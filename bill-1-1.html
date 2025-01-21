@@ -8,8 +8,8 @@
     <link href="./bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            font-size: 70%;
-            font-size: 15px;
+            font-size: 60%;
+            font-size: 14px;
             line-height: 1;
         }
 
@@ -18,7 +18,7 @@
             width: 210mm;
             height: 297mm;
             margin: 20px auto;
-            padding: 20px;
+            padding: 56.7px;
             background-color: white;
         }
 
@@ -63,6 +63,11 @@
                 margin: 0 auto;
                 width: 210mm;
                 height: 297mm;
+                padding: 56.7px;
+            }
+
+            .saveAsPdfButtonWrapper {
+                display: none;
             }
         }
 
@@ -167,19 +172,71 @@
                 transform: rotate(360deg);
             }
         }
+
+        .saveButtonWraper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #saveAsPdfButton {
+            padding: 12px 24px;
+            /* Add spacing inside the button */
+            font-size: 18px;
+            /* Slightly larger font for better readability */
+            font-weight: bold;
+            /* Make the text bold */
+            color: #fff;
+            /* White text */
+            background: linear-gradient(135deg, #6a11cb, #2575fc);
+            /* Gradient background */
+            border: none;
+            /* Remove default border */
+            border-radius: 8px;
+            /* Rounded corners */
+            cursor: pointer;
+            /* Pointer cursor on hover */
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            /* Subtle shadow for a 3D effect */
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            /* Smooth hover effect */
+            margin-top: 20px;
+        }
+
+        /* Hover effect */
+        #saveAsPdfButton:hover {
+            transform: translateY(-2px);
+            /* Slight lift on hover */
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+            /* Deeper shadow on hover */
+        }
+
+        /* Active state */
+        #saveAsPdfButton:active {
+            transform: translateY(0);
+            /* Reset lift on click */
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            /* Lighter shadow on click */
+        }
     </style>
 </head>
 
 <body>
+    <div class="container saveAsPdfButtonWrapper" id="saveAsPdfButtonWrapper">
+        <div class="row">
+            <div class="col-12 saveButtonWraper">
+                <button id="saveAsPdfButton">Lưu PDF</button>
+            </div>
+        </div>
+    </div>
     <div class="a4-container">
         <div class="text-center mb-2">
             <div class="row">
-                <div class="col-6">
+                <div class="col-7">
                     <h6 class="bold-text font-size-14">TẬP ĐOÀN ĐIỆN LỰC VIỆT NAM </br> CÔNG TY TNHH MTV NHIỆT ĐIỆN THỦ
                         ĐỨC
                 </div>
-                <div class="col-2"></div>
-                <div class="col-4 font-size-14">
+                <div class="col-5" style="text-align: left; padding-left: 100px; font-size: 14px;">
                     <p>HD-NĐTĐ-04-09/BM-05 </br>Lần ban hành : 02</p>
                 </div>
             </div>
@@ -192,10 +249,10 @@
         <table class="table table-border">
             <tbody>
                 <tr>
-                    <td class="bold-text height40" style="width: 21%;">Ngày xuất hóa đơn</td>
-                    <td id="nxhd" class="text-align-center height40" style="width: 29%;">26/12/2024</td>
-                    <td class="bold-text height40" style="width: 21%;">Ngày Nghiệm thu</td>
-                    <td id="nnt" class="text-align-center height40" style="width: 29%;">26/12/2024</td>
+                    <td class="bold-text height40" style="width: 23%;">Ngày xuất hóa đơn</td>
+                    <td id="nxhd" class="text-align-center height40" style="width: 27%;">26/12/2024</td>
+                    <td class="bold-text height40" style="width: 23%;">Ngày Nghiệm thu</td>
+                    <td id="nnt" class="text-align-center height40" style="width: 27%;">26/12/2024</td>
                 </tr>
                 <tr>
                     <td class="bold-text">Hóa đơn số</td>
@@ -327,8 +384,8 @@
             </div>
             <div class="col-4">
                 <div class="row">
-                    <div class="col-12 bold-text min-height-48 vertical-align-bottom">Trưởng ban kiểm nghiệm công ty
-                        </br>Chủ tịch Hội đồng</div>
+                    <div class="col-12 bold-text min-height-48 vertical-align-bottom" style="padding: 0;">Trưởng ban
+                        kiểm nghiệm công ty</br>Chủ tịch Hội đồng</div>
                 </div>
                 <div class="row mt-1">
                     <div class="col-12">
@@ -345,11 +402,10 @@
             </div>
         </div>
     </div>
-    <button id="filePickerButton">Choose File</button>
     <div id="fileDetails"></div>
     <div id="loading">
         <div class="spinner"></div>
-        <span>Đang tạo PDF, vui lòng chờ...</span>
+        <span id="loading-msg">Đang tạo PDF, vui lòng chờ...</span>
     </div>
     <script src="./bootstrap.bundle.min.js"></script>
     <script>
@@ -444,86 +500,91 @@
                 })
                 .catch(error => console.error('Error fetching image:', error));
         };
-
-        const fetchImgs = async (callBack) => {
-            document.getElementById("loading").style.display = "flex";
-            const imgs = document.getElementsByTagName('img');
-            for (let i = 0; i < imgs.length; i++) {
-                const theImg = imgs[i];
-                if (theImg.src && theImg.src != "")
-                    await convertImageToBase64AndSetToImg(theImg, theImg.src);
-            }
-            callBack();
-            document.getElementById("loading").style.display = "none";
+        const loading = document.getElementById("loading");
+        const loadingMsg = document.getElementById("loading-msg");
+        const showLoading = (msg) => {
+            loading.style.display = "flex";
+            loadingMsg.innerHTML = msg;
         }
-
-
-        const downloadPdfAndClosePage = (name) => {
-            const { jsPDF } = window.jspdf;
-
-            const element = document.querySelector('.a4-container');
-            // Capture the current page
-            html2canvas(element, { scale: 4 }).then(async (canvas) => {
-                const imgData = canvas.toDataURL('image/png');
-                const pdf = new jsPDF('p', 'mm', 'a4');
-                const scale = 0;
-                let pageWidth = pdf.internal.pageSize.getWidth();
-                pageWidth = pageWidth + pageWidth * scale;
-                let pageHeight = pdf.internal.pageSize.getHeight();
-                pageHeight = pageHeight + pageHeight * scale;
-
-                // Ensure content fits within the PDF page dimensions
-                const imgWidth = canvas.width;
-                const imgHeight = canvas.height;
-                const ratio = imgWidth / imgHeight;
-
-                const pdfWidth = pageWidth; // Fit to PDF page width
-                const pdfHeight = pageWidth / ratio; // Adjust height proportionally
-
-                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-                pdf.save(name);
-            });
-        };
-
-        const checkAndDownloadPDF = () => {
-            downloadPdfAndClosePage(exportPdfFileName);
+        const closeLoading = () => {
+            loading.style.display = "none";
         }
-        const exportPdfFileName = urlParams.get('tenPdf');
-        if (exportPdfFileName) {
-            fetchImgs(checkAndDownloadPDF);
-        }
-
     </script>
 
     <script>
-        // Get the button and file details elements
-        const filePickerButton = document.getElementById('filePickerButton');
-        const fileDetails = document.getElementById('fileDetails');
+        const exportPdfWrapper = document.getElementById('saveAsPdfButtonWrapper');
+        const exportPdfFileName = urlParams.get('tenPdf');
+        if (exportPdfFileName) {
+            exportPdfWrapper.style.display = "block";
+        } else {
+            exportPdfWrapper.style.display = "none";
+        }
 
-        filePickerButton.addEventListener('click', () => {
-            // Create an input element of type file
-            const input = document.createElement('input');
-            input.type = 'file'; // Set the input type to file
-            input.accept = 'application/pdf'; // Optional: Restrict file types, e.g., PDFs only
-
-            // Trigger the file picker dialog
-            input.click();
-
-            // Listen for file selection
-            input.addEventListener('change', () => {
-                if (input.files.length > 0) {
-                    // Get the selected file
-                    const file = input.files[0];
-                    fileDetails.innerHTML = `
-            <p>File Name: ${file.name}</p>
-            <p>File Size: ${(file.size / 1024).toFixed(2)} KB</p>
-            <p>File Type: ${file.type}</p>
-          `;
-                }
+        async function loadImage(url) {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const image = new Image();
+            image.src = URL.createObjectURL(blob);
+            return new Promise((resolve) => {
+                image.onload = () => resolve(image);
             });
-        });
+        }
 
-        filePickerButton.click();
+        document.getElementById('saveAsPdfButton').addEventListener('click', async () => {
+            showLoading("Đang tạo PDF, vui lòng chờ...");
+            try {
+
+                // Use File System Access API to show "Save As" dialog
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'page.pdf',
+                    types: [
+                        {
+                            description: 'PDF file',
+                            accept: { 'application/pdf': ['.pdf'] },
+                        },
+                    ],
+                });
+
+                const { jsPDF } = window.jspdf;
+
+                const element = document.querySelector('.a4-container');
+                // Capture the current page
+                html2canvas(element, {
+                    scale: 4
+                }).then(async (canvas) => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('p', 'mm', 'a4');
+                    const scale = 0;
+                    let pageWidth = pdf.internal.pageSize.getWidth();
+                    pageWidth = pageWidth + pageWidth * scale;
+                    let pageHeight = pdf.internal.pageSize.getHeight();
+                    pageHeight = pageHeight + pageHeight * scale;
+
+                    // Ensure content fits within the PDF page dimensions
+                    const imgWidth = canvas.width;
+                    const imgHeight = canvas.height;
+                    const ratio = imgWidth / imgHeight;
+
+                    const pdfWidth = pageWidth; // Fit to PDF page width
+                    const pdfHeight = pageWidth / ratio; // Adjust height proportionally
+
+                    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+                    const pdfBlob = pdf.output('blob');
+                    // Write the PDF Blob to the selected file
+                    const writableStream = await handle.createWritable();
+                    await writableStream.write(pdfBlob);
+                    await writableStream.close();
+
+                    console.log('PDF saved successfully');
+                    closeLoading();
+                    alert("Tải file thành công.");
+                });
+            } catch (error) {
+                console.error('Error saving PDF:', error);
+                closeLoading();
+                alert("Tải file thất bại!");
+            }
+        });
     </script>
 </body>
 
