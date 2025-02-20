@@ -104,45 +104,97 @@
     <script>
         const urlParams = new URLSearchParams(window.location.search);
 
-        const dataFromURL = [
-            {
-                tt: urlParams.get('tt1') || "",
-                qr: urlParams.get('qr1') || "",
-                tenCauKien: urlParams.get('tenCauKien1') || "",
-                soLuong: urlParams.get('soLuong1') || "",
-                ghiChu: urlParams.get('ghiChu1') || ""
-            },
-            {
-                tt: urlParams.get('tt2') || "",
-                qr: urlParams.get('qr2') || "",
-                tenCauKien: urlParams.get('tenCauKien2') || "",
-                soLuong: urlParams.get('soLuong2') || "",
-                ghiChu: urlParams.get('ghiChu2') || ""
-            },
-            // Thêm các hàng khác nếu cần
-        ];
+        // Hàm chuyển đổi dữ liệu từ URL
+        function convertToMap(input) {
+            const pairs = input.split('_b_');
+            const map = new Map();
 
-        function populateTableFromURL() {
-            const tableBody = document.getElementById("tableBody");
-            let html = "";
+            pairs.forEach(pair => {
+                const [key, chiTietSanPham, soLuongSanPham] = pair.split("_a_");
 
-            dataFromURL.forEach(item => {
-                html += `
-                    <tr>
-                        <td>${item.tt}</td>
-                        <td>${item.qr}</td>
-                        <td>${item.tenCauKien}</td>
-                        <td>${item.soLuong}</td>
-                        <td>${item.ghiChu}</td>
-                    </tr>
-                `;
+                if (!map.has(key)) {
+                    map.set(key, []);
+                }
+                map.get(key).push({ chiTietSanPham: chiTietSanPham, soLuongSanPham: soLuongSanPham });
             });
 
-            tableBody.innerHTML = html;
+            return map;
         }
 
-        // Gọi hàm để điền dữ liệu từ URL parameters
-        populateTableFromURL();
+        // Lấy dữ liệu từ URL
+        const gui = urlParams.get('gui');
+        const mst = urlParams.get('mst');
+        const diachi = urlParams.get('diachi');
+        const lienhe = urlParams.get('lienhe');
+        const chitiet = urlParams.get('chitiet');
+        const dongia = urlParams.get('dongia');
+        const ghichu = urlParams.get('ghichu');
+        const tongcong = urlParams.get('tongcong');
+        const chietkhau = urlParams.get('chietkhau');
+        const vat = urlParams.get('vat');
+        const thanhtien = urlParams.get('thanhtien');
+
+        // Xử lý dữ liệu chi tiết
+        const resultMap = convertToMap(chitiet);
+
+        // Xử lý dữ liệu đơn giá
+        const mapDongia = new Map();
+        if (dongia) {
+            const dongias = dongia.split('_b_');
+            for (var i = 0; i < dongias.length; i++) {
+                const chitietDongia = dongias[i].split('_a_');
+                const sanPham = chitietDongia[0];
+                const gia = chitietDongia[1];
+                mapDongia.set(sanPham, gia);
+            }
+        }
+
+        // Xử lý dữ liệu ghi chú
+        const mapGhichu = new Map();
+        if (ghichu) {
+            const ghichus = ghichu.split('_b_');
+            for (var i = 0; i < ghichus.length; i++) {
+                const chitietGhichu = ghichus[i].split('_a_');
+                let ghichu = "";
+                for (var j = 1; j < chitietGhichu.length; j++) {
+                    ghichu += chitietGhichu[j] + '-';
+                }
+                ghichu = ghichu.slice(0, -1);
+                const sanPham = chitietGhichu[0];
+                mapGhichu.set(sanPham, ghichu);
+            }
+        }
+
+        // Điền dữ liệu vào bảng
+        const tableBody = document.getElementById("tableBody");
+        let itemHtml = "";
+        var index = 1;
+
+        for (const [key, value] of resultMap.entries()) {
+            const chitietSize = value.length;
+            itemHtml += '<tr>' +
+                '<td rowspan="' + chitietSize + '">' + index + '</td>' +
+                '<td rowspan="' + chitietSize + '">' + key + '</td>' +
+                '<td>' + value[0].chiTietSanPham + '</td>' +
+                '<td>' + value[0].soLuongSanPham + '</td>' +
+                '<td rowspan="' + chitietSize + '">' + mapDongia.get(key) + '</td>' +
+                '<td rowspan="' + chitietSize + '" style="">' +
+                '<img src="' + mapGhichu.get(key) + '" alt="Set Quà" class="img-fluid ghichu-img">' +
+                '</td>' +
+                '</tr>';
+
+            if (chitietSize > 1) {
+                for (var i = 1; i < chitietSize; i++) {
+                    itemHtml += '<tr>' +
+                        '<td>' + value[i].chiTietSanPham + '</td>' +
+                        '<td>' + value[i].soLuongSanPham + '</td>' +
+                        '</tr>';
+                }
+            }
+            index++;
+        }
+
+        tableBody.innerHTML = itemHtml;
     </script>
 </body>
 
