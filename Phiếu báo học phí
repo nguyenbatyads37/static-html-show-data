@@ -183,64 +183,53 @@
                 if (value) document.getElementById(param).textContent = value;
             });
 
-            function convertToMap(input) {
-                const map = new Map();
-                if (input) {
-                    input.split('_b_').forEach(pair => {
-                        const [chiTietSanPham, soLuongSanPham] = pair.split("_a_");
-                        if (!map.has(chiTietSanPham)) map.set(chiTietSanPham, []);
-                        map.get(chiTietSanPham).push({ chiTietSanPham, soLuongSanPham: parseInt(soLuongSanPham) });
-                    });
-                }
-                return map;
+            // Hàm chuyển đổi chuỗi chi tiết thành mảng các đối tượng
+            function parseChiTiet(chitiet) {
+                if (!chitiet) return [];
+                return chitiet.split('_b_').map(item => {
+                    const [tenCauKien, soLuong] = item.split('_a_');
+                    return { tenCauKien, soLuong: parseInt(soLuong) };
+                });
             }
 
+            // Lấy giá trị tham số 'chitiet' từ URL
             const chitiet = urlParams.get('chitiet');
-            const resultMap = convertToMap(chitiet);
+            const danhSachCauKien = parseChiTiet(chitiet);
 
             const tableBody = document.getElementById("tableBody");
             let itemHtml = "";
-            let index = 1;
 
             // Tạo nội dung bảng
-            for (const [chiTietSanPham, value] of resultMap.entries()) {
-                // Tạo một div để chứa QR code
+            danhSachCauKien.forEach((cauKien, index) => {
                 const qrContainerId = `qr-container-${index}`;
                 itemHtml += `<tr>
-                    <td rowspan="${value.length}">${index}</td>
-                    <td rowspan="${value.length}"><div id="${qrContainerId}"></div></td>
-                    <td>${chiTietSanPham}</td>
-                    <td>${value[0].soLuongSanPham}</td>
-                    <td rowspan="${value.length}"></td>
+                    <td>${index + 1}</td>
+                    <td><div id="${qrContainerId}"></div></td>
+                    <td>${cauKien.tenCauKien}</td>
+                    <td>${cauKien.soLuong}</td>
+                    <td></td>
                 </tr>`;
-                for (let i = 1; i < value.length; i++) {
-                    itemHtml += `<tr>
-                        <td>${value[i].chiTietSanPham}</td>
-                        <td>${value[i].soLuongSanPham}</td>
-                    </tr>`;
-                }
-                index++;
-            }
+            });
 
             tableBody.innerHTML = itemHtml;
 
             // Tạo QR code cho từng cấu kiện
-            for (const [chiTietSanPham, value] of resultMap.entries()) {
-                const qrContainerId = `qr-container-${index - value.length}`;
+            danhSachCauKien.forEach((cauKien, index) => {
+                const qrContainerId = `qr-container-${index}`;
                 new QRCode(document.getElementById(qrContainerId), {
-                    text: chiTietSanPham,
+                    text: `${cauKien.tenCauKien} - Số lượng: ${cauKien.soLuong}`,
                     width: 50,
                     height: 50
                 });
-            }
+            });
 
-            // Lấy giá trị tongsoluong từ URL và cập nhật vào phần "Tổng cấu kiện"
+            // Cập nhật tổng số lượng cấu kiện
             const tongsoluong = urlParams.get('tongsoluong');
             const tongCauKienElement = document.getElementById("tongCauKien");
             if (tongsoluong !== null && !isNaN(tongsoluong)) {
                 tongCauKienElement.textContent = `Tổng cấu kiện: ${tongsoluong}`;
             } else {
-                tongCauKienElement.textContent = `Tổng cấu kiện: 0`; // Giá trị mặc định nếu không có tongsoluong
+                tongCauKienElement.textContent = `Tổng cấu kiện: ${danhSachCauKien.length}`;
             }
         });
     </script>
