@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Biên Bản Giao Nhận</title>
     <style>
+        /* GIỮ NGUYÊN PHẦN CSS */
         body {
             font-family: Arial, sans-serif;
             margin: 20px;
@@ -89,11 +90,16 @@
         td {
             padding: 8px;
             text-align: left;
-            white-space: nowrap;
         }
 
         th {
             background-color: #f2f2f2;
+            text-align: center;
+        }
+
+        th:nth-child(3),
+        td:nth-child(3) {
+            width: 60px;
             text-align: center;
         }
 
@@ -102,22 +108,11 @@
             font-weight: bold;
             text-align: center;
         }
-
-        .qr-code {
-            width: 80px;
-            height: 80px;
-            text-align: center;
-        }
-
-        .qr-code img {
-            width: 100%;
-            height: auto;
-        }
     </style>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 
 <body>
+    <!-- GIỮ NGUYÊN PHẦN HTML -->
     <div class="header">
         <img src="https://github.com/user-attachments/assets/36e3f245-8d16-4aa4-b7c3-12e2a94e76c3" alt="Logo" class="logo">
         <div class="header-center">
@@ -130,7 +125,6 @@
             <p>Ngày BH: <span id="ngaybh">01/06/2018</span></p>
         </div>
     </div>
-</div>
 
     <div class="content">
         <div class="content-row">
@@ -148,27 +142,25 @@
                 <p><strong>Biển số:</strong> <span id="bienso"></span></p>
             </div>
         </div>
-    <div class="content">
+
         <table>
             <thead>
                 <tr>
                     <th>TT</th>
-                    <th>QR CODE</th>
                     <th>TÊN CẤU KIỆN</th>
                     <th>SỐ LƯỢNG</th>
-                    <th>CÔNG ĐOẠN</th> <!-- Cột Công Đoạn (Ghi chú) -->
+                    <th>GHI CHÚ</th>
                 </tr>
             </thead>
             <tbody id="tableBody"></tbody>
             <tfoot>
                 <tr>
-                    <td colspan="5" id="tongCauKien">Tổng cấu kiện: 0</td> <!-- Tính tổng số lượng -->
+                    <td colspan="4" id="tongCauKien">Tổng cấu kiện: 0</td>
                 </tr>
             </tfoot>
         </table>
     </div>
-<!-- Thêm thư viện QRCode.js -->
-    <script src="https://cdn.jsdelivr.net/npm/qrcodejs/qrcode.min.js"></script>
+
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             const urlParams = new URLSearchParams(window.location.search);
@@ -177,67 +169,50 @@
                 "bennhan", "hangmuc", "nhaxe", "bienso", "ngay", "ngaybh"
             ];
 
-    <script>
-        document.addEventListener("DOMContentLoaded", function () {
-            const urlParams = new URLSearchParams(window.location.search);
-            const chitiet = urlParams.get('chitiet'); // Lấy tham số chitiet từ URL
-            if (!chitiet) return;
+            // GIỮ NGUYÊN PHẦN CẬP NHẬT THAM SỐ
+            params.forEach(param => {
+                const value = urlParams.get(param);
+                if (value) document.getElementById(param).textContent = value;
+            });
 
-            // Hàm phân tách chitiet thành các phần tử
+            // SỬA PHẦN XỬ LÝ CHI TIẾT
             function parseChiTiet(chitiet) {
-                const result = [];
-                const items = chitiet.split('_b_'); // Phân tách các cấu kiện theo "_b_"
-                items.forEach(item => {
-                    const parts = item.split('_a_'); // Phân tách mỗi phần theo "_a_"
-                    result.push(parts);
+                if (!chitiet) return [];
+                return chitiet.split('_b_').map(item => {
+                    const [id, soLuong] = item.split('_a_');
+                    return { 
+                        id: id,          // Lấy phần đầu làm ID
+                        soLuong: parseInt(soLuong) 
+                    };
                 });
-                return result;
             }
 
-            const danhSachCauKien = parseChiTiet(chitiet); // Phân tách dữ liệu
+            const chitiet = urlParams.get('chitiet');
+            const danhSachCauKien = parseChiTiet(chitiet);
             const tableBody = document.getElementById("tableBody");
             let itemHtml = "";
-            let totalQuantity = 0; // Khởi tạo biến tổng số lượng
 
-            // Tạo các cột động cho mỗi dòng
+            // HIỂN THỊ ID THAY VÌ TÊN
             danhSachCauKien.forEach((cauKien, index) => {
-                const qrCodeId = `qr-code-${index}`;
-                const quantity = parseInt(cauKien[1]); // Số lượng nằm ở chỉ mục 1
-
-                totalQuantity += quantity; // Cộng dồn số lượng
-
-                let rowHtml = `<tr>
+                itemHtml += `<tr>
                     <td>${index + 1}</td>
-                    <td class="qr-code" id="${qrCodeId}"></td>
-                    <td>${cauKien[0]}</td> <!-- Tên cấu kiện -->
-                    <td>${quantity}</td> <!-- Số lượng -->
-                    <td>${cauKien[2] || ''}</td> <!-- Cột Công Đoạn (Ghi chú) -->
+                    <td>${cauKien.id}</td> <!-- Hiển thị ID -->
+                    <td>${cauKien.soLuong}</td>
+                    <td></td>
                 </tr>`;
-
-                itemHtml += rowHtml;
             });
 
             tableBody.innerHTML = itemHtml;
 
-            // Tạo QR Code cho từng cấu kiện
-            danhSachCauKien.forEach((cauKien, index) => {
-                const qrCodeElement = document.getElementById(`qr-code-${index}`);
-                if (qrCodeElement) {
-                    new QRCode(qrCodeElement, {
-                        text: cauKien[0], // Nội dung QR Code là tên cấu kiện
-                        width: 80,
-                        height: 80
-                    });
-                }
-            });
-
-            // Hiển thị tổng số lượng
-            document.getElementById("tongCauKien").textContent = `Tổng cấu kiện: ${totalQuantity}`;
+            // GIỮ NGUYÊN PHẦN TÍNH TỔNG
+            const tongsoluong = urlParams.get('tongsoluong');
+            const tongCauKienElement = document.getElementById("tongCauKien");
+            if (tongsoluong !== null && !isNaN(tongsoluong)) {
+                tongCauKienElement.textContent = `Tổng cấu kiện: ${tongsoluong}`;
+            } else {
+                tongCauKienElement.textContent = `Tổng cấu kiện: ${danhSachCauKien.length}`;
+            }
         });
     </script>
 </body>
-
 </html>
-
-
-
