@@ -54,30 +54,42 @@
     .content-row {
       display: flex;
       justify-content: space-between;
+      align-items: stretch;
+      gap: 15px;
     }
 
     .content-left,
     .content-right {
       width: 48%;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #ddd;
+      padding: 10px;
+      border-radius: 4px;
     }
 
-    /* Phần mới thêm cho dãn dòng */
     .content-left p,
     .content-right p {
-      margin: 8px 0;
+      margin: 0;
+      padding: 8px 0;
       line-height: 1.4;
-      min-height: 24px;
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #eee;
+      flex: 1;
+    }
+
+    .content-left p:last-child,
+    .content-right p:last-child {
+      border-bottom: none;
     }
 
     .content-left strong,
     .content-right strong {
       display: inline-block;
-      min-width: 70px;
-    }
-
-    .content-right {
-      display: flex;
-      flex-direction: column;
+      min-width: 85px;
+      margin-right: 10px;
     }
 
     table {
@@ -93,14 +105,11 @@
       z-index: 10;
     }
 
-    table,
-    th,
-    td {
+    table, th, td {
       border: 1px solid black;
     }
 
-    th,
-    td {
+    th, td {
       padding: 8px;
       text-align: left;
     }
@@ -130,10 +139,10 @@
       margin: 0 auto;
     }
 
-    tfoot td {
-      background-color: #f2f2f2;
+    #tongSo {
       font-weight: bold;
-      text-align: center;
+      color: red;
+      padding-left: 5px;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -183,7 +192,7 @@
         <tr>
           <td colspan="5" style="text-align: center;">
             <strong>Tổng cấu kiện: </strong>
-            <span id="tongSo" style="font-weight: bold; color: red;">0</span>
+            <span id="tongSo">0</span>
           </td>
         </tr>
       </thead>
@@ -193,6 +202,7 @@
 
   <script>
     document.addEventListener("DOMContentLoaded", function () {
+      // Xử lý URL parameters
       const urlParams = new URLSearchParams(window.location.search);
       const params = [
         "bengiao", "daidien", "chucvu", "dienthoai", "noigiao",
@@ -204,6 +214,7 @@
         if (value) document.getElementById(param).textContent = value;
       });
 
+      // Xử lý chi tiết cấu kiện
       function parseChiTiet(chitiet) {
         if (!chitiet) return [];
         return chitiet.split('_b_').map(item => {
@@ -219,30 +230,41 @@
       const chitiet = urlParams.get('chitiet');
       const danhSachCauKien = parseChiTiet(chitiet);
       const tableBody = document.getElementById("tableBody");
-      let itemHtml = "";
+      
+      // Render bảng
+      tableBody.innerHTML = danhSachCauKien.map((cauKien, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td class="qrcode-cell"><div id="qrcode-${index}"></div></td>
+          <td>${cauKien.id}</td>
+          <td style="text-align:center;">${cauKien.soLuong}</td>
+          <td>${cauKien.ghiChu}</td>
+        </tr>
+      `).join('');
 
+      // Tạo QR Code
       danhSachCauKien.forEach((cauKien, index) => {
-        itemHtml += `<tr>
-                      <td>${index + 1}</td>
-                      <td class="qrcode-cell"><div id="qrcode-${index}"></div></td>
-                      <td>${cauKien.id}</td>
-                      <td style="text-align:center;">${cauKien.soLuong}</td>
-                      <td>${cauKien.ghiChu}</td>
-                    </tr>`;
-      });
-
-      tableBody.innerHTML = itemHtml;
-
-      danhSachCauKien.forEach((cauKien, index) => {
-        new QRCode(document.getElementById("qrcode-" + index), {
+        new QRCode(document.getElementById(`qrcode-${index}`), {
           text: cauKien.id,
           width: 60,
           height: 60
         });
       });
 
-      const sum = danhSachCauKien.reduce((acc, item) => acc + item.soLuong, 0);
-      document.getElementById("tongSo").textContent = sum;
+      // Cập nhật tổng số
+      document.getElementById("tongSo").textContent = danhSachCauKien.reduce((acc, item) => acc + item.soLuong, 0);
+
+      // Tự động cân bằng chiều cao
+      function balanceHeights() {
+        const leftCol = document.querySelector('.content-left');
+        const rightCol = document.querySelector('.content-right');
+        const maxHeight = Math.max(leftCol.offsetHeight, rightCol.offsetHeight);
+        leftCol.style.minHeight = `${maxHeight}px`;
+        rightCol.style.minHeight = `${maxHeight}px`;
+      }
+      
+      window.addEventListener('load', balanceHeights);
+      window.addEventListener('resize', balanceHeights);
     });
   </script>
 </body>
