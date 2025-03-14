@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Biên Bản Giao Nhận</title>
   <style>
-    /* GIỮ NGUYÊN PHẦN CSS CŨ */
+    /* GIỮ NGUYÊN PHẦN CSS */
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
@@ -62,6 +62,11 @@
       width: 48%;
     }
 
+    .content-right {
+      display: flex;
+      flex-direction: column;
+    }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -92,12 +97,14 @@
       text-align: center;
     }
 
+    /* Cột số lượng */
     th:nth-child(4),
     td:nth-child(4) {
       width: 60px;
       text-align: center;
     }
 
+    /* CSS cho ô chứa QR Code */
     .qrcode-cell {
       width: 50px;
       height: 50px;
@@ -106,22 +113,48 @@
       vertical-align: middle;
     }
 
-    /* CSS MỚI CHO DÒNG TỔNG */
-    .total-row td {
+    tfoot td {
       background-color: #f2f2f2;
       font-weight: bold;
       text-align: center;
     }
   </style>
+  <!-- Thêm thư viện QRCode.js -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 </head>
 
 <body>
+  <!-- GIỮ NGUYÊN PHẦN HTML -->
   <div class="header">
-    <!-- GIỮ NGUYÊN PHẦN HEADER -->
+    <img src="https://github.com/user-attachments/assets/36e3f245-8d16-4aa4-b7c3-12e2a94e76c3" alt="Logo" class="logo">
+    <div class="header-center">
+      <h1>BIÊN BẢN GIAO NHẬN HÀNG HÓA</h1>
+      <p>Số: ……/24-BBGN, ngày <span id="ngay">08/01/2025</span> 14:20</p>
+    </div>
+    <div class="company-info">
+      <p><strong>HGPT</strong></p>
+      <p>KMIH: HGPT-8.2/BM09/Rev:02</p>
+      <p>Ngày BH: <span id="ngaybh">01/06/2018</span></p>
+    </div>
   </div>
 
   <div class="content">
+    <div class="content-row">
+      <div class="content-left">
+        <p><strong>Bên giao:</strong> <span id="bengiao">HGPT MECHANICAL</span></p>
+        <p><strong>Đại diện:</strong> <span id="daidien"></span></p>
+        <p><strong>Chức vụ:</strong> <span id="chucvu"></span></p>
+        <p><strong>Điện thoại:</strong> <span id="dienthoai"></span></p>
+        <p><strong>Nơi giao:</strong> <span id="noigiao"></span></p>
+      </div>
+      <div class="content-right">
+        <p><strong>Bên nhận:</strong> <span id="bennhan">Hòa Phát</span></p>
+        <p><strong>Hạng mục:</strong> <span id="hangmuc"></span></p>
+        <p><strong>Nhà xe:</strong> <span id="nhaxe"></span></p>
+        <p><strong>Biển số:</strong> <span id="bienso"></span></p>
+      </div>
+    </div>
+
     <table>
       <thead>
         <tr>
@@ -132,70 +165,76 @@
           <th>GHI CHÚ</th>
         </tr>
       </thead>
-      <tbody id="tableBody">
-        <!-- TỔNG SẼ ĐƯỢC THÊM Ở ĐÂY -->
-      </tbody>
+      <tbody id="tableBody"></tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5" id="tongCauKien">Tổng cấu kiện: 0</td>
+        </tr>
+      </tfoot>
     </table>
   </div>
-
-  <script>
+   <script>
     document.addEventListener("DOMContentLoaded", function () {
       const urlParams = new URLSearchParams(window.location.search);
-      
-      // Cập nhật các tham số
-      const params = ["bengiao", "daidien", /*...các param khác...*/];
+      const params = [
+        "bengiao", "daidien", "chucvu", "dienthoai", "noigiao",
+        "bennhan", "hangmuc", "nhaxe", "bienso", "ngay", "ngaybh"
+      ];
+
+      // Cập nhật tham số vào nội dung trang
       params.forEach(param => {
         const value = urlParams.get(param);
         if (value) document.getElementById(param).textContent = value;
       });
 
-      // Xử lý chi tiết
+      // Hàm xử lý chuỗi "chitiet" theo định dạng:
+      // Tên cấu kiện_a_Số lượng_a_Ghi chú, các mục cách nhau bởi _b_
+      function parseChiTiet(chitiet) {
+        if (!chitiet) return [];
+        return chitiet.split('_b_').map(item => {
+          const parts = item.split('_a_');
+          return {
+            id: parts[0],                         // Tên cấu kiện
+            soLuong: parseInt(parts[1]),            // Số lượng
+            ghiChu: parts[2] ? parts[2] : ""         // Ghi chú (nếu có)
+          };
+        });
+      }
+
       const chitiet = urlParams.get('chitiet');
-      const danhSachCauKien = chitiet ? chitiet.split('_b_').map(item => {
-        const parts = item.split('_a_');
-        return {
-          id: parts[0],
-          soLuong: parseInt(parts[1]),
-          ghiChu: parts[2] || ""
-        };
-      }) : [];
-
-      // Tính tổng trước
-      const sum = danhSachCauKien.reduce((acc, item) => acc + item.soLuong, 0);
+      const danhSachCauKien = parseChiTiet(chitiet);
       const tableBody = document.getElementById("tableBody");
+      let itemHtml = "";
 
-      // Tạo HTML - DÒNG TỔNG Ở ĐẦU TIÊN
-      let itemHtml = `
-        <tr class="total-row">
-          <td colspan="5">Tổng cấu kiện: ${sum}</td>
-        </tr>
-      `;
-
-      // Thêm các dòng cấu kiện
+      // Tạo các dòng trong bảng
       danhSachCauKien.forEach((cauKien, index) => {
-        itemHtml += `
-          <tr>
-            <td>${index + 1}</td>
-            <td class="qrcode-cell"><div id="qrcode-${index}"></div></td>
-            <td>${cauKien.id}</td>
-            <td style="text-align:center;">${cauKien.soLuong}</td>
-            <td>${cauKien.ghiChu}</td>
-          </tr>
-        `;
+        itemHtml += `<tr>
+                      <td>${index + 1}</td>
+                      <td class="qrcode-cell"><div id="qrcode-${index}" style="width:50px; height:50px; margin:0 auto;"></div></td>
+                      <td>${cauKien.id}</td>
+                      <td style="text-align:center;">${cauKien.soLuong}</td>
+                      <td>${cauKien.ghiChu}</td>
+                    </tr>`;
       });
 
       tableBody.innerHTML = itemHtml;
 
-      // Tạo QR Code
+      // Tạo QR Code cho mỗi cấu kiện (nội dung QR là tên cấu kiện)
       danhSachCauKien.forEach((cauKien, index) => {
-        new QRCode(document.getElementById(`qrcode-${index}`), {
+        new QRCode(document.getElementById("qrcode-" + index), {
           text: cauKien.id,
           width: 50,
           height: 50
         });
       });
+
+      // Tính tổng số lượng từ các cấu kiện
+      const sum = danhSachCauKien.reduce((acc, item) => acc + item.soLuong, 0);
+      const tongCauKienElement = document.getElementById("tongCauKien");
+      tongCauKienElement.textContent = `Tổng cấu kiện: ${sum}`;
     });
   </script>
 </body>
 
 </html>
+
