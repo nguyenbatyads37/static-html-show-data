@@ -1,43 +1,159 @@
-<script>
-  document.addEventListener("DOMContentLoaded", function() {
-    // ... (phần trước giữ nguyên)
-    
-    const danhSachSanPham = chitiet ? chitiet.split('_b_').map(item => {
-      const parts = item.split('_a_');
-      let imageUrl = '';
-      try {
-        imageUrl = parts[0] ? encodeURI(decodeURIComponent(parts[0])) : '';
-        // Kiểm tra hợp lệ URL
-        new URL(imageUrl); 
-      } catch (e) {
-        imageUrl = '';
-      }
-      
-      return {
-        imageUrl: imageUrl,
-        tenSP: parts[1] || '',
-        tenTrung: parts[2] || '',
-        soLuong: parseInt(parts[3]) || 0,
-        donGia: parts[4] ? parseInt(parts[4]) : 0,
-        ghiChu: parts[5] || ''
-      };
-    }) : [];
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Biên Bản Giao Nhận</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
 
-    // Render bảng với fallback ảnh
-    tableBody.innerHTML = danhSachSanPham.map((item, index) => `
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .header h1 {
+      font-size: 16px;
+      margin: 0;
+      text-transform: uppercase;
+    }
+
+    .header p {
+      font-size: 12px;
+      margin: 5px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+
+    th, td {
+      border: 1px solid black;
+      padding: 8px;
+      text-align: left;
+    }
+
+    th {
+      background-color: #f2f2f2;
+      text-align: center;
+    }
+
+    .image-cell {
+      width: 70px;
+      height: 70px;
+      padding: 5px;
+      text-align: center;
+    }
+
+    #tongSo, #tongSL {
+      color: red;
+      font-weight: bold;
+    }
+
+    .signature-section {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 50px;
+    }
+
+    .signature-box {
+      text-align: center;
+      width: 200px;
+    }
+  </style>
+</head>
+<body>
+  
+  <div class="header">
+    <h1>HÓA ĐƠN BÁN HÀNG</h1>
+    <p>Ngày: <span id="ngay"></span></p>
+  </div>
+
+  <table>
+    <thead>
       <tr>
-        <td>${index + 1}</td>
-        <td class="image-cell">
-          ${item.imageUrl ? 
-            `<img src="${item.imageUrl}" 
-                  onerror="this.src='https://via.placeholder.com/60?text=Ảnh+SP';this.onerror=null" 
-                  alt="Ảnh sản phẩm" />` : 
-            '<div style="width:60px;height:60px;background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px">No Image</div>'}
-        </td>
-        <!-- Các cột khác giữ nguyên -->
+        <th>STT</th>
+        <th>Ảnh SP</th>
+        <th>TÊN SP</th>
+        <th>TIẾNG TRUNG</th>
+        <th>SỐ LƯỢNG</th>
+        <th>ĐƠN GIÁ</th>
+        <th>TỔNG</th>
       </tr>
-    `).join('');
-    
-    // ... (phần sau giữ nguyên)
-  });
-</script>
+      <tr>
+        <td colspan="4" style="text-align: center">
+          <strong>TỔNG TIỀN: </strong>
+          <span id="tongSo">0</span>
+        </td>
+        <td colspan="3" style="text-align: center">
+          <strong>TỔNG SỐ LƯỢNG: </strong>
+          <span id="tongSL">0</span>
+        </td>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+
+  <div class="signature-section">
+    <div class="signature-box">
+      <p><strong>NGƯỜI GIAO</strong></p>
+      <p>(Ký, ghi rõ họ tên)</p>
+    </div>
+    <div class="signature-box">
+      <p><strong>NGƯỜI NHẬN</strong></p>
+      <p>(Ký, ghi rõ họ tên)</p>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      // Xử lý tham số URL
+      const urlParams = new URLSearchParams(window.location.search);
+      
+      // Chỉ lấy ngày từ URL
+      const ngay = urlParams.get('ngay');
+      if (ngay) document.getElementById('ngay').textContent = ngay;
+
+      // Xử lý chi tiết cấu kiện
+      const chitiet = urlParams.get('chitiet');
+      const danhSachCauKien = chitiet ? chitiet.split('_b_').map(item => {
+        const parts = item.split('_a_');
+        return {
+          id: parts[0],
+          tenTrung: parts[1] || '',
+          soLuong: parseInt(parts[2]) || 0,
+          donGia: parts[3] ? parseInt(parts[3]) : 0,
+          ghiChu: parts[4] || ''
+        };
+      }) : [];
+
+      // Render bảng
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = danhSachCauKien.map((item, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td class="image-cell"></td>
+          <td>${item.id}</td>
+          <td>${item.tenTrung}</td>
+          <td style="text-align:center">${item.soLuong}</td>
+          <td>${item.donGia.toLocaleString()}</td>
+          <td>${(item.soLuong * item.donGia).toLocaleString()}</td>
+        </tr>
+      `).join('');
+
+      // Cập nhật tổng số lượng
+      document.getElementById('tongSL').textContent = danhSachCauKien
+        .reduce((sum, item) => sum + item.soLuong, 0);
+        
+      // Cập nhật tổng tiền
+      document.getElementById('tongSo').textContent = danhSachCauKien
+        .reduce((sum, item) => sum + (item.soLuong * item.donGia), 0).toLocaleString();
+    });
+  </script>
+</body>
+</html>
