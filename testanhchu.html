@@ -137,6 +137,13 @@
     .download-btn:hover {
       background-color: #0b7dda;
     }
+
+    /* Style cho text ẩn */
+    #tempText {
+      position: absolute;
+      left: -9999px;
+      white-space: pre;
+    }
   </style>
 </head>
 <body>
@@ -179,6 +186,9 @@
     </table>
   </div>
 
+  <!-- Phần tử ẩn chứa text riêng biệt -->
+  <div id="tempText">hihi</div>
+
   <div class="copy-btn-container">
     <button class="copy-btn" id="copyBtn">SAO CHÉP ẢNH VÀ TEXT</button>
     <button class="download-btn" id="downloadBtn">TẢI XUỐNG ẢNH</button>
@@ -218,72 +228,55 @@
         document.getElementById('qrImage').src = linkanh;
       }
 
-      // Hàm copy ảnh và text
+      // Hàm copy ảnh và text RIÊNG BIỆT
       document.getElementById('copyBtn').addEventListener('click', async function() {
         try {
-          // Thêm text "hihi" vào ảnh trước khi chụp
-          const originalContent = document.getElementById('captureArea').innerHTML;
-          document.getElementById('captureArea').innerHTML += `
-            <div style="text-align:center; padding:10px; font-size:18px; font-weight:bold; color:red;">
-              hihi
-            </div>
-          `;
-
+          // Bước 1: Chụp ảnh bảng học phí (không chứa text "hihi")
           const canvas = await html2canvas(document.getElementById('captureArea'), {
             scale: 3,
             useCORS: true,
-            allowTaint: true,
             logging: true
           });
 
-          // Khôi phục lại nội dung gốc
-          document.getElementById('captureArea').innerHTML = originalContent;
+          // Bước 2: Tạo blob cho ảnh và text riêng biệt
+          const imageBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+          const textContent = document.getElementById('tempText').textContent;
+          const textBlob = new Blob([textContent], {type: 'text/plain'});
 
-          // Phương pháp 1: Copy cả ảnh và text
-          try {
-            const imageBlob = await new Promise(resolve => canvas.toBlob(resolve));
-            const textBlob = new Blob(['hihi'], {type: 'text/plain'});
-            
-            await navigator.clipboard.write([
-              new ClipboardItem({
-                'image/png': imageBlob,
-                'text/plain': textBlob
-              })
-            ]);
-            alert('✅ Đã sao chép ảnh và text thành công!');
-          } catch (e) {
-            console.warn('Không thể copy nhiều định dạng, thử phương pháp khác...', e);
-            
-            // Phương pháp 2: Copy ảnh trước, sau đó copy text
-            try {
-              const imageBlob = await new Promise(resolve => canvas.toBlob(resolve));
-              await navigator.clipboard.write([new ClipboardItem({'image/png': imageBlob})]);
-              
-              // Đợi một chút rồi copy text
-              setTimeout(() => {
-                const textArea = document.createElement('textarea');
-                textArea.value = 'hihi';
-                document.body.appendChild(textArea);
-                textArea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textArea);
-                alert('✅ Đã sao chép ảnh và text (theo từng bước)');
-              }, 300);
-            } catch (e2) {
-              console.error('Lỗi copy ảnh', e2);
-              // Phương pháp 3: Chỉ copy text
-              const textArea = document.createElement('textarea');
-              textArea.value = 'hihi';
-              document.body.appendChild(textArea);
-              textArea.select();
-              document.execCommand('copy');
-              document.body.removeChild(textArea);
-              alert('⚠ Chỉ copy được text, vui lòng chụp màn hình để lấy ảnh');
-            }
-          }
+          // Bước 3: Copy cả ảnh và text vào clipboard
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'image/png': imageBlob,
+              'text/plain': textBlob
+            })
+          ]);
+
+          alert('✅ Đã sao chép thành công!\n- Ảnh bảng học phí\n- Text "hihi" riêng biệt');
         } catch (error) {
-          console.error('Lỗi nghiêm trọng:', error);
-          alert('❌ Lỗi khi sao chép. Vui lòng sử dụng nút tải xuống ảnh và copy text thủ công.');
+          console.error('Lỗi khi copy:', error);
+          
+          // Phương pháp dự phòng 1: Copy text trước, sau đó download ảnh
+          try {
+            // Copy text
+            const textArea = document.createElement('textarea');
+            textArea.value = 'hihi';
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            
+            // Download ảnh
+            const canvas = await html2canvas(document.getElementById('captureArea'));
+            const link = document.createElement('a');
+            link.download = `hoc-phi-${document.getElementById('studentName').textContent}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+            
+            alert('⚠ Đã copy text "hihi"\nVà tự động tải ảnh xuống, bạn có thể paste text và chèn ảnh thủ công');
+          } catch (fallbackError) {
+            console.error('Lỗi phương pháp dự phòng:', fallbackError);
+            alert('❌ Lỗi nghiêm trọng. Vui lòng chụp màn hình và copy text thủ công');
+          }
         }
       });
 
