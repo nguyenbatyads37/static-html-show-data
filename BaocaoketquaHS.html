@@ -197,7 +197,7 @@
     <h2>LỚP TIẾNG ANH CLC - CÔ THẢO LINH</h2>
     <h1 id="report-title">BÁO CÁO HỌC TẬP LỚP TIẾNG ANH CÔ THẢO LINH</h1>
     <p id="report-date"></p>
-    <p>Số 17, Ngõ 2 Trần Cung, Hoàng Quốc Việt, Cầu Giấy</p>
+    <p>Số 17, ngõ 2 Trần Cung, Hoàng Quốc Việt, Cầu Giấy</p>
   </div>
 
   <div class="info-box">
@@ -209,7 +209,9 @@
       <p><strong>Lớp:</strong> <span id="class-name">8E1</span></p>
     </div>
     <div class="student-photo">
-      <img src="https://via.placeholder.com/100" alt="Ảnh học sinh" id="student-photo" onerror="this.style.display='none'">
+      <img src="https://via.placeholder.com/100" alt="Ảnh học sinh" 
+           id="student-photo" crossorigin="anonymous"
+           onerror="this.style.display='none'">
     </div>
   </div>
 
@@ -297,6 +299,122 @@
         .join('') || '<li>Không có nội dung</li>';
     }
 
+    function cropCanvas(canvas) {
+      const ctx = canvas.getContext('2d');
+      const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const bounds = {
+        top: null,
+        left: null,
+        right: null,
+        bottom: null
+      };
+      
+      for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < canvas.width; x++) {
+          const idx = (y * canvas.width + x) * 4;
+          if (pixels.data[idx + 3] > 0) {
+            if (bounds.top === null || y < bounds.top) bounds.top = y;
+            if (bounds.bottom === null || y > bounds.bottom) bounds.bottom = y;
+            if (bounds.left === null || x < bounds.left) bounds.left = x;
+            if (bounds.right === null || x > bounds.right) bounds.right = x;
+          }
+        }
+      }
+      
+      const width = bounds.right - bounds.left + 1;
+      const height = bounds.bottom - bounds.top + 1;
+      
+      const croppedCanvas = document.createElement('canvas');
+      croppedCanvas.width = width;
+      croppedCanvas.height = height;
+      const croppedCtx = croppedCanvas.getContext('2d');
+      
+      croppedCtx.drawImage(
+        canvas,
+        bounds.left, bounds.top, width, height,
+        0, 0, width, height
+      );
+      
+      return croppedCanvas;
+    }
+
+    async function captureReport() {
+      try {
+        const captureBtn = document.getElementById('captureBtn');
+        captureBtn.style.display = 'none';
+
+        const html2canvas = await loadHtml2Canvas();
+        
+        const content = document.body;
+        
+        html2canvas(content, {
+          scale: 2,
+          logging: false,
+          useCORS: true,
+          allowTaint: true,
+          scrollY: 0,
+          scrollX: 0,
+          windowWidth: content.scrollWidth,
+          windowHeight: content.scrollHeight,
+          ignoreElements: (element) => {
+            return element === captureBtn || element.id === 'toast';
+          }
+        }).then(canvas => {
+          captureBtn.style.display = 'flex';
+          
+          const croppedCanvas = cropCanvas(canvas);
+          
+          croppedCanvas.toBlob(blob => {
+            navigator.clipboard.write([
+              new ClipboardItem({
+                'image/png': blob
+              })
+            ]).then(() => {
+              showToast('Đã sao chép ảnh vào bộ nhớ tạm!');
+            }).catch(err => {
+              console.error('Lỗi sao chép vào clipboard:', err);
+              downloadImage(croppedCanvas);
+            });
+          }, 'image/png');
+        });
+      } catch (error) {
+        console.error('Lỗi khi chụp ảnh:', error);
+        document.getElementById('captureBtn').style.display = 'flex';
+        alert('Có lỗi xảy ra khi chụp ảnh. Vui lòng thử lại.');
+      }
+    }
+
+    function downloadImage(canvas) {
+      const link = document.createElement('a');
+      link.download = 'bao-cao-hoc-tap.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast('Đã tải xuống ảnh báo cáo!');
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    function loadHtml2Canvas() {
+      return new Promise((resolve, reject) => {
+        if (window.html2canvas) {
+          resolve(window.html2canvas);
+        } else {
+          const script = document.createElement('script');
+          script.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
+          script.onload = () => resolve(window.html2canvas);
+          script.onerror = reject;
+          document.head.appendChild(script);
+        }
+      });
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
       const today = new Date();
       document.getElementById('report-date').textContent = formatDate(today);
@@ -380,74 +498,6 @@
         console.error('Lỗi tải dữ liệu:', e);
         alert('Không thể tải dữ liệu. Vui lòng thử lại sau.');
       }
-    }
-
-    async function captureReport() {
-      try {
-        const captureBtn = document.getElementById('captureBtn');
-        captureBtn.style.display = 'none';
-
-        const html2canvas = await loadHtml2Canvas();
-        
-        html2canvas(document.body, {
-          scale: 2,
-          logging: false,
-          useCORS: true,
-          allowTaint: true,
-          scrollY: 0,
-          scrollX: 0
-        }).then(canvas => {
-          captureBtn.style.display = 'flex';
-          
-          canvas.toBlob(blob => {
-            navigator.clipboard.write([
-              new ClipboardItem({
-                'image/png': blob
-              })
-            ]).then(() => {
-              showToast('Đã sao chép ảnh vào bộ nhớ tạm!');
-            }).catch(err => {
-              console.error('Lỗi sao chép vào clipboard:', err);
-              downloadImage(canvas);
-            });
-          }, 'image/png');
-        });
-      } catch (error) {
-        console.error('Lỗi khi chụp ảnh:', error);
-        document.getElementById('captureBtn').style.display = 'flex';
-        alert('Có lỗi xảy ra khi chụp ảnh. Vui lòng thử lại.');
-      }
-    }
-
-    function downloadImage(canvas) {
-      const link = document.createElement('a');
-      link.download = 'bao-cao-hoc-tap.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-      showToast('Đã tải xuống ảnh báo cáo!');
-    }
-
-    function showToast(message) {
-      const toast = document.getElementById('toast');
-      toast.textContent = message;
-      toast.classList.add('show');
-      setTimeout(() => {
-        toast.classList.remove('show');
-      }, 3000);
-    }
-
-    function loadHtml2Canvas() {
-      return new Promise((resolve, reject) => {
-        if (window.html2canvas) {
-          resolve(window.html2canvas);
-        } else {
-          const script = document.createElement('script');
-          script.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
-          script.onload = () => resolve(window.html2canvas);
-          script.onerror = reject;
-          document.head.appendChild(script);
-        }
-      });
     }
   </script>
 </body>
