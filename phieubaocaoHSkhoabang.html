@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>Báo cáo học tập</title>
   <style>
+    /* Giữ nguyên toàn bộ phần style như trước */
     * {
       box-sizing: border-box;
       font-family: Arial, sans-serif;
@@ -211,7 +212,7 @@
     </div>
   </div>
 
-  <!-- Candidate Details -->
+  <!-- Thông tin học viên -->
   <div class="section-title">THÔNG TIN HỌC VIÊN</div>
   <table class="candidate-details">
     <tr>
@@ -236,7 +237,7 @@
     </tr>
   </table>
 
-  <!-- Scores -->
+  <!-- Bảng điểm tổng hợp -->
   <table class="score-table">
     <tr>
       <th>Chuyên cần</th>
@@ -252,7 +253,7 @@
     </tr>
   </table>
 
-  <!-- Chi tiết học tập -->
+  <!-- Bảng chi tiết học tập -->
   <div class="section-title">CHI TIẾT HỌC TẬP</div>
   <table class="data-table">
     <thead>
@@ -266,7 +267,9 @@
         <th>Điểm yếu</th>
       </tr>
     </thead>
-    <tbody id="tableBody"></tbody>
+    <tbody id="tableBody">
+      <!-- Nội dung bảng chi tiết học tập được điền tại đây -->
+    </tbody>
     <tfoot>
       <tr class="summary-row">
         <td colspan="2">Tổng cộng</td>
@@ -289,7 +292,9 @@
         <th>Điểm</th>
       </tr>
     </thead>
-    <tbody id="testScoreBody"></tbody>
+    <tbody id="testScoreBody">
+      <!-- Nội dung bảng điểm kiểm tra sẽ được điền tại đây -->
+    </tbody>
     <tfoot>
       <tr class="summary-row">
         <td colspan="3">Điểm trung bình</td>
@@ -298,6 +303,7 @@
     </tfoot>
   </table>
 
+  <!-- Báo cáo tổng kết -->
   <div class="report-section">
     <h2>BÁO CÁO TỔNG KẾT</h2>
     <div id="comment">[Nhận xét buổi học]</div>
@@ -307,7 +313,7 @@
     <img src="https://private-user-images.githubusercontent.com/193345119/423208881-c62ae7d3-b44a-4a3d-9099-121a4adc93cc.png" alt="Con dấu">
   </div>
 
-  <!-- Stamp and Signature -->
+  <!-- Con dấu và chữ ký -->
   <div class="stamp-signature">
     <div class="stamp">Official Stamp</div>
     <div class="signature">Administrator Signature</div>
@@ -327,8 +333,7 @@
   
   // Cập nhật ngày báo cáo
   const today = new Date();
-  document.getElementById('report-date').textContent = params.get('ngay') || 
-      today.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  document.getElementById('report-date').textContent = params.get('ngay') || today.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   
   // Cập nhật điểm số
   document.getElementById('attendance').textContent = params.get('chuyencan') || '[Chuyên cần]';
@@ -384,29 +389,46 @@
     `;
   }
   
-  // Xử lý dữ liệu điểm kiểm tra các ngày từ biến "idktra"
-  const testData = params.get('idktra');
+  // Xử lý dữ liệu điểm kiểm tra các ngày từ phần query string không có key
+  let testData = '';
+  // Cách 1: duyệt qua các mục trong URLSearchParams
+  for (const [key, value] of params.entries()) {
+    if (key === '') { // Nếu key rỗng, coi value là dữ liệu kiểm tra
+      testData = value;
+      break;
+    }
+  }
+  // Nếu chưa có, thử tách query string trực tiếp
+  if (!testData) {
+    const queryString = window.location.search.substring(1); // loại bỏ dấu "?"
+    const parts = queryString.split('&');
+    for (const part of parts) {
+      if (part.indexOf('=') === -1) {
+        testData = decodeURIComponent(part);
+        break;
+      }
+    }
+  }
+  
+  console.log("Test data:", testData);
+  
   if (testData) {
     let sttCounter = 1;
     const testScoreBody = document.getElementById('testScoreBody');
     testScoreBody.innerHTML = '';
     let allScores = [];
     
-    // Giả sử dữ liệu truyền vào có định dạng:
-    // "2023-10-01_a_Bài1_a_8.5_c_Bài2_a_7.5_b_2023-10-08_a_Bài3_a_9.0"
-    //  - Mỗi nhóm ngày được phân tách bằng ký tự "_b_"
-    //  - Trong mỗi nhóm, ngày được lấy phần đầu tiên, sau đó chuỗi bài kiểm tra được tách bằng ký tự "_c_"
-    //  - Mỗi bài kiểm tra được định dạng: Tên bài (với ký tự "_a_") và Điểm
+    // Dữ liệu định dạng: "2023-10-01_a_Bài1_a_8.5_c_Bài2_a_7.5_b_2023-10-08_a_Bài3_a_9.0"
     const days = testData.split('_b_');
+    
     days.forEach(dayData => {
       if (!dayData) return;
-      // Tách ngày và chuỗi bài kiểm tra theo dấu "_a_"
       const dayParts = dayData.split('_a_');
       if (dayParts.length < 2) return;
-      const ngay = dayParts[0] || 'N/A';
       
-      // Lấy các bài kiểm tra sau ngày đầu tiên, nối các bài kiểm tra trong cùng 1 ngày sẽ được phân tách bằng ký tự "_c_"
+      const ngay = dayParts[0] || 'N/A';
       const tests = dayParts[1].split('_c_');
+      
       tests.forEach(test => {
         if (!test) return;
         const testParts = test.split('_a_');
@@ -426,10 +448,12 @@
       });
     });
     
-    // Tính điểm trung bình nếu có dữ liệu
     if (allScores.length > 0) {
       const averageScore = (allScores.reduce((sum, score) => sum + score, 0) / allScores.length).toFixed(2);
-      document.getElementById('average-test-score').textContent = averageScore;
+      const avgElem = document.getElementById('average-test-score');
+      if (avgElem) {
+        avgElem.textContent = averageScore;
+      }
     }
   } else {
     document.getElementById('testScoreBody').innerHTML = `
@@ -442,6 +466,7 @@
 
 </body>
 </html>
+
 
 
 
