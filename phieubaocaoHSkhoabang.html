@@ -169,7 +169,6 @@
       font-weight: bold;
       background-color: #e6e6e6 !important;
     }
-    /* Đảm bảo nội dung trong ô tự động xuống dòng và căn dọc lên trên */
     .data-table td, .data-table th {
       white-space: normal;
       overflow-wrap: break-word;
@@ -280,7 +279,7 @@
     </tfoot>
   </table>
 
-  <!-- Bảng điểm kiểm tra các ngày (đã thêm trường Tên bài kiểm tra) -->
+  <!-- Bảng điểm kiểm tra các ngày (đã cập nhật theo yêu cầu) -->
   <div class="section-title">ĐIỂM KIỂM TRA CÁC NGÀY</div>
   <table class="data-table">
     <thead>
@@ -324,7 +323,7 @@
     document.getElementById('student-class').textContent = params.get('lop') || '[Tên lớp]';
     document.getElementById('student-id').textContent = params.get('id') || '[Mã học sinh]';
     
-    // Cập nhật ngày báo cáo (sử dụng ngày hiện tại nếu không có tham số 'ngay')
+    // Cập nhật ngày báo cáo
     const today = new Date();
     document.getElementById('report-date').textContent = params.get('ngay') || 
       today.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -335,10 +334,10 @@
     document.getElementById('homework').textContent = params.get('btvn') || '[Điểm BTVN]';
     document.getElementById('stars').textContent = params.get('sao') ? params.get('sao') + ' ⭐' : '[Số sao]';
     
-    // Cập nhật nhận xét (hiển thị dưới dạng HTML)
+    // Cập nhật nhận xét
     document.getElementById('comment').innerHTML = params.get('nhanxet') || '[Nhận xét buổi học]';
     
-    // Xử lý dữ liệu bảng chi tiết từ tham số 'data'
+    // Xử lý dữ liệu bảng chi tiết
     const data = params.get('data');
     
     if (data) {
@@ -355,7 +354,6 @@
         };
       });
       
-      // Render các dòng dữ liệu vào bảng chi tiết
       const tableBody = document.getElementById('tableBody');
       tableBody.innerHTML = danhSachHocTap.map(item => `
         <tr>
@@ -369,7 +367,6 @@
         </tr>
       `).join('');
       
-      // Tính toán tổng hợp (chỉ cho bài tập và điểm kiểm tra)
       if (danhSachHocTap.length > 0) {
         const totalHomework = Math.round(danhSachHocTap.reduce((sum, item) => sum + item.hoanThanhBT, 0) / danhSachHocTap.length);
         const totalTest = Math.round(danhSachHocTap.reduce((sum, item) => sum + item.diemKiemTra, 0) / danhSachHocTap.length);
@@ -386,34 +383,53 @@
       `;
     }
 
-    // Xử lý dữ liệu điểm kiểm tra các ngày từ tham số 'idktra' (đã thêm trường Tên bài kiểm tra)
+    // Xử lý dữ liệu điểm kiểm tra các ngày (phiên bản mới)
     const testData = params.get('idktra');
     
     if (testData) {
-      const diemKiemTra = testData.split('_b_').map((item, index) => {
-        const parts = item.split('_a_');
-        return {
-          stt: index + 1,
-          ngay: parts[0] || 'N/A',
-          tenBaiKiemTra: parts[1] || 'Không có tên',
-          diem: parts[2] ? parseFloat(parts[2]) : 0
-        };
+      let sttCounter = 1;
+      const testScoreBody = document.getElementById('testScoreBody');
+      testScoreBody.innerHTML = '';
+      let allScores = [];
+      
+      // Tách các ngày bằng _b_
+      const days = testData.split('_b_');
+      
+      days.forEach(dayData => {
+        if (!dayData) return;
+        
+        // Tách ngày và danh sách bài kiểm tra bằng _a_
+        const dayParts = dayData.split('_a_');
+        if (dayParts.length < 2) return;
+        
+        const ngay = dayParts[0] || 'N/A';
+        const tests = dayParts[1].split('_c_');
+        
+        tests.forEach(test => {
+          if (!test) return;
+          
+          // Tách tên bài và điểm bằng _a_
+          const testParts = test.split('_a_');
+          if (testParts.length < 2) return;
+          
+          const tenBaiKiemTra = testParts[0] || 'Không có tên';
+          const diem = testParts[1] ? parseFloat(testParts[1]) : 0;
+          allScores.push(diem);
+          
+          testScoreBody.innerHTML += `
+            <tr>
+              <td class="center-text">${sttCounter++}</td>
+              <td>${ngay}</td>
+              <td>${tenBaiKiemTra}</td>
+              <td class="center-text">${diem}</td>
+            </tr>
+          `;
+        });
       });
       
-      // Render các dòng dữ liệu vào bảng điểm kiểm tra
-      const testScoreBody = document.getElementById('testScoreBody');
-      testScoreBody.innerHTML = diemKiemTra.map(item => `
-        <tr>
-          <td class="center-text">${item.stt}</td>
-          <td>${item.ngay}</td>
-          <td>${item.tenBaiKiemTra}</td>
-          <td class="center-text">${item.diem}</td>
-        </tr>
-      `).join('');
-      
       // Tính điểm trung bình
-      if (diemKiemTra.length > 0) {
-        const averageScore = (diemKiemTra.reduce((sum, item) => sum + item.diem, 0) / diemKiemTra.length).toFixed(2);
+      if (allScores.length > 0) {
+        const averageScore = (allScores.reduce((sum, score) => sum + score, 0) / allScores.length).toFixed(2);
         document.getElementById('average-test-score').textContent = averageScore;
       }
     } else {
