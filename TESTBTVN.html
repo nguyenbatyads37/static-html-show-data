@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thêm Bài Tập vào Google Sheet</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #4285f4;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #3367d6;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #e6f4ea;
+            color: #137333;
+        }
+        .error {
+            background-color: #fce8e6;
+            color: #d93025;
+        }
+        #linkList {
+            margin-top: 30px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        .link-item {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+        }
+    </style>
+</head>
+<body>
+    <h1>Thêm Link Bài Tập</h1>
+    
+    <div class="form-group">
+        <label for="linkInput">Nhập link bài tập:</label>
+        <input type="text" id="linkInput" placeholder="https://example.com/bai-tap">
+    </div>
+    
+    <button id="submitBtn">Thêm vào Google Sheet</button>
+    
+    <div id="result"></div>
+    
+    <div id="linkList">
+        <h2>Danh sách link đã thêm:</h2>
+        <div id="linksContainer"></div>
+    </div>
+
+    <script>
+        // URL Web App của bạn
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbynflNt4oPMzWMFB6d1PNqxhwiZ3zVBzVjqeOgOpG3chdC1fkqm9SGOofzp36jmgmnKkQ/exec';
+        
+        // Các biến DOM
+        const linkInput = document.getElementById('linkInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const resultDiv = document.getElementById('result');
+        const linksContainer = document.getElementById('linksContainer');
+        
+        // Load danh sách link khi trang được tải
+        document.addEventListener('DOMContentLoaded', fetchLinks);
+        
+        // Xử lý khi click nút Thêm
+        submitBtn.addEventListener('click', addLink);
+        
+        // Hàm thêm link vào Google Sheet
+        async function addLink() {
+            const link = linkInput.value.trim();
+            
+            if (!link) {
+                showResult('Vui lòng nhập link bài tập', false);
+                return;
+            }
+            
+            try {
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Đang thêm...';
+                
+                const response = await fetch(WEB_APP_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        action: 'add',
+                        rowData: [link] // Chỉ thêm vào cột A
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResult('Đã thêm link thành công vào hàng ' + data.newRowNumber, true);
+                    linkInput.value = '';
+                    fetchLinks(); // Cập nhật danh sách
+                } else {
+                    showResult('Lỗi: ' + data.message, false);
+                }
+            } catch (error) {
+                showResult('Lỗi kết nối: ' + error.message, false);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Thêm vào Google Sheet';
+            }
+        }
+        
+        // Hàm lấy danh sách link từ Google Sheet
+        async function fetchLinks() {
+            try {
+                const response = await fetch(WEB_APP_URL);
+                const data = await response.json();
+                
+                if (data.success && data.data) {
+                    displayLinks(data.data);
+                } else {
+                    linksContainer.innerHTML = '<p>Không thể tải danh sách link</p>';
+                }
+            } catch (error) {
+                linksContainer.innerHTML = '<p>Lỗi khi tải danh sách: ' + error.message + '</p>';
+            }
+        }
+        
+        // Hàm hiển thị danh sách link
+        function displayLinks(data) {
+            // Bỏ qua hàng tiêu đề nếu có
+            const links = data.slice(1).filter(row => row[0]); // Lấy cột A (index 0)
+            
+            if (links.length === 0) {
+                linksContainer.innerHTML = '<p>Chưa có link nào được thêm</p>';
+                return;
+            }
+            
+            let html = '';
+            links.forEach((row, index) => {
+                html += `
+                    <div class="link-item">
+                        <strong>${index + 1}.</strong> 
+                        <a href="${row[0]}" target="_blank">${row[0]}</a>
+                    </div>
+                `;
+            });
+            
+            linksContainer.innerHTML = html;
+        }
+        
+        // Hàm hiển thị kết quả
+        function showResult(message, isSuccess) {
+            resultDiv.textContent = message;
+            resultDiv.className = isSuccess ? 'success' : 'error';
+        }
+    </script>
+</body>
+</html>
