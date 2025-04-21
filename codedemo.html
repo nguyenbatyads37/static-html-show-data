@@ -32,15 +32,16 @@
             margin-bottom: 8px;
             font-weight: 500;
         }
-        input[type="text"] {
+        input[type="text"], input[type="date"], textarea, select {
             width: 100%;
             padding: 10px;
             border: 1px solid #dadce0;
             border-radius: 4px;
             font-size: 16px;
             transition: border 0.3s;
+            margin-bottom: 10px;
         }
-        input[type="text"]:focus {
+        input[type="text"]:focus, input[type="date"]:focus, textarea:focus, select:focus {
             border-color: #1a73e8;
             outline: none;
             box-shadow: 0 0 0 2px #e8f0fe;
@@ -145,6 +146,13 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
     </style>
 </head>
 <body>
@@ -152,8 +160,38 @@
         <h1>Quản lý Bài Tập</h1>
         
         <div class="form-group">
-            <label for="linkInput">Nhập link bài tập:</label>
-            <input type="text" id="linkInput" placeholder="https://example.com/bai-tap">
+            <label for="tenBaiTap">Tên bài tập:</label>
+            <input type="text" id="tenBaiTap" placeholder="Nhập tên bài tập">
+        </div>
+        
+        <div class="form-group">
+            <label for="linkBaiTap">Link bài tập:</label>
+            <input type="text" id="linkBaiTap" placeholder="https://example.com/bai-tap">
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="ngayBatDau">Ngày bắt đầu:</label>
+                <input type="date" id="ngayBatDau">
+            </div>
+            <div class="form-group">
+                <label for="ngayKetThuc">Ngày kết thúc:</label>
+                <input type="date" id="ngayKetThuc">
+            </div>
+        </div>
+        
+        <div class="form-group">
+            <label for="moTa">Mô tả:</label>
+            <textarea id="moTa" rows="3" placeholder="Nhập mô tả bài tập"></textarea>
+        </div>
+        
+        <div class="form-group">
+            <label for="trangThai">Trạng thái:</label>
+            <select id="trangThai">
+                <option value="Chưa hoàn thành">Chưa hoàn thành</option>
+                <option value="Đang làm">Đang làm</option>
+                <option value="Đã hoàn thành">Đã hoàn thành</option>
+            </select>
         </div>
         
         <button id="submitBtn">Thêm vào Google Sheet</button>
@@ -174,11 +212,16 @@
     </div>
 
     <script>
-        // URL Web App của bạn
+        // URL Web App của bạn - THAY THẾ BẰNG URL CỦA BẠN
         const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbynflNt4oPMzWMFB6d1PNqxhwiZ3zVBzVjqeOgOpG3chdC1fkqm9SGOofzp36jmgmnKkQ/exec';
         
         // DOM Elements
-        const linkInput = document.getElementById('linkInput');
+        const tenBaiTap = document.getElementById('tenBaiTap');
+        const linkBaiTap = document.getElementById('linkBaiTap');
+        const ngayBatDau = document.getElementById('ngayBatDau');
+        const ngayKetThuc = document.getElementById('ngayKetThuc');
+        const moTa = document.getElementById('moTa');
+        const trangThai = document.getElementById('trangThai');
         const submitBtn = document.getElementById('submitBtn');
         const refreshBtn = document.getElementById('refreshBtn');
         const resultDiv = document.getElementById('result');
@@ -186,6 +229,11 @@
         
         // Khởi tạo
         document.addEventListener('DOMContentLoaded', () => {
+            // Set ngày mặc định là hôm nay
+            const today = new Date().toISOString().split('T')[0];
+            ngayBatDau.value = today;
+            ngayKetThuc.value = today;
+            
             fetchLinks();
             
             // Thêm sự kiện click cho nút refresh
@@ -193,27 +241,40 @@
         });
         
         // Thêm sự kiện click cho nút submit
-        submitBtn.addEventListener('click', addLink);
+        submitBtn.addEventListener('click', addDataToSheet);
         
         // Thêm sự kiện nhấn Enter trong input
-        linkInput.addEventListener('keypress', (e) => {
+        tenBaiTap.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
-                addLink();
+                addDataToSheet();
             }
         });
         
-        // Hàm thêm link vào Google Sheet
-        async function addLink() {
-            const link = linkInput.value.trim();
+        // Hàm thêm dữ liệu vào Google Sheet
+        async function addDataToSheet() {
+            const data = {
+                tenBaiTap: tenBaiTap.value.trim(),
+                linkBaiTap: linkBaiTap.value.trim(),
+                ngayBatDau: ngayBatDau.value,
+                ngayKetThuc: ngayKetThuc.value,
+                moTa: moTa.value.trim(),
+                trangThai: trangThai.value
+            };
             
-            if (!link) {
-                showResult('Vui lòng nhập link bài tập', false);
-                linkInput.focus();
+            // Validate dữ liệu
+            if (!data.tenBaiTap) {
+                showResult('Vui lòng nhập tên bài tập', false);
+                tenBaiTap.focus();
                 return;
             }
             
-            // Validate URL
-            if (!isValidUrl(link)) {
+            if (!data.linkBaiTap) {
+                showResult('Vui lòng nhập link bài tập', false);
+                linkBaiTap.focus();
+                return;
+            }
+            
+            if (!isValidUrl(data.linkBaiTap)) {
                 showResult('Vui lòng nhập URL hợp lệ (bắt đầu bằng http:// hoặc https://)', false);
                 return;
             }
@@ -226,15 +287,22 @@
                 // Tạo request data
                 const requestData = {
                     action: 'add',
-                    rowData: [link]
+                    rowData: [
+                        data.tenBaiTap,
+                        data.linkBaiTap,
+                        formatDate(data.ngayBatDau),
+                        formatDate(data.ngayKetThuc),
+                        data.moTa,
+                        data.trangThai
+                    ]
                 };
                 
-                // Gửi request bằng cả 2 phương pháp để đảm bảo hoạt động
+                // Gửi request
                 let response = await sendRequest(WEB_APP_URL, requestData);
                 
                 if (response.success) {
-                    showResult(`Đã thêm thành công vào hàng ${response.newRowNumber}`, true);
-                    linkInput.value = '';
+                    showResult(`Đã thêm thành công bài tập "${data.tenBaiTap}" vào hàng ${response.newRowNumber}`, true);
+                    resetForm();
                     fetchLinks(); // Cập nhật danh sách
                 } else {
                     showResult('Lỗi: ' + (response.message || 'Không thể thêm dữ liệu'), false);
@@ -248,7 +316,20 @@
             }
         }
         
-        // Hàm lấy danh sách link từ Google Sheet
+        // Hàm reset form sau khi thêm thành công
+        function resetForm() {
+            tenBaiTap.value = '';
+            linkBaiTap.value = '';
+            moTa.value = '';
+            trangThai.value = 'Chưa hoàn thành';
+            
+            // Set lại ngày mặc định là hôm nay
+            const today = new Date().toISOString().split('T')[0];
+            ngayBatDau.value = today;
+            ngayKetThuc.value = today;
+        }
+        
+        // Hàm lấy danh sách dữ liệu từ Google Sheet
         async function fetchLinks() {
             try {
                 linksContainer.innerHTML = '<p>Đang tải danh sách...</p>';
@@ -264,7 +345,7 @@
                 const data = await response.json();
                 
                 if (data.success && data.data) {
-                    displayLinks(data.data);
+                    displayData(data.data);
                 } else {
                     throw new Error(data.message || 'Không thể tải dữ liệu');
                 }
@@ -282,23 +363,26 @@
             }
         }
         
-        // Hàm hiển thị danh sách link
-        function displayLinks(data) {
+        // Hàm hiển thị danh sách dữ liệu
+        function displayData(data) {
             // Bỏ qua hàng tiêu đề nếu có
-            const links = data.slice(1).filter(row => row[0]).map(row => row[0]);
+            const rows = data.slice(1).filter(row => row[0]);
             
-            if (links.length === 0) {
+            if (rows.length === 0) {
                 linksContainer.innerHTML = '<p>Chưa có bài tập nào được thêm</p>';
                 return;
             }
             
             let html = '';
-            links.forEach((link, index) => {
+            rows.forEach((row, index) => {
                 html += `
                     <div class="link-item">
                         <div class="link-number">${index + 1}.</div>
                         <div class="link-content">
-                            <a href="${link}" target="_blank">${link}</a>
+                            <strong>${row[0]}</strong> (${row[5]})<br>
+                            <small>Ngày bắt đầu: ${row[2]} - Ngày kết thúc: ${row[3]}</small><br>
+                            <a href="${row[1]}" target="_blank">${row[1]}</a><br>
+                            <small>${row[4]}</small>
                         </div>
                     </div>
                 `;
@@ -327,6 +411,13 @@
             } catch (_) {
                 return false;
             }
+        }
+        
+        // Hàm định dạng ngày tháng
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('vi-VN');
         }
         
         // Hàm gửi request với fallback
