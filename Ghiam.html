@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trợ Lý Ảo với Chức Năng Ghi Âm</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .recorder-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .recorder-title {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .recorder-button {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px;
+        }
+        .recorder-button:hover {
+            background-color: #c0392b;
+        }
+        .recorder-button.recording {
+            background-color: #2ecc71;
+            animation: pulse 1.5s infinite;
+        }
+        .recorder-button.recording:hover {
+            background-color: #27ae60;
+        }
+        .status-indicator {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        .timer {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #2c3e50;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trợ Lý Ảo với Chức Năng Ghi Âm</h1>
+        <div class="recorder-container">
+            <div class="recorder-title">Ghi Âm Trực Tuyến</div>
+            <button id="recordButton" class="recorder-button">
+                <i class="fas fa-microphone"></i> Bắt đầu ghi âm
+            </button>
+            <button id="stopButton" class="recorder-button hidden">
+                <i class="fas fa-stop"></i> Dừng ghi âm
+            </button>
+            <div id="timer" class="timer hidden">00:00</div>
+            <div id="status" class="status-indicator">Sẵn sàng ghi âm</div>
+            <div id="uploadStatus" class="status-indicator"></div>
+        </div>
+    </div>
+
+    <script>
+        // Thay thế YOUR_SCRIPT_URL bằng URL của Google Apps Script đã publish
+        const SCRIPT_URL = 'YOUR_WEB_APP_URL_HERE';
+        const DRIVE_FOLDER_ID = '1-8YbNFJ1qelAaiBH6CuN0iXmp1kn7sFumlm9WH6-DRW2H6Mo1v2fV4EDKjmcLUK1Q_1-78zS';
+        let mediaRecorder;
+        let audioChunks = [];
+        let recordingStartTime;
+        let timerInterval;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const recordButton = document.getElementById('recordButton');
+            const stopButton = document.getElementById('stopButton');
+            const timerElement = document.getElementById('timer');
+            const statusElement = document.getElementById('status');
+            const uploadStatusElement = document.getElementById('uploadStatus');
+
+            if (!navigator.mediaDevices || !window.MediaRecorder) {
+                statusElement.textContent = 'Trình duyệt của bạn không hỗ trợ ghi âm';
+                recordButton.disabled = true;
+                return;
+            }
+
+            recordButton.addEventListener('click', startRecording);
+            stopButton.addEventListener('click', stopRecording);
+
+            async function startRecording() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream);
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                        uploadToDrive(audioBlob);
+                    };
+
+                    mediaRecorder.start();
+                    audioChunks = [];
+                    recordingStartTime = Date.now();
+                    timerElement.textContent = '00:00';
+                    timerElement.classList.remove('hidden');
+                    timerInterval = setInterval(updateTimer, 1000);
+
+                    recordButton.classList.add('hidden');
+                    stopButton.classList.remove('hidden');
+                    statusElement.textContent = 'Đang ghi âm...';
+                } catch (error) {
+                    console.error('Lỗi khi bắt đầu ghi âm:', error);
+                    statusElement.textContent = 'Lỗi: ' + error.message;
+                }
+            }
+
+            function stopRecording() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    clearInterval(timerInterval);
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                    stopButton.classList.add('hidden');
+                    recordButton.classList.remove('hidden');
+                    statusElement.textContent = 'Đang xử lý và tải lên...';
+                }
+            }
+
+            function updateTimer() {
+                const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+                const m = String(Math.floor(elapsed / 60)).padStart(2, '0');
+                const s = String(elapsed % 60).padStart(2, '0');
+                timerElement.textContent = `${m}:${s}`;
+            }
+
+            async function uploadToDrive(audioBlob) {
+                uploadStatusElement.textContent = 'Đang kết nối với Google Drive...';
+                const formData = new FormData();
+                const fileName = `Ghi_am_${new Date().toISOString().replace(/[:.]/g, '-')}.wav`;
+                formData.append('file', audioBlob, fileName);
+                formData.append('folderId', DRIVE_FOLDER_ID);
+
+                try {
+                    const response = await fetch(SCRIPT_URL, { method: 'POST', body: formData });
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        uploadStatusElement.textContent = 'Tải lên thành công!';
+                    } else {
+                        uploadStatusElement.textContent = 'Lỗi tải lên: ' + (result.message || 'Không xác định');
+                    }
+                } catch (error) {
+                    console.error('Lỗi khi tải lên:', error);
+                    uploadStatusElement.textContent = 'Lỗi khi tải lên: ' + error.message;
+                } finally {
+                    statusElement.textContent = 'Sẵn sàng ghi âm';
+                    timerElement.classList.add('hidden');
+                }
+            }
+        });
+    </script>
+</body>
+</html>
