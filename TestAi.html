@@ -7,70 +7,90 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
             padding: 20px;
-            line-height: 1.6;
         }
-        h1 {
-            color: #4285F4;
+
+        h1, h2 {
             text-align: center;
+            color: #333;
         }
+
         .form-group {
             margin-bottom: 15px;
         }
+
         label {
-            display: block;
-            margin-bottom: 5px;
+            display: inline-block;
+            width: 120px;
             font-weight: bold;
         }
+
         input, select {
-            width: 100%;
             padding: 8px;
-            border: 1px solid #ddd;
+            width: 200px;
+            border: 1px solid #ccc;
             border-radius: 4px;
-            box-sizing: border-box;
         }
+
         button {
-            background-color: #4285F4;
+            padding: 10px 20px;
+            background-color: #28a745;
             color: white;
             border: none;
-            padding: 10px 15px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
+            margin: 10px 0;
         }
+
         button:hover {
-            background-color: #3367D6;
+            background-color: #218838;
         }
+
         #result {
-            margin-top: 20px;
-            padding: 15px;
+            margin: 20px 0;
+            padding: 10px;
             border-radius: 4px;
-            display: none;
         }
-        .success {
-            background-color: #E6F4EA;
-            color: #0D652D;
-            border: 1px solid #81C995;
+
+        #result.success {
+            background-color: #d4edda;
+            color: #155724;
         }
-        .error {
-            background-color: #FCE8E6;
-            color: #D93025;
-            border: 1px solid #F28B82;
+
+        #result.error {
+            background-color: #f8d7da;
+            color: #721c24;
         }
+
+        #dataTable {
+            margin-top: 20px;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
         }
+
         th, td {
+            padding: 10px;
             border: 1px solid #ddd;
-            padding: 8px;
             text-align: left;
         }
+
         th {
             background-color: #f2f2f2;
+            font-weight: bold;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
         }
     </style>
 </head>
@@ -86,28 +106,7 @@
         </select>
     </div>
     
-    <div id="inputFields">
-        <div class="form-group">
-            <label for="id">ID:</label>
-            <input type="text" id="id" placeholder="Nhập ID">
-        </div>
-        <div class="form-group">
-            <label for="category">Hạng mục:</label>
-            <input type="text" id="category" placeholder="Nhập hạng mục">
-        </div>
-        <div class="form-group">
-            <label for="aiName">Tên AI:</label>
-            <input type="text" id="aiName" placeholder="Nhập tên AI">
-        </div>
-        <div class="form-group">
-            <label for="aiCode">Mã AI:</label>
-            <input type="text" id="aiCode" placeholder="Nhập mã AI">
-        </div>
-        <div class="form-group">
-            <label for="user">User:</label>
-            <input type="text" id="user" placeholder="Nhập user">
-        </div>
-    </div>
+    <div id="inputFields"></div>
     
     <button id="submitBtn">Gửi dữ liệu</button>
     
@@ -115,6 +114,7 @@
     
     <div id="dataTable" style="display: none;">
         <h2>Danh sách AI</h2>
+        <button id="refreshBtn">Làm mới</button>
         <table id="aiTable">
             <thead>
                 <tr>
@@ -134,32 +134,62 @@
         document.addEventListener('DOMContentLoaded', function() {
             const actionSelect = document.getElementById('action');
             const submitBtn = document.getElementById('submitBtn');
+            const refreshBtn = document.getElementById('refreshBtn');
             const resultDiv = document.getElementById('result');
             const dataTable = document.getElementById('dataTable');
             const aiTableBody = document.querySelector('#aiTable tbody');
-            
+            const inputFields = document.getElementById('inputFields');
+
+            // Tạo các trường input động
+            const inputFieldsHTML = `
+                <div class="form-group">
+                    <label for="id">ID:</label>
+                    <input type="text" id="id" required>
+                </div>
+                <div class="form-group">
+                    <label for="category">Hạng mục:</label>
+                    <input type="text" id="category" required>
+                </div>
+                <div class="form-group">
+                    <label for="aiName">Tên AI:</label>
+                    <input type="text" id="aiName" required>
+                </div>
+                <div class="form-group">
+                    <label for="aiCode">Mã AI:</label>
+                    <input type="text" id="aiCode" required>
+                </div>
+                <div class="form-group">
+                    <label for="user">User:</label>
+                    <input type="text" id="user" required>
+                </div>
+            `;
+            inputFields.innerHTML = inputFieldsHTML;
+
             // Xử lý thay đổi hành động
             actionSelect.addEventListener('change', function() {
                 if (this.value === 'get') {
-                    document.getElementById('inputFields').style.display = 'none';
+                    inputFields.style.display = 'none';
                     submitBtn.textContent = 'Lấy dữ liệu';
                 } else {
-                    document.getElementById('inputFields').style.display = 'block';
+                    inputFields.style.display = 'block';
                     submitBtn.textContent = this.value === 'add' ? 'Thêm mới' : 'Cập nhật';
                 }
             });
-            
+
+            // Nút làm mới
+            refreshBtn.addEventListener('click', fetchData);
+
             // Xử lý gửi dữ liệu
             submitBtn.addEventListener('click', function() {
                 const action = actionSelect.value;
-                
+
                 if (action === 'get') {
                     fetchData();
                 } else {
                     submitData(action);
                 }
             });
-            
+
             // Hàm gửi dữ liệu
             function submitData(action) {
                 const id = document.getElementById('id').value;
@@ -167,86 +197,112 @@
                 const aiName = document.getElementById('aiName').value;
                 const aiCode = document.getElementById('aiCode').value;
                 const user = document.getElementById('user').value;
-                
+
                 if (!id || !category || !aiName || !aiCode || !user) {
                     showResult('Vui lòng điền đầy đủ thông tin', false);
                     return;
                 }
-                
-                // Tạo chuỗi dữ liệu cách nhau bằng dấu phẩy
+
                 const dataString = `${id},${category},${aiName},${aiCode},${user}`;
-                
-                // Gửi dữ liệu đến Google Apps Script
+
                 fetch('https://script.google.com/macros/s/AKfycbwhJLYfug8v7UzIiotoNFPpekQwfcBTEN-oQHYYdFZWrkwPB8F5BE87Ir3pjec35wOT/exec', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({
-                        data: dataString
-                    }),
+                    body: JSON.stringify({ data: dataString }),
+                    mode: 'cors',
+                    credentials: 'same-origin'
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success) {
                         showResult(`Thành công: ${data.message}`, true);
-                        // Làm mới danh sách sau khi thêm/cập nhật
                         fetchData();
+                        clearForm();
                     } else {
                         showResult(`Lỗi: ${data.message}`, false);
                     }
                 })
                 .catch(error => {
-                    showResult(`Lỗi kết nối: ${error}`, false);
+                    showResult(`Lỗi kết nối: ${error.message}`, false);
+                    console.error('Error:', error);
                 });
             }
-            
+
             // Hàm lấy dữ liệu
             function fetchData() {
-                fetch('https://script.google.com/macros/s/AKfycbwhJLYfug8v7UzIiotoNFPpekQwfcBTEN-oQHYYdFZWrkwPB8F5BE87Ir3pjec35wOT/exec?action=get')
-                .then(response => response.json())
+                fetch('https://script.google.com/macros/s/AKfycbwhJLYfug8v7UzIiotoNFPpekQwfcBTEN-oQHYYdFZWrkwPB8F5BE87Ir3pjec35wOT/exec?action=get', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    mode: 'cors'
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
                     if (data.success && data.data) {
                         displayData(data.data);
+                        showResult(`Đã tải ${data.data.length} bản ghi`, true);
                     } else {
                         showResult(data.message || 'Không có dữ liệu', false);
                     }
                 })
                 .catch(error => {
-                    showResult(`Lỗi khi lấy dữ liệu: ${error}`, false);
+                    showResult(`Lỗi khi lấy dữ liệu: ${error.message}`, false);
+                    console.error('Error:', error);
                 });
             }
-            
+
             // Hiển thị dữ liệu trong bảng
             function displayData(data) {
                 dataTable.style.display = 'block';
                 aiTableBody.innerHTML = '';
-                
+
                 if (Array.isArray(data)) {
                     data.forEach(item => {
                         const row = document.createElement('tr');
                         row.innerHTML = `
-                            <td>${item.id || ''}</td>
-                            <td>${item.category || ''}</td>
-                            <td>${item.aiName || ''}</td>
-                            <td>${item.aiCode || ''}</td>
-                            <td>${item.user || ''}</td>
-                            <td>${item.updatedAt || ''}</td>
+                            <td>${item.ID || item.id || ''}</td>
+                            <td>${item['Hạng mục'] || item.category || ''}</td>
+                            <td>${item['Tên Ai'] || item.aiName || ''}</td>
+                            <td>${item['Mã Ai'] || item.aiCode || ''}</td>
+                            <td>${item.User || item.user || ''}</td>
+                            <td>${item['Thời gian cập nhật'] || item.updatedAt || ''}</td>
                         `;
                         aiTableBody.appendChild(row);
                     });
-                    showResult(`Đã tải ${data.length} bản ghi`, true);
-                } else {
-                    showResult('Dữ liệu không hợp lệ', false);
                 }
             }
-            
+
+            // Xóa form sau khi submit
+            function clearForm() {
+                document.getElementById('id').value = '';
+                document.getElementById('category').value = '';
+                document.getElementById('aiName').value = '';
+                document.getElementById('aiCode').value = '';
+                document.getElementById('user').value = '';
+            }
+
             // Hiển thị kết quả
             function showResult(message, isSuccess) {
                 resultDiv.textContent = message;
                 resultDiv.className = isSuccess ? 'success' : 'error';
                 resultDiv.style.display = 'block';
             }
+
+            // Tự động load dữ liệu khi trang được tải
+            fetchData();
         });
     </script>
 </body>
