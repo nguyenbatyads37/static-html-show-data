@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xem dữ liệu từ Google Sheets</title>
+    <title>PHIẾU BÀN GIAO ĐƠN HÀNG</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -12,6 +12,12 @@
         }
         h1 {
             color: #1a73e8;
+            text-align: center;
+        }
+        .logo {
+            display: block;
+            margin: 0 auto 20px;
+            max-width: 200px;
         }
         table {
             border-collapse: collapse;
@@ -63,6 +69,8 @@
         }
         .filter-control {
             margin: 5px 0;
+            display: flex;
+            align-items: center;
         }
         label {
             margin-right: 10px;
@@ -73,20 +81,28 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+        .selected-date {
+            margin-left: 10px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
-    <h1>Dữ liệu từ Google Sheets</h1>
+    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
+    <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
     <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
     
     <div class="filter-container">
         <h3>Bộ lọc</h3>
         <div class="filter-control">
-            <label for="dateFilter">Ngày (cột E):</label>
-            <input type="date" id="dateFilter" onchange="filterData()">
+            <label for="dateFilter">Ngày:</label>
+            <select id="dateFilter" onchange="filterData()">
+                <option value="">Tất cả</option>
+            </select>
+            <span id="selectedDate" class="selected-date"></span>
         </div>
         <div class="filter-control">
-            <label for="anFilter">Lọc theo cột AN:</label>
+            <label for="anFilter">Lọc theo tài xế:</label>
             <select id="anFilter" onchange="filterData()">
                 <option value="">Tất cả</option>
             </select>
@@ -105,12 +121,21 @@
         let originalData = [];
         let filteredData = [];
         let uniqueANValues = [];
-        let anToCMap = {}; // Map AN codes to column C values
+        let uniqueDateValues = [];
+        let anToCMap = {};
+        
+        // Hàm chuyển đổi YYYY-MM-DD sang DD/MM/YYYY
+        function formatToDisplayDate(isoDate) {
+            if (!isoDate) return '';
+            const [year, month, day] = isoDate.split('-');
+            return `${day}/${month}/${year}`;
+        }
         
         function loadData() {
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
             document.getElementById('data-container').innerHTML = '';
+            document.getElementById('selectedDate').textContent = '';
             
             // Load lookup sheet first (for column C)
             const lookupUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`;
@@ -121,7 +146,6 @@
                         const jsonData = JSON.parse(data.substring(47).slice(0, -2));
                         const rows = jsonData.table.rows;
                         
-                        // Create mapping of AN (column A) to C
                         anToCMap = {};
                         rows.forEach(row => {
                             const anValue = row.c[0] ? String(row.c[0].v).trim() : '';
@@ -131,7 +155,6 @@
                             }
                         });
                         
-                        // Load main sheet
                         loadMainSheet();
                     } catch (e) {
                         document.getElementById('loading').style.display = 'none';
@@ -163,16 +186,37 @@
                         }
                         
                         originalData = rows.map(row => {
-                            // Normalize date in column E
                             let dateE = '';
                             if (row.c[4] && row.c[4].v) {
-                                const rawDate = new Date(row.c[4].v);
-                                // Adjust for local timezone to avoid date offset
-                                dateE = rawDate.toLocaleDateString('vi-VN', {
-                                    year: 'numeric',
-                                    month: '2-digit',
-                                    day: '2-digit'
-                                }).split('/').reverse().join('-'); // Format as YYYY-MM-DD
+                                try {
+                                    let rawDate;
+                                    if (typeof row.c[4].v === 'string' && row.c[4].v.startsWith('Date')) {
+                                        const dateMatch = row.c[4].v.match(/Date\((\d+),(\d+),(\d+)\)/);
+                                        if (dateMatch) {
+                                            // Google Sheets uses 0-based months
+                                            rawDate = new Date(
+                                                parseInt(dateMatch[1]),
+                                                parseInt(dateMatch[2]), // Không trừ 1 vì tháng đã đúng
+                                                parseInt(dateMatch[3])
+                                            );
+                                        }
+                                    } else if (typeof row.c[4].v === 'string') {
+                                        // Thử xử lý các định dạng ngày khác (ví dụ: DD/MM/YYYY hoặc YYYY-MM-DD)
+                                        rawDate = new Date(row.c[4].v.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
+                                    } else {
+                                        rawDate = new Date(row.c[4].v);
+                                    }
+                                    
+                                    if (rawDate && !isNaN(rawDate)) {
+                                        dateE = rawDate.toISOString().split('T')[0];
+                                    } else {
+                                        console.warn('Invalid date in column E:', row.c[4]);
+                                    }
+                                } catch (e) {
+                                    console.warn('Error parsing date in column E:', row.c[4], e);
+                                }
+                            } else {
+                                console.warn('Empty or missing date in column E:', row.c[4]);
                             }
                             
                             const anRaw = row.c[39] ? String(row.c[39].v).trim() : '';
@@ -188,10 +232,15 @@
                             };
                         });
                         
-                        // Get unique AN values (split by comma)
+                        uniqueDateValues = [...new Set(
+                            originalData.map(item => item.E).filter(date => date)
+                        )].sort();
+                        
                         uniqueANValues = [...new Set(
                             originalData.flatMap(item => item.AN).filter(v => v)
                         )].sort();
+                        
+                        updateDateFilterOptions();
                         updateANFilterOptions();
                         
                         filterData();
@@ -205,6 +254,18 @@
                 });
         }
         
+        function updateDateFilterOptions() {
+            const dateFilter = document.getElementById('dateFilter');
+            dateFilter.innerHTML = '<option value="">Tất cả</option>';
+            
+            uniqueDateValues.forEach(date => {
+                const option = document.createElement('option');
+                option.value = date;
+                option.textContent = formatToDisplayDate(date);
+                dateFilter.appendChild(option);
+            });
+        }
+        
         function updateANFilterOptions() {
             const anFilter = document.getElementById('anFilter');
             anFilter.innerHTML = '<option value="">Tất cả</option>';
@@ -212,7 +273,6 @@
             uniqueANValues.forEach(value => {
                 const option = document.createElement('option');
                 option.value = value;
-                // Display column C value if available, else AN code
                 option.textContent = anToCMap[value] || value;
                 anFilter.appendChild(option);
             });
@@ -221,6 +281,8 @@
         function filterData() {
             const dateFilter = document.getElementById('dateFilter').value;
             const anFilter = document.getElementById('anFilter').value;
+            
+            document.getElementById('selectedDate').textContent = dateFilter ? `Đã chọn: ${formatToDisplayDate(dateFilter)}` : '';
             
             filteredData = originalData.filter(item => {
                 if (dateFilter && item.E !== dateFilter) {
@@ -246,16 +308,16 @@
             }
             
             let html = '<table><thead><tr>';
-            html += '<th>Ngày (E)</th>';
-            html += '<th>H</th>';
-            html += '<th>I</th>';
-            html += '<th>AE</th>';
-            html += '<th>AN</th>';
+            html += '<th>Ngày</th>';
+            html += '<th>Tên khách hàng</th>';
+            html += '<th>SĐT</th>';
+            html += '<th>Tên SP</th>';
+            html += '<th>Tài xế</th>';
             html += '</tr></thead><tbody>';
             
             filteredData.forEach(item => {
                 html += '<tr>';
-                html += `<td>${item.E || ''}</td>`;
+                html += `<td>${formatToDisplayDate(item.E) || ''}</td>`;
                 html += `<td>${item.H || ''}</td>`;
                 html += `<td>${item.I || ''}</td>`;
                 html += `<td>${item.AE || ''}</td>`;
