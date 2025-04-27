@@ -55,81 +55,146 @@
         .refresh-btn:hover {
             background-color: #0d5bba;
         }
+        .filter-container {
+            margin: 15px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+        .filter-control {
+            margin: 5px 0;
+        }
+        label {
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        input, select {
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
     <h1>Dữ liệu từ Google Sheets</h1>
     <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
+    
+    <div class="filter-container">
+        <h3>Bộ lọc</h3>
+        <div class="filter-control">
+            <label for="dateFilter">Ngày (cột E):</label>
+            <input type="date" id="dateFilter" onchange="filterData()">
+        </div>
+        <div class="filter-control">
+            <label for="anFilter">Lọc theo cột AN:</label>
+            <select id="anFilter" onchange="filterData()">
+                <option value="">Tất cả</option>
+            </select>
+        </div>
+    </div>
+    
     <div id="loading" class="loading">Đang tải dữ liệu...</div>
     <div id="error" class="error" style="display: none;"></div>
     <div id="data-container" style="overflow-x: auto;"></div>
 
     <script>
-        // Thông tin Google Sheets của bạn
         const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
-        const sheetId = '116599712';
+        const sheetIdMain = '116599712';
+        const sheetIdLookup = '2007395895';
         
-        // Hàm tải dữ liệu
+        let originalData = [];
+        let filteredData = [];
+        let uniqueANValues = [];
+        let anToCMap = {}; // Map AN codes to column C values
+        
         function loadData() {
-            // Hiển thị trạng thái đang tải
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
             document.getElementById('data-container').innerHTML = '';
             
-            // API endpoint công khai (không cần xác thực)
-            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetId}`;
+            // Load lookup sheet first (for column C)
+            const lookupUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`;
+            fetch(lookupUrl)
+                .then(response => response.text())
+                .then(data => {
+                    try {
+                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                        const rows = jsonData.table.rows;
+                        
+                        // Create mapping of AN (column A) to C
+                        anToCMap = {};
+                        rows.forEach(row => {
+                            const anValue = row.c[0] ? String(row.c[0].v).trim() : '';
+                            const cValue = row.c[2] ? String(row.c[2].v).trim() : '';
+                            if (anValue && cValue) {
+                                anToCMap[anValue] = cValue;
+                            }
+                        });
+                        
+                        // Load main sheet
+                        loadMainSheet();
+                    } catch (e) {
+                        document.getElementById('loading').style.display = 'none';
+                        showError('Lỗi khi phân tích dữ liệu lookup: ' + e.message);
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    showError('Lỗi khi tải dữ liệu lookup: ' + error.message);
+                });
+        }
+        
+        function loadMainSheet() {
+            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`;
             
             fetch(url)
                 .then(response => response.text())
                 .then(data => {
-                    // Ẩn thông báo đang tải
                     document.getElementById('loading').style.display = 'none';
                     
-                    // Xử lý dữ liệu trả về từ Google Sheets
                     try {
-                        // Loại bỏ phần đầu không cần thiết
                         const jsonData = JSON.parse(data.substring(47).slice(0, -2));
-                        
-                        // Lấy thông tin cột và dòng
                         const columns = jsonData.table.cols.map(col => col.label);
                         const rows = jsonData.table.rows;
                         
-                        // Kiểm tra nếu không có dữ liệu
                         if (rows.length === 0) {
                             showError('Không có dữ liệu trong bảng tính');
                             return;
                         }
                         
-                        // Tạo bảng HTML
-                        let html = '<table><thead><tr>';
-                        
-                        // Thêm tiêu đề cột
-                        columns.forEach(column => {
-                            html += `<th>${column || ''}</th>`;
+                        originalData = rows.map(row => {
+                            // Normalize date in column E
+                            let dateE = '';
+                            if (row.c[4] && row.c[4].v) {
+                                const rawDate = new Date(row.c[4].v);
+                                // Adjust for local timezone to avoid date offset
+                                dateE = rawDate.toLocaleDateString('vi-VN', {
+                                    year: 'numeric',
+                                    month: '2-digit',
+                                    day: '2-digit'
+                                }).split('/').reverse().join('-'); // Format as YYYY-MM-DD
+                            }
+                            
+                            const anRaw = row.c[39] ? String(row.c[39].v).trim() : '';
+                            const anValues = anRaw ? anRaw.split(',').map(v => v.trim()).filter(v => v) : [];
+                            
+                            return {
+                                E: dateE,
+                                H: row.c[7] ? (row.c[7].f || row.c[7].v) : '',
+                                I: row.c[8] ? (row.c[8].f || row.c[8].v) : '',
+                                AE: row.c[30] ? (row.c[30].f || row.c[30].v) : '',
+                                AN: anValues,
+                                AN_Display: anValues.map(v => anToCMap[v] || v).join(', ')
+                            };
                         });
-                        html += '</tr></thead><tbody>';
                         
-                        // Thêm dữ liệu từng dòng
-                        rows.forEach(row => {
-                            html += '<tr>';
-                            row.c.forEach(cell => {
-                                let value = '';
-                                if (cell) {
-                                    value = cell.v !== undefined ? cell.v : '';
-                                    // Xử lý các kiểu dữ liệu đặc biệt (ngày tháng, số,...)
-                                    if (cell.f) {
-                                        value = cell.f;
-                                    }
-                                }
-                                html += `<td>${value}</td>`;
-                            });
-                            html += '</tr>';
-                        });
+                        // Get unique AN values (split by comma)
+                        uniqueANValues = [...new Set(
+                            originalData.flatMap(item => item.AN).filter(v => v)
+                        )].sort();
+                        updateANFilterOptions();
                         
-                        html += '</tbody></table>';
-                        
-                        // Hiển thị bảng
-                        document.getElementById('data-container').innerHTML = html;
+                        filterData();
                     } catch (e) {
                         showError('Lỗi khi phân tích dữ liệu: ' + e.message);
                     }
@@ -140,13 +205,74 @@
                 });
         }
         
+        function updateANFilterOptions() {
+            const anFilter = document.getElementById('anFilter');
+            anFilter.innerHTML = '<option value="">Tất cả</option>';
+            
+            uniqueANValues.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                // Display column C value if available, else AN code
+                option.textContent = anToCMap[value] || value;
+                anFilter.appendChild(option);
+            });
+        }
+        
+        function filterData() {
+            const dateFilter = document.getElementById('dateFilter').value;
+            const anFilter = document.getElementById('anFilter').value;
+            
+            filteredData = originalData.filter(item => {
+                if (dateFilter && item.E !== dateFilter) {
+                    return false;
+                }
+                
+                if (anFilter && !item.AN.includes(anFilter)) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            displayFilteredData();
+        }
+        
+        function displayFilteredData() {
+            const container = document.getElementById('data-container');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<p>Không có dữ liệu phù hợp với bộ lọc</p>';
+                return;
+            }
+            
+            let html = '<table><thead><tr>';
+            html += '<th>Ngày (E)</th>';
+            html += '<th>H</th>';
+            html += '<th>I</th>';
+            html += '<th>AE</th>';
+            html += '<th>AN</th>';
+            html += '</tr></thead><tbody>';
+            
+            filteredData.forEach(item => {
+                html += '<tr>';
+                html += `<td>${item.E || ''}</td>`;
+                html += `<td>${item.H || ''}</td>`;
+                html += `<td>${item.I || ''}</td>`;
+                html += `<td>${item.AE || ''}</td>`;
+                html += `<td>${item.AN_Display || ''}</td>`;
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+        
         function showError(message) {
             const errorDiv = document.getElementById('error');
             errorDiv.style.display = 'block';
             errorDiv.textContent = message;
         }
         
-        // Tải dữ liệu khi trang được mở
         window.onload = loadData;
     </script>
 </body>
