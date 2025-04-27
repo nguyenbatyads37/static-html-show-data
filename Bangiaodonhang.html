@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Xem dữ liệu từ Google Sheets</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1a73e8;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        .error {
+            color: #d32f2f;
+            padding: 10px;
+            background-color: #ffebee;
+            border-radius: 4px;
+        }
+        .refresh-btn {
+            margin: 10px 0;
+            padding: 8px 16px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background-color: #0d5bba;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dữ liệu từ Google Sheets</h1>
+    <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
+    <div id="loading" class="loading">Đang tải dữ liệu...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="data-container" style="overflow-x: auto;"></div>
+
+    <script>
+        // Thông tin Google Sheets của bạn
+        const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
+        const sheetId = '116599712';
+        
+        // Hàm tải dữ liệu
+        function loadData() {
+            // Hiển thị trạng thái đang tải
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('data-container').innerHTML = '';
+            
+            // API endpoint công khai (không cần xác thực)
+            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetId}`;
+            
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    // Ẩn thông báo đang tải
+                    document.getElementById('loading').style.display = 'none';
+                    
+                    // Xử lý dữ liệu trả về từ Google Sheets
+                    try {
+                        // Loại bỏ phần đầu không cần thiết
+                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                        
+                        // Lấy thông tin cột và dòng
+                        const columns = jsonData.table.cols.map(col => col.label);
+                        const rows = jsonData.table.rows;
+                        
+                        // Kiểm tra nếu không có dữ liệu
+                        if (rows.length === 0) {
+                            showError('Không có dữ liệu trong bảng tính');
+                            return;
+                        }
+                        
+                        // Tạo bảng HTML
+                        let html = '<table><thead><tr>';
+                        
+                        // Thêm tiêu đề cột
+                        columns.forEach(column => {
+                            html += `<th>${column || ''}</th>`;
+                        });
+                        html += '</tr></thead><tbody>';
+                        
+                        // Thêm dữ liệu từng dòng
+                        rows.forEach(row => {
+                            html += '<tr>';
+                            row.c.forEach(cell => {
+                                let value = '';
+                                if (cell) {
+                                    value = cell.v !== undefined ? cell.v : '';
+                                    // Xử lý các kiểu dữ liệu đặc biệt (ngày tháng, số,...)
+                                    if (cell.f) {
+                                        value = cell.f;
+                                    }
+                                }
+                                html += `<td>${value}</td>`;
+                            });
+                            html += '</tr>';
+                        });
+                        
+                        html += '</tbody></table>';
+                        
+                        // Hiển thị bảng
+                        document.getElementById('data-container').innerHTML = html;
+                    } catch (e) {
+                        showError('Lỗi khi phân tích dữ liệu: ' + e.message);
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('loading').style.display = 'none';
+                    showError('Lỗi khi tải dữ liệu: ' + error.message);
+                });
+        }
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+        }
+        
+        // Tải dữ liệu khi trang được mở
+        window.onload = loadData;
+    </script>
+</body>
+</html>
