@@ -91,6 +91,15 @@
     </div>
 
     <script>
+        // Hàm chuyển đổi ngày từ MM/DD/YYYY sang đối tượng Date
+        function parseCustomDate(dateStr) {
+            const parts = dateStr.split('/');
+            if (parts.length === 3) {
+                return new Date(parts[2], parts[0] - 1, parts[1]);
+            }
+            return new Date(0); // Trả về ngày mặc định nếu không parse được
+        }
+
         // Hàm lấy dữ liệu từ URL
         function getTableDataFromURL() {
             const params = new URLSearchParams(window.location.search);
@@ -101,7 +110,17 @@
             try {
                 // Giải mã URL và chia dữ liệu thành mảng các hàng
                 const decodedData = decodeURIComponent(dataParam);
-                const rows = decodedData.split('_b_').map(row => row.split('_a_'));
+                const rows = decodedData.split('_b_')
+                    .map(row => row.split('_a_'))
+                    .filter(row => row.length > 1); // Lọc các hàng trống
+                
+                // Sắp xếp theo ngày tăng dần
+                rows.sort((a, b) => {
+                    const dateA = parseCustomDate(a[0].trim());
+                    const dateB = parseCustomDate(b[0].trim());
+                    return dateA - dateB;
+                });
+                
                 return rows;
             } catch (e) {
                 console.error("Lỗi khi parse dữ liệu:", e);
@@ -118,9 +137,6 @@
             let totalHours = 0;
 
             tableData.forEach((rowData, index) => {
-                // Bỏ qua các hàng trống
-                if (rowData.length < 2) return;
-
                 const row = document.createElement('tr');
                 
                 // STT
@@ -137,13 +153,13 @@
                     rowData[4] || '', // Số giờ làm
                     rowData[5] || '', // Tổng công việc
                     rowData[6] || '', // Việc Đạt
-                    rowData[7] || '', // BTVN (nếu có)
+                    rowData[7] || '', // BTVN
                     rowData[8] || ''  // Số HS được nhận xét
                 ];
 
                 columns.forEach(colData => {
                     const cell = document.createElement('td');
-                    cell.textContent = colData;
+                    cell.textContent = colData.trim();
                     row.appendChild(cell);
                 });
                 
@@ -154,7 +170,7 @@
                 totalHours += hours;
             });
 
-            // Cập nhật tổng số giờ (làm tròn)
+            // Cập nhật tổng số giờ (làm tròn 2 chữ số thập phân)
             document.getElementById('tong-gio').textContent = Math.round(totalHours * 100) / 100;
         }
 
