@@ -251,6 +251,10 @@
       vertical-align: middle;
     }
     
+    .empty-row {
+      display: none;
+    }
+    
     .no-data {
       text-align: center;
       color: var(--text-light);
@@ -293,7 +297,7 @@
     }
     
     .comment-stamp {
-      position: absolute;
+      position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%) rotate(-15deg);
@@ -408,7 +412,6 @@
         font-size: 16pt;
       }
       
-      /* Ensure tables don't break across pages */
       table { 
         page-break-inside: auto;
       }
@@ -437,9 +440,10 @@
   <table class="candidate-details">
     <tr>
       <td rowspan="4" style="width: 150px; text-align:center;">
-        <div class="candidate-photo"></div>
+        <div class="candidate-photo">Photo</div>
+        <p>Candidate ID Photo</p>
       </td>
-      <th>Họ và tên</th>
+      <th style="width: 150px;">Họ và tên</th>
       <td id="student-name">[Tên học sinh]</td>
     </tr>
     <tr>
@@ -475,7 +479,7 @@
   <table class="data-table">
     <thead>
       <tr>
-        <th style="width: 50px;">STT</th>
+        <th>STT</th>
         <th>Ngày</th>
         <th>Chuyên cần</th>
         <th>% Hoàn thành bài tập</th>
@@ -483,7 +487,7 @@
       </tr>
     </thead>
     <tbody id="tableBody">
-      <tr>
+      <tr class="no-data-row">
         <td colspan="5" class="no-data">Không có dữ liệu học tập</td>
       </tr>
     </tbody>
@@ -493,20 +497,20 @@
   <table class="data-table">
     <thead>
       <tr>
-        <th style="width: 50px;">STT</th>
+        <th>STT</th>
         <th>Ngày kiểm tra</th>
         <th>Tên Bài Kiểm Tra</th>
         <th>Điểm</th>
       </tr>
     </thead>
     <tbody id="testScoreBody">
-      <tr>
+      <tr class="no-data-row">
         <td colspan="4" class="no-data">Không có dữ liệu điểm kiểm tra</td>
       </tr>
     </tbody>
   </table>
 
-  <div class="section-title">BIỂU ĐỒ TIẾN BỘ HỌC TẬP</div>
+  <div class="section-title">Biểu đồ tiến bộ học tập</div>
   <canvas id="progressChart" width="800" height="400"></canvas>
 
   <div class="report-section">
@@ -523,12 +527,11 @@
   </div>
 
   <div class="stamp-signature">
-    <div class="stamp">CON DẤU</div>
-    <div class="signature">NGƯỜI LẬP BÁO CÁO</div>
+    <div class="stamp">Official Stamp</div>
+    <div class="signature">Administrator Signature</div>
   </div>
 
   <script>
-    // Xử lý dữ liệu và hiển thị
     const params = new URLSearchParams(window.location.search);
     document.getElementById('student-name').textContent = params.get('ten') || '[Tên học sinh]';
     document.getElementById('student-class').textContent = params.get('lop') || '[Tên lớp]';
@@ -542,7 +545,7 @@
     document.getElementById('stars').textContent = params.get('sao') ? params.get('sao') + ' ⭐' : '[Số sao]';
     document.getElementById('comment').innerHTML = params.get('nhanxet') || document.getElementById('comment').innerHTML;
 
-    // Xử lý con dấu
+    // Handle the stamp image
     const condau = params.get('condau');
     const commentStamp = document.getElementById('commentStamp');
     if (condau && condau !== '0' && condau !== 'false') {
@@ -551,188 +554,112 @@
       commentStamp.style.display = 'none';
     }
 
-    // Xử lý dữ liệu học tập
     const data = params.get('data');
-    const tableBody = document.getElementById('tableBody');
-    const noDataRow = tableBody.querySelector('tr');
-    
-    if (data && data.trim() !== '') {
+    if (data) {
       const danhSachHocTap = data.split('_b_').map((item, index) => {
         const parts = item.split('_a_');
         return {
           stt: index + 1,
-          ngay: parts[0] || '',
-          chuyenCan: parts[1] || '',
-          hoanThanhBT: parts[2] ? parseInt(parts[2]) : null,
-          diemKiemTra: parts[3] ? parseInt(parts[3]) : null
+          ngay: parts[0] || 'N/A',
+          chuyenCan: parts[1] || 'Không có',
+          hoanThanhBT: parts[2] ? parseInt(parts[2]) : 0,
+          diemKiemTra: parts[3] ? parseInt(parts[3]) : 0
         };
-      }).filter(item => item.ngay.trim() !== '');
-
-      if (danhSachHocTap.length > 0) {
-        tableBody.innerHTML = danhSachHocTap.map(item => {
-          const getScoreClass = (score) => {
-            if (score === null) return '';
-            if (score >= 90) return 'score-excellent';
-            if (score >= 70) return 'score-good';
-            if (score >= 50) return 'score-average';
-            return 'score-poor';
-          };
-          
-          return `
-            <tr>
-              <td class="center-text">${item.stt}</td>
-              <td>${item.ngay || 'N/A'}</td>
-              <td>${item.chuyenCan || 'Không có'}</td>
-              <td class="center-text ${getScoreClass(item.hoanThanhBT)}">${item.hoanThanhBT !== null ? item.hoanThanhBT + '%' : 'N/A'}</td>
-              <td class="center-text ${getScoreClass(item.diemKiemTra)}">${item.diemKiemTra !== null ? item.diemKiemTra + '%' : 'N/A'}</td>
-            </tr>
-          `;
-        }).join('');
-      }
+      });
+      const tableBody = document.getElementById('tableBody');
+      tableBody.innerHTML = danhSachHocTap.map(item => `
+        <tr>
+          <td class="center-text">${item.stt}</td>
+          <td>${item.ngay}</td>
+          <td>${item.chuyenCan}</td>
+          <td class="center-text">${item.hoanThanhBT}%</td>
+          <td class="center-text">${item.diemKiemTra}%</td>
+        </tr>
+      `).join('');
+    } else {
+      document.getElementById('tableBody').innerHTML = `
+        <tr>
+          <td colspan="5" class="center-text">Không có dữ liệu học tập</td>
+        </tr>
+      `;
     }
 
-    // Xử lý dữ liệu điểm kiểm tra
     const testData = params.get('idktra');
-    const testScoreBody = document.getElementById('testScoreBody');
-    const noTestDataRow = testScoreBody.querySelector('tr');
-    
-    if (testData && testData.trim() !== '') {
+    if (testData) {
       let diemKiemTra = testData.split('_b_').map((item, index) => {
         const parts = item.split('_a_');
         return {
           stt: index + 1,
-          ngay: parts[0] || '',
-          tenBaiKiemTra: parts[1] || '',
-          diem: parts[2] ? parseFloat(parts[2]) : null
+          ngay: parts[0] || 'N/A',
+          tenBaiKiemTra: parts[1] || 'Không có tên',
+          diem: parts[2] ? parseFloat(parts[2]) : 0
         };
-      }).filter(item => item.ngay.trim() !== '');
-
-      if (diemKiemTra.length > 0) {
-        diemKiemTra.sort((a, b) => {
-          const dateA = new Date(a.ngay);
-          const dateB = new Date(b.ngay);
-          return dateA - dateB;
-        });
-        
-        testScoreBody.innerHTML = diemKiemTra.map((item, idx) => {
-          const getScoreClass = (score) => {
-            if (score === null) return '';
-            if (score >= 90) return 'score-excellent';
-            if (score >= 70) return 'score-good';
-            if (score >= 50) return 'score-average';
-            return 'score-poor';
-          };
-          
-          return `
-            <tr>
-              <td class="center-text">${idx + 1}</td>
-              <td>${item.ngay || 'N/A'}</td>
-              <td>${item.tenBaiKiemTra || 'Không có tên'}</td>
-              <td class="center-text ${getScoreClass(item.diem)}">${item.diem !== null ? item.diem : 'N/A'}</td>
-            </tr>
-          `;
-        }).join('');
-
-        // Vẽ biểu đồ
-        const validTestData = diemKiemTra.filter(item => item.diem !== null);
-        if (validTestData.length > 0) {
-          const labels = validTestData.map(item => [item.ngay, item.tenBaiKiemTra]);
-          const scores = validTestData.map(item => item.diem);
-          const ctx = document.getElementById('progressChart').getContext('2d');
-          new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: labels,
-              datasets: [{
-                label: 'Điểm bài kiểm tra',
-                data: scores,
-                backgroundColor: 'rgba(214, 40, 40, 0.1)',
-                borderColor: 'rgba(214, 40, 40, 1)',
-                borderWidth: 2,
-                pointBackgroundColor: 'rgba(214, 40, 40, 1)',
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                tension: 0.3,
-                fill: true
-              }]
+      });
+      diemKiemTra.sort((a, b) => {
+        const dateA = new Date(a.ngay);
+        const dateB = new Date(b.ngay);
+        return dateA - dateB;
+      });
+      const testScoreBody = document.getElementById('testScoreBody');
+      testScoreBody.innerHTML = diemKiemTra.map((item, idx) => `
+        <tr>
+          <td class="center-text">${idx + 1}</td>
+          <td>${item.ngay}</td>
+          <td>${item.tenBaiKiemTra}</td>
+          <td class="center-text">${item.diem}</td>
+        </tr>
+      `).join('');
+      
+      const labels = diemKiemTra.map(item => [item.ngay, item.tenBaiKiemTra]);
+      const scores = diemKiemTra.map(item => item.diem);
+      const ctx = document.getElementById('progressChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Điểm bài kiểm tra',
+            data: scores,
+            backgroundColor: 'rgba(214, 40, 40, 0.2)',
+            borderColor: 'rgba(214, 40, 40, 1)',
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: {
+              beginAtZero: true,
+              max: 100,
+              title: {
+                display: true,
+                text: 'Điểm số'
+              }
             },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: {
-                  position: 'top',
-                  labels: {
-                    font: {
-                      size: 14
-                    }
-                  }
-                },
-                tooltip: {
-                  backgroundColor: 'rgba(0,0,0,0.7)',
-                  titleFont: {
-                    size: 16
-                  },
-                  bodyFont: {
-                    size: 14
-                  }
-                }
-              },
-              scales: {
-                y: {
-                  beginAtZero: true,
-                  max: 100,
-                  title: {
-                    display: true,
-                    text: 'Điểm số',
-                    font: {
-                      size: 14,
-                      weight: 'bold'
-                    }
-                  },
-                  grid: {
-                    color: 'rgba(0,0,0,0.05)'
-                  }
-                },
-                x: {
-                  title: {
-                    display: true,
-                    text: 'Ngày kiểm tra',
-                    font: {
-                      size: 14,
-                      weight: 'bold'
-                    }
-                  },
-                  grid: {
-                    display: false
-                  }
-                }
+            x: {
+              title: {
+                display: true,
+                text: 'Ngày & Tên bài kiểm tra'
               }
             }
-          });
-        } else {
-          document.getElementById('progressChart').style.display = 'none';
+          },
+          plugins: {
+            title: {
+              display: true,
+              text: 'Tiến bộ qua các bài kiểm tra'
+            }
+          }
         }
-      }
-    } else {
-      document.getElementById('progressChart').style.display = 'none';
-    }
-
-    // Tự động in nếu có tham số autoprint
-    if (params.get('autoprint') {
-      window.addEventListener('load', function() {
-        setTimeout(function() {
-          window.print();
-        }, 500);
       });
+    } else {
+      document.getElementById('testScoreBody').innerHTML = `
+        <tr>
+          <td colspan="4" class="center-text">Không có dữ liệu điểm kiểm tra</td>
+        </tr>
+      `;
     }
   </script>
 </div>
 
 </body>
 </html>
-
-
-
-
-
