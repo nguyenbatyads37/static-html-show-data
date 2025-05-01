@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Báo cáo thí sinh ND134</title>
+    <title>Báo cáo thí sinh</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -36,6 +36,26 @@
             font-weight: bold;
             margin-top: 5px;
             color: #3498db;
+        }
+        .search-box {
+            padding: 15px;
+            background: #ecf0f1;
+            display: flex;
+            gap: 10px;
+        }
+        #student-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        #search-btn {
+            padding: 8px 15px;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
         }
         .subject-section {
             padding: 20px;
@@ -101,22 +121,35 @@
             color: #7f8c8d;
             font-size: 14px;
         }
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+        .error {
+            text-align: center;
+            padding: 40px;
+            color: #e74c3c;
+        }
     </style>
 </head>
 <body>
     <div class="report-container">
         <div class="header">
             <h1>BÁO CÁO KẾT QUẢ THI</h1>
-            <div class="student-id">Thí sinh: ND134</div>
+            <div class="student-id" id="student-id-display">Thí sinh: </div>
+        </div>
+        
+        <div class="search-box">
+            <input type="text" id="student-input" placeholder="Nhập mã thí sinh (VD: ND134)">
+            <button id="search-btn">Xem báo cáo</button>
         </div>
         
         <div id="report-content">
-            <!-- Data will be loaded here -->
-            <div style="text-align: center; padding: 40px;">
+            <div class="loading">
                 <div style="border: 5px solid #f3f3f3; border-top: 5px solid #3498db; 
                     border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; 
                     margin: 0 auto;"></div>
-                <p style="margin-top: 15px;">Đang tải dữ liệu thí sinh ND134...</p>
+                <p style="margin-top: 15px;">Vui lòng nhập mã thí sinh</p>
             </div>
         </div>
         
@@ -126,11 +159,49 @@
     </div>
 
     <script>
-        // Display current date
+        // Hiển thị ngày hiện tại
         document.getElementById('current-date').textContent = new Date().toLocaleDateString('vi-VN');
         
-        // Load data from Google Sheets
-        async function loadData() {
+        // Lấy tham số ID từ URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const studentIdFromUrl = urlParams.get('id');
+        
+        // Nếu có ID trong URL, tự động tải dữ liệu
+        if (studentIdFromUrl) {
+            document.getElementById('student-input').value = studentIdFromUrl;
+            loadData(studentIdFromUrl);
+        }
+        
+        // Xử lý sự kiện tìm kiếm
+        document.getElementById('search-btn').addEventListener('click', () => {
+            const studentId = document.getElementById('student-input').value.trim();
+            if (studentId) {
+                // Cập nhật URL với tham số ID mới
+                window.history.pushState({}, '', `?id=${studentId}`);
+                loadData(studentId);
+            }
+        });
+        
+        // Xử lý sự kiện nhấn Enter
+        document.getElementById('student-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('search-btn').click();
+            }
+        });
+        
+        // Hàm tải dữ liệu từ Google Sheets
+        async function loadData(studentId) {
+            document.getElementById('student-id-display').textContent = `Thí sinh: ${studentId}`;
+            
+            document.getElementById('report-content').innerHTML = `
+                <div class="loading">
+                    <div style="border: 5px solid #f3f3f3; border-top: 5px solid #3498db; 
+                        border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; 
+                        margin: 0 auto;"></div>
+                    <p style="margin-top: 15px;">Đang tải dữ liệu cho ${studentId}...</p>
+                </div>
+            `;
+            
             const spreadsheetId = '17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44';
             const gid = '1842364838';
             const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
@@ -141,9 +212,9 @@
                 const jsonText = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/)[1];
                 const data = JSON.parse(jsonText);
                 
-                // Process rows for student ND134 (lấy từ cột B - Mã)
+                // Lọc dữ liệu theo mã thí sinh (cột B)
                 const rows = data.table.rows;
-                const studentData = rows.filter(row => row.c[1]?.v === 'ND134').map(row => ({
+                const studentData = rows.filter(row => row.c[1]?.v === studentId).map(row => ({
                     subject: row.c[2]?.v || '',  // Cột C - Môn
                     question: row.c[3]?.v || '',  // Cột D - Câu
                     total: row.c[4]?.v || 0,      // Cột E - Tổng điểm
@@ -154,27 +225,29 @@
                 
                 if (studentData.length === 0) {
                     document.getElementById('report-content').innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: #e74c3c;">
-                            <p>Không tìm thấy dữ liệu cho thí sinh ND134 (kiểm tra cột Mã)</p>
+                        <div class="error">
+                            <p>Không tìm thấy dữ liệu cho thí sinh <strong>${studentId}</strong></p>
+                            <p>Vui lòng kiểm tra lại mã thí sinh</p>
                         </div>
                     `;
                     return;
                 }
                 
-                generateReport(studentData);
+                generateReport(studentData, studentId);
             } catch (error) {
-                console.error('Error loading data:', error);
+                console.error('Lỗi khi tải dữ liệu:', error);
                 document.getElementById('report-content').innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #e74c3c;">
+                    <div class="error">
                         <p>Lỗi khi tải dữ liệu từ Google Sheets</p>
-                        <p>Chi tiết: ${error.message}</p>
+                        <p>${error.message}</p>
                     </div>
                 `;
             }
         }
         
-        function generateReport(data) {
-            // Group by subject
+        // Hàm tạo báo cáo
+        function generateReport(data, studentId) {
+            // Nhóm dữ liệu theo môn
             const subjects = {};
             data.forEach(item => {
                 if (!subjects[item.subject]) {
@@ -185,7 +258,7 @@
             
             let reportHTML = '';
             
-            // Generate report for each subject
+            // Tạo báo cáo cho từng môn
             for (const subject in subjects) {
                 const items = subjects[subject];
                 const totalScore = items.reduce((sum, item) => sum + item.total, 0);
@@ -246,9 +319,6 @@
             
             document.getElementById('report-content').innerHTML = reportHTML;
         }
-        
-        // Load data when page is ready
-        window.addEventListener('DOMContentLoaded', loadData);
     </script>
 </body>
 </html>
