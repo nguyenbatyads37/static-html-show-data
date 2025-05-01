@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo cáo thí sinh ND134</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f7fa;
+            color: #333;
+        }
+        .report-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .student-id {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 5px;
+            color: #3498db;
+        }
+        .subject-section {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .subject-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+        .subject-title {
+            color: #3498db;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+        .subject-score {
+            font-weight: 700;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th {
+            background: #f8f9fa;
+            text-align: left;
+            padding: 10px 15px;
+            font-weight: 500;
+        }
+        td {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+        }
+        .perfect {
+            color: #27ae60;
+            font-weight: 500;
+        }
+        .lost {
+            color: #e74c3c;
+            font-weight: 500;
+        }
+        .analysis {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .strengths {
+            background: #e8f5e9;
+            border-left: 4px solid #27ae60;
+        }
+        .weaknesses {
+            background: #ffebee;
+            border-left: 4px solid #e74c3c;
+        }
+        .analysis-title {
+            font-weight: 600;
+            margin-top: 0;
+        }
+        .footer {
+            text-align: center;
+            padding: 15px;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <div class="header">
+            <h1>BÁO CÁO KẾT QUẢ THI</h1>
+            <div class="student-id">Thí sinh: ND134</div>
+        </div>
+        
+        <div id="report-content">
+            <!-- Data will be loaded here -->
+            <div style="text-align: center; padding: 40px;">
+                <div style="border: 5px solid #f3f3f3; border-top: 5px solid #3498db; 
+                    border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; 
+                    margin: 0 auto;"></div>
+                <p style="margin-top: 15px;">Đang tải dữ liệu thí sinh ND134...</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            Báo cáo được tạo vào <span id="current-date"></span>
+        </div>
+    </div>
+
+    <script>
+        // Display current date
+        document.getElementById('current-date').textContent = new Date().toLocaleDateString('vi-VN');
+        
+        // Load data from Google Sheets
+        async function loadData() {
+            const spreadsheetId = '17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44';
+            const gid = '1842364838';
+            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                const jsonText = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/)[1];
+                const data = JSON.parse(jsonText);
+                
+                // Process rows for student ND134 (lấy từ cột B - Mã)
+                const rows = data.table.rows;
+                const studentData = rows.filter(row => row.c[1]?.v === 'ND134').map(row => ({
+                    subject: row.c[2]?.v || '',  // Cột C - Môn
+                    question: row.c[3]?.v || '',  // Cột D - Câu
+                    total: row.c[4]?.v || 0,      // Cột E - Tổng điểm
+                    deducted: row.c[5]?.v || 0,   // Cột F - Điểm trừ
+                    achieved: row.c[6]?.v || 0,   // Cột G - Điểm hs
+                    errors: row.c[7]?.v || ''     // Cột H - Lỗi sai
+                }));
+                
+                if (studentData.length === 0) {
+                    document.getElementById('report-content').innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #e74c3c;">
+                            <p>Không tìm thấy dữ liệu cho thí sinh ND134 (kiểm tra cột Mã)</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                generateReport(studentData);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('report-content').innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #e74c3c;">
+                        <p>Lỗi khi tải dữ liệu từ Google Sheets</p>
+                        <p>Chi tiết: ${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function generateReport(data) {
+            // Group by subject
+            const subjects = {};
+            data.forEach(item => {
+                if (!subjects[item.subject]) {
+                    subjects[item.subject] = [];
+                }
+                subjects[item.subject].push(item);
+            });
+            
+            let reportHTML = '';
+            
+            // Generate report for each subject
+            for (const subject in subjects) {
+                const items = subjects[subject];
+                const totalScore = items.reduce((sum, item) => sum + item.total, 0);
+                const achievedScore = items.reduce((sum, item) => sum + item.achieved, 0);
+                const percentage = Math.round((achievedScore / totalScore) * 100);
+                
+                const strengths = items.filter(item => item.deducted === 0);
+                const weaknesses = items.filter(item => item.deducted > 0);
+                
+                reportHTML += `
+                    <div class="subject-section">
+                        <div class="subject-header">
+                            <h3 class="subject-title">Môn: ${subject}</h3>
+                            <div class="subject-score">${achievedScore}/${totalScore} (${percentage}%)</div>
+                        </div>
+                        
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Câu hỏi</th>
+                                    <th>Tổng điểm</th>
+                                    <th>Điểm đạt</th>
+                                    <th>Điểm trừ</th>
+                                    <th>Lỗi sai</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${items.map(item => `
+                                    <tr>
+                                        <td>${item.question}</td>
+                                        <td>${item.total}</td>
+                                        <td class="${item.deducted === 0 ? 'perfect' : 'lost'}">${item.achieved}</td>
+                                        <td>${item.deducted}</td>
+                                        <td>${item.errors || '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                        
+                        ${strengths.length > 0 ? `
+                            <div class="analysis strengths">
+                                <h4 class="analysis-title">ĐIỂM MẠNH</h4>
+                                <p>Làm tốt các câu: ${strengths.map(item => item.question).join(', ')}</p>
+                            </div>
+                        ` : ''}
+                        
+                        ${weaknesses.length > 0 ? `
+                            <div class="analysis weaknesses">
+                                <h4 class="analysis-title">ĐIỂM CẦN CẢI THIỆN</h4>
+                                <p>Cần cải thiện: ${weaknesses.map(item => 
+                                    `Câu ${item.question} (${item.errors || 'không xác định'})`
+                                ).join(', ')}</p>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            document.getElementById('report-content').innerHTML = reportHTML;
+        }
+        
+        // Load data when page is ready
+        window.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>
