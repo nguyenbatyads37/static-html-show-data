@@ -87,6 +87,12 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+        .selected-date {
+            margin-left: 10px;
+            font-style: italic;
+            font-weight: bold;
+            font-size: 16px;
+        }
         .total-amount {
             font-weight: bold;
             margin-top: 10px;
@@ -107,6 +113,12 @@
             margin-top: 50px;
             width: 100%;
         }
+        .date-display {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
     </style>
 </head>
 <body>
@@ -114,12 +126,14 @@
     <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
     <div class="sub-title">Ngày bàn giao: <span id="delivery-date"></span></div>
     
+    <div class="date-display" id="filtered-date-display"></div>
+    
     <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
     
     <div class="filter-container">
         <h3>Bộ lọc</h3>
         <div class="filter-control">
-            <label for="anFilter">Lọc theo tài xế:</label>
+            <label>Tài xế:</label>
             <select id="anFilter" onchange="filterData()">
                 <option value="">Tất cả</option>
             </select>
@@ -153,11 +167,11 @@
         let filteredData = [];
         let uniqueANValues = [];
         let anToCMap = {};
-        let selectedDateIso = '';
+        let currentFilterDate = '';
         
         // Hàm lấy tham số từ URL
         function getUrlParameter(name) {
-            name = name.replace(/[[\]]/g, '\\$&');
+            name = name.replace(/[\[\]]/g, '\\$&');
             const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
             const results = regex.exec(window.location.href);
             if (!results) return null;
@@ -165,147 +179,233 @@
             return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
         
-        // Hiển thị ngày bàn giao (URL param hoặc hôm nay)
-        function showDeliveryDate() {
-            const param = getUrlParameter('ngay');
-            const el = document.getElementById('delivery-date');
-            if (param) {
-                el.textContent = param;
-                // Chuyển sang định dạng ISO để lọc
-                const parts = param.split('/');
-                if (parts.length === 3) selectedDateIso = `${parts[2]}-${parts[1]}-${parts[0]}`;
-            } else {
-                const today = new Date();
-                const day = String(today.getDate()).padStart(2, '0');
-                const month = String(today.getMonth() + 1).padStart(2, '0');
-                const year = today.getFullYear();
-                el.textContent = `${day}/${month}/${year}`;
-                selectedDateIso = '';
-            }
+        // Hiển thị ngày hôm nay
+        function showTodayDate() {
+            const today = new Date();
+            const day = String(today.getDate()).padStart(2, '0');
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const year = today.getFullYear();
+            document.getElementById('delivery-date').textContent = `${day}/${month}/${year}`;
         }
         
-        // Định dạng DD/MM/YYYY -> YYYY-MM-DD
-        function formatToIso(dd_mm_yyyy) {
+        // Chuyển DD/MM/YYYY sang YYYY-MM-DD
+        function convertToIsoDate(dd_mm_yyyy) {
+            if (!dd_mm_yyyy) return '';
             const parts = dd_mm_yyyy.split('/');
-            return parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : '';
+            if (parts.length !== 3) return '';
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        
+        // Chuyển YYYY-MM-DD sang DD/MM/YYYY
+        function formatToDisplayDate(isoDate) {
+            if (!isoDate) return '';
+            const parts = isoDate.split('-');
+            if (parts.length !== 3) return isoDate;
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         
         // Định dạng số tiền
         function formatCurrency(amount) {
-            return amount ? parseInt(amount).toLocaleString('vi-VN') : '0';
+            if (!amount) return '0';
+            return parseInt(amount).toLocaleString('vi-VN');
         }
         
         // Hàm chính tải dữ liệu
         function loadData() {
-            showDeliveryDate();
+            showTodayDate();
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
             document.getElementById('data-container').innerHTML = '';
             document.getElementById('total-amount').textContent = '';
             
+            // Lấy ngày từ URL (nếu có)
+            const urlDateParam = getUrlParameter('ngay');
+            currentFilterDate = urlDateParam ? convertToIsoDate(urlDateParam) : '';
+            
+            if (currentFilterDate) {
+                document.getElementById('filtered-date-display').textContent = 
+                    `Dữ liệu ngày: ${formatToDisplayDate(currentFilterDate)}`;
+            } else {
+                document.getElementById('filtered-date-display').textContent = '';
+            }
+            
             // Tải dữ liệu từ sheet phụ (ánh xạ tài xế)
             fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
-                .then(res => res.text())
-                .then(txt => {
-                    const json = JSON.parse(txt.substring(47).slice(0, -2));
-                    anToCMap = {};
-                    json.table.rows.forEach(r => {
-                        const an = r.c[0]?.v?.toString().trim() || '';
-                        const c = r.c[2]?.v?.toString().trim() || '';
-                        if (an && c) anToCMap[an] = c;
-                    });
-                    loadMainSheet();
+                .then(response => response.text())
+                .then(data => {
+                    try {
+                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                        anToCMap = {};
+                        jsonData.table.rows.forEach(row => {
+                            const anValue = row.c[0]?.v?.toString().trim() || '';
+                            const cValue = row.c[2]?.v?.toString().trim() || '';
+                            if (anValue && cValue) anToCMap[anValue] = cValue;
+                        });
+                        loadMainSheet();
+                    } catch (e) {
+                        handleError('Lỗi xử lý dữ liệu phụ', e);
+                    }
                 })
-                .catch(err => handleError('Lỗi tải dữ liệu phụ', err));
+                .catch(error => {
+                    handleError('Lỗi tải dữ liệu phụ', error);
+                });
         }
         
         // Tải dữ liệu chính
         function loadMainSheet() {
             fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-                .then(res => res.text())
-                .then(txt => {
+                .then(response => response.text())
+                .then(data => {
                     document.getElementById('loading').style.display = 'none';
-                    const json = JSON.parse(txt.substring(47).slice(0, -2));
-                    originalData = json.table.rows.map(r => {
-                        let dateIso = '';
-                        const raw = r.c[4]?.v;
-                        if (raw) {
-                            const dateObj = new Date(raw);
-                            if (!isNaN(dateObj)) dateIso = dateObj.toISOString().split('T')[0];
+                    
+                    try {
+                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                        if (!jsonData.table.rows.length) {
+                            showError('Không có dữ liệu trong bảng tính');
+                            return;
                         }
-                        const anRaw = r.c[39]?.v?.toString().trim() || '';
-                        const anArr = anRaw.split(',').map(v => v.trim()).filter(v => v);
-                        return {
-                            E: dateIso,
-                            H: r.c[7]?.f || r.c[7]?.v || '',
-                            AE: r.c[30]?.f || r.c[30]?.v || '',
-                            AN: anArr,
-                            AN_Display: anArr.map(v => anToCMap[v] || v).join(', '),
-                            Q: r.c[16]?.v || 0
-                        };
-                    });
-                    uniqueANValues = [...new Set(originalData.flatMap(i => i.AN).filter(Boolean))].sort();
-                    updateDriverFilter();
+                        
+                        // Xử lý dữ liệu
+                        originalData = jsonData.table.rows.map(row => {
+                            let dateE = '';
+                            if (row.c[4]?.v) {
+                                try {
+                                    const dateValue = row.c[4].v;
+                                    let rawDate;
+                                    
+                                    if (typeof dateValue === 'string') {
+                                        if (dateValue.startsWith('Date')) {
+                                            const match = dateValue.match(/Date\((\d+),(\d+),(\d+)\)/);
+                                            if (match) rawDate = new Date(match[1], match[2], match[3]);
+                                        } else {
+                                            rawDate = new Date(dateValue.includes('/') 
+                                                ? dateValue.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1')
+                                                : dateValue);
+                                        }
+                                    } else {
+                                        rawDate = new Date(dateValue);
+                                    }
+                                    
+                                    if (rawDate && !isNaN(rawDate)) {
+                                        dateE = rawDate.toISOString().split('T')[0];
+                                    }
+                                } catch (e) {
+                                    console.warn('Lỗi xử lý ngày:', e);
+                                }
+                            }
+                            
+                            const anRaw = row.c[39]?.v?.toString().trim() || '';
+                            const anValues = anRaw.split(',').map(v => v.trim()).filter(v => v);
+                            const totalAmount = row.c[16]?.v || 0; // Cột Q (index 16) là tổng hóa đơn
+                            
+                            return {
+                                E: dateE,
+                                H: row.c[7]?.f || row.c[7]?.v || '',
+                                AE: row.c[30]?.f || row.c[30]?.v || '',
+                                AN: anValues,
+                                AN_Display: anValues.map(v => anToCMap[v] || v).join(', '),
+                                Q: totalAmount
+                            };
+                        });
+                        
+                        // Lọc theo ngày từ URL ngay từ đầu
+                        if (currentFilterDate) {
+                            originalData = originalData.filter(item => item.E === currentFilterDate);
+                        }
+                        
+                        // Lấy danh sách tài xế duy nhất
+                        uniqueANValues = [...new Set(originalData.flatMap(item => item.AN).filter(Boolean))].sort();
+                        
+                        // Cập nhật bộ lọc tài xế
+                        updateDriverFilter();
+                        
+                        filterData();
+                        
+                    } catch (e) {
+                        handleError('Lỗi xử lý dữ liệu chính', e);
+                    }
                 })
-                .catch(err => handleError('Lỗi tải dữ liệu chính', err));
+                .catch(error => {
+                    handleError('Lỗi tải dữ liệu chính', error);
+                });
         }
         
         // Cập nhật bộ lọc tài xế
         function updateDriverFilter() {
-            const sel = document.getElementById('anFilter');
-            sel.innerHTML = '<option value="">Tất cả</option>';
-            uniqueANValues.forEach(v => {
-                const opt = document.createElement('option');
-                opt.value = v;
-                opt.textContent = anToCMap[v] || v;
-                sel.appendChild(opt);
+            const anFilter = document.getElementById('anFilter');
+            anFilter.innerHTML = '<option value="">Tất cả</option>';
+            uniqueANValues.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = anToCMap[value] || value;
+                anFilter.appendChild(option);
             });
-            filterData();
         }
         
-        // Lọc và hiển thị dữ liệu
+        // Lọc dữ liệu
         function filterData() {
-            const driver = document.getElementById('anFilter').value;
+            const anFilter = document.getElementById('anFilter').value;
+            
             filteredData = originalData.filter(item => {
-                if (selectedDateIso && item.E !== selectedDateIso) return false;
-                if (driver && !item.AN.includes(driver)) return false;
+                if (anFilter && !item.AN.includes(anFilter)) return false;
                 return true;
             });
-            displayData();
+            
+            displayFilteredData();
         }
         
-        // Hiển thị dữ liệu
-        function displayData() {
-            const cont = document.getElementById('data-container');
-            const totalDiv = document.getElementById('total-amount');
-            if (!filteredData.length) {
-                cont.innerHTML = '<p>Không có dữ liệu phù hợp với bộ lọc</p>';
-                totalDiv.textContent = '';
+        // Hiển thị dữ liệu đã lọc
+        function displayFilteredData() {
+            const container = document.getElementById('data-container');
+            const totalAmountDiv = document.getElementById('total-amount');
+            
+            if (filteredData.length === 0) {
+                container.innerHTML = '<p>Không có dữ liệu phù hợp với bộ lọc</p>';
+                totalAmountDiv.textContent = '';
                 return;
             }
-            const total = filteredData.reduce((s, i) => s + (parseInt(i.Q) || 0), 0);
-            totalDiv.textContent = `Tổng tiền bàn giao: ${formatCurrency(total)} VNĐ`;
-            let html = '<table><thead><tr>' +
-                '<th>Ngày</th><th>Tên khách hàng</th><th>Tên SP</th><th>Tài xế</th><th>Tổng hóa đơn</th>' +
-                '</tr></thead><tbody>';
-            filteredData.forEach(i => {
-                html += `<tr><td>${i.E.split('-').reverse().join('/')}</td>` +
-                        `<td>${i.H}</td><td>${i.AE}</td><td>${i.AN_Display}</td>` +
-                        `<td>${formatCurrency(i.Q)}</td></tr>`;
+            
+            // Tính tổng tiền
+            const totalAmount = filteredData.reduce((sum, item) => sum + (parseInt(item.Q) || 0), 0);
+            totalAmountDiv.textContent = `Tổng tiền bàn giao: ${formatCurrency(totalAmount)} VNĐ`;
+            
+            // Tạo bảng dữ liệu
+            let html = '<table><thead><tr>';
+            html += '<th>Ngày</th>';
+            html += '<th>Tên khách hàng</th>';
+            html += '<th>Tên SP</th>';
+            html += '<th>Tài xế</th>';
+            html += '<th>Tổng hóa đơn</th>';
+            html += '</tr></thead><tbody>';
+            
+            filteredData.forEach(item => {
+                html += '<tr>';
+                html += `<td>${formatToDisplayDate(item.E)}</td>`;
+                html += `<td>${item.H}</td>`;
+                html += `<td>${item.AE}</td>`;
+                html += `<td>${item.AN_Display}</td>`;
+                html += `<td>${formatCurrency(item.Q)}</td>`;
+                html += '</tr>';
             });
+            
             html += '</tbody></table>';
-            cont.innerHTML = html;
+            container.innerHTML = html;
         }
         
         // Xử lý lỗi
-        function handleError(ctx, err) {
+        function handleError(context, error) {
             document.getElementById('loading').style.display = 'none';
-            const e = document.getElementById('error');
-            e.style.display = 'block';
-            e.textContent = `${ctx}: ${err.message}`;
-            console.error(ctx, err);
+            showError(`${context}: ${error.message}`);
+            console.error(context, error);
         }
         
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+        }
+        
+        // Khởi chạy khi tải trang
         window.onload = loadData;
     </script>
 </body>
