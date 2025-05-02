@@ -13,6 +13,12 @@
         h1 {
             color: #1a73e8;
             text-align: center;
+            margin-bottom: 5px;
+        }
+        .delivery-date {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
         }
         .logo {
             display: block;
@@ -81,26 +87,31 @@
             border: 1px solid #ddd;
             border-radius: 4px;
         }
-        .selected-date {
-            margin-left: 10px;
-            font-style: italic;
+        .signature-container {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+        .signature-box {
+            text-align: center;
+            width: 45%;
+        }
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 60px;
+            width: 100%;
         }
     </style>
 </head>
 <body>
     <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
     <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
+    <div class="delivery-date" id="deliveryDate"></div>
+    
     <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
     
     <div class="filter-container">
         <h3>Bộ lọc</h3>
-        <div class="filter-control">
-            <label for="dateFilter">Ngày:</label>
-            <select id="dateFilter" onchange="filterData()">
-                <option value="">Tất cả</option>
-            </select>
-            <span id="selectedDate" class="selected-date"></span>
-        </div>
         <div class="filter-control">
             <label for="anFilter">Lọc theo tài xế:</label>
             <select id="anFilter" onchange="filterData()">
@@ -113,15 +124,31 @@
     <div id="error" class="error" style="display: none;"></div>
     <div id="data-container" style="overflow-x: auto;"></div>
 
+    <div class="signature-container">
+        <div class="signature-box">
+            <div>NGƯỜI BÀN GIAO</div>
+            <div class="signature-line"></div>
+            <div>(Ký, ghi rõ họ tên)</div>
+        </div>
+        <div class="signature-box">
+            <div>TÀI XẾ</div>
+            <div class="signature-line"></div>
+            <div>(Ký, ghi rõ họ tên)</div>
+        </div>
+    </div>
+
     <script>
         const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
         const sheetIdMain = '116599712';
         const sheetIdLookup = '2007395895';
         
+        // Lấy ngày hiện tại và định dạng thành YYYY-MM-DD
+        const today = new Date();
+        const selectedDate = today.toISOString().split('T')[0];
+        
         let originalData = [];
         let filteredData = [];
         let uniqueANValues = [];
-        let uniqueDateValues = [];
         let anToCMap = {};
         
         // Hàm chuyển đổi YYYY-MM-DD sang DD/MM/YYYY
@@ -132,10 +159,12 @@
         }
         
         function loadData() {
+            // Hiển thị ngày hôm nay
+            document.getElementById('deliveryDate').textContent = `Ngày bàn giao: ${formatToDisplayDate(selectedDate)}`;
+            
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
             document.getElementById('data-container').innerHTML = '';
-            document.getElementById('selectedDate').textContent = '';
             
             // Load lookup sheet first (for column C)
             const lookupUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`;
@@ -225,22 +254,17 @@
                             return {
                                 E: dateE,
                                 H: row.c[7] ? (row.c[7].f || row.c[7].v) : '',
-                                I: row.c[8] ? (row.c[8].f || row.c[8].v) : '',
                                 AE: row.c[30] ? (row.c[30].f || row.c[30].v) : '',
+                                Total: row.c[8] ? (row.c[8].f || row.c[8].v) : '', // Using column I for total amount
                                 AN: anValues,
                                 AN_Display: anValues.map(v => anToCMap[v] || v).join(', ')
                             };
                         });
                         
-                        uniqueDateValues = [...new Set(
-                            originalData.map(item => item.E).filter(date => date)
-                        )].sort();
-                        
                         uniqueANValues = [...new Set(
                             originalData.flatMap(item => item.AN).filter(v => v)
                         )].sort();
                         
-                        updateDateFilterOptions();
                         updateANFilterOptions();
                         
                         filterData();
@@ -252,18 +276,6 @@
                     document.getElementById('loading').style.display = 'none';
                     showError('Lỗi khi tải dữ liệu: ' + error.message);
                 });
-        }
-        
-        function updateDateFilterOptions() {
-            const dateFilter = document.getElementById('dateFilter');
-            dateFilter.innerHTML = '<option value="">Tất cả</option>';
-            
-            uniqueDateValues.forEach(date => {
-                const option = document.createElement('option');
-                option.value = date;
-                option.textContent = formatToDisplayDate(date);
-                dateFilter.appendChild(option);
-            });
         }
         
         function updateANFilterOptions() {
@@ -279,16 +291,15 @@
         }
         
         function filterData() {
-            const dateFilter = document.getElementById('dateFilter').value;
             const anFilter = document.getElementById('anFilter').value;
             
-            document.getElementById('selectedDate').textContent = dateFilter ? `Đã chọn: ${formatToDisplayDate(dateFilter)}` : '';
-            
             filteredData = originalData.filter(item => {
-                if (dateFilter && item.E !== dateFilter) {
+                // Chỉ lấy dữ liệu của ngày hôm nay
+                if (item.E !== selectedDate) {
                     return false;
                 }
                 
+                // Lọc theo tài xế nếu được chọn
                 if (anFilter && !item.AN.includes(anFilter)) {
                     return false;
                 }
@@ -310,18 +321,18 @@
             let html = '<table><thead><tr>';
             html += '<th>Ngày</th>';
             html += '<th>Tên khách hàng</th>';
-            html += '<th>SĐT</th>';
             html += '<th>Tên SP</th>';
             html += '<th>Tài xế</th>';
+            html += '<th>Tổng tiền hàng</th>';
             html += '</tr></thead><tbody>';
             
             filteredData.forEach(item => {
                 html += '<tr>';
                 html += `<td>${formatToDisplayDate(item.E) || ''}</td>`;
                 html += `<td>${item.H || ''}</td>`;
-                html += `<td>${item.I || ''}</td>`;
                 html += `<td>${item.AE || ''}</td>`;
                 html += `<td>${item.AN_Display || ''}</td>`;
+                html += `<td>${item.Total || ''}</td>`;
                 html += '</tr>';
             });
             
