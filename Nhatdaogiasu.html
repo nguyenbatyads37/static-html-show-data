@@ -125,24 +125,20 @@
         }
         .footer {
             display: flex;
-            justify-content: space-between;
+            flex-direction: column;
             align-items: center;
-            flex-wrap: wrap;
             margin-top: 20px;
             color: #777;
-            font-size: 12px;
+            font-size: 14px;
             border-top: 1px solid #eee;
-            padding: 10px 0;
+            padding: 15px 0;
+            text-align: center;
         }
         .footer p {
-            margin: 2px 0;
+            margin: 5px 0;
         }
-        .footer a {
+        .footer strong {
             color: #0047ab;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
         }
         .date {
             text-align: right;
@@ -162,6 +158,21 @@
             color: #c62828;
             display: none;
         }
+        .capture-btn {
+            background-color: #0047ab;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 15px;
+            transition: background-color 0.3s;
+            font-size: 14px;
+        }
+        .capture-btn:hover {
+            background-color: #003366;
+        }
         @media (max-width: 600px) {
             .header {
                 flex-direction: column;
@@ -178,11 +189,6 @@
             .announcement-title {
                 font-size: 16px;
                 margin: 8px 0;
-            }
-            .footer {
-                flex-direction: column;
-                text-align: center;
-                gap: 5px;
             }
         }
     </style>
@@ -208,9 +214,6 @@
             <div class="info-row">
                 <div class="info-label">Học sinh:</div>
                 <div class="info-content" id="student-name">Đang tải...</div>
-            </div>
-            <div class="info-row">
-                
             </div>
             <div class="info-row">
                 <div class="info-label">Lớp/Môn học:</div>
@@ -268,167 +271,198 @@
         </div>
         
         <div class="footer">
-            <p>Trân trọng,</p>
-            <p><strong>Giám đốc Nhất Đạo Gia Sư:Ngô Duy Nhất Đạo</strong></p>
-            <p>Trung tâm Nhất Đạo Gia Sư</p>
-            <p>Mọi thắc mắc xin liên hệ: <strong>0965601055</strong> |
+            <p><strong>Trung tâm Gia Sư Nhất Đạo</strong></p>
+            <p>0965 601 055</p>
+            <button id="capture-btn" class="capture-btn">Chụp ảnh báo cáo</button>
         </div>
     </div>
 
-<script>
-    const spreadsheetId = '1CwXc6bXARyhJOh5gb8FXzLm8m4fWmYA03f9QpTCt4bs';
-    const sheetId = '596574590';
+    <!-- Thêm thư viện html2canvas -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    
+    <script>
+        const spreadsheetId = '1CwXc6bXARyhJOh5gb8FXzLm8m4fWmYA03f9QpTCt4bs';
+        const sheetId = '596574590';
 
-    // Hàm lấy id từ URL
-    function getQueryParam(param) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(param);
-    }
-
-    // Hàm chuyển đổi định dạng ngày
-    function formatToDisplayDate(dateInput) {
-        if (!dateInput) return 'Không xác định';
-        
-        // Nếu là chuỗi ngày dạng "Date(2024,5,15)"
-        if (typeof dateInput === 'string' && dateInput.startsWith('Date')) {
-            const dateMatch = dateInput.match(/Date\((\d+),(\d+),(\d+)\)/);
-            if (dateMatch) {
-                const year = parseInt(dateMatch[1]);
-                const month = parseInt(dateMatch[2]); // Tháng trong Google Sheets bắt đầu từ 0
-                const day = parseInt(dateMatch[3]);
-                return `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
-            }
-        }
-        
-        // Thử parse các định dạng khác
-        const date = new Date(dateInput);
-        if (!isNaN(date.getTime())) {
-            const day = date.getDate().toString().padStart(2, '0');
-            const month = (date.getMonth() + 1).toString().padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
-        }
-        
-        return 'Không xác định';
-    }
-
-    // Hàm hiển thị lỗi
-    function showError(message) {
-        const errorDiv = document.getElementById('error');
-        errorDiv.style.display = 'block';
-        errorDiv.textContent = message;
-        document.getElementById('loading').style.display = 'none';
-    }
-
-    // Hàm tải dữ liệu từ Google Sheet
-    function loadData() {
-        document.getElementById('loading').style.display = 'block';
-        document.getElementById('error').style.display = 'none';
-
-        // Lấy id từ URL
-        const studentId = getQueryParam('id');
-        if (!studentId) {
-            showError('Không tìm thấy mã học sinh trong URL');
-            return;
+        // Hàm lấy id từ URL
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
         }
 
-        const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetId}`;
-
-        fetch(url)
-            .then(response => response.text())
-            .then(data => {
-                try {
-                    // Xử lý dữ liệu trả về từ Google Sheets
-                    const jsonData = JSON.parse(data.substring(47).slice(0, -2));
-                    const rows = jsonData.table.rows;
-                    
-                    if (!rows || rows.length === 0) {
-                        showError('Không có dữ liệu trong bảng tính');
-                        return;
-                    }
-
-                    // Tìm hàng phù hợp với studentId
-                    let foundRow = null;
-                    for (const row of rows) {
-                        if (row.c && row.c[0] && row.c[0].v && row.c[0].v.toString().trim() === studentId.trim()) {
-                            foundRow = row;
-                            break;
-                        }
-                    }
-
-                    if (!foundRow) {
-                        showError(`Không tìm thấy dữ liệu cho học sinh với mã: ${studentId}`);
-                        return;
-                    }
-
-                  // Lấy dữ liệu từ các cột (theo yêu cầu mới)
-const studentName = foundRow.c[5]?.v || 'Không xác định'; // Cột F
-const classSubject = foundRow.c[3]?.v || 'Không xác định'; // Cột D
-const reportDate = formatToDisplayDate(foundRow.c[1]?.v); // Cột B
-const lessonContent = foundRow.c[4]?.v ? 
-    foundRow.c[4].v.split('\n').filter(item => item.trim()) : []; // Cột E
-
-const strengths = foundRow.c[8]?.v ? 
-    foundRow.c[8].v.split('\n').filter(item => item.trim()) : []; // Cột I
-
-const praise = foundRow.c[9]?.v || 'Em đã có tinh thần học tập tốt.'; // Cột J
-
-const weaknesses = foundRow.c[10]?.v ? 
-    foundRow.c[10].v.split('\n').filter(item => item.trim()) : []; // Cột K
-
-const reminder = foundRow.c[11]?.v || 'Tiếp tục phát huy tinh thần học tập.'; // Cột L
-
-const homework = foundRow.c[6]?.v || 'Không có bài tập về nhà'; // Cột H
-
-
-                    // Cập nhật thông tin học sinh
-                    document.getElementById('student-name').textContent = studentName;
-                    document.getElementById('student-id').textContent = studentId;
-                    document.getElementById('class-subject').textContent = classSubject;
-                    document.getElementById('report-date').textContent = reportDate;
-
-                    // Cập nhật nội dung bài học
-                    const lessonHtml = lessonContent.length > 0
-                        ? `<ul>${lessonContent.map(item => `<li>${item}</li>`).join('')}</ul>`
-                        : '<p>Không có nội dung bài học.</p>';
-                    document.getElementById('lesson-content').innerHTML = lessonHtml;
-
-                   // Cập nhật điểm mạnh
-const strengthsHtml = strengths.length > 0
-    ? `<ul>${strengths.map(item => `<li>${item}</li>`).join('')}</ul>`
-    : '<p>Không có điểm mạnh.</p>';
-document.getElementById('strengths').innerHTML = strengthsHtml;
-
-// Cập nhật lời khen
-document.getElementById('praise').textContent = praise;
-
-// Cập nhật điểm yếu
-const weaknessesHtml = weaknesses.length > 0
-    ? `<ul>${weaknesses.map(item => `<li>${item}</li>`).join('')}</ul>`
-    : '<p>Không có điểm yếu.</p>';
-document.getElementById('weaknesses').innerHTML = weaknessesHtml;
-
-// Cập nhật lời nhắc nhở/phê bình
-document.getElementById('reminder').textContent = reminder;
-
-
-                    // Cập nhật bài tập về nhà
-                    document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${homework}`;
-
-                    // Cập nhật link báo cáo
-                    document.getElementById('report-link').href = `Nhatdaogiasu.html?id=${studentId}`;
-
-                    document.getElementById('loading').style.display = 'none';
-                } catch (e) {
-                    showError('Lỗi khi phân tích dữ liệu: ' + e.message);
-                    console.error(e);
+        // Hàm chuyển đổi định dạng ngày
+        function formatToDisplayDate(dateInput) {
+            if (!dateInput) return 'Không xác định';
+            
+            // Nếu là chuỗi ngày dạng "Date(2024,5,15)"
+            if (typeof dateInput === 'string' && dateInput.startsWith('Date')) {
+                const dateMatch = dateInput.match(/Date\((\d+),(\d+),(\d+)\)/);
+                if (dateMatch) {
+                    const year = parseInt(dateMatch[1]);
+                    const month = parseInt(dateMatch[2]); // Tháng trong Google Sheets bắt đầu từ 0
+                    const day = parseInt(dateMatch[3]);
+                    return `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
                 }
-            })
-            .catch(error => {
-                showError('Lỗi khi tải dữ liệu: ' + error.message);
-                console.error(error);
-            });
-    }
+            }
+            
+            // Thử parse các định dạng khác
+            const date = new Date(dateInput);
+            if (!isNaN(date.getTime())) {
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear();
+                return `${day}/${month}/${year}`;
+            }
+            
+            return 'Không xác định';
+        }
 
-    window.onload = loadData;
-</script>
+        // Hàm hiển thị lỗi
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Hàm tải dữ liệu từ Google Sheet
+        function loadData() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+
+            // Lấy id từ URL
+            const studentId = getQueryParam('id');
+            if (!studentId) {
+                showError('Không tìm thấy mã học sinh trong URL');
+                return;
+            }
+
+            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetId}`;
+
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    try {
+                        // Xử lý dữ liệu trả về từ Google Sheets
+                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                        const rows = jsonData.table.rows;
+                        
+                        if (!rows || rows.length === 0) {
+                            showError('Không có dữ liệu trong bảng tính');
+                            return;
+                        }
+
+                        // Tìm hàng phù hợp với studentId
+                        let foundRow = null;
+                        for (const row of rows) {
+                            if (row.c && row.c[0] && row.c[0].v && row.c[0].v.toString().trim() === studentId.trim()) {
+                                foundRow = row;
+                                break;
+                            }
+                        }
+
+                        if (!foundRow) {
+                            showError(`Không tìm thấy dữ liệu cho học sinh với mã: ${studentId}`);
+                            return;
+                        }
+
+                        // Lấy dữ liệu từ các cột
+                        const studentName = foundRow.c[5]?.v || 'Không xác định'; // Cột F
+                        const classSubject = foundRow.c[3]?.v || 'Không xác định'; // Cột D
+                        const reportDate = formatToDisplayDate(foundRow.c[1]?.v); // Cột B
+                        const lessonContent = foundRow.c[4]?.v ? 
+                            foundRow.c[4].v.split('\n').filter(item => item.trim()) : []; // Cột E
+
+                        const strengths = foundRow.c[8]?.v ? 
+                            foundRow.c[8].v.split('\n').filter(item => item.trim()) : []; // Cột I
+
+                        const praise = foundRow.c[9]?.v || 'Em đã có tinh thần học tập tốt.'; // Cột J
+
+                        const weaknesses = foundRow.c[10]?.v ? 
+                            foundRow.c[10].v.split('\n').filter(item => item.trim()) : []; // Cột K
+
+                        const reminder = foundRow.c[11]?.v || 'Tiếp tục phát huy tinh thần học tập.'; // Cột L
+
+                        const homework = foundRow.c[6]?.v || 'Không có bài tập về nhà'; // Cột H
+
+                        // Cập nhật thông tin học sinh
+                        document.getElementById('student-name').textContent = studentName;
+                        document.getElementById('class-subject').textContent = classSubject;
+                        document.getElementById('report-date').textContent = reportDate;
+
+                        // Cập nhật nội dung bài học
+                        const lessonHtml = lessonContent.length > 0
+                            ? `<ul>${lessonContent.map(item => `<li>${item}</li>`).join('')}</ul>`
+                            : '<p>Không có nội dung bài học.</p>';
+                        document.getElementById('lesson-content').innerHTML = lessonHtml;
+
+                        // Cập nhật điểm mạnh
+                        const strengthsHtml = strengths.length > 0
+                            ? `<ul>${strengths.map(item => `<li>${item}</li>`).join('')}</ul>`
+                            : '<p>Không có điểm mạnh.</p>';
+                        document.getElementById('strengths').innerHTML = strengthsHtml;
+
+                        // Cập nhật lời khen
+                        document.getElementById('praise').textContent = praise;
+
+                        // Cập nhật điểm yếu
+                        const weaknessesHtml = weaknesses.length > 0
+                            ? `<ul>${weaknesses.map(item => `<li>${item}</li>`).join('')}</ul>`
+                            : '<p>Không có điểm yếu.</p>';
+                        document.getElementById('weaknesses').innerHTML = weaknessesHtml;
+
+                        // Cập nhật lời nhắc nhở/phê bình
+                        document.getElementById('reminder').textContent = reminder;
+
+                        // Cập nhật bài tập về nhà
+                        document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${homework}`;
+
+                        document.getElementById('loading').style.display = 'none';
+                    } catch (e) {
+                        showError('Lỗi khi phân tích dữ liệu: ' + e.message);
+                        console.error(e);
+                    }
+                })
+                .catch(error => {
+                    showError('Lỗi khi tải dữ liệu: ' + error.message);
+                    console.error(error);
+                });
+        }
+
+        // Thêm sự kiện click cho nút chụp ảnh
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            
+            document.getElementById('capture-btn').addEventListener('click', function() {
+                const container = document.querySelector('.container');
+                
+                html2canvas(container).then(canvas => {
+                    // Tùy chọn 1: Copy vào clipboard (yêu cầu HTTPS)
+                    if (navigator.clipboard && navigator.clipboard.write) {
+                        canvas.toBlob(function(blob) {
+                            const item = new ClipboardItem({ "image/png": blob });
+                            navigator.clipboard.write([item]).then(function() {
+                                alert('Đã chụp và lưu ảnh vào bộ nhớ tạm!');
+                            }).catch(function(error) {
+                                console.error('Lỗi khi sao chép ảnh:', error);
+                                downloadImage(canvas);
+                            });
+                        });
+                    } 
+                    // Tùy chọn 2: Tải ảnh xuống
+                    else {
+                        downloadImage(canvas);
+                    }
+                });
+            });
+            
+            function downloadImage(canvas) {
+                const link = document.createElement('a');
+                link.download = 'bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+            }
+        });
+    </script>
+</body>
+</html>
