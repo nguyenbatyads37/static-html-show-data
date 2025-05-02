@@ -1,341 +1,188 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PHIẾU BÀN GIAO ĐƠN HÀNG</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            line-height: 1.6;
-        }
-        h1 {
-            color: #1a73e8;
-            text-align: center;
-        }
-        .logo {
-            display: block;
-            margin: 0 auto 20px;
-            max-width: 200px;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-            margin-top: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-            position: sticky;
-            top: 0;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            font-style: italic;
-            color: #666;
-        }
-        .error {
-            color: #d32f2f;
-            padding: 10px;
-            background-color: #ffebee;
-            border-radius: 4px;
-        }
-        .refresh-btn {
-            margin: 10px 0;
-            padding: 8px 16px;
-            background-color: #1a73e8;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .refresh-btn:hover {
-            background-color: #0d5bba;
-        }
-        .filter-container {
-            margin: 15px 0;
-            padding: 10px;
-            background-color: #f5f5f5;
-            border-radius: 4px;
-        }
-        .filter-control {
-            margin: 5px 0;
-            display: flex;
-            align-items: center;
-        }
-        label {
-            margin-right: 10px;
-            font-weight: bold;
-        }
-        input, select {
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
-        .selected-date {
-            margin-left: 10px;
-            font-style: italic;
-        }
-    </style>
-</head>
-<body>
-    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
-    <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
-    <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
-    
-    <div class="filter-container">
-        <h3>Bộ lọc</h3>
-        <div class="filter-control">
-            <label for="dateFilter">Ngày:</label>
-            <select id="dateFilter" onchange="filterData()">
-                <option value="">Tất cả</option>
-            </select>
-            <span id="selectedDate" class="selected-date"></span>
-        </div>
-        <div class="filter-control">
-            <label for="anFilter">Lọc theo tài xế:</label>
-            <select id="anFilter" onchange="filterData()">
-                <option value="">Tất cả</option>
-            </select>
-        </div>
-    </div>
-    
-    <div id="loading" class="loading">Đang tải dữ liệu...</div>
-    <div id="error" class="error" style="display: none;"></div>
-    <div id="data-container" style="overflow-x: auto;"></div>
+// Hàm lấy ngày hôm nay ở định dạng YYYY-MM-DD (khớp với dữ liệu)
+function getTodayDate() {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0'); // Tháng bắt đầu từ 0
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`; // Định dạng YYYY-MM-DD
+}
 
-    <script>
-        const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
-        const sheetIdMain = '116599712';
-        const sheetIdLookup = '2007395895';
-        
-        let originalData = [];
-        let filteredData = [];
-        let uniqueANValues = [];
-        let uniqueDateValues = [];
-        let anToCMap = {};
-        
-        // Hàm chuyển đổi YYYY-MM-DD sang DD/MM/YYYY
-        function formatToDisplayDate(isoDate) {
-            if (!isoDate) return '';
-            const [year, month, day] = isoDate.split('-');
-            return `${day}/${month}/${year}`;
-        }
-        
-        function loadData() {
-            document.getElementById('loading').style.display = 'block';
-            document.getElementById('error').style.display = 'none';
-            document.getElementById('data-container').innerHTML = '';
-            document.getElementById('selectedDate').textContent = '';
-            
-            // Load lookup sheet first (for column C)
-            const lookupUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`;
-            fetch(lookupUrl)
-                .then(response => response.text())
-                .then(data => {
-                    try {
-                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
-                        const rows = jsonData.table.rows;
-                        
-                        anToCMap = {};
-                        rows.forEach(row => {
-                            const anValue = row.c[0] ? String(row.c[0].v).trim() : '';
-                            const cValue = row.c[2] ? String(row.c[2].v).trim() : '';
-                            if (anValue && cValue) {
-                                anToCMap[anValue] = cValue;
-                            }
-                        });
-                        
-                        loadMainSheet();
-                    } catch (e) {
-                        document.getElementById('loading').style.display = 'none';
-                        showError('Lỗi khi phân tích dữ liệu lookup: ' + e.message);
-                    }
-                })
-                .catch(error => {
-                    document.getElementById('loading').style.display = 'none';
-                    showError('Lỗi khi tải dữ liệu lookup: ' + error.message);
-                });
-        }
-        
-        function loadMainSheet() {
-            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`;
-            
-            fetch(url)
-                .then(response => response.text())
-                .then(data => {
-                    document.getElementById('loading').style.display = 'none';
-                    
-                    try {
-                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
-                        const columns = jsonData.table.cols.map(col => col.label);
-                        const rows = jsonData.table.rows;
-                        
-                        if (rows.length === 0) {
-                            showError('Không có dữ liệu trong bảng tính');
-                            return;
-                        }
-                        
-                        originalData = rows.map(row => {
-                            let dateE = '';
-                            if (row.c[4] && row.c[4].v) {
-                                try {
-                                    let rawDate;
-                                    if (typeof row.c[4].v === 'string' && row.c[4].v.startsWith('Date')) {
-                                        const dateMatch = row.c[4].v.match(/Date\((\d+),(\d+),(\d+)\)/);
-                                        if (dateMatch) {
-                                            // Google Sheets uses 0-based months
-                                            rawDate = new Date(
-                                                parseInt(dateMatch[1]),
-                                                parseInt(dateMatch[2]), // Không trừ 1 vì tháng đã đúng
-                                                parseInt(dateMatch[3])
-                                            );
-                                        }
-                                    } else if (typeof row.c[4].v === 'string') {
-                                        // Thử xử lý các định dạng ngày khác (ví dụ: DD/MM/YYYY hoặc YYYY-MM-DD)
-                                        rawDate = new Date(row.c[4].v.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
-                                    } else {
-                                        rawDate = new Date(row.c[4].v);
-                                    }
-                                    
-                                    if (rawDate && !isNaN(rawDate)) {
-                                        dateE = rawDate.toISOString().split('T')[0];
-                                    } else {
-                                        console.warn('Invalid date in column E:', row.c[4]);
-                                    }
-                                } catch (e) {
-                                    console.warn('Error parsing date in column E:', row.c[4], e);
-                                }
-                            } else {
-                                console.warn('Empty or missing date in column E:', row.c[4]);
-                            }
-                            
-                            const anRaw = row.c[39] ? String(row.c[39].v).trim() : '';
-                            const anValues = anRaw ? anRaw.split(',').map(v => v.trim()).filter(v => v) : [];
-                            
-                            return {
-                                E: dateE,
-                                H: row.c[7] ? (row.c[7].f || row.c[7].v) : '',
-                                I: row.c[8] ? (row.c[8].f || row.c[8].v) : '',
-                                AE: row.c[30] ? (row.c[30].f || row.c[30].v) : '',
-                                AN: anValues,
-                                AN_Display: anValues.map(v => anToCMap[v] || v).join(', ')
-                            };
-                        });
-                        
-                        uniqueDateValues = [...new Set(
-                            originalData.map(item => item.E).filter(date => date)
-                        )].sort();
-                        
-                        uniqueANValues = [...new Set(
-                            originalData.flatMap(item => item.AN).filter(v => v)
-                        )].sort();
-                        
-                        updateDateFilterOptions();
-                        updateANFilterOptions();
-                        
-                        filterData();
-                    } catch (e) {
-                        showError('Lỗi khi phân tích dữ liệu: ' + e.message);
-                    }
-                })
-                .catch(error => {
-                    document.getElementById('loading').style.display = 'none';
-                    showError('Lỗi khi tải dữ liệu: ' + error.message);
-                });
-        }
-        
-        function updateDateFilterOptions() {
-            const dateFilter = document.getElementById('dateFilter');
-            dateFilter.innerHTML = '<option value="">Tất cả</option>';
-            
-            uniqueDateValues.forEach(date => {
-                const option = document.createElement('option');
-                option.value = date;
-                option.textContent = formatToDisplayDate(date);
-                dateFilter.appendChild(option);
-            });
-        }
-        
-        function updateANFilterOptions() {
-            const anFilter = document.getElementById('anFilter');
-            anFilter.innerHTML = '<option value="">Tất cả</option>';
-            
-            uniqueANValues.forEach(value => {
-                const option = document.createElement('option');
-                option.value = value;
-                option.textContent = anToCMap[value] || value;
-                anFilter.appendChild(option);
-            });
-        }
-        
-        function filterData() {
-            const dateFilter = document.getElementById('dateFilter').value;
-            const anFilter = document.getElementById('anFilter').value;
-            
-            document.getElementById('selectedDate').textContent = dateFilter ? `Đã chọn: ${formatToDisplayDate(dateFilter)}` : '';
-            
-            filteredData = originalData.filter(item => {
-                if (dateFilter && item.E !== dateFilter) {
-                    return false;
-                }
+// Hàm chuyển đổi YYYY-MM-DD sang DD/MM/YYYY
+function formatToDisplayDate(isoDate) {
+    if (!isoDate) return '';
+    const [year, month, day] = isoDate.split('-');
+    return `${day}/${month}/${year}`;
+}
+
+function loadData() {
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('data-container').innerHTML = '';
+    document.getElementById('selectedDate').textContent = '';
+
+    // Load lookup sheet first (for column C)
+    const lookupUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`;
+    fetch(lookupUrl)
+        .then(response => response.text())
+        .then(data => {
+            try {
+                const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                const rows = jsonData.table.rows;
                 
-                if (anFilter && !item.AN.includes(anFilter)) {
-                    return false;
-                }
+                anToCMap = {};
+                rows.forEach(row => {
+                    const anValue = row.c[0] ? String(row.c[0].v).trim() : '';
+                    const cValue = row.c[2] ? String(row.c[2].v).trim() : '';
+                    if (anValue && cValue) {
+                        anToCMap[anValue] = cValue;
+                    }
+                });
                 
-                return true;
-            });
-            
-            displayFilteredData();
-        }
-        
-        function displayFilteredData() {
-            const container = document.getElementById('data-container');
-            
-            if (filteredData.length === 0) {
-                container.innerHTML = '<p>Không có dữ liệu phù hợp với bộ lọc</p>';
-                return;
+                loadMainSheet();
+            } catch (e) {
+                document.getElementById('loading').style.display = 'none';
+                showError('Lỗi khi phân tích dữ liệu lookup: ' + e.message);
             }
+        })
+        .catch(error => {
+            document.getElementById('loading').style.display = 'none';
+            showError('Lỗi khi tải dữ liệu lookup: ' + error.message);
+        });
+}
+
+function loadMainSheet() {
+    const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`;
+    
+    fetch(url)
+        .then(response => response.text())
+        .then(data => {
+            document.getElementById('loading').style.display = 'none';
             
-            let html = '<table><thead><tr>';
-            html += '<th>Ngày</th>';
-            html += '<th>Tên khách hàng</th>';
-            html += '<th>SĐT</th>';
-            html += '<th>Tên SP</th>';
-            html += '<th>Tài xế</th>';
-            html += '</tr></thead><tbody>';
-            
-            filteredData.forEach(item => {
-                html += '<tr>';
-                html += `<td>${formatToDisplayDate(item.E) || ''}</td>`;
-                html += `<td>${item.H || ''}</td>`;
-                html += `<td>${item.I || ''}</td>`;
-                html += `<td>${item.AE || ''}</td>`;
-                html += `<td>${item.AN_Display || ''}</td>`;
-                html += '</tr>';
-            });
-            
-            html += '</tbody></table>';
-            container.innerHTML = html;
+            try {
+                const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                const columns = jsonData.table.cols.map(col => col.label);
+                const rows = jsonData.table.rows;
+                
+                if (rows.length === 0) {
+                    showError('Không có dữ liệu trong bảng tính');
+                    return;
+                }
+                
+                originalData = rows.map(row => {
+                    let dateE = '';
+                    if (row.c[4] && row.c[4].v) {
+                        try {
+                            let rawDate;
+                            if (typeof row.c[4].v === 'string' && row.c[4].v.startsWith('Date')) {
+                                const dateMatch = row.c[4].v.match(/Date\((\d+),(\d+),(\d+)\)/);
+                                if (dateMatch) {
+                                    rawDate = new Date(
+                                        parseInt(dateMatch[1]),
+                                        parseInt(dateMatch[2]),
+                                        parseInt(dateMatch[3])
+                                    );
+                                }
+                            } else if (typeof row.c[4].v === 'string') {
+                                rawDate = new Date(row.c[4].v.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1'));
+                            } else {
+                                rawDate = new Date(row.c[4].v);
+                            }
+                            
+                            if (rawDate && !isNaN(rawDate)) {
+                                dateE = rawDate.toISOString().split('T')[0];
+                            } else {
+                                console.warn('Invalid date in column E:', row.c[4]);
+                            }
+                        } catch (e) {
+                            console.warn('Error parsing date in column E:', row.c[4], e);
+                        }
+                    } else {
+                        console.warn('Empty or missing date in column E:', row.c[4]);
+                    }
+                    
+                    const anRaw = row.c[39] ? String(row.c[39].v).trim() : '';
+                    const anValues = anRaw ? anRaw.split(',').map(v => v.trim()).filter(v => v) : [];
+                    
+                    return {
+                        E: dateE,
+                        H: row.c[7] ? (row.c[7].f || row.c[7].v) : '',
+                        I: row.c[8] ? (row.c[8].f || row.c[8].v) : '',
+                        AE: row.c[30] ? (row.c[30].f || row.c[30].v) : '',
+                        AN: anValues,
+                        AN_Display: anValues.map(v => anToCMap[v] || v).join(', ')
+                    };
+                });
+                
+                uniqueDateValues = [...new Set(
+                    originalData.map(item => item.E).filter(date => date)
+                )].sort();
+                
+                uniqueANValues = [...new Set(
+                    originalData.flatMap(item => item.AN).filter(v => v)
+                )].sort();
+                
+                updateDateFilterOptions();
+                updateANFilterOptions();
+                
+                // Đặt ngày hôm nay làm mặc định
+                const today = getTodayDate();
+                if (uniqueDateValues.includes(today)) {
+                    document.getElementById('dateFilter').value = today;
+                    document.getElementById('selectedDate').textContent = `Đã chọn: ${formatToDisplayDate(today)}`;
+                }
+                
+                filterData();
+            } catch (e) {
+                showError('Lỗi khi phân tích dữ liệu: ' + e.message);
+            }
+        })
+        .catch(error => {
+            document.getElementById('loading').style.display = 'none';
+            showError('Lỗi khi tải dữ liệu: ' + error.message);
+        });
+}
+
+function updateDateFilterOptions() {
+    const dateFilter = document.getElementById('dateFilter');
+    dateFilter.innerHTML = '<option value="">Tất cả</option>';
+    
+    uniqueDateValues.forEach(date => {
+        const option = document.createElement('option');
+        option.value = date;
+        option.textContent = formatToDisplayDate(date);
+        dateFilter.appendChild(option);
+    });
+}
+
+function updateANFilterOptions() {
+    const anFilter = document.getElementById('anFilter');
+    anFilter.innerHTML = '<option value="">Tất cả</option>';
+    
+    uniqueANValues.forEach(value => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = anToCMap[value] || value;
+        anFilter.appendChild(option);
+    });
+}
+
+function filterData() {
+    const dateFilter = document.getElementById('dateFilter').value || getTodayDate(); // Mặc định là hôm nay nếu không chọn
+    const anFilter = document.getElementById('anFilter').value;
+    
+    document.getElementById('selectedDate').textContent = dateFilter ? `Đã chọn: ${formatToDisplayDate(dateFilter)}` : '';
+    
+    filteredData = originalData.filter(item => {
+        if (dateFilter && item.E !== dateFilter) {
+            return false;
         }
         
-        function showError(message) {
-            const errorDiv = document.getElementById('error');
-            errorDiv.style.display = 'block';
-            errorDiv.textContent = message;
+        if (anFilter && !item.AN.includes(anFilter)) {
+            return false;
         }
         
-        window.onload = loadData;
-    </script>
-</body>
-</html>
+        return true;
+    });
+    
+    displayFilteredData();
+}
