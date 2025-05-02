@@ -1,149 +1,54 @@
-<!DOCTYPE html>
-<html lang="vi">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thông Báo Kết Quả Học Tập</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f9f9f9;
-        }
-        #screenshot-area {
-            background-color: white;
-        }
-        .header-container {
-            background-color: white;
-            border: 3px solid #0047ab;
-            border-radius: 8px 8px 0 0;
-            padding: 10px;
-            margin-bottom: 0;
-        }
-        .header {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: center;
-            gap: 10px;
-        }
-        .logo-container {
-            display: flex;
-            align-items: center;
-        }
-        .logo {
-            max-height: 50px;
-            max-width: 100px;
-        }
-        .company-name {
-            font-weight: bold;
-            color: #003366;
-            font-size: 24px;
-            text-align: center;
-            flex: 1;
-            margin: 0;
-        }
-        .header-image {
-            max-height: 50px;
-            max-width: 100px;
-            object-fit: contain;
-        }
-        .announcement-title {
-            text-align: center;
-            font-size: 18px;
-            font-weight: bold;
-            color: #ff6200;
-            margin: 10px 0 0;
-            width: 100%;
-            padding: 8px 0;
-            border-top: 1px solid #eaeaea;
-        }
-        .container {
-            background-color: white;
-            border-radius: 0 0 8px 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-            padding: 25px;
-            border-left: 3px solid #0047ab;
-            border-right: 3px solid #0047ab;
-            border-bottom: 3px solid #0047ab;
-        }
-        /* ... (giữ nguyên các style khác) ... */
-        .screenshot-btn {
-            background-color: #0047ab;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            margin-top: 15px;
-            transition: background-color 0.3s;
-            font-size: 14px;
-        }
-        .screenshot-btn:hover {
-            background-color: #003366;
-        }
-    </style>
-</head>
-<body>
-    <div id="loading">Đang tải dữ liệu...</div>
-    <div id="error"></div>
+function callDeepSeek(prompt, outputCell) {
+  var url = "https://api.deepseek.com/v1/chat/completions";
+  var apiKey = "sk-your-api-key-here"; // ⚠️ Replace with your actual API key (store securely!)
+  
+  var payload = {
+    "model": "deepseek-chat",
+    "messages": [
+      { "role": "system", "content": "You are a helpful assistant." },
+      { "role": "user", "content": prompt }
+    ]
+  };
+
+  var options = {
+    "method": "POST",
+    "contentType": "application/json",
+    "headers": { "Authorization": "Bearer " + apiKey },
+    "payload": JSON.stringify(payload),
+    "muteHttpExceptions": true // Prevents HTTP errors from throwing exceptions
+  };
+
+  try {
+    // 1. Fetch API response
+    var response = UrlFetchApp.fetch(url, options);
+    var responseText = response.getContentText();
     
-    <!-- Khu vực cần chụp màn hình -->
-    <div id="screenshot-area">
-        <!-- ... (giữ nguyên phần header và container) ... -->
-    </div>
+    // 2. Check if response is valid JSON
+    var json;
+    try {
+      json = JSON.parse(responseText);
+    } catch (e) {
+      throw new Error("API returned non-JSON: " + responseText);
+    }
 
-    <!-- Nút chụp màn hình -->
-    <div style="text-align: center; margin-top: 20px;">
-        <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình báo cáo</button>
-    </div>
+    // 3. Handle API errors (e.g., invalid key, rate limits)
+    if (json.error) {
+      throw new Error("API Error: " + json.error.message);
+    }
 
-    <script>
-        // ... (giữ nguyên các hàm loadData và các hàm hỗ trợ khác) ...
-
-        // Xử lý chụp màn hình
-        document.addEventListener('DOMContentLoaded', function() {
-            loadData();
-            
-            document.getElementById('screenshot-btn').addEventListener('click', function() {
-                const element = document.getElementById('screenshot-area');
-                
-                // Tạm ẩn các phần không cần thiết
-                const loadingElement = document.getElementById('loading');
-                const originalDisplay = loadingElement.style.display;
-                loadingElement.style.display = 'none';
-                
-                // Sử dụng html2canvas để chụp màn hình
-                html2canvas(element, {
-                    scale: 2,
-                    logging: false,
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: '#ffffff'
-                }).then(canvas => {
-                    // Khôi phục trạng thái ban đầu
-                    loadingElement.style.display = originalDisplay;
-                    
-                    // Tạo link tải xuống
-                    const link = document.createElement('a');
-                    link.download = 'bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
-                }).catch(error => {
-                    console.error('Lỗi khi chụp màn hình:', error);
-                    alert('Có lỗi xảy ra khi chụp màn hình. Vui lòng thử lại!');
-                    loadingElement.style.display = originalDisplay;
-                });
-            });
-        });
-    </script>
+    // 4. Extract and return the AI response
+    var result = json.choices[0].message.content;
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    sheet.getRange(outputCell).setValue(result);
     
-    <!-- Thêm thư viện html2canvas -->
-    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-</body>
-</html>
+    return result; // Optional: Display in the cell calling the function
+
+  } catch (e) {
+    var errorMsg = "❌ Error: " + e.message;
+    console.error(errorMsg);
+    
+    // Write error to the output cell (helps debugging)
+    SpreadsheetApp.getActiveSheet().getRange(outputCell).setValue(errorMsg);
+    return errorMsg;
+  }
+}
