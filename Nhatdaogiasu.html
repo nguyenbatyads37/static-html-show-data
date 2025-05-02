@@ -1,54 +1,458 @@
-function callDeepSeek(prompt, outputCell) {
-  var url = "https://api.deepseek.com/v1/chat/completions";
-  var apiKey = "sk-your-api-key-here"; // ⚠️ Replace with your actual API key (store securely!)
-  
-  var payload = {
-    "model": "deepseek-chat",
-    "messages": [
-      { "role": "system", "content": "You are a helpful assistant." },
-      { "role": "user", "content": prompt }
-    ]
-  };
-
-  var options = {
-    "method": "POST",
-    "contentType": "application/json",
-    "headers": { "Authorization": "Bearer " + apiKey },
-    "payload": JSON.stringify(payload),
-    "muteHttpExceptions": true // Prevents HTTP errors from throwing exceptions
-  };
-
-  try {
-    // 1. Fetch API response
-    var response = UrlFetchApp.fetch(url, options);
-    var responseText = response.getContentText();
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thông Báo Kết Quả Học Tập</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .header-container {
+            background-color: white;
+            border: 3px solid #0047ab;
+            border-radius: 8px 8px 0 0;
+            padding: 10px;
+            margin-bottom: 0;
+        }
+        .header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        .logo-container {
+            display: flex;
+            align-items: center;
+        }
+        .logo {
+            max-height: 50px;
+            max-width: 100px;
+        }
+        .company-name {
+            font-weight: bold;
+            color: #003366;
+            font-size: 24px;
+            text-align: center;
+            flex: 1;
+            margin: 0;
+        }
+        .header-image {
+            max-height: 50px;
+            max-width: 100px;
+            object-fit: contain;
+        }
+        .announcement-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff6200;
+            margin: 10px 0 0;
+            width: 100%;
+            padding: 8px 0;
+            border-top: 1px solid #eaeaea;
+        }
+        .container {
+            background-color: white;
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            border-left: 3px solid #0047ab;
+            border-right: 3px solid #0047ab;
+            border-bottom: 3px solid #0047ab;
+        }
+        h2 {
+            color: #0047ab;
+            border-bottom: 2px solid #eaeaea;
+            padding-bottom: 8px;
+            font-size: 18px;
+            margin-top: 25px;
+            position: relative;
+            padding-left: 20px;
+        }
+        h2:before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 5px;
+            background-color: #0047ab;
+            border-radius: 3px;
+        }
+        .info-section {
+            margin-bottom: 20px;
+        }
+        .info-row {
+            display: flex;
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            width: 150px;
+            color: #555;
+        }
+        .info-content {
+            flex: 1;
+        }
+        .feedback-section {
+            background-color: #f5f9ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        .praise {
+            color: #2e7d32;
+            font-weight: bold;
+        }
+        .criticism {
+            color: #c62828;
+            font-weight: bold;
+        }
+        .reminder {
+            background-color: #fff8e1;
+            padding: 15px;
+            border-left: 4px solid #ffc107;
+            margin: 20px 0;
+            font-style: italic;
+        }
+        .footer {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            color: #777;
+            font-size: 14px;
+            border-top: 1px solid #eee;
+            padding: 15px 0;
+            text-align: center;
+        }
+        .footer p {
+            margin: 5px 0;
+        }
+        .footer strong {
+            color: #0047ab;
+        }
+        .date {
+            text-align: right;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .intro-text {
+            font-style: italic;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        #loading, #error {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #error {
+            color: #c62828;
+            display: none;
+        }
+        .screenshot-btn {
+            background-color: #0047ab;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 20px auto;
+            display: block;
+            transition: background-color 0.3s;
+            font-size: 14px;
+        }
+        .screenshot-btn:hover {
+            background-color: #003366;
+        }
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                align-items: center;
+            }
+            .company-name {
+                font-size: 20px;
+                margin: 5px 0;
+            }
+            .logo, .header-image {
+                max-height: 40px;
+                max-width: 80px;
+            }
+            .announcement-title {
+                font-size: 16px;
+                margin: 8px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Đang tải dữ liệu...</div>
+    <div id="error"></div>
     
-    // 2. Check if response is valid JSON
-    var json;
-    try {
-      json = JSON.parse(responseText);
-    } catch (e) {
-      throw new Error("API returned non-JSON: " + responseText);
-    }
+    <!-- Toàn bộ khu vực cần chụp -->
+    <div id="report-content">
+        <div class="header-container">
+            <div class="header">
+                <div class="logo-container">
+                    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2Fdfb4194c.%E1%BA%A2nh.010114.png" 
+                         alt="Logo Nhất Đạo Gia Sư" class="logo">
+                </div>
+                <div class="company-name">NHẤT ĐẠO GIA SƯ</div>
+                <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F3a2368ed.%E1%BA%A2nh.011317.png" 
+                     alt="Hình ảnh học tập" class="header-image">
+                <div class="announcement-title">Trân trọng thông báo kết quả học tập ngày: <span id="report-date">Đang tải...</span></div>
+            </div>
+        </div>
+        
+        <div class="container">
+            <div class="info-section">
+                <div class="info-row">
+                    <div class="info-label">Học sinh:</div>
+                    <div class="info-content" id="student-name">Đang tải...</div>
+                </div>
+                <div class="info-row">
+                    <div class="info-label">Lớp/Môn học:</div>
+                    <div class="info-content" id="class-subject">Đang tải...</div>
+                </div>
+            </div>
+            
+            <h2>BÀI HỌC HÔM NAY</h2>
+            <p class="intro-text">Buổi học hôm nay Gia sư đã tập trung vào các nội dung sau:</p>
+            <div class="info-content" id="lesson-content">
+                <ul>
+                    <li>Đang tải...</li>
+                </ul>
+            </div>
+            
+            <h2>NHẬN XÉT CỦA GIA SƯ</h2>
+            <p class="intro-text">Sau buổi học, tôi có một số nhận xét về tình hình học tập như sau:</p>
+            
+            <div class="feedback-section" id="feedback-section">
+                <div class="info-row">
+                    <div class="info-label">Điểm mạnh:</div>
+                    <div class="info-content" id="strengths">
+                        <ul>
+                            <li>Đang tải...</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <div class="info-row">
+                    <div class="info-label">Điểm cần cải thiện:</div>
+                    <div class="info-content" id="weaknesses">
+                        <ul>
+                            <li>Đang tải...</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="info-row">
+                <div class="info-label">Lời khen:</div>
+                <div class="info-content praise" id="praise">
+                    Đang tải...
+                </div>
+            </div>
+            
+            <div class="info-row">
+                <div class="info-label">Lời nhắc nhở:</div>
+                <div class="info-content criticism" id="reminder">
+                    Đang tải...
+                </div>
+            </div>
+            
+            <div class="reminder" id="homework">
+                <strong>Bài tập về nhà:</strong> Đang tải...
+            </div>
+            
+            <div class="footer">
+                <p><strong>Trung tâm Gia Sư Nhất Đạo</strong></p>
+                <p>0965 601 055</p>
+            </div>
+        </div>
+    </div>
 
-    // 3. Handle API errors (e.g., invalid key, rate limits)
-    if (json.error) {
-      throw new Error("API Error: " + json.error.message);
-    }
+    <!-- Nút chụp màn hình - Đặt bên ngoài khu vực cần chụp -->
+    <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình báo cáo</button>
 
-    // 4. Extract and return the AI response
-    var result = json.choices[0].message.content;
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    sheet.getRange(outputCell).setValue(result);
+    <!-- Thêm thư viện html2canvas -->
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     
-    return result; // Optional: Display in the cell calling the function
+    <script>
+        const spreadsheetId = '1CwXc6bXARyhJOh5gb8FXzLm8m4fWmYA03f9QpTCt4bs';
+        const sheetId = '596574590';
 
-  } catch (e) {
-    var errorMsg = "❌ Error: " + e.message;
-    console.error(errorMsg);
-    
-    // Write error to the output cell (helps debugging)
-    SpreadsheetApp.getActiveSheet().getRange(outputCell).setValue(errorMsg);
-    return errorMsg;
-  }
-}
+        // Hàm lấy id từ URL
+        function getQueryParam(param) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(param);
+        }
+
+        // Hàm chuyển đổi định dạng ngày
+        function formatToDisplayDate(dateInput) {
+            if (!dateInput) return 'Không xác định';
+            
+            if (typeof dateInput === 'string' && dateInput.startsWith('Date')) {
+                const dateMatch = dateInput.match(/Date\((\d+),(\d+),(\d+)\)/);
+                if (dateMatch) {
+                    const year = parseInt(dateMatch[1]);
+                    const month = parseInt(dateMatch[2]);
+                    const day = parseInt(dateMatch[3]);
+                    return `${day.toString().padStart(2, '0')}/${(month + 1).toString().padStart(2, '0')}/${year}`;
+                }
+            }
+            
+            const date = new Date(dateInput);
+            if (!isNaN(date.getTime())) {
+                const day = date.getDate().toString().padStart(2, '0');
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                const year = date.getFullYear();
+                return `${day}/${month}/${year}`;
+            }
+            
+            return 'Không xác định';
+        }
+
+        // Hàm hiển thị lỗi
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = message;
+            document.getElementById('loading').style.display = 'none';
+        }
+
+        // Hàm tải dữ liệu từ Google Sheet
+        function loadData() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+
+            const studentId = getQueryParam('id');
+            if (!studentId) {
+                showError('Không tìm thấy mã học sinh trong URL');
+                return;
+            }
+
+            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetId}`;
+
+            fetch(url)
+                .then(response => response.text())
+                .then(data => {
+                    try {
+                        const jsonData = JSON.parse(data.substring(47).slice(0, -2));
+                        const rows = jsonData.table.rows;
+                        
+                        if (!rows || rows.length === 0) {
+                            showError('Không có dữ liệu trong bảng tính');
+                            return;
+                        }
+
+                        let foundRow = null;
+                        for (const row of rows) {
+                            if (row.c && row.c[0] && row.c[0].v && row.c[0].v.toString().trim() === studentId.trim()) {
+                                foundRow = row;
+                                break;
+                            }
+                        }
+
+                        if (!foundRow) {
+                            showError(`Không tìm thấy dữ liệu cho học sinh với mã: ${studentId}`);
+                            return;
+                        }
+
+                        const studentName = foundRow.c[5]?.v || 'Không xác định';
+                        const classSubject = foundRow.c[3]?.v || 'Không xác định';
+                        const reportDate = formatToDisplayDate(foundRow.c[1]?.v);
+                        const lessonContent = foundRow.c[4]?.v ? 
+                            foundRow.c[4].v.split('\n').filter(item => item.trim()) : [];
+
+                        const strengths = foundRow.c[8]?.v ? 
+                            foundRow.c[8].v.split('\n').filter(item => item.trim()) : [];
+
+                        const praise = foundRow.c[9]?.v || 'Em đã có tinh thần học tập tốt.';
+
+                        const weaknesses = foundRow.c[10]?.v ? 
+                            foundRow.c[10].v.split('\n').filter(item => item.trim()) : [];
+
+                        const reminder = foundRow.c[11]?.v || 'Tiếp tục phát huy tinh thần học tập.';
+
+                        const homework = foundRow.c[6]?.v || 'Không có bài tập về nhà';
+
+                        // Cập nhật thông tin
+                        document.getElementById('student-name').textContent = studentName;
+                        document.getElementById('class-subject').textContent = classSubject;
+                        document.getElementById('report-date').textContent = reportDate;
+
+                        document.getElementById('lesson-content').innerHTML = lessonContent.length > 0
+                            ? `<ul>${lessonContent.map(item => `<li>${item}</li>`).join('')}</ul>`
+                            : '<p>Không có nội dung bài học.</p>';
+
+                        document.getElementById('strengths').innerHTML = strengths.length > 0
+                            ? `<ul>${strengths.map(item => `<li>${item}</li>`).join('')}</ul>`
+                            : '<p>Không có điểm mạnh.</p>';
+
+                        document.getElementById('praise').textContent = praise;
+
+                        document.getElementById('weaknesses').innerHTML = weaknesses.length > 0
+                            ? `<ul>${weaknesses.map(item => `<li>${item}</li>`).join('')}</ul>`
+                            : '<p>Không có điểm yếu.</p>';
+
+                        document.getElementById('reminder').textContent = reminder;
+                        document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${homework}`;
+
+                        document.getElementById('loading').style.display = 'none';
+                    } catch (e) {
+                        showError('Lỗi khi phân tích dữ liệu: ' + e.message);
+                        console.error(e);
+                    }
+                })
+                .catch(error => {
+                    showError('Lỗi khi tải dữ liệu: ' + error.message);
+                    console.error(error);
+                });
+        }
+
+        // Xử lý chụp màn hình
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            
+            document.getElementById('screenshot-btn').addEventListener('click', function() {
+                const element = document.getElementById('report-content');
+                const originalDisplay = document.getElementById('loading').style.display;
+                document.getElementById('loading').style.display = 'none';
+                
+                // Thêm delay để đảm bảo DOM đã ổn định
+                setTimeout(() => {
+                    html2canvas(element, {
+                        scale: 2,
+                        logging: false,
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff'
+                    }).then(canvas => {
+                        document.getElementById('loading').style.display = originalDisplay;
+                        
+                        // Tạo link tải xuống
+                        const link = document.createElement('a');
+                        link.download = 'bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
+                        link.href = canvas.toDataURL('image/png');
+                        link.click();
+                    }).catch(error => {
+                        console.error('Lỗi khi chụp màn hình:', error);
+                        alert('Có lỗi xảy ra khi chụp màn hình. Vui lòng thử lại!');
+                        document.getElementById('loading').style.display = originalDisplay;
+                    });
+                }, 500);
+            });
+        });
+    </script>
+</body>
+</html>
