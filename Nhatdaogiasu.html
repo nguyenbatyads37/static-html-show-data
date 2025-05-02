@@ -330,6 +330,19 @@
             document.getElementById('loading').style.display = 'none';
         }
 
+        // Hàm chờ tất cả hình ảnh tải xong
+        function waitForImagesToLoad(element) {
+            const images = element.getElementsByTagName('img');
+            const promises = Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise(resolve => {
+                    img.onload = resolve;
+                    img.onerror = resolve; // Tiếp tục ngay cả khi hình ảnh không tải được
+                });
+            });
+            return Promise.all(promises);
+        }
+
         // Hàm tải dữ liệu từ Google Sheet
         function loadData() {
             document.getElementById('loading').style.display = 'block';
@@ -420,7 +433,7 @@
                 });
         }
 
-        // Xử lý chụp màn hình
+        // Xử lý chụp màn hình và sao chép vào clipboard
         document.addEventListener('DOMContentLoaded', function() {
             loadData();
             
@@ -428,9 +441,9 @@
                 const element = document.getElementById('report-content');
                 const originalDisplay = document.getElementById('loading').style.display;
                 document.getElementById('loading').style.display = 'none';
-                
-                // Thêm delay để đảm bảo DOM đã ổn định
-                setTimeout(() => {
+
+                // Chờ tất cả hình ảnh tải xong
+                waitForImagesToLoad(element).then(() => {
                     html2canvas(element, {
                         scale: 2,
                         logging: false,
@@ -438,19 +451,33 @@
                         allowTaint: true,
                         backgroundColor: '#ffffff'
                     }).then(canvas => {
+                        // Khôi phục trạng thái loading
                         document.getElementById('loading').style.display = originalDisplay;
-                        
-                        // Tạo link tải xuống
+
+                        // Tải xuống tệp PNG
                         const link = document.createElement('a');
                         link.download = 'bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
                         link.href = canvas.toDataURL('image/png');
                         link.click();
+
+                        // Sao chép vào clipboard
+                        canvas.toBlob(blob => {
+                            const item = new ClipboardItem({ 'image/png': blob });
+                            navigator.clipboard.write([item])
+                                .then(() => {
+                                    alert('Báo cáo đã được chụp và sao chép vào bộ nhớ tạm!');
+                                })
+                                .catch(err => {
+                                    console.error('Lỗi khi sao chép vào clipboard:', err);
+                                    alert('Đã chụp và tải xuống báo cáo, nhưng không thể sao chép vào bộ nhớ tạm.');
+                                });
+                        });
                     }).catch(error => {
                         console.error('Lỗi khi chụp màn hình:', error);
                         alert('Có lỗi xảy ra khi chụp màn hình. Vui lòng thử lại!');
                         document.getElementById('loading').style.display = originalDisplay;
                     });
-                }, 500);
+                });
             });
         });
     </script>
