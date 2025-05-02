@@ -13,6 +13,12 @@
         h1 {
             color: #1a73e8;
             text-align: center;
+            margin-bottom: 5px;
+        }
+        .sub-title {
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 20px;
         }
         .logo {
             display: block;
@@ -85,11 +91,33 @@
             margin-left: 10px;
             font-style: italic;
         }
+        .total-amount {
+            font-weight: bold;
+            margin-top: 10px;
+            text-align: right;
+            font-size: 16px;
+        }
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 40px;
+        }
+        .signature-box {
+            text-align: center;
+            width: 200px;
+        }
+        .signature-line {
+            border-top: 1px solid #000;
+            margin-top: 50px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
     <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
     <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
+    <div class="sub-title">Ngày bàn giao: <span id="delivery-date"></span></div>
+    
     <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
     
     <div class="filter-container">
@@ -112,11 +140,26 @@
     <div id="loading" class="loading">Đang tải dữ liệu...</div>
     <div id="error" class="error" style="display: none;"></div>
     <div id="data-container" style="overflow-x: auto;"></div>
+    <div id="total-amount" class="total-amount"></div>
+    
+    <div class="signature-section">
+        <div class="signature-box">
+            <div>Người bàn giao</div>
+            <div class="signature-line"></div>
+        </div>
+        <div class="signature-box">
+            <div>Tài xế</div>
+            <div class="signature-line"></div>
+        </div>
+    </div>
+
     <script>
+        // Cấu hình Google Sheets
         const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
         const sheetIdMain = '116599712';
         const sheetIdLookup = '2007395895';
         
+        // Biến toàn cục
         let originalData = [];
         let filteredData = [];
         let uniqueANValues = [];
@@ -133,99 +176,111 @@
             return decodeURIComponent(results[2].replace(/\+/g, ' '));
         }
         
+        // Hiển thị ngày hôm nay
+        function showTodayDate() {
+            const today = new Date();
+            const day = String(today.getDate()).padStart(2, '0');
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const year = today.getFullYear();
+            document.getElementById('delivery-date').textContent = `${day}/${month}/${year}`;
+        }
+        
         // Chuyển DD/MM/YYYY sang YYYY-MM-DD
         function convertToIsoDate(dd_mm_yyyy) {
             if (!dd_mm_yyyy) return '';
-            const [day, month, year] = dd_mm_yyyy.split('/');
-            return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            const parts = dd_mm_yyyy.split('/');
+            if (parts.length !== 3) return '';
+            return `${parts[2]}-${parts[1]}-${parts[0]}`;
         }
         
         // Chuyển YYYY-MM-DD sang DD/MM/YYYY
         function formatToDisplayDate(isoDate) {
             if (!isoDate) return '';
-            const [year, month, day] = isoDate.split('-');
-            return `${day}/${month}/${year}`;
+            const parts = isoDate.split('-');
+            if (parts.length !== 3) return isoDate;
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         
+        // Định dạng số tiền
+        function formatCurrency(amount) {
+            if (!amount) return '0';
+            return parseInt(amount).toLocaleString('vi-VN');
+        }
+        
+        // Hàm chính tải dữ liệu
         function loadData() {
+            showTodayDate();
             document.getElementById('loading').style.display = 'block';
             document.getElementById('error').style.display = 'none';
             document.getElementById('data-container').innerHTML = '';
             document.getElementById('selectedDate').textContent = '';
+            document.getElementById('total-amount').textContent = '';
             
-            // Load dữ liệu từ sheet phụ trước
-            const lookupUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`;
-            fetch(lookupUrl)
+            // Lấy ngày từ URL (nếu có)
+            const urlDateParam = getUrlParameter('ngay');
+            let urlDateIso = '';
+            if (urlDateParam) {
+                urlDateIso = convertToIsoDate(urlDateParam);
+            }
+            
+            // Tải dữ liệu từ sheet phụ (ánh xạ tài xế)
+            fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
                 .then(response => response.text())
                 .then(data => {
                     try {
                         const jsonData = JSON.parse(data.substring(47).slice(0, -2));
-                        const rows = jsonData.table.rows;
-                        
                         anToCMap = {};
-                        rows.forEach(row => {
-                            const anValue = row.c[0] ? String(row.c[0].v).trim() : '';
-                            const cValue = row.c[2] ? String(row.c[2].v).trim() : '';
-                            if (anValue && cValue) {
-                                anToCMap[anValue] = cValue;
-                            }
+                        jsonData.table.rows.forEach(row => {
+                            const anValue = row.c[0]?.v?.toString().trim() || '';
+                            const cValue = row.c[2]?.v?.toString().trim() || '';
+                            if (anValue && cValue) anToCMap[anValue] = cValue;
                         });
-                        
-                        loadMainSheet();
+                        loadMainSheet(urlDateIso);
                     } catch (e) {
-                        document.getElementById('loading').style.display = 'none';
-                        showError('Lỗi khi xử lý dữ liệu phụ: ' + e.message);
+                        handleError('Lỗi xử lý dữ liệu phụ', e);
                     }
                 })
                 .catch(error => {
-                    document.getElementById('loading').style.display = 'none';
-                    showError('Lỗi khi tải dữ liệu phụ: ' + error.message);
+                    handleError('Lỗi tải dữ liệu phụ', error);
                 });
         }
         
-        function loadMainSheet() {
-            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`;
-            
-            fetch(url)
+        // Tải dữ liệu chính
+        function loadMainSheet(urlDateIso) {
+            fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
                 .then(response => response.text())
                 .then(data => {
                     document.getElementById('loading').style.display = 'none';
                     
                     try {
                         const jsonData = JSON.parse(data.substring(47).slice(0, -2));
-                        const rows = jsonData.table.rows;
-                        
-                        if (rows.length === 0) {
+                        if (!jsonData.table.rows.length) {
                             showError('Không có dữ liệu trong bảng tính');
                             return;
                         }
                         
-                        // Xử lý dữ liệu từ Google Sheets
-                        originalData = rows.map(row => {
+                        // Xử lý dữ liệu
+                        originalData = jsonData.table.rows.map(row => {
                             let dateE = '';
-                            if (row.c[4] && row.c[4].v) {
+                            if (row.c[4]?.v) {
                                 try {
                                     const dateValue = row.c[4].v;
                                     let rawDate;
                                     
-                                    if (typeof dateValue === 'string' && dateValue.startsWith('Date')) {
-                                        const dateMatch = dateValue.match(/Date\((\d+),(\d+),(\d+)\)/);
-                                        if (dateMatch) {
-                                            rawDate = new Date(
-                                                parseInt(dateMatch[1]),
-                                                parseInt(dateMatch[2]),
-                                                parseInt(dateMatch[3])
-                                            );
+                                    if (typeof dateValue === 'string') {
+                                        if (dateValue.startsWith('Date')) {
+                                            const match = dateValue.match(/Date\((\d+),(\d+),(\d+)\)/);
+                                            if (match) rawDate = new Date(match[1], match[2], match[3]);
+                                        } else {
+                                            rawDate = new Date(dateValue.includes('/') 
+                                                ? dateValue.replace(/(\d+)\/(\d+)\/(\d+)/, '$3-$2-$1')
+                                                : dateValue);
                                         }
-                                    } else if (typeof dateValue === 'string') {
-                                        rawDate = new Date(dateValue.includes('/') 
-                                            ? dateValue.replace(/(\d{2})\/(\d{2})\/(\d{4})/, '$3-$2-$1')
-                                            : dateValue);
                                     } else {
                                         rawDate = new Date(dateValue);
                                     }
                                     
-                                    if (rawDate && !isNaN(rawDate.getTime())) {
+                                    if (rawDate && !isNaN(rawDate)) {
                                         dateE = rawDate.toISOString().split('T')[0];
                                     }
                                 } catch (e) {
@@ -233,62 +288,40 @@
                                 }
                             }
                             
-                            const anRaw = row.c[39] ? String(row.c[39].v).trim() : '';
-                            const anValues = anRaw ? anRaw.split(',').map(v => v.trim()).filter(v => v) : [];
+                            const anRaw = row.c[39]?.v?.toString().trim() || '';
+                            const anValues = anRaw.split(',').map(v => v.trim()).filter(v => v);
+                            const totalAmount = row.c[16]?.v || 0; // Cột Q (index 16) là tổng hóa đơn
                             
                             return {
                                 E: dateE,
-                                H: row.c[7] ? (row.c[7].f || row.c[7].v) : '',
-                                I: row.c[8] ? (row.c[8].f || row.c[8].v) : '',
-                                AE: row.c[30] ? (row.c[30].f || row.c[30].v) : '',
+                                H: row.c[7]?.f || row.c[7]?.v || '',
+                                AE: row.c[30]?.f || row.c[30]?.v || '',
                                 AN: anValues,
-                                AN_Display: anValues.map(v => anToCMap[v] || v).join(', ')
+                                AN_Display: anValues.map(v => anToCMap[v] || v).join(', '),
+                                Q: totalAmount
                             };
                         });
                         
                         // Lấy danh sách ngày duy nhất
-                        uniqueDateValues = [...new Set(
-                            originalData.map(item => item.E).filter(date => date)
-                        )].sort();
+                        uniqueDateValues = [...new Set(originalData.map(item => item.E).filter(Boolean))].sort();
                         
                         // Lấy danh sách tài xế duy nhất
-                        uniqueANValues = [...new Set(
-                            originalData.flatMap(item => item.AN).filter(v => v)
-                        )].sort();
+                        uniqueANValues = [...new Set(originalData.flatMap(item => item.AN).filter(Boolean))].sort();
                         
                         // Cập nhật bộ lọc
-                        updateDateFilterOptions();
-                        updateANFilterOptions();
+                        updateFilters(urlDateIso);
                         
-                        // Lấy ngày từ tham số URL (nếu có)
-                        const urlDate = getUrlParameter('ngay');
-                        let selectedDate = '';
-                        
-                        if (urlDate) {
-                            // Chuyển đổi ngày từ URL sang định dạng ISO
-                            selectedDate = convertToIsoDate(urlDate);
-                            
-                            // Kiểm tra nếu ngày tồn tại trong dữ liệu
-                            if (uniqueDateValues.includes(selectedDate)) {
-                                document.getElementById('dateFilter').value = selectedDate;
-                                document.getElementById('selectedDate').textContent = `Đã chọn: ${urlDate}`;
-                            } else {
-                                document.getElementById('selectedDate').textContent = `Không có dữ liệu cho ngày ${urlDate}`;
-                            }
-                        }
-                        
-                        filterData();
                     } catch (e) {
-                        showError('Lỗi khi xử lý dữ liệu chính: ' + e.message);
+                        handleError('Lỗi xử lý dữ liệu chính', e);
                     }
                 })
                 .catch(error => {
-                    document.getElementById('loading').style.display = 'none';
-                    showError('Lỗi khi tải dữ liệu chính: ' + error.message);
+                    handleError('Lỗi tải dữ liệu chính', error);
                 });
         }
         
-        function updateDateFilterOptions() {
+        // Cập nhật bộ lọc
+        function updateFilters(urlDateIso) {
             const dateFilter = document.getElementById('dateFilter');
             dateFilter.innerHTML = '<option value="">Tất cả</option>';
             
@@ -298,20 +331,28 @@
                 option.textContent = formatToDisplayDate(date);
                 dateFilter.appendChild(option);
             });
-        }
-        
-        function updateANFilterOptions() {
+            
             const anFilter = document.getElementById('anFilter');
             anFilter.innerHTML = '<option value="">Tất cả</option>';
-            
             uniqueANValues.forEach(value => {
                 const option = document.createElement('option');
                 option.value = value;
                 option.textContent = anToCMap[value] || value;
                 anFilter.appendChild(option);
             });
+            
+            // Tự động chọn ngày từ URL (nếu có)
+            if (urlDateIso && uniqueDateValues.includes(urlDateIso)) {
+                dateFilter.value = urlDateIso;
+                document.getElementById('selectedDate').textContent = `Đã chọn: ${formatToDisplayDate(urlDateIso)}`;
+            } else if (urlDateIso) {
+                document.getElementById('selectedDate').textContent = `Không có dữ liệu cho ngày ${formatToDisplayDate(urlDateIso)}`;
+            }
+            
+            filterData();
         }
         
+        // Lọc dữ liệu
         function filterData() {
             const dateFilter = document.getElementById('dateFilter').value;
             const anFilter = document.getElementById('anFilter').value;
@@ -325,34 +366,49 @@
             displayFilteredData();
         }
         
+        // Hiển thị dữ liệu đã lọc
         function displayFilteredData() {
             const container = document.getElementById('data-container');
+            const totalAmountDiv = document.getElementById('total-amount');
             
             if (filteredData.length === 0) {
                 container.innerHTML = '<p>Không có dữ liệu phù hợp với bộ lọc</p>';
+                totalAmountDiv.textContent = '';
                 return;
             }
             
+            // Tính tổng tiền
+            const totalAmount = filteredData.reduce((sum, item) => sum + (parseInt(item.Q) || 0), 0);
+            totalAmountDiv.textContent = `Tổng tiền bàn giao: ${formatCurrency(totalAmount)} VNĐ`;
+            
+            // Tạo bảng dữ liệu
             let html = '<table><thead><tr>';
             html += '<th>Ngày</th>';
             html += '<th>Tên khách hàng</th>';
-            html += '<th>SĐT</th>';
             html += '<th>Tên SP</th>';
             html += '<th>Tài xế</th>';
+            html += '<th>Tổng hóa đơn</th>';
             html += '</tr></thead><tbody>';
             
             filteredData.forEach(item => {
                 html += '<tr>';
-                html += `<td>${formatToDisplayDate(item.E) || ''}</td>`;
-                html += `<td>${item.H || ''}</td>`;
-                html += `<td>${item.I || ''}</td>`;
-                html += `<td>${item.AE || ''}</td>`;
-                html += `<td>${item.AN_Display || ''}</td>`;
+                html += `<td>${formatToDisplayDate(item.E)}</td>`;
+                html += `<td>${item.H}</td>`;
+                html += `<td>${item.AE}</td>`;
+                html += `<td>${item.AN_Display}</td>`;
+                html += `<td>${formatCurrency(item.Q)}</td>`;
                 html += '</tr>';
             });
             
             html += '</tbody></table>';
             container.innerHTML = html;
+        }
+        
+        // Xử lý lỗi
+        function handleError(context, error) {
+            document.getElementById('loading').style.display = 'none';
+            showError(`${context}: ${error.message}`);
+            console.error(context, error);
         }
         
         function showError(message) {
@@ -361,7 +417,7 @@
             errorDiv.textContent = message;
         }
         
-        // Tự động tải dữ liệu khi trang được load
+        // Khởi chạy khi tải trang
         window.onload = loadData;
     </script>
 </body>
