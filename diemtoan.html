@@ -93,6 +93,28 @@
             margin-top: 8px;
         }
 
+        .download-button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .download-button:hover {
+            background: var(--primary-light);
+        }
+
+        .download-button:disabled {
+            background: var(--gray);
+            cursor: not-allowed;
+        }
+
         .student-info-container {
             display: flex;
             justify-content: center;
@@ -412,18 +434,19 @@
             color: var(--secondary);
         }
 
-        .comment-content ul,
-        .comment-content ol {
+        .comment-content p {
+            margin: 8px 0;
+            line-height: 1.7;
+        }
+
+        .comment-content ul {
             padding-left: 20px;
             margin: 10px 0;
         }
 
         .comment-content li {
             margin-bottom: 8px;
-        }
-
-        .comment-content p {
-            margin: 10px 0;
+            line-height: 1.7;
         }
 
         .summary-panel {
@@ -507,6 +530,12 @@
                 margin: 0 0 20px;
             }
 
+            .download-button {
+                width: 100%;
+                padding: 10px;
+                font-size: 14px;
+            }
+
             .student-info-container {
                 flex-direction: column;
                 padding: 15px;
@@ -567,6 +596,8 @@
             <div class="student-info-container" id="student-info">
                 <div class="loading-spinner"></div>
             </div>
+            
+            <button class="download-button" id="download-pdf" disabled>Tải báo cáo PDF</button>
         </div>
         
         <div id="report-content">
@@ -584,6 +615,7 @@
         </div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script>
         // Hiển thị ngày báo cáo
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -667,6 +699,8 @@
                 }
                 
                 generateReport(studentData);
+                // Kích hoạt nút tải PDF sau khi dữ liệu được tải thành công
+                document.getElementById('download-pdf').disabled = false;
             } catch (error) {
                 console.error('Lỗi khi tải dữ liệu:', error);
                 document.getElementById('report-content').innerHTML = `
@@ -730,33 +764,33 @@
         }
 
         // Hàm định dạng nhận xét để hiển thị HTML
-      function formatComment(comment) {
-    // Loại bỏ các ký tự xuống dòng thừa và chuẩn hóa
-    let formatted = comment.trim().replace(/\r\n/g, '\n').replace(/\n+/g, '\n');
-    
-    // Chia thành các dòng và xử lý từng dòng
-    const lines = formatted.split('\n').map(line => line.trim()).filter(line => line !== '');
-    
-    // Biến đổi các dòng thành HTML
-    let html = lines.map(line => {
-        // Kiểm tra nếu dòng là đầu mục số (1., 2.,...)
-        if (/^\d+\.\s/.test(line)) {
-            return `<li>${line}</li>`;
+        function formatComment(comment) {
+            // Loại bỏ các ký tự xuống dòng thừa và chuẩn hóa
+            let formatted = comment.trim().replace(/\r\n/g, '\n').replace(/\n+/g, '\n');
+            
+            // Chia thành các dòng và xử lý từng dòng
+            const lines = formatted.split('\n').map(line => line.trim()).filter(line => line !== '');
+            
+            // Biến đổi các dòng thành HTML
+            let html = lines.map(line => {
+                // Kiểm tra nếu dòng là đầu mục số (1., 2.,...)
+                if (/^\d+\.\s/.test(line)) {
+                    return `<li>${line}</li>`;
+                }
+                // Các dòng thông thường
+                return `<p>${line}</p>`;
+            }).join('');
+            
+            // Nếu có các đầu mục số, bọc trong thẻ ul
+            if (html.includes('<li>')) {
+                html = `<ul class="analysis-list">${html}</ul>`;
+            }
+            
+            // Bảo vệ chống XSS
+            const div = document.createElement('div');
+            div.innerHTML = html;
+            return div.innerHTML;
         }
-        // Các dòng thông thường
-        return `<p>${line}</p>`;
-    }).join('');
-    
-    // Nếu có các đầu mục số, bọc trong thẻ ul
-    if (html.includes('<li>')) {
-        html = `<ul class="analysis-list">${html}</ul>`;
-    }
-    
-    // Bảo vệ chống XSS
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    return div.innerHTML;
-}
         
         // Hàm tạo báo cáo
         function generateReport(data) {
@@ -892,6 +926,34 @@
             header.classList.toggle('collapsed');
             content.classList.toggle('active');
         }
+
+        // Hàm tải PDF
+        document.getElementById('download-pdf').addEventListener('click', () => {
+            const element = document.getElementById('report-card');
+            const button = document.getElementById('download-pdf');
+            button.disabled = true;
+            button.textContent = 'Đang tạo PDF...';
+
+            // Cấu hình html2pdf
+            const opt = {
+                margin: [10, 10, 10, 10],
+                filename: `BaoCaoHocTap_${studentId}_${studentName}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            // Tạo PDF và tải xuống
+            html2pdf().set(opt).from(element).save().then(() => {
+                button.disabled = false;
+                button.textContent = 'Tải báo cáo PDF';
+            }).catch(error => {
+                console.error('Lỗi khi tạo PDF:', error);
+                button.disabled = false;
+                button.textContent = 'Tải báo cáo PDF';
+                alert('Đã xảy ra lỗi khi tạo PDF. Vui lòng thử lại.');
+            });
+        });
     </script>
 </body>
 </html>
