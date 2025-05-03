@@ -361,6 +361,57 @@
             margin-bottom: 15px;
         }
 
+        .wish-box {
+            margin: 30px;
+            padding: 25px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .wish-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 15px;
+        }
+
+        .wish-content {
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--secondary);
+        }
+
+        .comment-box {
+            margin: 30px;
+            padding: 25px;
+            background: #fff9ed;
+            border-radius: 10px;
+            border: 1px solid #ffe4b5;
+        }
+
+        .comment-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            color: #d97706;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+        }
+
+        .comment-title svg {
+            margin-right: 10px;
+        }
+
+        .comment-content {
+            font-size: 15px;
+            line-height: 1.7;
+            color: var(--secondary);
+        }
+
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -430,6 +481,11 @@
             .subject-panel {
                 padding: 0 20px;
             }
+
+            .wish-box, .comment-box {
+                margin: 20px 15px;
+                padding: 20px;
+            }
         }
     </style>
 </head>
@@ -457,6 +513,8 @@
                 <p class="loading-text">Đang tải dữ liệu...</p>
             </div>
         </div>
+        
+        <div id="wish-comment-section"></div>
         
         <div class="report-footer">
             <p>Báo cáo được tạo tự động vào <span id="report-date"></span></p>
@@ -492,6 +550,7 @@
         } else {
             renderStudentInfo(studentId, studentName);
             loadReportData(studentId);
+            loadStudentComment(studentId);
         }
         
         // Hiển thị thông tin học sinh
@@ -556,6 +615,56 @@
                     </div>
                 `;
             }
+        }
+        
+        // Hàm tải nhận xét từ bảng DS Học sinh
+        async function loadStudentComment(studentId) {
+            const spreadsheetId = '17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44';
+            const gid = '0'; // Giả sử bảng DS Học sinh ở sheet đầu tiên
+            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
+            
+            try {
+                const response = await fetch(url);
+                const text = await response.text();
+                const jsonText = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/)[1];
+                const data = JSON.parse(jsonText);
+                
+                const rows = data.table.rows;
+                const studentRow = rows.find(row => row.c[0]?.v === studentId);
+                const comment = studentRow?.c[8]?.v || ''; // Cột I (index 8) chứa nhận xét
+                
+                renderWishAndComment(comment);
+            } catch (error) {
+                console.error('Lỗi khi tải nhận xét:', error);
+                renderWishAndComment('');
+            }
+        }
+        
+        // Hàm hiển thị lời chúc và nhận xét
+        function renderWishAndComment(comment) {
+            const wishCommentHTML = `
+                <div class="wish-box">
+                    <h3 class="wish-title">LỜI NHẮN GỬI ĐẾN HỌC SINH</h3>
+                    <div class="wish-content">
+                        <p>Chúc em <strong>${studentName}</strong> tiếp tục phát huy những điểm mạnh và khắc phục những điểm cần cải thiện.</p>
+                        <p>Chúc em đạt kết quả cao trong kỳ thi vào lớp 10 sắp tới!</p>
+                    </div>
+                </div>
+                
+                ${comment ? `
+                <div class="comment-box">
+                    <h4 class="comment-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        NHẬN XÉT CỦA GIÁO VIÊN
+                    </h4>
+                    <div class="comment-content">${comment}</div>
+                </div>
+                ` : ''}
+            `;
+            
+            document.getElementById('wish-comment-section').innerHTML = wishCommentHTML;
         }
         
         // Hàm tạo báo cáo
