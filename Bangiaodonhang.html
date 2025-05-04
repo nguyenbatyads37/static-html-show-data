@@ -125,7 +125,7 @@
         <h3>Bộ lọc</h3>
         <div class="filter-control">
             <label>Tài xế:</label>
-            <select id="anFilter" disabled>
+            <select id="anFilter" onchange="filterData()">
                 <option value="">Tất cả</option>
             </select>
         </div>
@@ -164,69 +164,6 @@
         let uniqueANValues = [];
         let anToCMap = {};
         
-        // Hàm chuẩn hóa ngày từ Google Sheets hoặc URL
-        function normalizeSheetDate(dateValue) {
-            if (!dateValue) {
-                console.warn('Giá trị ngày rỗng hoặc không xác định');
-                return null;
-            }
-            
-            try {
-                if (typeof dateValue === 'object' && dateValue.getTime) {
-                    return dateValue.toISOString().split('T')[0];
-                }
-                
-                const strValue = dateValue.toString().trim();
-                console.log('Giá trị ngày thô:', strValue);
-                
-                const formats = [
-                    // Google Sheets Date(2025,4,4)
-                    {
-                        regex: /Date\((\d+),(\d+),(\d+)\)/,
-                        handler: (m) => new Date(m[1], parseInt(m[2]), m[3])
-                    },
-                    // DD/MM/YYYY hoặc D/M/YYYY
-                    {
-                        regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-                        handler: (m) => new Date(m[3], m[2]-1, m[1])
-                    },
-                    // YYYY-MM-DD
-                    {
-                        regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
-                        handler: (m) => new Date(m[1], m[2]-1, m[3])
-                    },
-                    // MM/DD/YYYY
-                    {
-                        regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-                        handler: (m) => new Date(m[3], m[1]-1, m[2])
-                    },
-                    // DD-MM-YYYY hoặc D-M-YYYY
-                    {
-                        regex: /^(\d{1,2})-(\d{1,2})-(\d{4})$/,
-                        handler: (m) => new Date(m[3], m[2]-1, m[1])
-                    }
-                ];
-                
-                for (const format of formats) {
-                    const match = strValue.match(format.regex);
-                    if (match) {
-                        const date = format.handler(match);
-                        if (!isNaN(date.getTime())) {
-                            const result = date.toISOString().split('T')[0];
-                            console.log('Ngày chuẩn hóa thành:', result);
-                            return result;
-                        }
-                    }
-                }
-                
-                console.warn('Không thể chuẩn hóa ngày:', strValue);
-                return null;
-            } catch (e) {
-                console.warn('Lỗi xử lý ngày:', strValue, e);
-                return null;
-            }
-        }
-
         // Hàm lấy tham số từ URL
         function getUrlParameter(name) {
             name = name.replace(/[\[\]]/g, '\\$&');
@@ -246,9 +183,58 @@
             document.getElementById('delivery-date').textContent = `${day}/${month}/${year}`;
         }
         
+        // Hàm chuẩn hóa ngày từ nhiều định dạng
+        function normalizeDate(dateValue) {
+            if (!dateValue) return null;
+            
+            try {
+                // Xử lý đối tượng Date từ Google Sheets
+                if (typeof dateValue === 'object' && dateValue.getTime) {
+                    return dateValue.toISOString().split('T')[0]; // YYYY-MM-DD
+                }
+                
+                const strValue = dateValue.toString().trim();
+                const formats = [
+                    // Định dạng dd/mm/yyyy
+                    { 
+                        regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+                        handler: (m) => `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+                    },
+                    // Định dạng d/m/yyyy
+                    { 
+                        regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
+                        handler: (m) => `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+                    },
+                    // Định dạng yyyy-mm-dd
+                    { 
+                        regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
+                        handler: (m) => `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
+                    },
+                    // Định dạng Google Sheets (Date(2025,4,4))
+                    { 
+                        regex: /Date\((\d+),(\d+),(\d+)\)/,
+                        handler: (m) => new Date(m[1], m[2], m[3]).toISOString().split('T')[0]
+                    }
+                ];
+                
+                for (const format of formats) {
+                    const match = strValue.match(format.regex);
+                    if (match) {
+                        const result = format.handler(match);
+                        if (result) return result;
+                    }
+                }
+                
+                return null;
+            } catch (e) {
+                console.warn('Lỗi xử lý ngày:', e);
+                return null;
+            }
+        }
+        
         // Chuyển YYYY-MM-DD sang DD/MM/YYYY
         function formatToDisplayDate(isoDate) {
-            if (!isoDate || isoDate === 'Ngày không hợp lệ') return isoDate;
+            if (!isoDate) return '';
             const parts = isoDate.split('-');
             if (parts.length !== 3) return isoDate;
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
@@ -308,19 +294,17 @@
                         // Xử lý dữ liệu
                         originalData = jsonData.table.rows
                             .map(row => {
-                                const rawDate = row.c[41]?.v; // Giá trị thô của cột AP
-                                const dateAP = normalizeSheetDate(rawDate);
+                                // Lấy và chuẩn hóa ngày từ cột AP (index 41)
+                                const dateAP = normalizeDate(row.c[41]?.v);
+                                
+                                // Lấy tên khách hàng từ cột H (index 7)
                                 const customerName = (row.c[7]?.f || row.c[7]?.v || '').toString().trim();
                                 
-                                console.log('Xử lý bản ghi:', { rawDate, dateAP, customerName });
-                                
-                                if (!customerName) {
-                                    console.warn('Bỏ qua bản ghi không có tên khách hàng:', { rawDate, dateAP, customerName });
-                                    return null;
-                                }
+                                // Chỉ giữ lại các bản ghi có ngày và tên khách hợp lệ
+                                if (!dateAP || !customerName) return null;
                                 
                                 return {
-                                    AP: dateAP || 'Ngày không hợp lệ',
+                                    AP: dateAP,
                                     H: customerName,
                                     AN: (row.c[39]?.v?.toString().trim() || '').split(',').map(v => v.trim()).filter(v => v),
                                     Q: parseInt(row.c[16]?.v) || 0
@@ -328,37 +312,29 @@
                             })
                             .filter(item => item !== null);
                         
+                        // Áp dụng lọc ngày từ URL
+                        const urlDateParam = getUrlParameter('ngay');
+                        if (urlDateParam) {
+                            const filterDate = normalizeDate(urlDateParam);
+                            if (filterDate) {
+                                originalData = originalData.filter(item => item.AP === filterDate);
+                                console.log(`Đã lọc ${originalData.length} bản ghi cho ngày ${urlDateParam}`);
+                            }
+                        }
+                        
                         // Tạo AN_Display
                         originalData.forEach(item => {
                             item.AN_Display = item.AN.map(v => anToCMap[v] || v).join(', ');
                         });
                         
-                        // Áp dụng bộ lọc ngày từ URL
-                        const urlDateParam = getUrlParameter('ngay');
-                        if (urlDateParam) {
-                            const filterDate = normalizeSheetDate(urlDateParam);
-                            if (filterDate) {
-                                console.log('Lọc theo ngày:', filterDate);
-                                originalData = originalData.filter(item => item.AP === filterDate);
-                                console.log('Dữ liệu sau khi lọc:', originalData);
-                                if (originalData.length === 0) {
-                                    showError(`Không tìm thấy dữ liệu cho ngày ${urlDateParam}`);
-                                }
-                            } else {
-                                console.warn('Ngày từ URL không hợp lệ:', urlDateParam);
-                                showError('Ngày lọc từ URL không hợp lệ: ' + urlDateParam);
-                            }
-                        } else {
-                            showError('Vui lòng cung cấp tham số ngày trong URL (ví dụ: ?ngay=04/05/2025)');
-                            return;
-                        }
-                        
                         // Lấy danh sách tài xế duy nhất
                         uniqueANValues = [...new Set(originalData.flatMap(item => item.AN).filter(Boolean))].sort();
                         
-                        // Cập nhật bộ lọc tài xế (dù bị vô hiệu hóa)
+                        // Cập nhật bộ lọc tài xế
                         updateDriverFilter();
+                        
                         filterData();
+                        
                     } catch (e) {
                         handleError('Lỗi xử lý dữ liệu chính', e);
                     }
@@ -368,7 +344,7 @@
                 });
         }
         
-        // Cập nhật bộ lọc tài xế (dù không sử dụng)
+        // Cập nhật bộ lọc tài xế
         function updateDriverFilter() {
             const anFilter = document.getElementById('anFilter');
             anFilter.innerHTML = '<option value="">Tất cả</option>';
@@ -380,20 +356,31 @@
             });
         }
         
-        // Không áp dụng bộ lọc tài xế
+        // Lọc dữ liệu
         function filterData() {
-            filteredData = originalData; // Giữ nguyên dữ liệu đã lọc theo ngày
+            const anFilter = document.getElementById('anFilter').value;
+            
+            filteredData = originalData.filter(item => {
+                if (anFilter && !item.AN.includes(anFilter)) return false;
+                return true;
+            });
+            
             displayFilteredData();
         }
         
-        // Hiển thị dữ liệu
+        // Hiển thị dữ liệu đã lọc
         function displayFilteredData() {
             const container = document.getElementById('data-container');
             const totalOrdersSpan = document.getElementById('total-orders');
             const totalReceivableSpan = document.getElementById('total-receivable');
             
             if (filteredData.length === 0) {
-                container.innerHTML = '<p>Không có dữ liệu phù hợp với ngày đã chọn</p>';
+                const urlDateParam = getUrlParameter('ngay');
+                const errorMsg = urlDateParam 
+                    ? `Không tìm thấy dữ liệu cho ngày ${urlDateParam}` 
+                    : 'Không có dữ liệu phù hợp với bộ lọc';
+                
+                container.innerHTML = `<p>${errorMsg}</p>`;
                 totalOrdersSpan.textContent = '0';
                 totalReceivableSpan.textContent = '0';
                 return;
@@ -424,15 +411,13 @@
                     acc[item.H] = {
                         AP: item.AP,
                         H: item.H,
-                        AN: [...new Set(item.AN)],
+                        AN: [...new Set(item.AN)], // Loại bỏ trùng lặp tài xế
                         Q: 0
                     };
                 }
                 acc[item.H].Q += item.Q;
                 return acc;
             }, {});
-
-            console.log('Dữ liệu nhóm:', groupedData);
 
             // Hiển thị dữ liệu đã nhóm
             Object.values(groupedData).forEach(item => {
