@@ -5,33 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHIẾU BÀN GIAO ĐƠN HÀNG</title>
     <style>
-        /* Giảm font chung về ~18px */
+        /* Giới hạn chiều rộng màn hình/tablet/print bằng khổ A4 */
         body {
             font-family: Arial, sans-serif;
-            margin: 20px;
-            line-height: 1.6;
+            margin: 0 auto;
+            padding: 10px;
+            line-height: 1.5;
             font-size: 18px;
+            max-width: 210mm;
+            box-sizing: border-box;
         }
 
         /* Tiêu đề chính và phụ */
         h1 {
             color: #1a73e8;
             text-align: center;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
             font-size: 24px;
         }
         .sub-title,
         .time-title {
             text-align: center;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 10px;
             font-size: 20px;
         }
 
         /* Logo */
         .logo {
             display: block;
-            margin: 0 auto 20px;
+            margin: 0 auto 15px;
             max-width: 200px;
         }
 
@@ -39,13 +42,13 @@
         table {
             border-collapse: collapse;
             width: 100%;
-            margin-top: 20px;
+            margin-top: 15px;
+            font-size: 18px;
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 6px;
             text-align: left;
-            font-size: 18px;
         }
         th {
             background-color: #f2f2f2;
@@ -59,54 +62,55 @@
         /* Tổng hợp thông tin */
         #summary-info {
             background-color: #f5f5f5;
-            padding: 10px;
+            padding: 8px;
             border-radius: 4px;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-weight: bold;
             font-size: 18px;
         }
         #summary-info div {
-            margin: 6px 0;
+            margin: 4px 0;
         }
 
         /* Chữ ký */
         .signature-section {
             display: flex;
             justify-content: space-between;
-            margin-top: 50px;
+            margin-top: 40px;
         }
         .signature-box {
             text-align: center;
-            width: 300px;
+            width: 45%;
             font-size: 18px;
         }
         .signature-line {
             border-top: 2px solid #000;
-            margin-top: 40px;
+            margin-top: 30px;
             width: 100%;
         }
 
-        /* Ẩn nút và trạng thái khi in */
+        /* Ẩn nút làm mới (nếu còn sót) và trạng thái khi in */
+        .refresh-btn,
+        #loading,
+        #error {
+            display: none !important;
+        }
+
+        /* Thiết lập trang in A4 */
+        @page {
+            size: A4 portrait;
+            margin: 15mm;
+        }
         @media print {
-            .refresh-btn,
-            #loading,
-            #error {
-                display: none !important;
-            }
             body {
-                margin: 1.5cm;
-            }
-            table {
-                page-break-after: auto;
-            }
-            tr {
-                page-break-inside: avoid;
+                margin: 0;
+                padding: 0;
             }
             thead {
                 display: table-header-group;
             }
-            tfoot {
-                display: table-footer-group;
+            tr {
+                page-break-inside: avoid;
             }
             th {
                 -webkit-print-color-adjust: exact;
@@ -119,14 +123,14 @@
     <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
     <div class="sub-title">Ngày bàn giao: <span id="delivery-date"></span></div>
     <div class="time-title">Giờ bàn giao: <span id="delivery-time"></span></div>
-    <button class="refresh-btn" onclick="loadData()">Làm mới dữ liệu</button>
-    <div id="loading" class="loading">Đang tải dữ liệu...</div>
-    <div id="error" class="error"></div>
+
     <div id="summary-info">
         <div>Tổng Đơn: <span id="total-orders">0</span></div>
         <div>Tổng tiền hàng phải thu: <span id="total-receivable">0</span> VNĐ</div>
     </div>
+
     <div id="data-container" style="overflow-x:auto;"></div>
+
     <div class="signature-section">
         <div class="signature-box">
             <div>Người bàn giao</div>
@@ -137,6 +141,7 @@
             <div class="signature-line"></div>
         </div>
     </div>
+
 <script>
 (function() {
     const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
@@ -170,12 +175,6 @@
 
     function loadData() {
         showDateTime();
-        document.getElementById('loading').style.display = 'block';
-        document.getElementById('error').style.display = 'none';
-        document.getElementById('data-container').innerHTML = '';
-        document.getElementById('total-orders').textContent = '0';
-        document.getElementById('total-receivable').textContent = '0';
-
         fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
             .then(res => res.text())
             .then(txt => {
@@ -185,84 +184,71 @@
                     if (key && val) map[key] = val;
                     return map;
                 }, {});
-                loadMain(driverMap);
+                return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
+                    .then(res => res.text())
+                    .then(txt2 => ({ driverMap, txt2 }));
             })
-            .catch(err => showError('Lỗi tải dữ liệu phụ', err));
-    }
-
-    function loadMain(driverMap) {
-        fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-            .then(res => res.text())
-            .then(txt => {
-                document.getElementById('loading').style.display = 'none';
-                const rows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
+            .then(({ driverMap, txt2 }) => {
+                const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
                 originalData = rows.map(row => {
-                    const dateText = row.c[41]?.f?.toString().trim() || row.c[41]?.v?.toString().trim();
-                    const customer = (row.c[7]?.f || row.c[7]?.v || '').toString().trim();
-                    const drivers = (row.c[39]?.v || '').toString().split(',').map(v => v.trim());
+                    const dateText = row.c[41]?.f || row.c[41]?.v;
+                    const customer = row.c[7]?.f || row.c[7]?.v || '';
+                    const drivers = (row.c[39]?.v || '').split(',').map(v => v.trim());
                     const amount = parseInt(row.c[16]?.v) || 0;
-                    if (!dateText || !customer) return null;
-                    return { AP: dateText, H: customer, AN: drivers, Q: amount };
+                    return dateText && customer.trim() ? { AP: dateText.toString().trim(), H: customer.toString().trim(), AN: drivers, Q: amount } : null;
                 }).filter(x => x);
                 displayFilteredData(driverMap);
             })
-            .catch(err => showError('Lỗi tải dữ liệu chính', err));
+            .catch(err => {
+                console.error('Lỗi tải dữ liệu:', err);
+            });
     }
 
     function displayFilteredData(driverMap) {
         const ngay = getUrlParameter('ngay');
         const ten = getUrlParameter('ten');
-
-        let filtered = originalData.filter(item => {
+        const filtered = originalData.filter(item => {
             if (ngay && item.AP !== ngay) return false;
             if (ten) {
-                const displayNames = item.AN.map(a => driverMap[a] || a);
-                if (!displayNames.includes(ten)) return false;
+                const names = item.AN.map(a => driverMap[a] || a);
+                return names.includes(ten);
             }
             return true;
         });
-
         const grouped = filtered.reduce((acc, item) => {
-            if (!acc[item.H]) acc[item.H] = { ...item, AN: Array.from(new Set(item.AN)), Q: item.Q };
+            if (!acc[item.H]) acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
             else {
                 acc[item.H].Q += item.Q;
-                acc[item.H].AN = Array.from(new Set(acc[item.H].AN.concat(item.AN)));
+                item.AN.forEach(a => acc[item.H].AN.add(a));
             }
             return acc;
         }, {});
-        const data = Object.values(grouped);
-
+        const data = Object.entries(grouped).map(([_, v]) => ({
+            AP: v.AP,
+            H: v.H,
+            AN: Array.from(v.AN),
+            Q: v.Q
+        }));
         document.getElementById('total-orders').textContent = data.length;
-        document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((s, i) => s + i.Q, 0));
+        document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((s,i)=>s+i.Q,0));
 
-        let html = '<table><thead><tr>' +
-                   '<th>Ngày</th><th>Tên khách hàng</th><th>Tài xế</th><th>Tổng hóa đơn</th>' +
-                   '</tr></thead><tbody>';
+        let html = '<table><thead><tr>'
+                 + '<th>Ngày</th><th>Tên khách hàng</th><th>Tài xế</th><th>Tổng hóa đơn</th>'
+                 + '</tr></thead><tbody>';
         data.forEach(item => {
-            html += '<tr>' +
-                    `<td>${item.AP}</td>` +
-                    `<td>${item.H}</td>` +
-                    `<td>${item.AN.map(a => driverMap[a] || a).join(', ')}</td>` +
-                    `<td>${formatCurrency(item.Q)}</td>` +
-                    '</tr>';
+            const drivers = item.AN.map(a => driverMap[a] || a).join(', ');
+            html += `<tr><td>${item.AP}</td><td>${item.H}</td><td>${drivers}</td><td>${formatCurrency(item.Q)}</td></tr>`;
         });
         html += '</tbody></table>';
         document.getElementById('data-container').innerHTML = html;
     }
 
-    function showError(msg, err) {
-        document.getElementById('loading').style.display = 'none';
-        const e = document.getElementById('error');
-        e.style.display = 'block';
-        e.textContent = `${msg}: ${err.message || err}`;
-    }
-
     window.addEventListener('load', loadData);
-    window.loadData = loadData;
 })();
 </script>
 </body>
 </html>
+
 
 
 
