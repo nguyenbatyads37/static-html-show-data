@@ -16,26 +16,51 @@
             box-sizing: border-box;
         }
 
-        /* Tiêu đề chính và phụ */
+        /* Header với logo và nội dung quảng cáo, căn giữa */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+        .logo {
+            max-width: 200px;
+            margin-right: 20px;
+        }
+        .ad-content {
+            flex: 1;
+            text-align: center;
+        }
+        .ad-title {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+        .ad-info {
+            font-size: 16px;
+            font-weight: bold;
+            line-height: 1.4;
+            margin: 2px 0;
+        }
+
+        /* Tiêu đề chính */
         h1 {
             color: #1a73e8;
             text-align: center;
             margin-bottom: 5px;
             font-size: 24px;
         }
-        .sub-title,
-        .time-title {
+
+        /* Ngày và Giờ bàn giao chung một dòng */
+        .datetime {
             text-align: center;
+            font-size: 16px;
             font-weight: bold;
             margin-bottom: 10px;
-            font-size: 20px;
         }
-
-        /* Logo */
-        .logo {
-            display: block;
-            margin: 0 auto 15px;
-            max-width: 200px;
+        .datetime span {
+            display: inline-block;
+            margin: 0 10px;
         }
 
         /* Bảng */
@@ -119,10 +144,21 @@
     </style>
 </head>
 <body>
-    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
+    <div class="header">
+        <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
+        <div class="ad-content">
+            <div class="ad-title">NPP HÀ HÒA</div>
+            <div class="ad-info">Phân phối các mặt hàng đồ dùng 1 lần: Nilon, Cốc nhựa, Cốc giấy, Khay xốp các loại, Chai nhựa, Màng bọc thực phẩm, …</div>
+            <div class="ad-info">ĐC: Tiên Phong, Ba Vì, Hà Nội</div>
+            <div class="ad-info">Góp ý chất lượng sản phẩm & dịch vụ: 0973.905.992</div>
+            <div class="ad-info">Liên hệ nhà phân phối: 0969.250.323</div>
+        </div>
+    </div>
     <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
-    <div class="sub-title">Ngày bàn giao: <span id="delivery-date"></span></div>
-    <div class="time-title">Giờ bàn giao: <span id="delivery-time"></span></div>
+    <div class="datetime">
+        <span>Ngày bàn giao: <span id="delivery-date"></span></span>
+        <span>Giờ bàn giao: <span id="delivery-time"></span></span>
+    </div>
 
     <div id="summary-info">
         <div>Tổng Đơn: <span id="total-orders">0</span></div>
@@ -154,7 +190,7 @@
         const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
         const results = regex.exec(window.location.href);
         if (!results) return null;
-        if (!results[2]) return '';
+        if (!results[2]) return '';  
         return decodeURIComponent(results[2].replace(/\+/g, ' '));
     }
 
@@ -184,70 +220,8 @@
                     if (key && val) map[key] = val;
                     return map;
                 }, {});
-                return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-                    .then(res => res.text())
-                    .then(txt2 => ({ driverMap, txt2 }));
-            })
-            .then(({ driverMap, txt2 }) => {
-                const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
-                originalData = rows.map(row => {
-                    const dateText = row.c[41]?.f || row.c[41]?.v;
-                    const customer = row.c[7]?.f || row.c[7]?.v || '';
-                    const drivers = (row.c[39]?.v || '').split(',').map(v => v.trim());
-                    const amount = parseInt(row.c[16]?.v) || 0;
-                    return dateText && customer.trim() ? { AP: dateText.toString().trim(), H: customer.toString().trim(), AN: drivers, Q: amount } : null;
-                }).filter(x => x);
-                displayFilteredData(driverMap);
-            })
-            .catch(err => {
-                console.error('Lỗi tải dữ liệu:', err);
-            });
-    }
+                return fetch(`https://docs.google.com/spreadsheets/d/${
 
-    function displayFilteredData(driverMap) {
-        const ngay = getUrlParameter('ngay');
-        const ten = getUrlParameter('ten');
-        const filtered = originalData.filter(item => {
-            if (ngay && item.AP !== ngay) return false;
-            if (ten) {
-                const names = item.AN.map(a => driverMap[a] || a);
-                return names.includes(ten);
-            }
-            return true;
-        });
-        const grouped = filtered.reduce((acc, item) => {
-            if (!acc[item.H]) acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
-            else {
-                acc[item.H].Q += item.Q;
-                item.AN.forEach(a => acc[item.H].AN.add(a));
-            }
-            return acc;
-        }, {});
-        const data = Object.entries(grouped).map(([_, v]) => ({
-            AP: v.AP,
-            H: v.H,
-            AN: Array.from(v.AN),
-            Q: v.Q
-        }));
-        document.getElementById('total-orders').textContent = data.length;
-        document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((s,i)=>s+i.Q,0));
-
-        let html = '<table><thead><tr>'
-                 + '<th>Ngày</th><th>Tên khách hàng</th><th>NV giao hàng</th><th>Tổng hóa đơn</th>'
-                 + '</tr></thead><tbody>';
-        data.forEach(item => {
-            const drivers = item.AN.map(a => driverMap[a] || a).join(', ');
-            html += `<tr><td>${item.AP}</td><td>${item.H}</td><td>${drivers}</td><td>${formatCurrency(item.Q)}</td></tr>`;
-        });
-        html += '</tbody></table>';
-        document.getElementById('data-container').innerHTML = html;
-    }
-
-    window.addEventListener('load', loadData);
-})();
-</script>
-</body>
-</html>
 
 
 
