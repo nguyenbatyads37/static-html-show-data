@@ -105,23 +105,31 @@
                 originalData = rows.map(row => {
                     const dateText = row.c[41]?.f?.toString().trim() || row.c[41]?.v?.toString().trim();
                     const customer = (row.c[7]?.f || row.c[7]?.v || '').toString().trim();
+                    const drivers = (row.c[39]?.v || '').toString().split(',').map(v => v.trim());
+                    const amount = parseInt(row.c[16]?.v) || 0;
                     if (!dateText || !customer) return null;
-                    return {
-                        AP: dateText,
-                        H: customer,
-                        AN: (row.c[39]?.v || '').toString().split(',').map(v => v.trim()),
-                        Q: parseInt(row.c[16]?.v) || 0
-                    };
+                    return { AP: dateText, H: customer, AN: drivers, Q: amount };
                 }).filter(x => x);
-                displayAllData(driverMap);
+                displayFilteredData(driverMap);
             })
             .catch(err => showError('Lỗi tải dữ liệu chính', err));
     }
 
-    function displayAllData(driverMap) {
-        const ngay = getUrlParameter('ngay'); // giá trị lọc từ URL, định dạng dd/mm/yyyy
-        const filtered = originalData.filter(item => item.AP === ngay);
+    function displayFilteredData(driverMap) {
+        const ngay = getUrlParameter('ngay'); // dd/mm/yyyy
+        const ten = getUrlParameter('ten'); // tên tài xế cần lọc
 
+        // Lọc theo ngày và tên tài xế nếu có
+        let filtered = originalData.filter(item => {
+            if (ngay && item.AP !== ngay) return false;
+            if (ten) {
+                const displayNames = item.AN.map(a => driverMap[a] || a);
+                if (!displayNames.includes(ten)) return false;
+            }
+            return true;
+        });
+
+        // Gom nhóm theo khách hàng
         const grouped = filtered.reduce((acc, item) => {
             if (!acc[item.H]) {
                 acc[item.H] = { ...item, AN: Array.from(new Set(item.AN)), Q: item.Q };
@@ -133,9 +141,11 @@
         }, {});
         const data = Object.values(grouped);
 
+        // Cập nhật summary
         document.getElementById('total-orders').textContent = data.length;
-        document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((sum, it) => sum + it.Q, 0));
+        document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((s, i) => s + i.Q, 0));
 
+        // Hiển thị bảng
         let html = '<table><thead><tr>' +
                    '<th>Ngày</th><th>Tên khách hàng</th><th>Tài xế</th><th>Tổng hóa đơn</th>' +
                    '</tr></thead><tbody>';
@@ -162,6 +172,7 @@
 </script>
 </body>
 </html>
+
 
 
 
