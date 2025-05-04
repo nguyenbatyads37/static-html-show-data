@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PHIẾU BÀN GIAO ĐƠN HÀNG</title>
     <style>
-        /* Giới hạn chiều rộng màn hình/tablet/print bằng khổ A4 */
         body {
             font-family: Arial, sans-serif;
             margin: 0 auto;
@@ -15,8 +14,6 @@
             max-width: 210mm;
             box-sizing: border-box;
         }
-
-        /* Header với logo và nội dung quảng cáo, căn giữa */
         .header {
             display: flex;
             align-items: center;
@@ -39,19 +36,14 @@
         .ad-info {
             font-size: 16px;
             font-weight: bold;
-            line-height: 1.4;
             margin: 2px 0;
         }
-
-        /* Tiêu đề chính */
         h1 {
             color: #1a73e8;
             text-align: center;
             margin-bottom: 5px;
             font-size: 24px;
         }
-
-        /* Ngày và Giờ bàn giao chung một dòng */
         .datetime {
             text-align: center;
             font-size: 16px;
@@ -62,8 +54,6 @@
             display: inline-block;
             margin: 0 10px;
         }
-
-        /* Bảng */
         table {
             border-collapse: collapse;
             width: 100%;
@@ -83,8 +73,6 @@
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
-
-        /* Tổng hợp thông tin */
         #summary-info {
             background-color: #f5f5f5;
             padding: 8px;
@@ -96,8 +84,6 @@
         #summary-info div {
             margin: 4px 0;
         }
-
-        /* Chữ ký */
         .signature-section {
             display: flex;
             justify-content: space-between;
@@ -113,33 +99,20 @@
             margin-top: 30px;
             width: 100%;
         }
-
-        /* Ẩn nút làm mới (nếu còn sót) và trạng thái khi in */
         .refresh-btn,
         #loading,
         #error {
             display: none !important;
         }
-
-        /* Thiết lập trang in A4 */
         @page {
             size: A4 portrait;
             margin: 15mm;
         }
         @media print {
-            body {
-                margin: 0;
-                padding: 0;
-            }
-            thead {
-                display: table-header-group;
-            }
-            tr {
-                page-break-inside: avoid;
-            }
-            th {
-                -webkit-print-color-adjust: exact;
-            }
+            body { margin: 0; padding: 0; }
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+            th { -webkit-print-color-adjust: exact; }
         }
     </style>
 </head>
@@ -156,17 +129,14 @@
     </div>
     <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
     <div class="datetime">
-        <span>Ngày bàn giao: <span id="delivery-date">today</span></span>
-        <span>Giờ bàn giao: <span id="delivery-time">now</span></span>
+        <span>Ngày bàn giao: <span id="delivery-date"></span></span>
+        <span>Giờ bàn giao: <span id="delivery-time"></span></span>
     </div>
-
     <div id="summary-info">
         <div>Tổng Đơn: <span id="total-orders">0</span></div>
         <div>Tổng tiền hàng phải thu: <span id="total-receivable">0</span> VNĐ</div>
     </div>
-
     <div id="data-container" style="overflow-x:auto;"></div>
-
     <div class="signature-section">
         <div class="signature-box">
             <div>Người bàn giao</div>
@@ -177,22 +147,93 @@
             <div class="signature-line"></div>
         </div>
     </div>
-
     <script>
-    // Hiển thị ngày hiện tại và giờ hiện tại
     (function() {
-        const now = new Date();
-        const dd = String(now.getDate()).padStart(2, '0');
-        const mm = String(now.getMonth() + 1).padStart(2, '0');
-        const yyyy = now.getFullYear();
-        const hh = String(now.getHours()).padStart(2, '0');
-        const min = String(now.getMinutes()).padStart(2, '0');
-        document.getElementById('delivery-date').textContent = `${dd}/${mm}/${yyyy}`;
-        document.getElementById('delivery-time').textContent = `${hh}:${min}`;
+        const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
+        const sheetIdMain = '116599712';
+        const sheetIdLookup = '2007395895';
+        let originalData = [];
+        function getUrlParameter(name) {
+            name = name.replace(/[[\]]/g, '\\$&');
+            const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+            const results = regex.exec(window.location.href);
+            if (!results) return null;
+            return results[2] ? decodeURIComponent(results[2].replace(/\+/g, ' ')) : '';
+        }
+        function showDateTime() {
+            const now = new Date();
+            const dd = String(now.getDate()).padStart(2,'0');
+            const mm = String(now.getMonth()+1).padStart(2,'0');
+            const yyyy = now.getFullYear();
+            const hh = String(now.getHours()).padStart(2,'0');
+            const min = String(now.getMinutes()).padStart(2,'0');
+            document.getElementById('delivery-date').textContent = `${dd}/${mm}/${yyyy}`;
+            document.getElementById('delivery-time').textContent = `${hh}:${min}`;
+        }
+        function formatCurrency(amount) {
+            return amount ? parseInt(amount).toLocaleString('vi-VN') : '0';
+        }
+        function loadData() {
+            showDateTime();
+            fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
+                .then(res => res.text())
+                .then(txt => {
+                    const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
+                    const driverMap = lookupRows.reduce((map,row) => {
+                        const key = row.c[0]?.v, val = row.c[2]?.v;
+                        if (key && val) map[key] = val;
+                        return map;
+                    }, {});
+                    return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
+                        .then(res => res.text())
+                        .then(txt2 => ({ driverMap, txt2 }));
+                })
+                .then(({ driverMap, txt2 }) => {
+                    const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
+                    originalData = rows.map(row => {
+                        const dateText = row.c[41]?.f || row.c[41]?.v;
+                        const customer = row.c[7]?.f || row.c[7]?.v || '';
+                        const drivers = (row.c[39]?.v || '').split(',').map(v => v.trim());
+                        const amount = parseInt(row.c[16]?.v) || 0;
+                        return dateText && customer.trim() ? { AP: dateText.toString().trim(), H: customer.toString().trim(), AN: drivers, Q: amount } : null;
+                    }).filter(x => x);
+                    displayFilteredData(driverMap);
+                })
+                .catch(err => console.error('Lỗi tải dữ liệu:', err));
+        }
+        function displayFilteredData(driverMap) {
+            const ngay = getUrlParameter('ngay');
+            const ten = getUrlParameter('ten');
+            const filtered = originalData.filter(item => {
+                if (ngay && item.AP !== ngay) return false;
+                if (ten) {
+                    const names = item.AN.map(a => driverMap[a] || a);
+                    return names.includes(ten);
+                }
+                return true;
+            });
+            const grouped = filtered.reduce((acc, item) => {
+                if (!acc[item.H]) acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
+                else { acc[item.H].Q += item.Q; item.AN.forEach(a => acc[item.H].AN.add(a)); }
+                return acc;
+            }, {});
+            const data = Object.entries(grouped).map(([_, v]) => ({ AP: v.AP, H: v.H, AN: Array.from(v.AN), Q: v.Q }));
+            document.getElementById('total-orders').textContent = data.length;
+            document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((s,i)=>s+i.Q,0));
+            let html = '<table><thead><tr><th>Ngày</th><th>Tên khách hàng</th><th>NV giao hàng</th><th>Tổng hóa đơn</th></tr></thead><tbody>';
+            data.forEach(item => {
+                const drivers = item.AN.map(a => driverMap[a] || a).join(', ');
+                html += `<tr><td>${item.AP}</td><td>${item.H}</td><td>${drivers}</td><td>${formatCurrency(item.Q)}</td></tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('data-container').innerHTML = html;
+        }
+        window.addEventListener('load', loadData);
     })();
     </script>
 </body>
 </html>
+
 
 
 
