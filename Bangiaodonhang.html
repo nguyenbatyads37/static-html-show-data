@@ -22,7 +22,6 @@
         .signature-section { display: flex; justify-content: space-between; margin-top: 40px; }
         .signature-box { text-align: center; width: 200px; }
         .signature-line { border-top: 1px solid #000; margin-top: 50px; width: 100%; }
-        pre { background: #f6f8fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
     </style>
 </head>
 <body>
@@ -37,7 +36,6 @@
         <div>Tổng tiền hàng phải thu: <span id="total-receivable">0</span> VNĐ</div>
     </div>
     <div id="data-container" style="overflow-x:auto;"></div>
-    <div id="raw-data-container"></div>
     <div class="signature-section">
         <div class="signature-box">
             <div>Người bàn giao</div>
@@ -54,6 +52,15 @@
     const sheetIdMain = '116599712';
     const sheetIdLookup = '2007395895';
     let originalData = [];
+
+    function getUrlParameter(name) {
+        name = name.replace(/[[\]]/g, '\\$&');
+        const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+        const results = regex.exec(window.location.href);
+        if (!results) return null;
+        if (!results[2]) return '';
+        return decodeURIComponent(results[2].replace(/\+/g, ' '));
+    }
 
     function showTodayDate() {
         const today = new Date();
@@ -72,7 +79,6 @@
         document.getElementById('loading').style.display = 'block';
         document.getElementById('error').style.display = 'none';
         document.getElementById('data-container').innerHTML = '';
-        document.getElementById('raw-data-container').innerHTML = '';
         document.getElementById('total-orders').textContent = '0';
         document.getElementById('total-receivable').textContent = '0';
 
@@ -82,7 +88,7 @@
                 const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
                 const driverMap = lookupRows.reduce((map,row) => {
                     const key = row.c[0]?.v, val = row.c[2]?.v;
-                    if(key && val) map[key] = val;
+                    if (key && val) map[key] = val;
                     return map;
                 }, {});
                 loadMain(driverMap);
@@ -96,11 +102,10 @@
             .then(txt => {
                 document.getElementById('loading').style.display = 'none';
                 const rows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
-                // Chuẩn bị dữ liệu gốc
                 originalData = rows.map(row => {
                     const dateText = row.c[41]?.f?.toString().trim() || row.c[41]?.v?.toString().trim();
                     const customer = (row.c[7]?.f || row.c[7]?.v || '').toString().trim();
-                    if(!dateText || !customer) return null;
+                    if (!dateText || !customer) return null;
                     return {
                         AP: dateText,
                         H: customer,
@@ -109,33 +114,28 @@
                     };
                 }).filter(x => x);
                 displayAllData(driverMap);
-                document.getElementById('raw-data-container').innerHTML = `<h3>Raw Data:</h3><pre>${JSON.stringify(originalData, null, 2)}</pre>`;
             })
             .catch(err => showError('Lỗi tải dữ liệu chính', err));
     }
 
     function displayAllData(driverMap) {
-        const container = document.getElementById('data-container');
-        // Gom nhóm theo tên khách hàng
-        const grouped = originalData.reduce((acc, item) => {
+        const ngay = getUrlParameter('ngay'); // giá trị lọc từ URL, định dạng dd/mm/yyyy
+        const filtered = originalData.filter(item => item.AP === ngay);
+
+        const grouped = filtered.reduce((acc, item) => {
             if (!acc[item.H]) {
                 acc[item.H] = { ...item, AN: Array.from(new Set(item.AN)), Q: item.Q };
             } else {
                 acc[item.H].Q += item.Q;
-                const mergedAN = acc[item.H].AN.concat(item.AN);
-                acc[item.H].AN = Array.from(new Set(mergedAN));
+                acc[item.H].AN = Array.from(new Set(acc[item.H].AN.concat(item.AN)));
             }
             return acc;
         }, {});
         const data = Object.values(grouped);
 
-        // Tính tổng sau gom nhóm
-        const totalOrders = data.length;
-        const totalReceivable = data.reduce((sum, it) => sum + it.Q, 0);
-        document.getElementById('total-orders').textContent = totalOrders;
-        document.getElementById('total-receivable').textContent = formatCurrency(totalReceivable);
+        document.getElementById('total-orders').textContent = data.length;
+        document.getElementById('total-receivable').textContent = formatCurrency(data.reduce((sum, it) => sum + it.Q, 0));
 
-        // Hiển thị bảng
         let html = '<table><thead><tr>' +
                    '<th>Ngày</th><th>Tên khách hàng</th><th>Tài xế</th><th>Tổng hóa đơn</th>' +
                    '</tr></thead><tbody>';
@@ -148,7 +148,7 @@
                     '</tr>';
         });
         html += '</tbody></table>';
-        container.innerHTML = html;
+        document.getElementById('data-container').innerHTML = html;
     }
 
     function showError(msg, err) {
@@ -162,6 +162,7 @@
 </script>
 </body>
 </html>
+
 
 
 
