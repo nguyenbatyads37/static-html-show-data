@@ -166,7 +166,7 @@
         
         // Hàm lấy tham số từ URL
         function getUrlParameter(name) {
-            name = name.replace(/[\[\]]/g, '\\$&');
+            name = name.replace(/[[\]]/g, '\\$&');
             const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
             const results = regex.exec(window.location.href);
             if (!results) return null;
@@ -181,63 +181,6 @@
             const month = String(today.getMonth() + 1).padStart(2, '0');
             const year = today.getFullYear();
             document.getElementById('delivery-date').textContent = `${day}/${month}/${year}`;
-        }
-        
-        // Hàm chuẩn hóa ngày từ nhiều định dạng
-        function normalizeDate(dateValue) {
-            if (!dateValue) return null;
-            
-            try {
-                // Xử lý đối tượng Date từ Google Sheets
-                if (typeof dateValue === 'object' && dateValue.getTime) {
-                    return dateValue.toISOString().split('T')[0]; // YYYY-MM-DD
-                }
-                
-                const strValue = dateValue.toString().trim();
-                const formats = [
-                    // Định dạng dd/mm/yyyy
-                    { 
-                        regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-                        handler: (m) => `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
-                    },
-                    // Định dạng d/m/yyyy
-                    { 
-                        regex: /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/,
-                        handler: (m) => `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
-                    },
-                    // Định dạng yyyy-mm-dd
-                    { 
-                        regex: /^(\d{4})-(\d{1,2})-(\d{1,2})$/,
-                        handler: (m) => `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`
-                    },
-                    // Định dạng Google Sheets (Date(2025,4,4))
-                    { 
-                        regex: /Date\((\d+),(\d+),(\d+)\)/,
-                        handler: (m) => new Date(m[1], m[2], m[3]).toISOString().split('T')[0]
-                    }
-                ];
-                
-                for (const format of formats) {
-                    const match = strValue.match(format.regex);
-                    if (match) {
-                        const result = format.handler(match);
-                        if (result) return result;
-                    }
-                }
-                
-                return null;
-            } catch (e) {
-                console.warn('Lỗi xử lý ngày:', e);
-                return null;
-            }
-        }
-        
-        // Chuyển YYYY-MM-DD sang DD/MM/YYYY
-        function formatToDisplayDate(isoDate) {
-            if (!isoDate) return '';
-            const parts = isoDate.split('-');
-            if (parts.length !== 3) return isoDate;
-            return `${parts[2]}/${parts[1]}/${parts[0]}`;
         }
         
         // Định dạng số tiền
@@ -294,8 +237,8 @@
                         // Xử lý dữ liệu
                         originalData = jsonData.table.rows
                             .map(row => {
-                                // Lấy và chuẩn hóa ngày từ cột AP (index 41)
-                                const dateAP = normalizeDate(row.c[41]?.v);
+                                // Lấy nguyên giá trị ngày từ cột AP (index 41)
+                                const dateAP = row.c[41]?.v;
                                 
                                 // Lấy tên khách hàng từ cột H (index 7)
                                 const customerName = (row.c[7]?.f || row.c[7]?.v || '').toString().trim();
@@ -315,11 +258,7 @@
                         // Áp dụng lọc ngày từ URL
                         const urlDateParam = getUrlParameter('ngay');
                         if (urlDateParam) {
-                            const filterDate = normalizeDate(urlDateParam);
-                            if (filterDate) {
-                                originalData = originalData.filter(item => item.AP === filterDate);
-                                console.log(`Đã lọc ${originalData.length} bản ghi cho ngày ${urlDateParam}`);
-                            }
+                            originalData = originalData.filter(item => item.AP === urlDateParam);
                         }
                         
                         // Tạo AN_Display
@@ -411,7 +350,7 @@
                     acc[item.H] = {
                         AP: item.AP,
                         H: item.H,
-                        AN: [...new Set(item.AN)], // Loại bỏ trùng lặp tài xế
+                        AN: [...new Set(item.AN)],
                         Q: 0
                     };
                 }
@@ -422,7 +361,7 @@
             // Hiển thị dữ liệu đã nhóm
             Object.values(groupedData).forEach(item => {
                 html += '<tr>';
-                html += `<td>${formatToDisplayDate(item.AP)}</td>`;
+                html += `<td>${item.AP}</td>`;  // In thẳng giá trị ngày
                 html += `<td>${item.H}</td>`;
                 html += `<td>${item.AN.map(v => anToCMap[v] || v).join(', ')}</td>`;
                 html += `<td>${formatCurrency(item.Q)}</td>`;
@@ -451,4 +390,5 @@
     </script>
 </body>
 </html>
+
 
