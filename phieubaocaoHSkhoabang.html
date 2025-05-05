@@ -642,266 +642,204 @@
   </div>
 </div>
 
-<script>
-  // Hàm decode URL an toàn
-  function safeDecode(encoded) {
-    if (!encoded) return '';
-    try {
-      return decodeURIComponent(encoded.replace(/\+/g, ' '));
-    } catch (e) {
-      return encoded;
-    }
+// Hàm xử lý dữ liệu học tập và sắp xếp theo ngày tăng dần
+function processLearningData(dataStr) {
+  if (!dataStr || dataStr.trim() === '') return [];
+  
+  try {
+    return dataStr.split('_b_').map(item => {
+      const parts = item.split('_a_');
+      return {
+        ngay: safeDecode(parts[0]) || '',
+        chuyenCan: safeDecode(parts[1]) || '',
+        hoanThanhBT: parts[2] ? parseInt(parts[2]) : null,
+        diemKiemTra: parts[3] ? parseInt(parts[3]) : null
+      };
+    }).filter(item => item.ngay.trim() !== '').sort((a, b) => new Date(a.ngay) - new Date(b.ngay));  // Sắp xếp theo ngày
+  } catch (e) {
+    console.error('Lỗi xử lý dữ liệu học tập:', e);
+    return [];
   }
+}
 
-  // Hàm xử lý dữ liệu học tập
-  function processLearningData(dataStr) {
-    if (!dataStr || dataStr.trim() === '') return [];
-    
-    try {
-      return dataStr.split('_b_').map(item => {
-        const parts = item.split('_a_');
-        return {
-          ngay: safeDecode(parts[0]) || '',
-          chuyenCan: safeDecode(parts[1]) || '',
-          hoanThanhBT: parts[2] ? parseInt(parts[2]) : null,
-          diemKiemTra: parts[3] ? parseInt(parts[3]) : null
-        };
-      }).filter(item => item.ngay.trim() !== '');
-    } catch (e) {
-      console.error('Lỗi xử lý dữ liệu học tập:', e);
-      return [];
-    }
+// Hàm xử lý dữ liệu điểm kiểm tra và sắp xếp theo ngày tăng dần
+function processTestData(testStr) {
+  if (!testStr || testStr.trim() === '') return [];
+  
+  try {
+    return testStr.split('_b_').map(item => {
+      const parts = item.split('_a_');
+      return {
+        ngay: safeDecode(parts[0]) || '',
+        tenBaiKiemTra: safeDecode(parts[1]) || '',
+        diem: parts[2] ? parseFloat(parts[2]) : null
+      };
+    }).filter(item => item.ngay.trim() !== '').sort((a, b) => new Date(a.ngay) - new Date(b.ngay));  // Sắp xếp theo ngày
+  } catch (e) {
+    console.error('Lỗi xử lý dữ liệu điểm kiểm tra:', e);
+    return [];
   }
+}
 
-  // Hàm xử lý dữ liệu điểm kiểm tra
-  function processTestData(testStr) {
-    if (!testStr || testStr.trim() === '') return [];
+// Hàm hiển thị dữ liệu học tập
+function displayLearningData(data) {
+  const tableBody = document.getElementById('tableBody');
+  const noDataRow = tableBody.querySelector('.no-data-row');
+  
+  if (data.length > 0) {
+    noDataRow.style.display = 'none';
     
-    try {
-      return testStr.split('_b_').map(item => {
-        const parts = item.split('_a_');
-        return {
-          ngay: safeDecode(parts[0]) || '',
-          tenBaiKiemTra: safeDecode(parts[1]) || '',
-          diem: parts[2] ? parseFloat(parts[2]) : null
-        };
-      }).filter(item => item.ngay.trim() !== '');
-    } catch (e) {
-      console.error('Lỗi xử lý dữ liệu điểm kiểm tra:', e);
-      return [];
-    }
-  }
-
-  // Hàm hiển thị dữ liệu học tập
-  function displayLearningData(data) {
-    const tableBody = document.getElementById('tableBody');
-    const noDataRow = tableBody.querySelector('.no-data-row');
-    
-    if (data.length > 0) {
-      noDataRow.style.display = 'none';
+    tableBody.innerHTML = data.map((item, index) => {
+      const getScoreClass = (score) => {
+        if (score === null) return '';
+        if (score >= 90) return 'score-excellent';
+        if (score >= 70) return 'score-good';
+        if (score >= 50) return 'score-average';
+        return 'score-poor';
+      };
       
-      tableBody.innerHTML = data.map((item, index) => {
-        const getScoreClass = (score) => {
-          if (score === null) return '';
-          if (score >= 90) return 'score-excellent';
-          if (score >= 70) return 'score-good';
-          if (score >= 50) return 'score-average';
-          return 'score-poor';
-        };
-        
-        return `
-          <tr>
-            <td class="center-text">${index + 1}</td>
-            <td>${item.ngay || 'N/A'}</td>
-            <td>${item.chuyenCan || 'Không có'}</td>
-            <td class="center-text ${getScoreClass(item.hoanThanhBT)}">
-              ${item.hoanThanhBT !== null ? item.hoanThanhBT + '%' : 'N/A'}
-            </td>
-            <td class="center-text ${getScoreClass(item.diemKiemTra)}">
-              ${item.diemKiemTra !== null ? item.diemKiemTra + '%' : 'N/A'}
-            </td>
-          </tr>
-        `;
-      }).join('');
-    }
+      return `
+        <tr>
+          <td class="center-text">${index + 1}</td>
+          <td>${item.ngay || 'N/A'}</td>
+          <td>${item.chuyenCan || 'Không có'}</td>
+          <td class="center-text ${getScoreClass(item.hoanThanhBT)}">
+            ${item.hoanThanhBT !== null ? item.hoanThanhBT + '%' : 'N/A'}
+          </td>
+          <td class="center-text ${getScoreClass(item.diemKiemTra)}">
+            ${item.diemKiemTra !== null ? item.diemKiemTra + '%' : 'N/A'}
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
+}
 
-  // Hàm hiển thị điểm kiểm tra
-  function displayTestData(data) {
-    const testScoreBody = document.getElementById('testScoreBody');
-    const noTestDataRow = testScoreBody.querySelector('.no-data-row');
+// Hàm hiển thị điểm kiểm tra
+function displayTestData(data) {
+  const testScoreBody = document.getElementById('testScoreBody');
+  const noTestDataRow = testScoreBody.querySelector('.no-data-row');
+  
+  if (data.length > 0) {
+    noTestDataRow.style.display = 'none';
     
-    if (data.length > 0) {
-      noTestDataRow.style.display = 'none';
+    testScoreBody.innerHTML = data.map((item, index) => {
+      const getScoreClass = (score) => {
+        if (score === null) return '';
+        if (score >= 90) return 'score-excellent';
+        if (score >= 70) return 'score-good';
+        if (score >= 50) return 'score-average';
+        return 'score-poor';
+      };
       
-      testScoreBody.innerHTML = data.map((item, index) => {
-        const getScoreClass = (score) => {
-          if (score === null) return '';
-          if (score >= 90) return 'score-excellent';
-          if (score >= 70) return 'score-good';
-          if (score >= 50) return 'score-average';
-          return 'score-poor';
-        };
-        
-        return `
-          <tr>
-            <td class="center-text">${index + 1}</td>
-            <td>${item.ngay || 'N/A'}</td>
-            <td>${item.tenBaiKiemTra || 'Không có tên'}</td>
-            <td class="center-text ${getScoreClass(item.diem)}">
-              ${item.diem !== null ? item.diem : 'N/A'}
-            </td>
-          </tr>
-        `;
-      }).join('');
-    }
+      return `
+        <tr>
+          <td class="center-text">${index + 1}</td>
+          <td>${item.ngay || 'N/A'}</td>
+          <td>${item.tenBaiKiemTra || 'Không có tên'}</td>
+          <td class="center-text ${getScoreClass(item.diem)}">
+            ${item.diem !== null ? item.diem : 'N/A'}
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
+}
 
-  // Hàm vẽ biểu đồ
-  function drawChart(data) {
-    if (data.length === 0) {
-      document.getElementById('progressChart').style.display = 'none';
-      return;
-    }
-    
-    const validData = data.filter(item => item.diem !== null);
-    if (validData.length === 0) {
-      document.getElementById('progressChart').style.display = 'none';
-      return;
-    }
-    
-    const labels = validData.map(item => [item.ngay, item.tenBaiKiemTra]);
-    const scores = validData.map(item => item.diem);
-    
-    try {
-      const ctx = document.getElementById('progressChart').getContext('2d');
-      new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: labels,
-          datasets: [{
-            label: 'Điểm bài kiểm tra',
-            data: scores,
-            backgroundColor: 'rgba(214, 40, 40, 0.1)',
-            borderColor: 'rgba(214, 40, 40, 1)',
-            borderWidth: 2,
-            pointBackgroundColor: 'rgba(214, 40, 40, 1)',
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            tension: 0.3,
-            fill: true
-          }]
-        },
-        options: {
-          responsive: true,
-          plugins: {
-            legend: {
-              position: 'top',
-              labels: {
-                font: {
-                  size: 14
-                }
-              }
-            },
-            tooltip: {
-              backgroundColor: 'rgba(0,0,0,0.7)',
-              titleFont: {
-                size: 16
-              },
-              bodyFont: {
+// Hàm vẽ biểu đồ
+function drawChart(data) {
+  if (data.length === 0) {
+    document.getElementById('progressChart').style.display = 'none';
+    return;
+  }
+  
+  const validData = data.filter(item => item.diem !== null);
+  if (validData.length === 0) {
+    document.getElementById('progressChart').style.display = 'none';
+    return;
+  }
+  
+  const labels = validData.map(item => [item.ngay, item.tenBaiKiemTra]);
+  const scores = validData.map(item => item.diem);
+  
+  try {
+    const ctx = document.getElementById('progressChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Điểm bài kiểm tra',
+          data: scores,
+          backgroundColor: 'rgba(214, 40, 40, 0.1)',
+          borderColor: 'rgba(214, 40, 40, 1)',
+          borderWidth: 2,
+          pointBackgroundColor: 'rgba(214, 40, 40, 1)',
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: {
+              font: {
                 size: 14
               }
             }
           },
-          scales: {
-            y: {
-              beginAtZero: true,
-              max: 100,
-              title: {
-                display: true,
-                text: 'Điểm số',
-                font: {
-                  size: 14,
-                  weight: 'bold'
-                }
-              },
-              grid: {
-                color: 'rgba(0,0,0,0.05)'
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            titleFont: {
+              size: 16
+            },
+            bodyFont: {
+              size: 14
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 100,
+            title: {
+              display: true,
+              text: 'Điểm số',
+              font: {
+                size: 14,
+                weight: 'bold'
               }
             },
-            x: {
-              title: {
-                display: true,
-                text: 'Ngày kiểm tra',
-                font: {
-                  size: 14,
-                  weight: 'bold'
-                }
-              },
-              grid: {
-                display: false
+            grid: {
+              color: 'rgba(0,0,0,0.05)'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Ngày kiểm tra',
+              font: {
+                size: 14,
+                weight: 'bold'
               }
+            },
+            grid: {
+              display: false
             }
           }
         }
-      });
-    } catch (e) {
-      console.error('Lỗi khi vẽ biểu đồ:', e);
-      document.getElementById('progressChart').style.display = 'none';
-    }
+      }
+    });
+  } catch (e) {
+    console.error('Lỗi khi vẽ biểu đồ:', e);
+    document.getElementById('progressChart').style.display = 'none';
   }
+}
 
-  // Hàm chính khi trang được tải
-  function init() {
-    const params = new URLSearchParams(window.location.search);
-    
-    // Hiển thị thông tin cơ bản
-    document.getElementById('student-name').textContent = safeDecode(params.get('ten')) || '[Tên học sinh]';
-    document.getElementById('student-class').textContent = safeDecode(params.get('lop')) || '[Tên lớp]';
-    document.getElementById('student-id').textContent = params.get('id') || '[Mã học sinh]';
-    
-    // Xử lý ngày báo cáo
-    const today = new Date();
-    document.getElementById('report-date').textContent = params.get('ngay') || 
-      today.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    
-    // Xử lý các điểm số
-    document.getElementById('attendance').textContent = params.get('chuyencan') || '[Chuyên cần]';
-    document.getElementById('test-score').textContent = params.get('diem') || '[Điểm kiểm tra]';
-    document.getElementById('homework').textContent = params.get('btvn') || '[Điểm BTVN]';
-    document.getElementById('stars').textContent = params.get('sao') ? params.get('sao') + ' %' : '[Số sao]';
-    
-    // Xử lý nhận xét
-    const nhanxet = params.get('nhanxet');
-    if (nhanxet) {
-      document.getElementById('comment').innerHTML = safeDecode(nhanxet)
-        .replace(/###/g, '<h3>')
-        .replace(/<\/br>/g, '<br>')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    }
-    
-    // Xử lý con dấu
-    const condau = params.get('condau');
-    const commentStamp = document.getElementById('commentStamp');
-    if (condau && condau !== '0' && condau !== 'false') {
-      commentStamp.querySelector('img').src = safeDecode(condau);
-    } else {
-      commentStamp.style.display = 'none';
-    }
-    
-    // Xử lý dữ liệu học tập
-    const learningData = processLearningData(params.get('data'));
-    displayLearningData(learningData);
-    
-    // Xử lý điểm kiểm tra
-    const testData = processTestData(params.get('idktra'));
-    displayTestData(testData);
-    drawChart(testData);
-  }
-
-  // Khởi chạy khi trang được tải
-  document.addEventListener('DOMContentLoaded', init);
-</script>
 
 </body>
 </html>
