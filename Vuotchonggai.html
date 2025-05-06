@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bảng Vinh Danh Học Sinh</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f2f0;
+            margin: 0;
+            padding: 30px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #8e2323;
+        }
+        .header h1 {
+            font-size: 2.2em;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        .header p {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-top: 0;
+        }
+        .honor-table {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto;
+            border-collapse: separate;
+            border-spacing: 0;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .honor-table th {
+            background: linear-gradient(135deg, #8e2323 0%, #c12e2e 100%);
+            color: white;
+            padding: 18px;
+            text-align: center;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+        .honor-table td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid #f0e0dd;
+            position: relative;
+        }
+        .honor-table tr:nth-child(even) {
+            background-color: #fff9f9;
+        }
+        .honor-table tr:hover {
+            background-color: #fdf0ef;
+        }
+        .gold::before, .silver::before, .bronze::before {
+            content: "";
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            margin-right: 8px;
+            vertical-align: middle;
+            background-size: contain;
+            background-repeat: no-repeat;
+        }
+        .gold::before {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="%23FFD700"/><path fill="%23FFC000" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/><circle cx="12" cy="12" r="6" fill="%23FFEE99"/></svg>');
+        }
+        .silver::before {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="%23C0C0C0"/><path fill="%23A0A0A0" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/><circle cx="12" cy="12" r="6" fill="%23E0E0E0"/></svg>');
+        }
+        .bronze::before {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="%23CD7F32"/><path fill="%23B87333" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16z"/><circle cx="12" cy="12" r="6" fill="%23E19D65"/></svg>');
+        }
+        .gold { color: #b8860b; font-weight: bold; }
+        .silver { color: #808080; font-weight: bold; }
+        .bronze { color: #cd7f32; font-weight: bold; }
+        .top-3-row {
+            background-color: #fff0f0 !important;
+            border-left: 4px solid #8e2323;
+        }
+        .percent {
+            font-weight: 600;
+            color: #8e2323;
+        }
+        .error-message {
+            color: #c12e2e;
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>DANH SÁCH VƯỢT CHÔNG GAI THÁNG 4!</h1>
+        <p id="subtitle">Trung Tâm Khoa Bảng</p>
+    </div>
+
+    <div id="table-container"></div>
+
+    <script>
+        // Hàm giải mã URL parameter
+        function getParameterByName(name, url) {
+            if (!url) url = window.location.href;
+            name = name.replace(/[\[\]]/g, '\\$&');
+            const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+            const results = regex.exec(url);
+            if (!results) return null;
+            if (!results[2]) return '';
+            return decodeURIComponent(results[2].replace(/\+/g, ' '));
+        }
+
+        // Hàm tạo bảng từ dữ liệu và sắp xếp theo Tích lũy
+        function renderTable(data) {
+            if (!data) {
+                document.getElementById('table-container').innerHTML = 
+                    '<div class="error-message">Không có dữ liệu hiển thị. Vui lòng truyền dữ liệu qua URL parameter ?data=</div>';
+                return;
+            }
+
+            try {
+                // Xử lý dữ liệu đặc biệt (thay thế khoảng trắng cuối mỗi hàng nếu có)
+                data = data.replace(/\%20\_b\_/g, '_b_').replace(/\s+$/, '');
+                const rows = data.split('_b_').filter(row => row.trim() !== '');
+                if (rows.length === 0) throw new Error('Dữ liệu trống');
+
+                // Sắp xếp dữ liệu theo Tích lũy (cột thứ 5)
+                rows.sort((a, b) => {
+                    const aPercent = parseFloat(a.split('_a_')[3].trim());
+                    const bPercent = parseFloat(b.split('_a_')[3].trim());
+                    return bPercent - aPercent; // Sắp xếp từ cao xuống thấp
+                });
+
+                let tableHTML = `
+                    <table class="honor-table">
+                        <thead>
+                            <tr>
+                                <th>STT</th>
+                                <th>Nhóm</th>
+                                <th>Họ và tên</th>
+                                <th>Lớp</th>
+                                <th>Tích lũy</th>
+                                <th>Chuyên cần</th>
+                                <th>BTVN</th>
+                                <th>Kiểm tra</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+                rows.forEach((row, index) => {
+                    const columns = row.split('_a_').map(col => col.trim());
+                    if (columns.length < 6) return;
+
+                    // Làm tròn Tích lũy và hiển thị hai chữ số sau dấu thập phân
+                    const accumulation = (parseFloat(columns[3]) || 0).toFixed(2);
+
+                    const rankClass = index === 0 ? 'gold' : 
+                                    index === 1 ? 'silver' : 
+                                    index === 2 ? 'bronze' : '';
+                    const isTop3 = index < 3 ? 'top-3-row' : '';
+
+                    tableHTML += `
+                        <tr class="${isTop3}">
+                            <td>${index + 1}</td>
+                            <td>${columns[0] || ''}</td>
+                            <td>${columns[1] || ''}</td>
+                            <td>${columns[2] || ''}</td>
+                            <td class="percent">${accumulation}%</td>
+                            <td class="percent">${columns[4] || ''}%</td>
+                            <td class="percent">${columns[5] || ''}%</td>
+                            <td class="percent">${columns[6] || ''}%</td>
+                        </tr>`;
+                });
+
+                tableHTML += `</tbody></table>`;
+                document.getElementById('table-container').innerHTML = tableHTML;
+
+            } catch (error) {
+                document.getElementById('table-container').innerHTML = 
+                    `<div class="error-message">Lỗi hiển thị dữ liệu: ${error.message}<br>Dữ liệu nhận được: ${data}</div>`;
+            }
+        }
+
+        // Lấy dữ liệu từ URL và render bảng
+        const dataParam = getParameterByName('data');
+        renderTable(dataParam);
+    </script>
+</body>
+</html>
