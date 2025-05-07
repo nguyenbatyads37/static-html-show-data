@@ -99,6 +99,22 @@
       font-weight: 700;
       color: var(--primary);
     }
+    .detail-scores {
+      margin-bottom: 20px;
+    }
+    .subject-detail {
+      margin-bottom: 15px;
+    }
+    .subject-detail h4 {
+      color: var(--primary);
+      margin-bottom: 5px;
+    }
+    .score-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 5px 0;
+      border-bottom: 1px dashed var(--border);
+    }
     .comment-section {
       margin-bottom: 20px;
       padding: 15px;
@@ -157,6 +173,10 @@
       <div class="core-subject"><h4>Tổng 3 môn</h4><div class="score" id="total-core-score">0</div></div>
     </div>
     
+    <div class="detail-scores" id="detail-scores">
+      <!-- Chi tiết điểm từng môn sẽ được thêm ở đây -->
+    </div>
+    
     <div class="comment-section" id="wish-comment">
       <!-- Nhận xét sẽ được thêm bằng JavaScript -->
     </div>
@@ -175,50 +195,76 @@
     // Lấy param từ URL
     const params = new URLSearchParams(window.location.search);
     const studentId = params.get('id');
-    const studentName = params.get('ten') || 'Không có thông tin';
     
     if (!studentId) {
       document.querySelector('#student-info').innerHTML = '<div style="color:red;">Thiếu mã HS</div>';
     } else {
-      renderStudentInfo(studentId, studentName);
-      loadReportData(studentId);
-      loadStudentComment(studentId);
+      loadStudentData(studentId);
     }
     
-    function renderStudentInfo(id, name) {
-      document.getElementById('stu-id').textContent = id;
-      document.getElementById('stu-name').textContent = name;
-    }
-    
-    async function loadReportData(id) {
-      const url = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=1842364838`;
+    async function loadStudentData(id) {
       try {
-        const res = await fetch(url);
-        const text = await res.text();
-        const data = JSON.parse(text.match(/setResponse\((.*)\)/)[1]);
-        const rows = data.table.rows.filter(r => r.c[1]?.v === id);
+        // Lấy dữ liệu từ Sheet chính (Gid=0)
+        const mainUrl = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=0`;
+        const mainRes = await fetch(mainUrl);
+        const mainText = await mainRes.text();
+        const mainData = JSON.parse(mainText.match(/setResponse\((.*)\)/)[1]);
         
-        if (!rows.length) {
-          document.getElementById('report-content').innerHTML = '<p>Không có dữ liệu</p>';
-          return;
+        // Tìm học sinh trong sheet chính (cột A là ID, cột B là Họ tên)
+        const mainRow = mainData.table.rows.find(r => r.c[0]?.v === id);
+        if (!mainRow) {
+          throw new Error('Không tìm thấy học sinh');
         }
         
+        const studentName = mainRow.c[1]?.v || 'Không có thông tin';
+        const comment = mainRow.c[8]?.v || '';
+        
+        // Hiển thị thông tin học sinh
+        document.getElementById('stu-id').textContent = id;
+        document.getElementById('stu-name').textContent = studentName;
+        
+        // Lấy dữ liệu điểm từ Sheet điểm (Gid=1842364838)
+        const scoreUrl = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=1842364838`;
+        const scoreRes = await fetch(scoreUrl);
+        const scoreText = await scoreRes.text();
+        const scoreData = JSON.parse(scoreText.match(/setResponse\((.*)\)/)[1]);
+        
+        // Lọc các dòng của học sinh này (cột SBD = ID học sinh)
+        const scoreRows = scoreData.table.rows.filter(r => r.c[1]?.v === id);
+        
+        if (scoreRows.length === 0) {
+          throw new Error('Không có dữ liệu điểm');
+        }
+        
+        // Tính toán điểm số
         let totalAchieved = 0;
         let totalPossible = 0;
         let mathScore = 0;
         let literatureScore = 0;
         let englishScore = 0;
-        let subjectSet = new Set();
+        const subjects = {};
         
-        rows.forEach(r => {
-          const s = r.c;
-          const subject = s[2]?.v;
-          const achieved = s[6]?.v || 0;
-          const total = s[4]?.v || 0;
+        scoreRows.forEach(row => {
+          const cells = row.c;
+          const subject = cells[2]?.v; // Cột Môn
+          const achieved = cells[6]?.v || 0; // Cột Đạt (G)
+          const total = cells[4]?.v || 0; // Cột Tổng
+          const question = cells[3]?.v; // Cột Câu hỏi
+          const errors = cells[7]?.v; // Cột Lỗi
           
           totalAchieved += achieved;
           totalPossible += total;
-          subjectSet.add(subject);
+          
+          // Nhóm theo môn học
+          if (!subjects[subject]) {
+            subjects[subject] = [];
+          }
+          subjects[subject].push({
+            question,
+            achieved,
+            total,
+            errors
+          });
           
           // Tính điểm các môn chính
           if (subject === 'Toán') {
@@ -233,7 +279,7 @@
         // Hiển thị tổng quan
         document.getElementById('total-score').textContent = totalAchieved;
         document.getElementById('percentage').textContent = Math.round((totalAchieved / totalPossible) * 100) + '%';
-        document.getElementById('subject-count').textContent = subjectSet.size;
+        document.getElementById('subject-count').textContent = Object.keys(subjects).length;
         
         // Hiển thị điểm các môn chính
         document.getElementById('math-score').textContent = mathScore;
@@ -241,23 +287,54 @@
         document.getElementById('english-score').textContent = englishScore;
         document.getElementById('total-core-score').textContent = mathScore + literatureScore + englishScore;
         
-      } catch (e) {
-        console.error('Lỗi khi tải dữ liệu:', e);
+        // Hiển thị chi tiết từng môn
+        renderSubjectDetails(subjects);
+        
+        // Hiển thị nhận xét
+        renderWishComment(comment);
+        
+      } catch (error) {
+        console.error('Lỗi khi tải dữ liệu:', error);
+        document.getElementById('wish-comment').innerHTML = `
+          <h3 style="color:red;">Lỗi</h3>
+          <p>${error.message}</p>
+        `;
       }
     }
     
-    async function loadStudentComment(id) {
-      const url = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=0`;
-      try {
-        const res = await fetch(url);
-        const text = await res.text();
-        const data = JSON.parse(text.match(/setResponse\((.*)\)/)[1]);
-        const row = data.table.rows.find(r => r.c[0]?.v === id);
-        const comment = row?.c[8]?.v || '';
+    function renderSubjectDetails(subjects) {
+      const container = document.getElementById('detail-scores');
+      container.innerHTML = '<h3 style="color: var(--primary); margin-bottom: 15px;">Chi tiết điểm từng môn</h3>';
+      
+      for (const subject in subjects) {
+        const subjectDiv = document.createElement('div');
+        subjectDiv.className = 'subject-detail';
         
-        renderWishComment(comment);
-      } catch (e) {
-        console.error('Lỗi khi tải nhận xét:', e);
+        let subjectHTML = `
+          <h4>Môn ${subject}</h4>
+          <div class="score-list">
+        `;
+        
+        let subjectTotal = 0;
+        subjects[subject].forEach(item => {
+          subjectTotal += item.achieved;
+          subjectHTML += `
+            <div class="score-item">
+              <span>Câu ${item.question}:</span>
+              <span>${item.achieved} điểm ${item.errors ? '(Lỗi: ' + item.errors + ')' : ''}</span>
+            </div>
+          `;
+        });
+        
+        subjectHTML += `
+          <div class="score-item" style="font-weight: bold; border-top: 1px solid var(--border); margin-top: 5px;">
+            <span>Tổng môn ${subject}:</span>
+            <span>${subjectTotal} điểm</span>
+          </div>
+        </div>`;
+        
+        subjectDiv.innerHTML = subjectHTML;
+        container.appendChild(subjectDiv);
       }
     }
     
@@ -265,12 +342,12 @@
       const div = document.getElementById('wish-comment');
       div.innerHTML = `
         <h3>Lời nhắn</h3>
-        <p>Chúc em tiếp tục phát huy điểm mạnh.</p>
+        <p>Chúc em tiếp tục phát huy điểm mạnh và khắc phục những điểm cần cải thiện.</p>
       `;
       
       if (comment) {
         div.innerHTML += `
-          <h3>Nhận xét GV</h3>
+          <h3>Nhận xét giáo viên</h3>
           <p>${comment.replace(/\n/g, '<br>')}</p>
         `;
       }
