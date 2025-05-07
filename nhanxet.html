@@ -92,20 +92,6 @@
       background: var(--secondary);
       border: 2px solid var(--primary);
     }
-    .wish-comment {
-      margin: 20px 0;
-      padding: 15px;
-      background: var(--secondary);
-      border-radius: 8px;
-    }
-    .wish-comment h3 {
-      color: var(--primary);
-      margin-bottom: 10px;
-    }
-    .wish-comment p {
-      font-size: 14px;
-      line-height: 1.5;
-    }
     .action-buttons {
       display: flex;
       justify-content: center;
@@ -139,10 +125,6 @@
       margin-top: 25px;
       padding-top: 15px;
       border-top: 1px solid var(--border);
-    }
-    @media print {
-      @page { size: A4; margin: 10mm; }
-      body, .container { background: #fff !important; color: #000 !important; width: 100% !important; }
     }
   </style>
 </head>
@@ -178,11 +160,6 @@
       </div>
     </div>
     
-    <div class="wish-comment" id="wish-comment">
-      <h3>Lời nhắn</h3>
-      <p>Chúc em tiếp tục phát huy điểm mạnh.</p>
-    </div>
-    
     <div class="action-buttons">
       <button class="btn btn-primary" id="capture-btn">
         📸 Chụp báo cáo
@@ -206,12 +183,11 @@
     });
     document.getElementById('report-date').textContent = formattedDate;
     document.getElementById('report-date-footer').textContent = formattedDate;
-    
-    // Lấy ID và tên học sinh từ URL
+
+    // Lấy ID học sinh từ URL
     const params = new URLSearchParams(window.location.search);
     const studentId = params.get('id');
-    const studentName = params.get('ten') || 'Không có thông tin';
-    
+
     if (!studentId) {
       document.getElementById('student-info').innerHTML = `
         <div style="color:red; grid-column: span 3;">
@@ -219,71 +195,91 @@
         </div>
       `;
     } else {
-      // Hiển thị thông tin học sinh
+      // Hiển thị mã HS
       document.getElementById('stu-id').textContent = studentId;
-      document.getElementById('stu-name').textContent = studentName;
-      
-      // Lấy và tính toán điểm số
+
+      // Lấy tên và điểm học sinh
+      fetchStudentName(studentId);
       calculateScores(studentId);
-      loadStudentComment(studentId);
     }
-    
+
     // Xử lý nút chụp màn hình
     document.getElementById('capture-btn').addEventListener('click', captureReport);
-    
+
+    async function fetchStudentName(studentId) {
+      try {
+        const url = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=0`;
+        const response = await fetch(url);
+        const text = await response.text();
+        const data = JSON.parse(text.match(/setResponse\((.*)\)/)[1]);
+
+        // Tìm học sinh theo ID (cột A - row.c[0])
+        const studentRow = data.table.rows.find(row => row.c[0]?.v === studentId);
+        if (studentRow && studentRow.c[1]?.v) {
+          document.getElementById('stu-name').textContent = studentRow.c[1].v;
+        } else {
+          document.getElementById('stu-name').textContent = 'Không tìm thấy tên';
+        }
+      } catch (error) {
+        console.error('Không thể lấy tên học sinh:', error);
+        document.getElementById('stu-name').textContent = 'Lỗi khi lấy tên';
+      }
+    }
+
     async function calculateScores(studentId) {
       try {
-        // Lấy dữ liệu từ Google Sheets
+        // Lấy dữ liệu từ sheet "Chấm chi tiết"
         const url = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=1842364838`;
         const response = await fetch(url);
         const text = await response.text();
         const data = JSON.parse(text.match(/setResponse\((.*)\)/)[1]);
-        
-        // Lọc điểm của học sinh này
+
+        // Lọc các hàng theo SBD (ID học sinh)
         const rows = data.table.rows.filter(row => row.c[1]?.v === studentId);
-        
+
         if (rows.length === 0) {
           throw new Error('Không tìm thấy dữ liệu điểm cho học sinh này');
         }
-        
+
         // Tính tổng điểm từng môn
         let mathTotal = 0;
         let literatureTotal = 0;
         let englishTotal = 0;
-        
+
         rows.forEach(row => {
-          const subject = row.c[2]?.v;
-          const score = row.c[6]?.v || 0; // Cột điểm đạt
-          
+          const subject = row.c[2]?.v; // Cột Môn
+          const score = row.c[6]?.v || 0; // Cột G (điểm)
+
           if (subject === 'Toán') mathTotal += score;
           else if (subject === 'Văn') literatureTotal += score;
           else if (subject === 'Anh') englishTotal += score;
         });
-        
-        // Tính tổng điểm 3 môn
-        const totalScore = mathTotal + literatureTotal + englishTotal;
-        
+
         // Hiển thị điểm
-        document.getElementById('math-score').textContent = mathTotal;
-        document.getElementById('literature-score').textContent = literatureTotal;
-        document.getElementById('english-score').textContent = englishTotal;
-        document.getElementById('total-score').textContent = totalScore;
-        
+        document.getElementById('math-score').textContent = mathTotal.toFixed(1);
+        document.getElementById('literature-score').textContent = literatureTotal.toFixed(1);
+        document.getElementById('english-score').textContent = englishTotal.toFixed(1);
+        document.getElementById('total-score').textContent = (mathTotal + literatureTotal + englishTotal).toFixed(1);
+
       } catch (error) {
         console.error('Lỗi khi tính điểm:', error);
         alert('Có lỗi xảy ra: ' + error.message);
+        document.getElementById('math-score').textContent = 'N/A';
+        document.getElementById('literature-score').textContent = 'N/A';
+        document.getElementById('english-score').textContent = 'N/A';
+        document.getElementById('total-score').textContent = 'N/A';
       }
     }
-    
+
     async function captureReport() {
-      const btn = document.getElementById: Document.getElementById('capture-btn');
+      const btn = document.getElementById('capture-btn');
       btn.disabled = true;
       btn.innerHTML = '⏳ Đang xử lý...';
-      
+
       try {
         const container = document.getElementById('report-container');
         container.style.opacity = '0.9';
-        
+
         const canvas = await html2canvas(container, {
           scale: 2,
           logging: false,
@@ -291,12 +287,12 @@
           allowTaint: true,
           backgroundColor: '#f8fafc'
         });
-        
+
         const link = document.createElement('a');
         link.download = `Diem_${studentId || 'hocsinh'}_${formattedDate.replace(/\//g, '-')}.png`;
         link.href = canvas.toDataURL('image/png', 1.0);
         link.click();
-        
+
       } catch (error) {
         console.error('Lỗi khi chụp màn hình:', error);
         alert('Có lỗi khi chụp báo cáo');
@@ -304,26 +300,6 @@
         btn.disabled = false;
         btn.innerHTML = '📸 Chụp báo cáo';
         container.style.opacity = '1';
-      }
-    }
-    
-    async function loadStudentComment(studentId) {
-      try {
-        const url = `https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=0`;
-        const response = await fetch(url);
-        const text = await response.text();
-        const data = JSON.parse(text.match(/setResponse\((.*)\)/)[1]);
-        
-        const row = data.table.rows.find(r => r.c[0]?.v === studentId);
-        const comment = row?.c[8]?.v || '';
-        
-        const div = document.getElementById('wish-comment');
-        div.innerHTML = `<h3>Lời nhắn</h3><p>Chúc em tiếp tục phát huy điểm mạnh.</p>`;
-        if (comment) {
-          div.innerHTML += `<h3>Nhận xét GV</h3><p>${comment.replace(/\n/g, '<br>')}</p>`;
-        }
-      } catch (error) {
-        console.error('Không thể lấy nhận xét:', error);
       }
     }
   </script>
