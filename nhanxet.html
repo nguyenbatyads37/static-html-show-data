@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -8,8 +7,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --primary: #0047AB; /* Cobalt blue */
-            --primary-light: #3b82f6; /* Lighter cobalt for accents */
+            --primary: #0047AB;
+            --primary-light: #3b82f6;
             --secondary: #1e293b;
             --success: #22c55e;
             --danger: #ef4444;
@@ -59,7 +58,7 @@
         }
 
         .logo-container {
-            margin-bottom: 0px; /* No gap between logo and text */
+            margin-bottom: 0;
         }
 
         .logo-img {
@@ -74,7 +73,8 @@
             flex-direction: column;
             align-items: center;
             text-align: center;
-            margin: 0 0 30px; /* No top margin, only bottom margin for student info */
+            margin: 0 0 30px;
+            white-space: nowrap;
         }
 
         .report-header h1 {
@@ -102,12 +102,14 @@
             border-radius: 10px;
             padding: 20px;
             width: 100%;
+            flex-wrap: nowrap;
         }
 
         .student-info-card {
             text-align: center;
             padding: 0 30px;
             position: relative;
+            flex: 1;
         }
 
         .student-info-card:not(:last-child)::after {
@@ -132,6 +134,7 @@
         .info-value {
             font-size: 18px;
             font-weight: 600;
+            white-space: nowrap;
         }
 
         .student-id {
@@ -317,7 +320,7 @@
             text-align: center;
             padding: 30px;
             background: white;
-            border-top: 1px solid var(--border);
+            border ontwikk: 1px solid var(--border);
             font-size: 14px;
             color: var(--gray);
         }
@@ -392,7 +395,7 @@
             }
 
             .logo-container {
-                margin-bottom: 0px; /* No gap on mobile */
+                margin-bottom: 0;
             }
 
             .title-container {
@@ -430,6 +433,131 @@
 
             .subject-panel {
                 padding: 0 20px;
+            }
+        }
+
+        @media print {
+            body {
+                background: white;
+                margin: 0;
+                padding: 0;
+            }
+
+            .report-container {
+                margin: 0;
+                border: none;
+                width: 100%;
+                max-width: none;
+                border-radius: 0;
+                box-shadow: none;
+            }
+
+            .report-header {
+                padding: 10px 20px;
+                display: block;
+            }
+
+            .header-content {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                page-break-inside: avoid;
+            }
+
+            .logo-container {
+                margin: 0 auto;
+                text-align: center;
+            }
+
+            .logo-img {
+                width: 100px;
+                height: 100px;
+            }
+
+            .title-container {
+                margin: 10px 0;
+                text-align: center;
+                white-space: nowrap;
+            }
+
+            .report-header h1 {
+                font-size: 24px;
+            }
+
+            .center-name {
+                font-size: 16px;
+            }
+
+            .student-info-container {
+                display: flex;
+                flex-direction: row;
+                justify-content: space-between;
+                padding: 10px;
+                border: none;
+                page-break-inside: avoid;
+                flex-wrap: nowrap;
+            }
+
+            .student-info-card {
+                flex: 1;
+                padding: 0 10px;
+                text-align: center;
+            }
+
+            .student-info-card:not(:last-child)::after {
+                height: 30px;
+            }
+
+            .info-label {
+                font-size: 12px;
+            }
+
+            .info-value {
+                font-size: 16px;
+            }
+
+            .subject-panel {
+                padding: 0 20px;
+                page-break-inside: auto;
+            }
+
+            .subject-header {
+                padding: 10px;
+                margin: 10px 0;
+                page-break-inside: avoid;
+            }
+
+            .subject-content {
+                padding: 10px 0;
+            }
+
+            .score-table th, .score-table td {
+                padding: 8px 10px;
+                font-size: 12px;
+            }
+
+            .analysis-box {
+                padding: 10px;
+                margin: 10px 0;
+                page-break-inside: avoid;
+            }
+
+            .progress-container {
+                margin: 10px 0;
+            }
+
+            .report-footer {
+                padding: 10px;
+                font-size: 12px;
+                page-break-before: avoid;
+            }
+
+            .loading-container, .error-container {
+                display: none;
+            }
+
+            .no-print {
+                display: none;
             }
         }
     </style>
@@ -473,7 +601,7 @@
         // Lấy tham số từ URL
         const urlParams = new URLSearchParams(window.location.search);
         const studentId = urlParams.get('id');
-        const studentName = urlParams.get('ten') || 'Không có thông tin';
+        const studentName = decodeURIComponent(urlParams.get('ten') || 'Không có thông tin');
         
         // Kiểm tra nếu không có ID
         if (!studentId) {
@@ -573,8 +701,17 @@
             
             for (const subject in subjects) {
                 const subjectData = subjects[subject];
-                const totalScore = subjectData.reduce((sum, item) => sum + item.total, 0);
-                const achievedScore = subjectData.reduce((sum, item) => sum + item.achieved, 0);
+                let totalScore = subjectData.reduce((sum, item) => sum + item.total, 0);
+                let achievedScore = subjectData.reduce((sum, item) => sum + item.achieved, 0);
+                
+                // Scale scores for Literature (Văn) and English (Anh) to max 10
+                if (subject.toLowerCase() === 'văn' || subject.toLowerCase() === 'anh') {
+                    const maxPossibleScore = subjectData.length * 10; // Assuming each question max 10 points
+                    totalScore = maxPossibleScore;
+                    achievedScore = (achievedScore / subjectData.reduce((sum, item) => sum + item.total, 0)) * maxPossibleScore;
+                    achievedScore = Math.round(achievedScore * 10) / 10; // Round to 1 decimal place
+                }
+                
                 const percentage = Math.round((achievedScore / totalScore) * 100);
                 
                 const strengths = subjectData.filter(item => item.deducted === 0);
@@ -584,7 +721,7 @@
                     <div class="subject-panel">
                         <div class="subject-header" onclick="toggleSubject(this)">
                             <h3 class="subject-title">Môn: ${subject}</h3>
-                            <div class="subject-score">${achievedScore}/${totalScore} (${percentage}%)</div>
+                            <div class="subject-score">${achievedScore.toFixed(1)}/${totalScore.toFixed(1)} (${percentage}%)</div>
                         </div>
                         
                         <div class="subject-content active">
@@ -599,15 +736,24 @@
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    ${subjectData.map(item => `
-                                        <tr>
-                                            <td>${item.question}</td>
-                                            <td>${item.total}</td>
-                                            <td class="${item.deducted === 0 ? 'perfect' : 'lost'}">${item.achieved}</td>
-                                            <td>${item.deducted}</td>
-                                            <td>${item.errors || '-'}</td>
-                                        </tr>
-                                    `).join('')}
+                                    ${subjectData.map(item => {
+                                        let displayTotal = item.total;
+                                        let displayAchieved = item.achieved;
+                                        if (subject.toLowerCase() === 'văn' || subject.toLowerCase() === 'anh') {
+                                            displayTotal = 10; // Each question max 10 points
+                                            displayAchieved = (item.achieved / item.total) * 10;
+                                            displayAchieved = Math.round(displayAchieved * 10) / 10;
+                                        }
+                                        return `
+                                            <tr>
+                                                <td>${item.question}</td>
+                                                <td>${displayTotal}</td>
+                                                <td class="${item.deducted === 0 ? 'perfect' : 'lost'}">${displayAchieved.toFixed(1)}</td>
+                                                <td>${item.deducted}</td>
+                                                <td>${item.errors || '-'}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
                                 </tbody>
                             </table>
                             
