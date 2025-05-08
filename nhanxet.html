@@ -157,12 +157,19 @@
         }
         .score-table td {
             padding: 14px 20px; background: white; border-bottom: 1px solid var(--border);
+            vertical-align: top;
         }
         .score-table tr:nth-child(even) td { background: #f9fafb; }
         .score-table tr:hover td { background: #f1f5f9; }
         .perfect { color: var(--success); font-weight: 500; }
         .lost { color: var(--danger); font-weight: 500; }
-        .analysis-box { margin-top: 20px; padding: 20px; background: white; border: 1px solid var(--border); border-radius: 8px; }
+        .analysis-box { 
+            margin-top: 20px; 
+            padding: 20px; 
+            background: white; 
+            border: 1px solid var(--border); 
+            border-radius: 8px; 
+        }
         .strengths-box { border-left: 4px solid var(--success); }
         .weaknesses-box { border-left: 4px solid var(--danger); }
         .errors-box { border-left: 4px solid var(--primary); }
@@ -170,7 +177,37 @@
             font-family: 'Poppins', sans-serif; font-size: 18px; font-weight: 600;
             display: flex; align-items: center; margin: 0 0 12px; color: var(--secondary);
         }
-        .analysis-list { margin: 0; padding-left: 20px; line-height: 1.8; }
+        .analysis-list { 
+            margin: 0; 
+            padding-left: 20px; 
+            line-height: 1.8;
+        }
+        .analysis-list li {
+            margin-bottom: 8px;
+            position: relative;
+        }
+        .error-item {
+            background: #fff5f5;
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--danger);
+        }
+        .error-item strong {
+            color: var(--danger);
+            display: block;
+            margin-bottom: 5px;
+        }
+        .error-detail {
+            white-space: pre-line;
+            line-height: 1.6;
+        }
+        .error-detail .highlight {
+            background-color: #fff3bf;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
         .progress-container { margin-top: 25px; }
         .progress-header { display: flex; justify-content: space-between; margin-bottom: 12px; }
         .progress-title { font-weight: 500; color: var(--secondary); font-size: 14px; }
@@ -217,25 +254,29 @@
             .student-info-card:not(:last-child)::after { display: none; }
             .student-info-card:not(:last-child) { margin-bottom: 15px; }
         }
-      @media print {
-  /* Buộc flex không wrap và chia đều 3 phần */
-  .summary-grid {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    justify-content: space-between !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    gap: 2px !important;            /* khoảng nhỏ giữa các ô */
-  }
-  .summary-card {
-    flex: 0 0 calc(33.333% - 1.33px) !important;   /* chính xác 1/3 trừ 1/3 gap */
-    max-width: calc(33.333% - 1.33px) !important;
-    margin: 0 !important;
-    padding: 4px 6px !important;    /* giữ padding tối thiểu */
-    box-sizing: border-box !important;
-  }
-}
-
+        @media print {
+            .summary-grid {
+                display: flex !important;
+                flex-wrap: nowrap !important;
+                justify-content: space-between !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                gap: 2px !important;
+            }
+            .summary-card {
+                flex: 0 0 calc(33.333% - 1.33px) !important;
+                max-width: calc(33.333% - 1.33px) !important;
+                margin: 0 !important;
+                padding: 4px 6px !important;
+                box-sizing: border-box !important;
+            }
+            .print-hide {
+                display: none !important;
+            }
+            .strengths-box .analysis-list li:first-child {
+                display: none !important;
+            }
+        }
     </style>
 </head>
 <body>
@@ -311,6 +352,16 @@
                     <div class="info-value">${new Date().toLocaleDateString('vi-VN')}</div>
                 </div>
             `;
+        }
+
+        function formatErrorText(text) {
+            if (!text) return '-';
+            
+            // Xử lý xuống dòng cho nội dung có **
+            let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<span class="highlight">$1</span>');
+            formattedText = formattedText.replace(/\n/g, '<br>');
+            
+            return formattedText;
         }
 
         async function loadReportData(id) {
@@ -451,7 +502,7 @@
                                                 <td>${i.total}</td>
                                                 <td class="${i.deducted === 0 ? 'perfect' : 'lost'}">${i.achieved}</td>
                                                 <td>${i.deducted}</td>
-                                                <td>${i.errors || '-'}</td>
+                                                <td class="error-detail">${formatErrorText(i.errors) || '-'}</td>
                                             </tr>
                                         `).join('')}
                                     </tbody>
@@ -461,11 +512,14 @@
                             ${errorItems.length > 0 ? `
                                 <div class="analysis-box errors-box">
                                     <h4 class="analysis-title">Chi tiết lỗi sai ${isSpecialSubject ? `(${subject})` : ''}</h4>
-                                    <ul class="analysis-list">
+                                    <div>
                                         ${errorItems.map(i => `
-                                            <li><strong>Câu ${i.question}:</strong> ${i.errors} (Trừ ${i.deducted} điểm)</li>
+                                            <div class="error-item">
+                                                <strong>Câu ${i.question} (Trừ ${i.deducted} điểm)</strong>
+                                                <div class="error-detail">${formatErrorText(i.errors)}</div>
+                                            </div>
                                         `).join('')}
-                                    </ul>
+                                    </div>
                                 </div>
                             ` : ''}
                             
@@ -473,7 +527,7 @@
                                 <div class="analysis-box strengths-box">
                                     <h4 class="analysis-title">Điểm Mạnh ${isSpecialSubject ? `(${subject})` : ''}</h4>
                                     <ul class="analysis-list">
-                                        ${showDetails ? `<li>Hoàn thành tốt ${strengths.length}/${items.length} câu hỏi</li>` : ''}
+                                        ${showDetails ? `<li class="print-hide">Hoàn thành tốt ${strengths.length}/${items.length} câu hỏi</li>` : ''}
                                         ${strengths.map(i => `<li>${i.strengthDetail}</li>`).join('')}
                                     </ul>
                                 </div>
