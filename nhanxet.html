@@ -224,13 +224,10 @@
         }
 
         function generateReport(data) {
-            // Loại bỏ hoàn toàn môn Anh và Văn
-            const filteredData = data.filter(item => item.subject !== 'Anh' && item.subject !== 'Văn');
-
             const bySubject = {};
             let totalAchieved = 0, totalPossible = 0;
             
-            filteredData.forEach(item => {
+            data.forEach(item => {
                 if (!bySubject[item.subject]) bySubject[item.subject] = [];
                 bySubject[item.subject].push(item);
                 totalAchieved += item.achieved;
@@ -256,67 +253,75 @@
                 const subjTotal = items.reduce((s,i) => s + i.total, 0);
                 const subjAch = items.reduce((s,i) => s + i.achieved, 0);
                 const subjPercent = subjTotal ? Math.round((subjAch/subjTotal)*100) : 0;
-                const strengths = items.filter(i => i.deducted === 0);
-                const weaknesses = items.filter(i => i.deducted > 0);
+                const strengths = items.filter(i => i.deducted === 0 && i.strengthDetail);
+                const weaknesses = items.filter(i => i.deducted > 0 && i.weaknessDetail);
+
+                const isSpecialSubject = subject === 'Văn' || subject === 'Anh';
+                const showDetails = !isSpecialSubject;
 
                 html += `
                     <div class="subject-panel">
-                        <div class="subject-header" onclick="this.classList.toggle('collapsed');this.nextElementSibling.classList.toggle('active');">
+                        <div class="subject-header" ${showDetails ? 'onclick="this.classList.toggle(\'collapsed\');this.nextElementSibling.classList.toggle(\'active\');"' : ''}>
                             <h3 class="subject-title">Môn: ${subject}</h3>
-                            <div class="subject-score">${subjAch}/${subjTotal} (${subjPercent}%)</div>
+                            <div class="subject-score">${isSpecialSubject ? 'Nhận xét chuyên sâu' : `${subjAch}/${subjTotal} (${subjPercent}%)`}</div>
                         </div>
                         <div class="subject-content active">
-                            <table class="score-table">
-                                <thead>
-                                    <tr>
-                                        <th>Câu hỏi</th>
-                                        <th>Tổng điểm</th>
-                                        <th>Điểm đạt</th>
-                                        <th>Điểm trừ</th>
-                                        <th>Lỗi sai</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${items.map(i => `
+                            ${showDetails ? `
+                                <table class="score-table">
+                                    <thead>
                                         <tr>
-                                            <td>${i.question}</td>
-                                            <td>${i.total}</td>
-                                            <td class="${i.deducted === 0 ? 'perfect' : 'lost'}">${i.achieved}</td>
-                                            <td>${i.deducted}</td>
-                                            <td>${i.errors || '-'}</td>
+                                            <th>Câu hỏi</th>
+                                            <th>Tổng điểm</th>
+                                            <th>Điểm đạt</th>
+                                            <th>Điểm trừ</th>
+                                            <th>Lỗi sai</th>
                                         </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        ${items.map(i => `
+                                            <tr>
+                                                <td>${i.question}</td>
+                                                <td>${i.total}</td>
+                                                <td class="${i.deducted === 0 ? 'perfect' : 'lost'}">${i.achieved}</td>
+                                                <td>${i.deducted}</td>
+                                                <td>${i.errors || '-'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            ` : ''}
                             ${strengths.length > 0 ? `
                                 <div class="analysis-box strengths-box">
-                                    <h4 class="analysis-title">Điểm Mạnh</h4>
+                                    <h4 class="analysis-title">Điểm Mạnh ${isSpecialSubject ? `(${subject})` : ''}</h4>
                                     <ul class="analysis-list">
-                                        <li>Hoàn thành tốt ${strengths.length}/${items.length} câu hỏi</li>
-                                        <li>Các câu làm tốt: ${strengths.map(i => i.question).join(', ')}</li>
-                                        ${strengths.map(i => `<li>${i.strengthDetail}</li>`).join('')}
+                                        ${showDetails ? `<li>Hoàn thành tốt ${strengths.length}/${items.length} câu hỏi</li>` : ''}
+                                        ${strengths.map(i => `
+                                            <li>${i.strengthDetail}</li>
+                                        `).join('')}
                                     </ul>
                                 </div>
                             ` : ''}
                             ${weaknesses.length > 0 ? `
                                 <div class="analysis-box weaknesses-box">
-                                    <h4 class="analysis-title">Điểm Cần Cải Thiện</h4>
+                                    <h4 class="analysis-title">Điểm Cần Cải Thiện ${isSpecialSubject ? `(${subject})` : ''}</h4>
                                     <ul class="analysis-list">
                                         ${weaknesses.map(i => `
-                                            <li>Câu ${i.question}: ${i.errors || 'Không xác định'} (-${i.deducted} điểm)<br>${i.weaknessDetail}</li>
+                                            <li>${showDetails ? `Câu ${i.question}: ${i.errors || 'Không xác định'} (-${i.deducted} điểm)<br>` : ''}${i.weaknessDetail}</li>
                                         `).join('')}
                                     </ul>
                                 </div>
+                            ` : showDetails ? '<p>Không có điểm cần cải thiện</p>' : ''}
+                            ${showDetails ? `
+                                <div class="progress-container">
+                                    <div class="progress-header">
+                                        <span class="progress-title">Mức độ hoàn thành</span>
+                                        <span class="progress-value">${subjPercent}%</span>
+                                    </div>
+                                    <div class="progress-bar">
+                                        <div class="progress-fill" style="width:${subjPercent}%"></div>
+                                    </div>
+                                </div>
                             ` : ''}
-                            <div class="progress-container">
-                                <div class="progress-header">
-                                    <span class="progress-title">Mức độ hoàn thành</span>
-                                    <span class="progress-value">${subjPercent}%</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill" style="width:${subjPercent}%"></div>
-                                </div>
-                            </div>
                         </div>
                     </div>
                 `;
@@ -327,4 +332,3 @@
     </script>
 </body>
 </html>
-
