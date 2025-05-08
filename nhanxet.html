@@ -8,353 +8,85 @@
     <style>
         :root {
             --primary: #0047AB;
-            --primary-light: #3b82f6;
             --secondary: #1e293b;
             --success: #22c55e;
             --danger: #ef4444;
             --light: #f1f5f9;
             --dark: #0f172a;
-            --gray: #6b7280;
             --border: #e2e8f0;
         }
-
-        * {
-            box-sizing: border-box;
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; margin: 0; background: #f8fafc; color: var(--dark); }
+        .report-container { max-width: 1050px; margin: 40px auto; background: #fff; border: 3px solid var(--primary); border-radius: 12px; overflow: hidden; }
+        .report-header, .report-footer { padding: 30px; background: #fff; text-align: center; border-bottom: 1px solid var(--border); }
+        .report-header h1 { font-family: 'Poppins', sans-serif; color: var(--primary); margin: 0; font-size: 28px; }
+        .center-name { color: var(--secondary); margin-top: 8px; font-size: 16px; }
+        .student-info-container { display: flex; justify-content: center; padding: 20px; border: 1px solid var(--border); border-radius: 10px; background: #fff; margin-top: 20px; }
+        .student-info-card { flex: 1; text-align: center; position: relative; padding: 0 30px; }
+        .student-info-card:not(:last-child)::after { content: ''; position: absolute; top:50%; right:0; transform:translateY(-50%); width:1px; height:50px; background: var(--border); }
+        .info-label { text-transform: uppercase; color: var(--secondary); font-size:12px; margin-bottom:6px; }
+        .info-value { font-size:18px; font-weight:600; }
+        .student-id { color: var(--primary); }
+        .subject-panel { max-width:800px; margin:20px auto; }
+        .subject-header { display:flex; justify-content:space-between; align-items:center; padding:18px 20px; background:#fff; border:1px solid var(--border); border-radius:8px; cursor:pointer; }
+        .subject-header.collapsed .subject-title::after { transform:rotate(180deg); }
+        .subject-title { font-family:'Poppins',sans-serif; color:var(--primary); margin:0; font-size:22px; position:relative; }
+        .subject-title::after { content:'▼'; position:absolute; right:-24px; top:50%; transform:translateY(-50%); transition:transform .3s; }
+        .subject-score { font-size:20px; color:var(--secondary); }
+        .subject-content { display:none; padding:10px 0 30px; }
+        .subject-content.active { display:block; }
+        .score-table { width:100%; border-collapse:separate; border-spacing:0; margin:20px 0; font-size:15px; border-radius:8px; overflow:hidden; }
+        .score-table th { background:var(--light); text-align:left; padding:12px 16px; text-transform:uppercase; font-size:12px; color:var(--secondary); }
+        .score-table td { padding:10px 16px; border-bottom:1px solid var(--border); background:#fff; }
+        .score-table tr:nth-child(even) td { background:#f9fafb; }
+        .analysis-box { margin-top:20px; padding:20px; background:#fff; border:1px solid var(--border); border-radius:8px; }
+        .comment-box { border-left:4px solid var(--primary); }
+        .analysis-title { font-family:'Poppins',sans-serif; color:var(--secondary); margin:0 0 12px; font-size:18px; }
+        .analysis-title strong { color:var(--dark); }
+        .analysis-list { padding-left:20px; margin:0; line-height:1.6; }
+        .progress-container { margin-top:20px; }
+        .progress-bar { height:10px; background:var(--border); border-radius:5px; overflow:hidden; }
+        .progress-fill { height:100%; background:var(--primary); width:0; transition:width .5s; }
+    </style>
+</head>
+<body>
+    <div class="report-container">
+        <div class="report-header">
+            <h1>BÁO CÁO KẾT QUẢ HỌC TẬP</h1>
+            <div class="center-name">Công ty TNHH Giáo Dục Nhất Đạo EDU</div>
+            <div class="student-info-container" id="student-info"><div class="loading-spinner"></div></div>
+        </div>
+        <div id="report-content"><div class="loading-spinner"></div></div>
+        <div class="report-footer">
+            <p>Báo cáo được tạo tự động vào <span id="report-date"></span></p>
+            <p>Công ty TNHH Giáo Dục Nhất Đạo EDU | Email: contact@nhatdao.edu | Hotline: 0123 456 789</p>
+        </div>
+    </div>
+    <script>
+        document.getElementById('report-date').textContent = new Date().toLocaleDateString('vi-VN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+        // Lấy params URL
+        const params = new URLSearchParams(window.location.search);
+        const sid = params.get('id'), sname = params.get('ten') || 'Không có thông tin';
+        if(!sid){ document.getElementById('student-info').innerHTML=`<p>Thiếu mã thí sinh</p>`; return; }
+        renderStudentInfo(sid, sname);
+        loadReportData(sid);
+        function renderStudentInfo(id,name){ document.getElementById('student-info').innerHTML=`<div class="student-info-card"><div class="info-label">Mã Thí Sinh</div><div class="info-value student-id">${id}</div></div><div class="student-info-card"><div class="info-label">Họ và Tên</div><div class="info-value">${name}</div></div><div class="student-info-card"><div class="info-label">Ngày Báo Cáo</div><div class="info-value">${new Date().toLocaleDateString('vi-VN')}</div></div>`; }
+        async function loadReportData(id){
+            const url=`https://docs.google.com/spreadsheets/d/17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44/gviz/tq?tqx=out:json&gid=1842364838`;
+            const res=await fetch(url); const txt=await res.text(); const js=JSON.parse(txt.match(/setResponse\((.*)\)/)[1]);
+            const rows=js.table.rows.map(r=>({ subject:r.c[2]?.v, question:r.c[3]?.v, total:r.c[4]?.v, deducted:r.c[5]?.v, achieved:r.c[6]?.v, errors:r.c[8]?.v, weaknessDetail:r.c[9]?.v }));
+            const data=rows.filter(r=>r.subject && r.question && r.subject && true).filter(r=>true && params.get('id')===id);
+            generateReport(data);
         }
-
-        body {
-            font-family: 'Inter', sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 0;
-            background-color: #f8fafc;
-            color: var(--dark);
-        }
-
-        .report-container {
-            max-width: 1050px;
-            margin: 40px auto;
-            background: white;
-            border: 3px solid var(--primary);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .report-header {
-            background: white;
-            color: var(--dark);
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .header-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            max-width: 800px;
-        }
-
-        .logo-container {
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: center;
-        }
-
-        .logo-img {
-            width: 120px;
-            height: 120px;
-            object-fit: contain;
-            border-radius: 8px;
-        }
-
-        .title-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            margin: 0 0 30px;
-        }
-
-        .report-header h1 {
-            font-family: 'Poppins', sans-serif;
-            margin: 0;
-            font-size: 28px;
-            font-weight: 700;
-            letter-spacing: 0.5px;
-            color: var(--primary);
-        }
-
-        .center-name {
-            font-family: 'Inter', sans-serif;
-            font-size: 16px;
-            font-weight: 400;
-            color: var(--gray);
-            margin-top: 8px;
-        }
-
-        .student-info-container {
-            display: flex;
-            justify-content: center;
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 20px;
-            width: 100%;
-            max-width: 800px;
-        }
-
-        .student-info-card {
-            text-align: center;
-            padding: 0 30px;
-            position: relative;
-            flex: 1;
-        }
-
-        .student-info-card:not(:last-child)::after {
-            content: "";
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            height: 50px;
-            width: 1px;
-            background: var(--border);
-        }
-
-        .info-label {
-            font-size: 13px;
-            font-weight: 500;
-            text-transform: uppercase;
-            color: var(--gray);
-            margin-bottom: 6px;
-        }
-
-        .info-value {
-            font-size: 18px;
-            font-weight: 600;
-        }
-
-        .student-id {
-            color: var(--primary);
-        }
-
-        .subject-panel {
-            padding: ascended;
-            margin-bottom: 20px;
-            max-width: 800px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        .subject-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 18px 20px;
-            background: white;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            cursor: pointer;
-            transition: border-color 0.3s ease;
-            margin: 15px 0;
-        }
-
-        .subject-header:hover {
-            border-color: var(--primary);
-        }
-
-        .subject-title {
-            font-family: 'Poppins', sans-serif;
-            font-size: 22px;
-            font-weight: 600;
-            color: var(--primary);
-            margin: 0;
-            display: flex;
-            align-items: center;
-        }
-
-        .subject-title::after {
-            content: '▼';
-            font-size: 14px;
-            margin-left: 10px;
-            transition: transform 0.3s ease;
-        }
-
-        .subject-header.collapsed .subject-title::after {
-            transform: rotate(180deg);
-        }
-
-        .subject-score {
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--secondary);
-        }
-
-        .subject-content {
-            padding: 10px 0 30px;
-            display: none;
-        }
-
-        .subject-content.active {
-            display: block;
-        }
-
-        .score-table {
-            width: 100%;
-            border-collapse: separate;
-            border-spacing: 0;
-            margin: 20px 0;
-            font-size: 15px;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        .score-table th {
-            background: var(--light);
-            text-align: left;
-            padding: 16px 20px;
-            font-weight: 500;
-            color: var(--secondary);
-            text-transform: uppercase;
-            font-size: 12px;
-            letter-spacing: 0.5px;
-        }
-
-        .score-table td {
-            padding: 14px 20px;
-            border-bottom: 1px solid var(--border);
-            background: white;
-        }
-
-        .score-table tr:nth-child(even) td {
-            background: #f9fafb;
-        }
-
-        .score-table tr:hover td {
-            background: #f1f5f9;
-        }
-
-        .perfect {
-            color: var(--success);
-            font-weight: 500;
-        }
-
-        .lost {
-            color: var(--danger);
-            font-weight: 500;
-        }
-
-        .analysis-box {
-            margin-top: 20px;
-            padding: 20px;
-            border-radius: 8px;
-            background: white;
-            border: 1px solid var(--border);
-        }
-
-        .strengths-box {
-            border-left: 4px solid var(--success);
-        }
-
-        .weaknesses-box {
-            border-left: 4px solid var(--danger);
-        }
-
-        .analysis-title {
-            font-family: 'Poppins', sans-serif;
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0 0 12px;
-            display: flex;
-            align-items: center;
-            color: var(--secondary);
-        }
-
-        .analysis-title svg {
-            margin-right: 10px;
-        }
-
-        .analysis-list {
-            margin: 0;
-            padding-left: 20px;
-            line-height: 1.8;
-        }
-
-        .progress-container {
-            margin-top: 25px;
-        }
-
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 12px;
-        }
-
-        .progress-title {
-            font-weight: 500;
-            color: var(--secondary);
-            font-size: 14px;
-        }
-
-        .progress-value {
-            font-weight: 600;
-            font-size: 14px;
-            color: var(--primary);
-        }
-
-        .progress-bar {
-            height: 10px;
-            background: var(--border);
-            border-radius: 5px;
-            overflow: hidden;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: var(--primary);
-            border-radius: 5px;
-            transition: width 0.5s ease;
-        }
-
-        .report-footer {
-            text-align: center;
-            padding: 30px;
-            background: white;
-            border-top: 1px solid var(--border);
-            font-size: 14px;
-            color: var(--gray);
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .footer-contact {
-            margin-top: 10px;
-            font-size: 13px;
-            opacity: 0.8;
-        }
-
-        .loading-container, .error-container {
-            text-align: center;
-            padding: 80px 30px;
-            animation: fadeIn 0.5s ease-in;
-            background: white;
-            max-width: 800px;
-            margin: 0 auto;
-        }
-
-        .loading-spinner {
-            border: 6px solid #f3f3f3;
-            border-top: 6px solid var(--primary);
-            border-radius: 50%;
-            width: 60px;
-            height: 60px;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        .loading-text, .error-text {
-            margin-top: 20px;
+        function generateReport(data){ let html=''; const subjects={};; data.forEach(i=>{ if(!subjects[i.subject]) subjects[i.subject]=[]; subjects[i.subject].push(i); });
+            for(const sub in subjects){ const items=subjects[sub]; const total=items.reduce((a,b)=>a+b.total,0); const ach=items.reduce((a,b)=>a+b.achieved,0); const pct=Math.round(ach/total*100);
+                html+=`<div class="subject-panel"><div class="subject-header" onclick="toggle(this)"><h3 class="subject-title">Môn: ${sub}</h3><div class="subject-score">${ach}/${total} (${pct}%)</div></div><div class="subject-content active">`;
+                html+=`<table class="score-table"><thead><tr><th>Câu hỏi</th><th>Tổng điểm</th><th>Đạt</th><th>Trừ</th><th>Lỗi sai</th></tr></thead><tbody>${items.map(i=>`<tr><td>${i.question}</td><td>${i.total}</td><td>${i.achieved}</td><td>${i.deducted}</td><td>${i.errors||'-'}</td></tr>`).join('')}</tbody></table>`;
+                if(sub==='Anh'||sub==='Văn'){ html+=`<div class="analysis-box comment-box"><h4 class="analysis-title">Nhận xét Giáo Viên (${sub})</h4><ul class="analysis-list"><li><strong>Cột I (Lỗi sai):</strong> ${items.map(i=>i.errors||'-').join('; ')}</li><li><strong>Cột J (Điểm yếu):</strong> ${items.map(i=>i.weaknessDetail||'-').join('; ')}</li></ul></div>`; }
+                html+=`<div class="progress-container"><div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div></div>`;
+                html+=`</div></div>`; }
+            document.getElementById('report-content').innerHTML=html; }
+        function toggle(el){ el.classList.toggle('collapsed'); el.nextElementSibling.classList.toggle('active'); }
+    </script>
+</body>
+</html>
