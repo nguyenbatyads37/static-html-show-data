@@ -80,7 +80,6 @@
         .strengths-box { border-left: 4px solid var(--success); }
         .weaknesses-box { border-left: 4px solid var(--danger); }
         .errors-box { border-left: 4px solid var(--primary); }
-        .comment-box { border-left: 4px solid var(--primary-light); margin-top: 30px; }
         .analysis-title { font-family: 'Poppins', sans-serif; font-size: 18px; font-weight: 600; display: flex; align-items: center; margin: 0 0 12px; color: var(--secondary); }
         .analysis-list { margin: 0; padding-left: 20px; line-height: 1.8; }
         .progress-container { margin-top: 25px; }
@@ -99,27 +98,25 @@
         .error-container { text-align: center; padding: 40px; }
         .error-title { color: var(--danger); font-size: 20px; font-weight: bold; margin-bottom: 10px; }
         .error-text { color: var(--secondary); font-size: 16px; }
-        .overall-comment { 
-            background: white; 
-            padding: 25px; 
-            border-radius: 8px; 
-            border: 1px solid var(--border);
+        .overall-comment {
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            padding: 20px;
             margin: 30px auto;
             max-width: 800px;
+            border-radius: 8px;
         }
         .overall-comment h3 {
+            color: #0047AB;
+            margin-top: 0;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 10px;
             font-family: 'Poppins', sans-serif;
             font-size: 22px;
-            font-weight: 600;
-            color: var(--primary);
-            margin: 0 0 20px;
-            border-bottom: 2px solid var(--primary);
-            padding-bottom: 10px;
         }
-        .overall-comment-content {
-            font-size: 16px;
-            line-height: 1.8;
-            color: var(--secondary);
+        .no-comment {
+            color: #6b7280;
+            font-style: italic;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         @media (max-width: 768px) {
@@ -201,22 +198,42 @@
 
         async function loadReportData(id) {
             const spreadsheetId = '17vWieOZewahahS757ph6w4rzMs7DPDHYnUj40P4bY44';
-            const gid = '1842364838';
-            const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
             
             try {
-                const res = await fetch(url);
-                if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+                // 1. Lấy dữ liệu chi tiết từ sheet kết quả (gid=1842364838)
+                const detailUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&gid=1842364838`;
+                const detailRes = await fetch(detailUrl);
+                if (!detailRes.ok) throw new Error(`Lỗi khi tải dữ liệu chi tiết: ${detailRes.status}`);
                 
-                const text = await res.text();
-                const match = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/);
-                if (!match || !match[1]) throw new Error('Invalid response format từ Google Sheets');
+                const detailText = await detailRes.text();
+                const detailMatch = detailText.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/);
+                if (!detailMatch || !detailMatch[1]) throw new Error('Định dạng dữ liệu chi tiết không hợp lệ');
                 
-                const json = JSON.parse(match[1]);
-                if (!json.table || !json.table.rows) throw new Error('Không tìm thấy dữ liệu trong bảng tính');
+                const detailJson = JSON.parse(detailMatch[1]);
+                if (!detailJson.table || !detailJson.table.rows) throw new Error('Không có dữ liệu chi tiết');
                 
-                const rows = json.table.rows;
-                const studentData = rows
+                // 2. Lấy nhận xét từ sheet DS Học sinh (gid=0)
+                const studentUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:json&gid=0`;
+                const studentRes = await fetch(studentUrl);
+                if (!studentRes.ok) throw new Error(`Lỗi khi tải DS Học sinh: ${studentRes.status}`);
+                
+                const studentText = await studentRes.text();
+                const studentMatch = studentText.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/);
+                if (!studentMatch || !studentMatch[1]) throw new Error('Định dạng DS Học sinh không hợp lệ');
+                
+                const studentJson = JSON.parse(studentMatch[1]);
+                if (!studentJson.table || !studentJson.table.rows) throw new Error('Không có dữ liệu DS Học sinh');
+
+                // 3. Tìm nhận xét từ cột I (index 8)
+                let overallComment = "Không có nhận xét";
+                studentJson.table.rows.forEach(row => {
+                    if (row.c && row.c[1] && row.c[1].v === id && row.c[8] && row.c[8].v) {
+                        overallComment = row.c[8].v;
+                    }
+                });
+
+                // 4. Xử lý dữ liệu chi tiết
+                const studentData = detailJson.table.rows
                     .filter(r => r.c && r.c[1] && r.c[1].v === id)
                     .map(r => ({
                         subject: r.c[2]?.v || '',
@@ -226,13 +243,9 @@
                         achieved: r.c[6]?.v || 0,
                         errors: r.c[7]?.v || '',
                         strengthDetail: r.c[8]?.v || '',
-                        weaknessDetail: r.c[9]?.v || '',
-                        comment: r.c[10]?.v || '' // Thêm cột nhận xét (cột I)
+                        weaknessDetail: r.c[9]?.v || ''
                     }));
-                
-                // Lấy nhận xét tổng từ dòng đầu tiên (nếu có)
-                const overallComment = studentData.length > 0 ? studentData[0].comment : '';
-                
+
                 if (studentData.length === 0) {
                     document.getElementById('report-content').innerHTML = `
                         <div class="error-container">
@@ -242,8 +255,9 @@
                 } else {
                     generateReport(studentData, overallComment);
                 }
+
             } catch (err) {
-                console.error('Error loading report data:', err);
+                console.error('Lỗi khi tải dữ liệu:', err);
                 document.getElementById('report-content').innerHTML = `
                     <div class="error-container">
                         <div class="error-title">LỖI KHI TẢI DỮ LIỆU</div>
@@ -252,7 +266,7 @@
             }
         }
 
-        function generateReport(data, overallComment) {
+        function generateReport(data, comment) {
             const bySubject = {};
             let totalAchieved = 0, totalPossible = 0;
             
@@ -371,15 +385,15 @@
                 `;
             });
 
-            // Thêm phần NHẬN XÉT TỔNG nếu có dữ liệu
-            if (overallComment) {
-                html += `
-                    <div class="overall-comment">
-                        <h3>NHẬN XÉT TỔNG</h3>
-                        <div class="overall-comment-content">${overallComment}</div>
+            // PHẦN NHẬN XÉT TỔNG - LUÔN HIỂN THỊ
+            html += `
+                <div class="overall-comment">
+                    <h3>NHẬN XÉT TỔNG</h3>
+                    <div class="${comment === 'Không có nhận xét' ? 'no-comment' : ''}">
+                        ${comment}
                     </div>
-                `;
-            }
+                </div>
+            `;
 
             document.getElementById('report-content').innerHTML = html;
         }
