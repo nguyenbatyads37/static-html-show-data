@@ -602,13 +602,15 @@
         const urlParams = new URLSearchParams(window.location.search);
         const studentId = urlParams.get('id');
         const studentName = decodeURIComponent(urlParams.get('ten') || 'Không có thông tin');
+        const vanScore = urlParams.get('van') || 'Chưa có điểm';
+        const anhScore = urlParams.get('anh') || 'Chưa có điểm';
         
         // Kiểm tra nếu không có ID
         if (!studentId) {
             document.getElementById('student-info').innerHTML = `
                 <div class="error-container">
                     <div class="error-title">THIẾU MÃ THÍ SINH</div>
-                    <p class="error-text">Vui lòng truyền mã thí sinh qua URL (ví dụ: ?id=ND134&ten=NguyenVanA)</p>
+                    <p class="error-text">Vui lòng truyền mã thí sinh qua URL (ví dụ: ?id=ND134&ten=NguyenVanA&van=7.5&anh=8.0)</p>
                 </div>
             `;
             
@@ -619,12 +621,12 @@
                 </div>
             `;
         } else {
-            renderStudentInfo(studentId, studentName);
+            renderStudentInfo(studentId, studentName, vanScore, anhScore);
             loadReportData(studentId);
         }
         
-        // Hiển thị thông tin học sinh
-        function renderStudentInfo(id, name) {
+        // Hiển thị thông tin học sinh (đã thêm điểm Văn và Anh)
+        function renderStudentInfo(id, name, van, anh) {
             document.getElementById('student-info').innerHTML = `
                 <div class="student-info-card">
                     <div class="info-label">Mã Thí Sinh</div>
@@ -633,6 +635,14 @@
                 <div class="student-info-card">
                     <div class="info-label">Họ và Tên</div>
                     <div class="info-value">${name}</div>
+                </div>
+                <div class="student-info-card">
+                    <div class="info-label">Điểm Văn</div>
+                    <div class="info-value">${van}</div>
+                </div>
+                <div class="student-info-card">
+                    <div class="info-label">Điểm Anh</div>
+                    <div class="info-value">${anh}</div>
                 </div>
                 <div class="student-info-card">
                     <div class="info-label">Ngày Báo Cáo</div>
@@ -664,27 +674,80 @@
                 }));
                 
                 if (studentData.length === 0) {
-                    document.getElementById('report-content').innerHTML = `
-                        <div class="error-container">
-                            <div class="error-title">KHÔNG TÌM THẤY DỮ LIỆU</div>
-                            <p class="error-text">Không có kết quả nào cho thí sinh <strong>${studentId}</strong></p>
-                            <p class="error-text">Vui lòng kiểm tra lại mã thí sinh</p>
-                        </div>
-                    `;
+                    showBasicScoreReport();
                     return;
                 }
                 
                 generateReport(studentData);
             } catch (error) {
                 console.error('Lỗi khi tải dữ liệu:', error);
-                document.getElementById('report-content').innerHTML = `
-                    <div class="error-container">
-                        <div class="error-title">LỖI KHI TẢI DỮ LIỆU</div>
-                        <p class="error-text">${error.message}</p>
-                        <p class="error-text">Vui lòng kiểm tra lại kết nối hoặc quyền truy cập</p>
-                    </div>
-                `;
+                showBasicScoreReport();
             }
+        }
+        
+        // Hiển thị báo cáo điểm cơ bản khi không có dữ liệu từ Google Sheets
+        function showBasicScoreReport() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const vanScore = urlParams.get('van') || 'Chưa có điểm';
+            const anhScore = urlParams.get('anh') || 'Chưa có điểm';
+            
+            document.getElementById('report-content').innerHTML = `
+                <div class="subject-panel">
+                    <div class="subject-header">
+                        <h3 class="subject-title">Tổng Hợp Điểm</h3>
+                    </div>
+                    <div class="subject-content active">
+                        <table class="score-table">
+                            <thead>
+                                <tr>
+                                    <th>Môn học</th>
+                                    <th>Điểm số</th>
+                                    <th>Đánh giá</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Ngữ Văn</td>
+                                    <td>${vanScore}</td>
+                                    <td>${getEvaluation(vanScore)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Tiếng Anh</td>
+                                    <td>${anhScore}</td>
+                                    <td>${getEvaluation(anhScore)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div class="analysis-box">
+                            <h4 class="analysis-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                                </svg>
+                                Nhận xét chung
+                            </h4>
+                            <ul class="analysis-list">
+                                <li>Điểm được cập nhật từ tham số URL</li>
+                                <li>Không tìm thấy dữ liệu chi tiết từ hệ thống</li>
+                                <li>Vui lòng kiểm tra lại mã thí sinh hoặc liên hệ quản trị viên</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Hàm đánh giá điểm số
+        function getEvaluation(score) {
+            if (score === 'Chưa có điểm') return 'Chưa nhập điểm';
+            const num = parseFloat(score);
+            if (num >= 8.5) return 'Xuất sắc';
+            if (num >= 7) return 'Giỏi';
+            if (num >= 5.5) return 'Khá';
+            if (num >= 4) return 'Trung bình';
+            return 'Yếu';
         }
         
         // Hàm tạo báo cáo
@@ -699,18 +762,54 @@
             
             let reportHTML = '';
             
+            // Thêm bảng tổng hợp điểm từ URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const vanScore = urlParams.get('van') || 'Chưa có điểm';
+            const anhScore = urlParams.get('anh') || 'Chưa có điểm';
+            
+            reportHTML += `
+                <div class="subject-panel">
+                    <div class="subject-header">
+                        <h3 class="subject-title">Tổng Hợp Điểm</h3>
+                    </div>
+                    <div class="subject-content active">
+                        <table class="score-table">
+                            <thead>
+                                <tr>
+                                    <th>Môn học</th>
+                                    <th>Điểm số</th>
+                                    <th>Đánh giá</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Ngữ Văn</td>
+                                    <td>${vanScore}</td>
+                                    <td>${getEvaluation(vanScore)}</td>
+                                </tr>
+                                <tr>
+                                    <td>Tiếng Anh</td>
+                                    <td>${anhScore}</td>
+                                    <td>${getEvaluation(anhScore)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+            
+            // Thêm dữ liệu chi tiết từ Google Sheets
             for (const subject in subjects) {
                 const subjectData = subjects[subject];
-                let totalScore = 10; // Set total score to 10 for all subjects
+                let totalScore = 10;
                 let achievedScore = subjectData.reduce((sum, item) => sum + item.achieved, 0);
                 
-                // Scale scores to ensure achieved score is out of 10
                 const rawTotal = subjectData.reduce((sum, item) => sum + item.total, 0);
                 if (rawTotal > 0) {
                     achievedScore = (achievedScore / rawTotal) * 10;
-                    achievedScore = Math.round(achievedScore * 10) / 10; // Round to 1 decimal place
+                    achievedScore = Math.round(achievedScore * 10) / 10;
                 } else {
-                    achievedScore = 0; // Handle case where rawTotal is 0
+                    achievedScore = 0;
                 }
                 
                 const strengths = subjectData.filter(item => item.deducted === 0);
@@ -723,7 +822,7 @@
                             <div class="subject-score">${achievedScore.toFixed(1)}/10</div>
                         </div>
                         
-                        <div class="subject-content active">
+                        <div class="subject-content">
                             <table class="score-table">
                                 <thead>
                                     <tr>
@@ -739,7 +838,7 @@
                                         let displayTotal = item.total;
                                         let displayAchieved = item.achieved;
                                         if (item.total > 0) {
-                                            displayTotal = 10; // Each question max 10 points
+                                            displayTotal = 10;
                                             displayAchieved = (item.achieved / item.total) * 10;
                                             displayAchieved = Math.round(displayAchieved * 10) / 10;
                                         } else {
