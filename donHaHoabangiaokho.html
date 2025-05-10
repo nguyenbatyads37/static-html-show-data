@@ -223,33 +223,39 @@
       ).join(' ');
     }
 
-    function filterData(data, driverMap) {
+    function filterData(data) {
       const ngay = getUrlParameter('ngay');
       const ten = getUrlParameter('ten');
 
       return data.filter(item => {
-        if (ngay && item.AP !== ngay) return false;
+        // Kiểm tra ngày nếu có tham số
+        const ngayTrung = ngay ? item.AP === ngay : true;
+        
+        // Kiểm tra tên trong danh sách NV phụ trách kho (cột I)
+        let tenTrung = true;
         if (ten) {
-          const driverNames = item.AN.map(code => driverMap[code] || code);
-          return driverNames.some(name => name.includes(ten));
+          // Split danh sách tên bằng dấu phẩy và trim khoảng trắng
+          const driverNames = item.AN.split(',').map(name => name.trim());
+          tenTrung = driverNames.some(name => name.includes(ten));
         }
-        return true;
+        
+        return ngayTrung && tenTrung;
       });
     }
 
     function groupData(filteredData) {
       return filteredData.reduce((acc, item) => {
         if (!acc[item.H]) {
-          acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
+          acc[item.H] = { ...item, AN: new Set(item.AN.split(',')), Q: item.Q };
         } else {
           acc[item.H].Q += item.Q;
-          item.AN.forEach(a => acc[item.H].AN.add(a));
+          item.AN.split(',').forEach(a => acc[item.H].AN.add(a.trim()));
         }
         return acc;
       }, {});
     }
 
-    function displayData(data, driverMap) {
+    function displayData(data) {
       const totalOrders = data.length;
       const totalOrdersStr = totalOrders < 10 ? '0' + totalOrders : totalOrders;
       document.getElementById('total-orders').textContent = totalOrdersStr;
@@ -262,11 +268,11 @@
         html = '<tr><td colspan="4">Không có dữ liệu phù hợp</td></tr>';
       } else {
         data.forEach(item => {
-          const drivers = item.AN.map(a => driverMap[a] || a).join(', ');
+          const drivers = Array.from(item.AN).join(', ');
           html += `
             <tr>
               <td>${item.AP}</td>
-              <td style="text-align:left">${item.H}</td>
+              <td style="text-align:left">${capitalizeFirstLetter(item.H)}</td>
               <td style="text-align:left">${drivers}</td>
               <td style="text-align:right">${formatCurrency(item.Q)}</td>
             </tr>`;
@@ -278,48 +284,42 @@
     function loadData() {
       showDateTime();
 
-      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
+      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
         .then(res => res.text())
         .then(txt => {
-          const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
-          const driverMap = lookupRows.reduce((map,row) => {
-            const key = row.c[0]?.v, val = row.c[2]?.v;
-            if (key && val) map[key] = val;
-            return map;
-          }, {});
-          return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-            .then(res => res.text())
-            .then(txt2 => ({ driverMap, txt2 }));
-        })
-        .then(({ driverMap, txt2 }) => {
-          const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
+          const rows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
           originalData = rows.map(row => {
-            const dateText = row.c[11]?.f || row.c[11]?.v;
-            const customer = row.c[3]?.f || row.c[3]?.v || '';
-            const driver = row.c[9]?.v || '';
-            const amount = parseInt(row.c[16]?.v) || 0;
+            const dateText = row.c[4]?.f || row.c[4]?.v; // Cột E (index 4)
+            const customer = row.c[3]?.f || row.c[3]?.v || ''; // Cột D (index 3)
+            const drivers = row.c[8]?.v || ''; // Cột I (index 8) - NV phụ trách kho
+            const amount = parseInt(row.c[16]?.v) || 0; // Cột Q (index 16)
             
             return dateText && customer.trim() ? {
               AP: dateText.toString().trim(),
               H: customer.toString().trim(),
-              AN: [driver],
+              AN: drivers, // Danh sách NV phụ trách kho (phân cách bằng dấu phẩy)
               Q: amount
             } : null;
           }).filter(x => x);
 
-          const filtered = filterData(originalData, driverMap);
+          // Lọc dữ liệu
+          const filtered = filterData(originalData);
+          
+          // Nhóm dữ liệu theo khách hàng
           const grouped = groupData(filtered);
           
+          // Chuẩn bị dữ liệu hiển thị
           const displayData = Object.entries(grouped).map(([_, v]) => ({
             AP: v.AP, 
-            H: capitalizeFirstLetter(v.H), 
-            AN: Array.from(v.AN), 
+            H: v.H, 
+            AN: v.AN, 
             Q: v.Q
           })).sort((a, b) => {
             return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
           });
 
-          displayData(displayData, driverMap);
+          // Hiển thị dữ liệu
+          displayData(displayData);
         })
         .catch(err => {
           console.error('Lỗi tải dữ liệu:', err);
