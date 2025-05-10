@@ -225,21 +225,29 @@
 
     // Lọc dữ liệu theo ngày và tên tài xế
     function filterData(data, driverMap) {
-      const ngay = getUrlParameter('ngay'); // e.g., 10/5/2025
-      const ten = getUrlParameter('ten');   // e.g., Phùng Như Quang
+      const ngayParam = getUrlParameter('ngay'); // e.g., 10/5/2025
+      const tenParam = getUrlParameter('ten');   // e.g., Phùng Như Quang
 
       return data.filter(item => {
         // Kiểm tra ngày nếu có tham số
-        const ngayTrung = ngay ? item.G === ngay : true;
-        
-        // Kiểm tra tài xế tồn tại trong danh sách NV giao hàng
-        let tenTrung = true;
-        if (ten) {
-          const driverNames = item.J.map(code => driverMap[code] || code);
-          tenTrung = driverNames.some(name => name.includes(ten));
+        let ngayMatch = true;
+        if (ngayParam) {
+          // Chuẩn hóa định dạng ngày để so sánh
+          const itemDate = item.AP ? item.AP.trim() : '';
+          ngayMatch = itemDate === ngayParam.trim();
         }
         
-        return ngayTrung && tenTrung;
+        // Kiểm tra tên tài xế nếu có tham số
+        let tenMatch = true;
+        if (tenParam) {
+          // Lấy danh sách tài xế từ cột AN (mã tài xế) và chuyển sang tên
+          const driverNames = item.AN.map(code => driverMap[code] || code);
+          tenMatch = driverNames.some(name => 
+            name.toLowerCase().includes(tenParam.toLowerCase().trim())
+          );
+        }
+        
+        return ngayMatch && tenMatch;
       });
     }
 
@@ -247,10 +255,10 @@
     function groupData(filteredData) {
       return filteredData.reduce((acc, item) => {
         if (!acc[item.H]) {
-          acc[item.H] = { ...item, J: new Set(item.J), Q: item.Q };
+          acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
         } else {
           acc[item.H].Q += item.Q;
-          item.J.forEach(a => acc[item.H].J.add(a));
+          item.AN.forEach(a => acc[item.H].AN.add(a));
         }
         return acc;
       }, {});
@@ -271,10 +279,10 @@
       } else {
         data.forEach(item => {
           // Split driver names for display (one per line)
-          const drivers = item.J.map(a => driverMap[a] || a).join('<br>');
+          const drivers = item.AN.map(a => driverMap[a] || a).join('<br>');
           html += `
             <tr>
-              <td>${item.G}</td>
+              <td>${item.AP}</td>
               <td style="text-align:left">${item.H}</td>
               <td style="text-align:left" class="driver-cell">${drivers}</td>
               <td style="text-align:right">${formatCurrency(item.Q)}</td>
@@ -284,47 +292,25 @@
       document.getElementById('data-container').innerHTML = html;
     }
 
-    // Hàm fetch với retry
-    function fetchWithRetry(url, retries = 3, delay = 1000) {
-      return fetch(url)
-        .then(res => {
-          if (!res.ok) {
-            throw new Error(`HTTP error! Status: ${res.status}`);
-          }
-          return res.text();
-        })
-        .catch(err => {
-          if (retries > 0) {
-            return new Promise(resolve => setTimeout(resolve, delay))
-              .then(() => fetchWithRetry(url, retries - 1, delay));
-          }
-          throw err;
-        });
-    }
-
     // Tải dữ liệu từ Google Sheets
     function loadData() {
       showDateTime();
 
       // 1. Tải dữ liệu tra cứu tài xế
-      fetchWithRetry(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
+      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
+        .then(res => res.text())
         .then(txt => {
-          if (!txt.startsWith('google.visualization.Query.setResponse')) {
-            throw new Error('Réponse inattendue, probablement un problème d\'accès au tableur');
-          }
           const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
-          const driverMap = lookupRows.reduce((map, row) => {
+          const driverMap = lookupRows.reduce((map,row) => {
             const key = row.c[0]?.v, val = row.c[2]?.v;
             if (key && val) map[key] = val;
             return map;
           }, {});
 
           // 2. Tải dữ liệu chính từ sheet Check kho
-          return fetchWithRetry(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
+          return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
+            .then(res => res.text())
             .then(txt2 => {
-              if (!txt2.startsWith('google.visualization.Query.setResponse')) {
-                throw new Error('Réponse inattendue pour l\'onglet Check kho');
-              }
               const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
               
               // 3. Xử lý dữ liệu từ sheet Check kho
@@ -335,9 +321,9 @@
                 const amount = parseInt(row.c[5]?.v) || 0; // Cột F (index 5) - Tổng tiền
                 
                 return dateText && customer.trim() ? {
-                  G: dateText.toString().trim(), // Ngày
+                  AP: dateText.toString().trim(), // Ngày
                   H: customer.toString().trim(),  // Khách hàng
-                  J: [driver],                  // Mã tài xế (chuyển thành mảng)
+                  AN: [driver],                  // Mã tài xế (chuyển thành mảng)
                   Q: amount                     // Tổng tiền (từ cột F)
                 } : null;
               }).filter(x => x);
@@ -350,12 +336,12 @@
               
               // 6. Chuẩn bị dữ liệu để hiển thị
               const displayData = Object.entries(grouped).map(([_, v]) => ({
-                G: v.G, 
+                AP: v.AP, 
                 H: capitalizeFirstLetter(v.H), 
-                J: Array.from(v.J), 
+                AN: Array.from(v.AN), 
                 Q: v.Q
               })).sort((a, b) => {
-                return a.G.split('/').reverse().join('').localeCompare(b.G.split('/').reverse().join(''));
+                return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
               });
 
               // 7. Hiển thị kết quả
@@ -363,38 +349,11 @@
             });
         })
         .catch(err => {
-          console.error('Lỗi tải dữ liệu:', err.message, err.stack);
+          console.error('Lỗi tải dữ liệu:', err);
           document.getElementById('data-container').innerHTML =
-            `<tr><td colspan="4" style="padding:10px;">Không thể tải dữ liệu: ${err.message}. Vérifiez l'accès au tableur ou la structure des données.</td></tr>`;
+            '<tr><td colspan="4" style="padding:10px;">Không thể tải dữ liệu</td></tr>';
         });
     }
-
-    // Données de test locales (décommentez pour tester sans Google Sheets)
-    /*
-    function loadData() {
-      showDateTime();
-      const driverMap = {
-        "TX01": "Phùng Như Quang",
-        "TX02": "Nguyễn Văn Hùng"
-      };
-      originalData = [
-        { G: "10/5/2025", H: "Khách A", J: ["TX01"], Q: 100000 },
-        { G: "10/5/2025", H: "Khách B", J: ["TX02"], Q: 200000 },
-        { G: "11/5/2025", H: "Khách C", J: ["TX01"], Q: 150000 }
-      ];
-      const filtered = filterData(originalData, driverMap);
-      const grouped = groupData(filtered);
-      const displayData = Object.entries(grouped).map(([_, v]) => ({
-        G: v.G,
-        H: capitalizeFirstLetter(v.H),
-        J: Array.from(v.J),
-        Q: v.Q
-      })).sort((a, b) => {
-        return a.G.split('/').reverse().join('').localeCompare(b.G.split('/').reverse().join(''));
-      });
-      displayData(displayData, driverMap);
-    }
-    */
 
     // Khởi chạy khi trang được tải
     window.addEventListener('load', loadData);
