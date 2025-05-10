@@ -16,7 +16,6 @@
       background: #fff;
       text-align: center;
     }
-
     .header {
       display: flex;
       justify-content: space-between;
@@ -52,19 +51,16 @@
       display: block;
       margin: 0 auto;
     }
-
     h1 {
       margin: 15px 0;
       font-size: 18px;
       font-weight: bold;
       text-transform: uppercase;
     }
-
     .document-info {
       margin-bottom: 15px;
       font-size: 13px;
     }
-
     .summary {
       margin-bottom: 15px;
       padding: 8px;
@@ -76,7 +72,6 @@
     .summary div {
       margin: 3px 0;
     }
-
     table {
       width: 100%;
       border-collapse: collapse;
@@ -97,7 +92,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-
     .signature-section {
       display: flex;
       justify-content: space-between;
@@ -107,7 +101,6 @@
       width: 30%;
       text-align: center;
     }
-
     @media print {
       body {
         padding: 10px;
@@ -126,12 +119,8 @@
   </style>
 </head>
 <body>
-
   <div class="header">
-    <img
-      src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg"
-      alt="Logo"
-      class="logo">
+    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
     <div class="company-info">
       <div class="company-name">NPP HÀ HÒA</div>
       <div class="company-details">
@@ -189,8 +178,7 @@
   <script>
   (function() {
     const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
-    const sheetIdMain = '449675231'; // Sheet Check kho
-    const sheetIdLookup = '2007395895'; // Sheet tra cứu
+    const sheetIdMain = '449675231';
     let originalData = [];
 
     function getUrlParameter(name) {
@@ -223,62 +211,36 @@
       ).join(' ');
     }
 
+    function normalizeDate(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        return `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
+      }
+      return dateStr;
+    }
+
+    function removeAccents(str) {
+      return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    }
+
     function filterData(data) {
       const ngay = getUrlParameter('ngay');
       const ten = getUrlParameter('ten');
 
       return data.filter(item => {
-        // Kiểm tra ngày nếu có tham số
-        const ngayTrung = ngay ? item.AP === ngay : true;
+        const itemDate = normalizeDate(item.AP);
+        const filterDate = normalizeDate(ngay);
+        const ngayTrung = ngay ? itemDate === filterDate : true;
         
-        // Kiểm tra tên trong danh sách NV phụ trách kho (cột I)
         let tenTrung = true;
         if (ten) {
-          // Split danh sách tên bằng dấu phẩy và trim khoảng trắng
-          const driverNames = item.AN.split(',').map(name => name.trim());
-          tenTrung = driverNames.some(name => name.includes(ten));
+          const driverNames = item.AN.split(',').map(name => removeAccents(name.trim().toLowerCase()));
+          tenTrung = driverNames.some(name => name.includes(removeAccents(ten.toLowerCase())));
         }
         
         return ngayTrung && tenTrung;
       });
-    }
-
-    function groupData(filteredData) {
-      return filteredData.reduce((acc, item) => {
-        if (!acc[item.H]) {
-          acc[item.H] = { ...item, AN: new Set(item.AN.split(',')), Q: item.Q };
-        } else {
-          acc[item.H].Q += item.Q;
-          item.AN.split(',').forEach(a => acc[item.H].AN.add(a.trim()));
-        }
-        return acc;
-      }, {});
-    }
-
-    function displayData(data) {
-      const totalOrders = data.length;
-      const totalOrdersStr = totalOrders < 10 ? '0' + totalOrders : totalOrders;
-      document.getElementById('total-orders').textContent = totalOrdersStr;
-      document.getElementById('total-receivable').textContent = formatCurrency(
-        data.reduce((s, i) => s + i.Q, 0)
-      );
-
-      let html = '';
-      if (data.length === 0) {
-        html = '<tr><td colspan="4">Không có dữ liệu phù hợp</td></tr>';
-      } else {
-        data.forEach(item => {
-          const drivers = Array.from(item.AN).join(', ');
-          html += `
-            <tr>
-              <td>${item.AP}</td>
-              <td style="text-align:left">${capitalizeFirstLetter(item.H)}</td>
-              <td style="text-align:left">${drivers}</td>
-              <td style="text-align:right">${formatCurrency(item.Q)}</td>
-            </tr>`;
-        });
-      }
-      document.getElementById('data-container').innerHTML = html;
     }
 
     function loadData() {
@@ -291,46 +253,53 @@
           originalData = rows.map(row => {
             const dateText = row.c[4]?.f || row.c[4]?.v; // Cột E (index 4)
             const customer = row.c[3]?.f || row.c[3]?.v || ''; // Cột D (index 3)
-            const drivers = row.c[8]?.v || ''; // Cột I (index 8) - NV phụ trách kho
-            const amount = parseInt(row.c[16]?.v) || 0; // Cột Q (index 16)
+            const drivers = row.c[8]?.v || ''; // Cột I (index 8)
+            const amount = parseInt(row.c[5]?.v) || 0; // CỘT F (index 5)
             
             return dateText && customer.trim() ? {
               AP: dateText.toString().trim(),
               H: customer.toString().trim(),
-              AN: drivers, // Danh sách NV phụ trách kho (phân cách bằng dấu phẩy)
+              AN: drivers,
               Q: amount
             } : null;
           }).filter(x => x);
 
-          // Lọc dữ liệu
           const filtered = filterData(originalData);
-          
-          // Nhóm dữ liệu theo khách hàng
-          const grouped = groupData(filtered);
-          
-          // Chuẩn bị dữ liệu hiển thị
-          const displayData = Object.entries(grouped).map(([_, v]) => ({
-            AP: v.AP, 
-            H: v.H, 
-            AN: v.AN, 
-            Q: v.Q
-          })).sort((a, b) => {
-            return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
-          });
-
-          // Hiển thị dữ liệu
-          displayData(displayData);
+          displayData(filtered);
         })
         .catch(err => {
-          console.error('Lỗi tải dữ liệu:', err);
-          document.getElementById('data-container').innerHTML =
-            '<tr><td colspan="4" style="padding:10px;">Không thể tải dữ liệu</td></tr>';
+          console.error('Lỗi:', err);
+          document.getElementById('data-container').innerHTML = 
+            '<tr><td colspan="4" style="color:red">Lỗi tải dữ liệu. Vui lòng kiểm tra console (F12) để biết chi tiết.</td></tr>';
         });
+    }
+
+    function displayData(data) {
+      const totalOrders = data.length;
+      document.getElementById('total-orders').textContent = 
+        totalOrders < 10 ? '0' + totalOrders : totalOrders;
+      document.getElementById('total-receivable').textContent = 
+        formatCurrency(data.reduce((sum, item) => sum + item.Q, 0));
+
+      let html = '';
+      if (data.length === 0) {
+        html = '<tr><td colspan="4">Không tìm thấy đơn hàng nào phù hợp</td></tr>';
+      } else {
+        data.forEach(item => {
+          html += `
+          <tr>
+            <td>${item.AP}</td>
+            <td style="text-align:left">${capitalizeFirstLetter(item.H)}</td>
+            <td style="text-align:left">${item.AN.split(',').map(d => d.trim()).join(', ')}</td>
+            <td style="text-align:right">${formatCurrency(item.Q)}</td>
+          </tr>`;
+        });
+      }
+      document.getElementById('data-container').innerHTML = html;
     }
 
     window.addEventListener('load', loadData);
   })();
   </script>
-
 </body>
 </html>
