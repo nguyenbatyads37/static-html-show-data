@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PHIẾU BÀN GIAO ĐƠN HÀNG</title>
   <style>
+    /* Giữ nguyên phần CSS như trước */
     body {
       font-family: Arial, sans-serif;
       margin: 0 auto;
@@ -106,6 +107,14 @@
       width: 40%;
       text-align: center;
     }
+    #debug-info {
+      margin-top: 20px;
+      padding: 10px;
+      background-color: #f8f8f8;
+      border: 1px solid #ddd;
+      text-align: left;
+      display: none;
+    }
     @media print {
       body {
         padding: 10px;
@@ -123,10 +132,14 @@
       .driver-cell {
         white-space: normal !important;
       }
+      #debug-info {
+        display: none !important;
+      }
     }
   </style>
 </head>
 <body>
+  <!-- Giữ nguyên phần HTML như trước -->
   <div class="header">
     <img
       src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg"
@@ -182,58 +195,119 @@
     </div>
   </div>
 
+  <!-- Thêm phần debug -->
+  <div id="debug-info">
+    <h3>Thông tin Debug:</h3>
+    <div id="debug-content"></div>
+    <button onclick="fetchData()">Thử lại</button>
+    <button onclick="document.getElementById('debug-info').style.display='none'">Ẩn thông tin</button>
+  </div>
+
   <script>
   (function() {
     // URL Google Apps Script của bạn
     const API_URL = 'https://script.google.com/macros/s/AKfycbzxa3Tu7TMjk8_TeE3ihsq_caT1WuR48mK_OcCHJTf0Y5uk88qH0UA4Z0_6UCjDhK4z/exec';
     
+    // Hiển thị thông tin debug
+    function showDebugInfo(info) {
+      const debugDiv = document.getElementById('debug-info');
+      const contentDiv = document.getElementById('debug-content');
+      
+      debugDiv.style.display = 'block';
+      contentDiv.innerHTML = `
+        <p><strong>Thời gian:</strong> ${new Date().toLocaleString()}</p>
+        <p><strong>API URL:</strong> ${API_URL}</p>
+        <p><strong>Thông tin:</strong></p>
+        <pre>${JSON.stringify(info, null, 2)}</pre>
+      `;
+    }
+
     // Hiển thị ngày giờ hiện tại
     function showCurrentDateTime() {
-      const now = new Date();
-      const dateStr = now.toLocaleDateString('vi-VN');
-      const timeStr = now.toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
-      document.getElementById('delivery-date').textContent = dateStr;
-      document.getElementById('delivery-time').textContent = timeStr;
+      try {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString('vi-VN');
+        const timeStr = now.toLocaleTimeString('vi-VN', {hour: '2-digit', minute:'2-digit'});
+        document.getElementById('delivery-date').textContent = dateStr;
+        document.getElementById('delivery-time').textContent = timeStr;
+      } catch (e) {
+        console.error('Lỗi hiển thị ngày giờ:', e);
+      }
     }
 
     // Định dạng tiền tệ
     function formatCurrency(amount) {
-      return new Intl.NumberFormat('vi-VN').format(amount || 0);
+      try {
+        return new Intl.NumberFormat('vi-VN').format(amount || 0);
+      } catch (e) {
+        return amount || '0';
+      }
     }
 
     // Chuẩn hóa tên (viết hoa chữ cái đầu)
     function formatName(name) {
       if (!name) return '';
-      return name.toLowerCase().split(' ')
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(' ');
+      try {
+        return name.toLowerCase().split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' ');
+      } catch (e) {
+        return name;
+      }
     }
 
     // Hiển thị dữ liệu
     function renderData(data) {
-      const container = document.getElementById('data-container');
-      let html = '';
-      
-      // Tính tổng số đơn và tổng tiền
-      const totalOrders = data.length;
-      const totalAmount = data.reduce((sum, item) => sum + (Number(item.totalAmount) || 0, 0);
-      
-      document.getElementById('total-orders').textContent = 
-        totalOrders < 10 ? '0' + totalOrders : totalOrders;
-      document.getElementById('total-receivable').textContent = formatCurrency(totalAmount);
-      
-      // Tạo HTML cho từng dòng dữ liệu
-      data.forEach(item => {
-        html += `
-        <tr>
-          <td>${item.date || ''}</td>
-          <td>${formatName(item.customer)}</td>
-          <td class="driver-cell">${item.driver || ''}</td>
-          <td style="text-align:right">${formatCurrency(item.totalAmount)}</td>
-        </tr>`;
-      });
-      
-      container.innerHTML = html || '<tr><td colspan="4">Không có dữ liệu</td></tr>';
+      try {
+        const container = document.getElementById('data-container');
+        let html = '';
+        
+        // Kiểm tra nếu data không phải array
+        if (!Array.isArray(data)) {
+          showDebugInfo({
+            error: "Dữ liệu không phải mảng",
+            receivedData: data
+          });
+          container.innerHTML = '<tr><td colspan="4">Dữ liệu không hợp lệ</td></tr>';
+          return;
+        }
+        
+        // Tính tổng số đơn và tổng tiền
+        const totalOrders = data.length;
+        const totalAmount = data.reduce((sum, item) => sum + (Number(item.totalAmount) || 0, 0);
+        
+        document.getElementById('total-orders').textContent = 
+          totalOrders < 10 ? '0' + totalOrders : totalOrders;
+        document.getElementById('total-receivable').textContent = formatCurrency(totalAmount);
+        
+        // Tạo HTML cho từng dòng dữ liệu
+        if (data.length === 0) {
+          html = '<tr><td colspan="4">Không có dữ liệu</td></tr>';
+        } else {
+          data.forEach(item => {
+            // Kiểm tra cấu trúc item
+            if (!item.date || !item.customer) {
+              console.warn('Dữ liệu không đầy đủ:', item);
+            }
+            
+            html += `
+            <tr>
+              <td>${item.date || ''}</td>
+              <td>${formatName(item.customer)}</td>
+              <td class="driver-cell">${item.driver || ''}</td>
+              <td style="text-align:right">${formatCurrency(item.totalAmount)}</td>
+            </tr>`;
+          });
+        }
+        
+        container.innerHTML = html;
+      } catch (e) {
+        console.error('Lỗi render data:', e);
+        showDebugInfo({
+          error: "Lỗi khi hiển thị dữ liệu",
+          exception: e.message
+        });
+      }
     }
 
     // Lấy dữ liệu từ API
@@ -241,16 +315,36 @@
       try {
         showCurrentDateTime();
         
+        // Hiển thị trạng thái loading
+        document.getElementById('data-container').innerHTML = '<tr><td colspan="4">Đang tải dữ liệu...</td></tr>';
+        
         const response = await fetch(API_URL);
-        if (!response.ok) throw new Error('Lỗi kết nối');
+        
+        // Kiểm tra response
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const data = await response.json();
+        
+        // Kiểm tra dữ liệu nhận được
+        if (!data) {
+          throw new Error('Không nhận được dữ liệu');
+        }
+        
+        console.log('Dữ liệu nhận được:', data);
         renderData(data);
         
       } catch (error) {
         console.error('Lỗi khi tải dữ liệu:', error);
         document.getElementById('data-container').innerHTML = 
           '<tr><td colspan="4" style="color:red">Lỗi khi tải dữ liệu</td></tr>';
+        
+        showDebugInfo({
+          error: "Lỗi khi tải dữ liệu",
+          message: error.message,
+          stack: error.stack
+        });
       }
     }
 
