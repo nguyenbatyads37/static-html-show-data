@@ -1,20 +1,194 @@
-function doGet() {
-  return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('Dữ liệu kiểm kho')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dữ liệu kiểm kho</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        h1 {
+            color: #1a73e8;
+            text-align: center;
+        }
+        .controls {
+            margin: 20px 0;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .search-box {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 300px;
+        }
+        .refresh-btn {
+            padding: 8px 16px;
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .refresh-btn:hover {
+            background-color: #0d5bba;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
+        .error {
+            color: #d32f2f;
+            padding: 10px;
+            background-color: #fde8e8;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Dữ liệu kiểm kho</h1>
+    
+    <div class="controls">
+        <input type="text" id="searchInput" class="search-box" placeholder="Tìm kiếm theo tên khách hàng..." onkeyup="searchTable()">
+        <button onclick="fetchData()" class="refresh-btn">Làm mới dữ liệu</button>
+    </div>
+    
+    <div id="loading" class="loading">Đang tải dữ liệu...</div>
+    <div id="error" class="error" style="display: none;"></div>
+    
+    <table id="dataTable">
+        <thead>
+            <tr>
+                <th>Ngày</th>
+                <th>Tên khách hàng</th>
+                <th>Thủ kho nhận bàn giao</th>
+                <th>Tổng tiền hàng</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <!-- Dữ liệu sẽ được thêm vào đây -->
+        </tbody>
+    </table>
 
-function getSheetData() {
-  // ... (giữ nguyên phần code hiện tại của bạn)
-  
-  // Thêm header để cho phép CORS
-  const output = ContentService.createTextOutput(JSON.stringify(result));
-  output.setMimeType(ContentService.MimeType.JSON);
-  output.setHeaders({
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET'
-  });
-  
-  return output;
-}
+    <script>
+        // URL Web App của bạn
+        const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxy4olvFzRuwjD19GMQfYRYlt7vJka6wGtLlrcpYdkMrmsfJkksjIrYwrUmsYON_HWb/exec';
+        
+        // Hàm lấy dữ liệu từ Web App
+        async function fetchData() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('tableBody').innerHTML = '';
+            
+            try {
+                const response = await fetch(WEB_APP_URL);
+                
+                if (!response.ok) {
+                    throw new Error(`Lỗi khi tải dữ liệu: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                updateTable(data);
+            } catch (error) {
+                console.error('Lỗi:', error);
+                document.getElementById('error').textContent = `Đã xảy ra lỗi: ${error.message}`;
+                document.getElementById('error').style.display = 'block';
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+        
+        // Hàm cập nhật bảng với dữ liệu mới
+        function updateTable(data) {
+            const tableBody = document.getElementById("tableBody");
+            tableBody.innerHTML = "";
+            
+            if (!data || data.length === 0) {
+                const tr = document.createElement("tr");
+                const td = document.createElement("td");
+                td.colSpan = 4;
+                td.textContent = "Không có dữ liệu nào được tìm thấy";
+                td.style.textAlign = "center";
+                tr.appendChild(td);
+                tableBody.appendChild(tr);
+                return;
+            }
+            
+            data.forEach(row => {
+                const tr = document.createElement("tr");
+                
+                const tdDate = document.createElement("td");
+                tdDate.textContent = row.date || '---';
+                tr.appendChild(tdDate);
+                
+                const tdCustomer = document.createElement("td");
+                tdCustomer.textContent = row.customer || '---';
+                tr.appendChild(tdCustomer);
+                
+                const tdWarehouse = document.createElement("td");
+                tdWarehouse.textContent = row.warehouse || '---';
+                tr.appendChild(tdWarehouse);
+                
+                const tdTotal = document.createElement("td");
+                tdTotal.textContent = row.total || '0đ';
+                tr.appendChild(tdTotal);
+                
+                tableBody.appendChild(tr);
+            });
+        }
+        
+        // Hàm tìm kiếm trong bảng
+        function searchTable() {
+            const input = document.getElementById("searchInput");
+            const filter = input.value.toUpperCase();
+            const table = document.getElementById("dataTable");
+            const tr = table.getElementsByTagName("tr");
+            
+            for (let i = 1; i < tr.length; i++) {
+                const td = tr[i].getElementsByTagName("td")[1]; // Cột tên khách hàng
+                if (td) {
+                    const txtValue = td.textContent || td.innerText;
+                    if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                        tr[i].style.display = "";
+                    } else {
+                        tr[i].style.display = "none";
+                    }
+                }
+            }
+        }
+        
+        // Tải dữ liệu khi trang được tải
+        window.onload = fetchData;
+    </script>
+</body>
+</html>
