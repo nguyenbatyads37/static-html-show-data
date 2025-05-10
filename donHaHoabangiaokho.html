@@ -79,17 +79,19 @@
   <script>
     const url = 'https://script.google.com/macros/s/AKfycbzoI8UjokSHP8oXsjhAhi60Z7nVcoegGMM0rhvFojekpNHnNZdpZL_-qeh2ButYf9er/exec';
     const urlParams = new URLSearchParams(window.location.search);
-    // 'ngay' param expected in dd/mm/yyyy
     const filterDateParam = urlParams.get('ngay');
     const filterDriverParam = urlParams.get('nv');
     const fetchUrl = `${url}?${urlParams.toString()}`;
 
+    // Hàm viết hoa chữ đầu của từng từ (hỗ trợ unicode)
     function capitalizeWords(str) {
-      return str.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+      return str.toLowerCase().replace(/(^|\s)\S/g, function(a) { return a.toUpperCase(); });
     }
+    // Định dạng tiền với ngăn cách hàng nghìn và VNĐ
     function formatMoney(num) {
       return Number(num).toLocaleString('vi-VN') + ' VNĐ';
     }
+    // Chuyển ISO sang dd/mm/yyyy
     function formatDate(iso) {
       const d = new Date(iso);
       const day = String(d.getDate()).padStart(2, '0');
@@ -98,12 +100,8 @@
       return `${day}/${month}/${year}`;
     }
 
-    // Header date display directly uses dd/mm/yyyy param, or today
-    if (filterDateParam) {
-      document.getElementById('delivery-date').textContent = filterDateParam;
-    } else {
-      document.getElementById('delivery-date').textContent = formatDate(new Date().toISOString());
-    }
+    // Hiển thị header ngày giờ
+    document.getElementById('delivery-date').textContent = filterDateParam || formatDate(new Date().toISOString());
     document.getElementById('delivery-time').textContent = new Date().toLocaleTimeString('vi-VN', {hour:'2-digit', minute:'2-digit'});
 
     fetch(fetchUrl)
@@ -111,39 +109,35 @@
       .then(data => {
         const records = Array.isArray(data) ? data : [data];
         const filtered = records.filter(item => {
-          let dateOk = true, driverOk = true;
+          let okDate = true, okDriver = true;
           if (filterDateParam) {
-            dateOk = item.date && formatDate(item.date) === filterDateParam;
+            okDate = item.date && formatDate(item.date) === filterDateParam;
           }
           if (filterDriverParam) {
             const drivers = (item.deliveryStaff || '').split(',').map(s => s.trim().toLowerCase());
-            driverOk = drivers.includes(filterDriverParam.toLowerCase());
+            okDriver = drivers.includes(filterDriverParam.toLowerCase());
           }
-          return dateOk && driverOk;
+          return okDate && okDriver;
         });
         const container = document.getElementById('data-container');
-        let totalAmount = 0;
+        let total = 0;
         filtered.forEach(item => {
           const tr = document.createElement('tr');
-          const tdDate = document.createElement('td');
-          tdDate.textContent = item.date ? formatDate(item.date) : '';
-          const tdCustomer = document.createElement('td');
-          tdCustomer.textContent = capitalizeWords(item.customerName || '');
-          const tdDriver = document.createElement('td');
-          tdDriver.classList.add('driver-cell');
+          const tdDate = document.createElement('td'); tdDate.textContent = item.date ? formatDate(item.date) : '';
+          const tdCustomer = document.createElement('td'); tdCustomer.textContent = capitalizeWords(item.customerName || '');
+          const tdDriver = document.createElement('td'); tdDriver.classList.add('driver-cell');
           let drivers = (item.deliveryStaff || '').split(',').map(s => capitalizeWords(s.trim()));
           if (filterDriverParam) {
             drivers = drivers.filter(d => d.toLowerCase() === filterDriverParam.toLowerCase());
           }
           tdDriver.textContent = drivers.join(', ');
-          const tdTotal = document.createElement('td');
-          tdTotal.textContent = formatMoney(item.totalAmount || 0);
-          totalAmount += Number(item.totalAmount) || 0;
+          const tdTotal = document.createElement('td'); tdTotal.textContent = formatMoney(item.totalAmount || 0);
+          total += Number(item.totalAmount) || 0;
           tr.append(tdDate, tdCustomer, tdDriver, tdTotal);
           container.appendChild(tr);
         });
         document.getElementById('total-orders').textContent = filtered.length;
-        document.getElementById('total-receivable').textContent = formatMoney(totalAmount);
+        document.getElementById('total-receivable').textContent = formatMoney(total);
         if (!filtered.length) {
           const msg = document.createElement('div'); msg.textContent = 'Không có dữ liệu phù hợp với bộ lọc.'; msg.className = 'error'; document.body.appendChild(msg);
         }
@@ -155,4 +149,5 @@
   </script>
 </body>
 </html>
+
 
