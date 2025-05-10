@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PHIẾU BÀN GIAO ĐƠN HÀNG VỚI KHO</title>
+  <title>PHIẾU BÀN GIAO ĐƠN HÀNG</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -92,13 +92,18 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
+    .driver-cell {
+      white-space: normal; /* Allow wrapping for driver names */
+      line-height: 1.4;
+    }
     .signature-section {
       display: flex;
-      justify-content: space-between;
+      justify-content: center;
+      gap: 40px;
       margin-top: 40px;
     }
     .signature-box {
-      width: 30%;
+      width: 40%;
       text-align: center;
     }
     @media print {
@@ -115,12 +120,18 @@
       td {
         white-space: nowrap !important;
       }
+      .driver-cell {
+        white-space: normal !important; /* Keep driver names wrapped for printing */
+      }
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg" alt="Logo" class="logo">
+    <img
+      src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F79ab1bb2.%E1%BA%A2nh.040547.jpg"
+      alt="Logo"
+      class="logo">
     <div class="company-info">
       <div class="company-name">NPP HÀ HÒA</div>
       <div class="company-details">
@@ -135,7 +146,7 @@
     </div>
   </div>
 
-  <h1>PHIẾU BÀN GIAO ĐƠN HÀNG VỚI KHO</h1>
+  <h1>PHIẾU BÀN GIAO ĐƠN HÀNG</h1>
 
   <div class="document-info">
     Ngày bàn giao: <span id="delivery-date"></span> | Giờ bàn giao: <span id="delivery-time"></span>
@@ -151,7 +162,7 @@
       <tr>
         <th style="width:15%">Ngày</th>
         <th style="width:35%">Khách hàng</th>
-        <th style="width:30%">NV phụ trách kho</th>
+        <th style="width:30%">NV giao hàng</th>
         <th style="width:20%">Tổng tiền</th>
       </tr>
     </thead>
@@ -166,11 +177,7 @@
       <div>(Ký và ghi rõ họ tên)</div>
     </div>
     <div class="signature-box">
-      <div>NV phụ trách kho</div>
-      <div>(Ký và ghi rõ họ tên)</div>
-    </div>
-    <div class="signature-box">
-      <div>Thủ kho</div>
+      <div>NV giao hàng</div>
       <div>(Ký và ghi rõ họ tên)</div>
     </div>
   </div>
@@ -178,9 +185,11 @@
   <script>
   (function() {
     const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
-    const sheetIdMain = '449675231';
+    const sheetIdMain = '449675231'; // Sheet Check kho
+    const sheetIdLookup = '2007395895'; // Sheet tra cứu
     let originalData = [];
 
+    // Hàm lấy tham số từ URL
     function getUrlParameter(name) {
       name = name.replace(/[[\]]/g, '\\$&');
       const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
@@ -189,6 +198,7 @@
       return results[2] ? decodeURIComponent(results[2].replace(/\+/g, ' ')) : '';
     }
 
+    // Hiển thị ngày giờ hiện tại
     function showDateTime() {
       const now = new Date();
       const dd = String(now.getDate()).padStart(2,'0');
@@ -200,10 +210,12 @@
       document.getElementById('delivery-time').textContent = `${hh}:${min}`;
     }
 
+    // Định dạng tiền tệ
     function formatCurrency(amount) {
       return amount ? parseInt(amount).toLocaleString('vi-VN') : '0';
     }
 
+    // Viết hoa chữ cái đầu
     function capitalizeFirstLetter(str) {
       if (!str) return '';
       return str.toLowerCase().split(' ').map(word => 
@@ -211,93 +223,139 @@
       ).join(' ');
     }
 
-    function normalizeDate(dateStr) {
-      if (!dateStr) return '';
-      const parts = dateStr.split('/');
-      if (parts.length === 3) {
-        return `${parts[0].padStart(2,'0')}/${parts[1].padStart(2,'0')}/${parts[2]}`;
-      }
-      return dateStr;
-    }
-
-    function removeAccents(str) {
-      return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    }
-
-    function filterData(data) {
-      const ngay = getUrlParameter('ngay');
-      const ten = getUrlParameter('ten');
+    // Lọc dữ liệu theo ngày và tên tài xế
+    function filterData(data, driverMap) {
+      const ngayParam = getUrlParameter('ngay'); // e.g., 10/5/2025
+      const tenParam = getUrlParameter('ten');   // e.g., Phùng Như Quang
 
       return data.filter(item => {
-        const itemDate = normalizeDate(item.AP);
-        const filterDate = normalizeDate(ngay);
-        const ngayTrung = ngay ? itemDate === filterDate : true;
-        
-        let tenTrung = true;
-        if (ten) {
-          const driverNames = item.AN.split(',').map(name => removeAccents(name.trim().toLowerCase()));
-          tenTrung = driverNames.some(name => name.includes(removeAccents(ten.toLowerCase())));
+        // Kiểm tra ngày nếu có tham số
+        let ngayMatch = true;
+        if (ngayParam) {
+          // Chuẩn hóa định dạng ngày để so sánh
+          const itemDate = item.AP ? item.AP.trim() : '';
+          ngayMatch = itemDate === ngayParam.trim();
         }
         
-        return ngayTrung && tenTrung;
+        // Kiểm tra tên tài xế nếu có tham số
+        let tenMatch = true;
+        if (tenParam) {
+          // Lấy danh sách tài xế từ cột AN (mã tài xế) và chuyển sang tên
+          const driverNames = item.AN.map(code => driverMap[code] || code);
+          tenMatch = driverNames.some(name => 
+            name.toLowerCase().includes(tenParam.toLowerCase().trim())
+          );
+        }
+        
+        return ngayMatch && tenMatch;
       });
     }
 
-    function loadData() {
-      showDateTime();
-
-      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-        .then(res => res.text())
-        .then(txt => {
-          const rows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
-          originalData = rows.map(row => {
-            const dateText = row.c[4]?.f || row.c[4]?.v; // Cột E (index 4)
-            const customer = row.c[3]?.f || row.c[3]?.v || ''; // Cột D (index 3)
-            const drivers = row.c[8]?.v || ''; // Cột I (index 8)
-            const amount = parseInt(row.c[5]?.v) || 0; // CỘT F (index 5)
-            
-            return dateText && customer.trim() ? {
-              AP: dateText.toString().trim(),
-              H: customer.toString().trim(),
-              AN: drivers,
-              Q: amount
-            } : null;
-          }).filter(x => x);
-
-          const filtered = filterData(originalData);
-          displayData(filtered);
-        })
-        .catch(err => {
-          console.error('Lỗi:', err);
-          document.getElementById('data-container').innerHTML = 
-            '<tr><td colspan="4" style="color:red">Lỗi tải dữ liệu. Vui lòng kiểm tra console (F12) để biết chi tiết.</td></tr>';
-        });
+    // Nhóm dữ liệu theo khách hàng
+    function groupData(filteredData) {
+      return filteredData.reduce((acc, item) => {
+        if (!acc[item.H]) {
+          acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
+        } else {
+          acc[item.H].Q += item.Q;
+          item.AN.forEach(a => acc[item.H].AN.add(a));
+        }
+        return acc;
+      }, {});
     }
 
-    function displayData(data) {
+    // Hiển thị dữ liệu ra bảng
+    function displayData(data, driverMap) {
       const totalOrders = data.length;
-      document.getElementById('total-orders').textContent = 
-        totalOrders < 10 ? '0' + totalOrders : totalOrders;
-      document.getElementById('total-receivable').textContent = 
-        formatCurrency(data.reduce((sum, item) => sum + item.Q, 0));
+      const totalOrdersStr = totalOrders < 10 ? '0' + totalOrders : totalOrders;
+      document.getElementById('total-orders').textContent = totalOrdersStr;
+      document.getElementById('total-receivable').textContent = formatCurrency(
+        data.reduce((s, i) => s + i.Q, 0)
+      );
 
       let html = '';
       if (data.length === 0) {
-        html = '<tr><td colspan="4">Không tìm thấy đơn hàng nào phù hợp</td></tr>';
+        html = '<tr><td colspan="4">Không có dữ liệu phù hợp</td></tr>';
       } else {
         data.forEach(item => {
+          // Split driver names for display (one per line)
+          const drivers = item.AN.map(a => driverMap[a] || a).join('<br>');
           html += `
-          <tr>
-            <td>${item.AP}</td>
-            <td style="text-align:left">${capitalizeFirstLetter(item.H)}</td>
-            <td style="text-align:left">${item.AN.split(',').map(d => d.trim()).join(', ')}</td>
-            <td style="text-align:right">${formatCurrency(item.Q)}</td>
-          </tr>`;
+            <tr>
+              <td>${item.AP}</td>
+              <td style="text-align:left">${item.H}</td>
+              <td style="text-align:left" class="driver-cell">${drivers}</td>
+              <td style="text-align:right">${formatCurrency(item.Q)}</td>
+            </tr>`;
         });
       }
       document.getElementById('data-container').innerHTML = html;
     }
 
+    // Tải dữ liệu từ Google Sheets
+    function loadData() {
+      showDateTime();
+
+      // 1. Tải dữ liệu tra cứu tài xế
+      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
+        .then(res => res.text())
+        .then(txt => {
+          const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
+          const driverMap = lookupRows.reduce((map,row) => {
+            const key = row.c[0]?.v, val = row.c[2]?.v;
+            if (key && val) map[key] = val;
+            return map;
+          }, {});
+
+          // 2. Tải dữ liệu chính từ sheet Check kho
+          return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
+            .then(res => res.text())
+            .then(txt2 => {
+              const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
+              
+              // 3. Xử lý dữ liệu từ sheet Check kho
+              originalData = rows.map(row => {
+                const dateText = row.c[11]?.f || row.c[11]?.v; // Column L (index 11) - Ngày
+                const customer = row.c[3]?.f || row.c[3]?.v || ''; // Column D (index 3) - Khách hàng
+                const driver = row.c[9]?.v || ''; // Column J (index 9) - Mã tài xế
+                const amount = parseInt(row.c[5]?.v) || 0; // Cột F (index 5) - Tổng tiền
+                
+                return dateText && customer.trim() ? {
+                  AP: dateText.toString().trim(), // Ngày
+                  H: customer.toString().trim(),  // Khách hàng
+                  AN: [driver],                  // Mã tài xế (chuyển thành mảng)
+                  Q: amount                     // Tổng tiền (từ cột F)
+                } : null;
+              }).filter(x => x);
+
+              // 4. Lọc dữ liệu theo ngày và tên tài xế
+              const filtered = filterData(originalData, driverMap);
+              
+              // 5. Nhóm dữ liệu theo khách hàng
+              const grouped = groupData(filtered);
+              
+              // 6. Chuẩn bị dữ liệu để hiển thị
+              const displayData = Object.entries(grouped).map(([_, v]) => ({
+                AP: v.AP, 
+                H: capitalizeFirstLetter(v.H), 
+                AN: Array.from(v.AN), 
+                Q: v.Q
+              })).sort((a, b) => {
+                return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
+              });
+
+              // 7. Hiển thị kết quả
+              displayData(displayData, driverMap);
+            });
+        })
+        .catch(err => {
+          console.error('Lỗi tải dữ liệu:', err);
+          document.getElementById('data-container').innerHTML =
+            '<tr><td colspan="4" style="padding:10px;">Không thể tải dữ liệu</td></tr>';
+        });
+    }
+
+    // Khởi chạy khi trang được tải
     window.addEventListener('load', loadData);
   })();
   </script>
