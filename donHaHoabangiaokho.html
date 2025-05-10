@@ -93,7 +93,7 @@
       text-overflow: ellipsis;
     }
     .driver-cell {
-      white-space: normal; /* Allow wrapping for driver names */
+      white-space: normal;
       line-height: 1.4;
     }
     .signature-section {
@@ -121,7 +121,7 @@
         white-space: nowrap !important;
       }
       .driver-cell {
-        white-space: normal !important; /* Keep driver names wrapped for printing */
+        white-space: normal !important;
       }
     }
   </style>
@@ -167,7 +167,7 @@
       </tr>
     </thead>
     <tbody id="data-container">
-      <!-- Dữ liệu sẽ được thêm vào đây bằng JavaScript -->
+      <!-- Dữ liệu sẽ được thêm vào đây -->
     </tbody>
   </table>
 
@@ -183,181 +183,87 @@
   </div>
 
   <script>
-  (function() {
-    const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
-    const sheetIdMain = '449675231'; // Sheet Check kho
-    const sheetIdLookup = '2007395895'; // Sheet tra cứu
-    let originalData = [];
+    // URL của Google Apps Script
+    const scriptUrl = "https://script.google.com/macros/s/AKfycbxit7BbQZZAwbyA0GcddqG6P0yhGp-wdMWjTJ0Fofto1VGBKV9LtKn3NDQyoTz4DznZ/exec";
 
-    // Hàm lấy tham số từ URL
-    function getUrlParameter(name) {
-      name = name.replace(/[[\]]/g, '\\$&');
-      const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
-      const results = regex.exec(window.location.href);
-      if (!results) return null;
-      return results[2] ? decodeURIComponent(results[2].replace(/\+/g, ' ')) : '';
+    // Hàm định dạng ngày thành dd/mm/yyyy
+    function formatDate(date) {
+      const d = new Date(date);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
     }
 
-    // Hiển thị ngày giờ hiện tại
-    function showDateTime() {
-      const now = new Date();
-      const dd = String(now.getDate()).padStart(2,'0');
-      const mm = String(now.getMonth()+1).padStart(2,'0');
-      const yyyy = now.getFullYear();
-      const hh = String(now.getHours()).padStart(2,'0');
-      const min = String(now.getMinutes()).padStart(2,'0');
-      document.getElementById('delivery-date').textContent = `${dd}/${mm}/${yyyy}`;
-      document.getElementById('delivery-time').textContent = `${hh}:${min}`;
+    // Hàm viết hoa chữ cái đầu của mỗi từ
+    function capitalizeWords(str) {
+      if (!str) return str;
+      return str
+        .toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
     }
 
-    // Định dạng tiền tệ
-    function formatCurrency(amount) {
-      return amount ? parseInt(amount).toLocaleString('vi-VN') : '0';
+    // Hàm định dạng số tiền (thêm dấu chấm phân cách hàng nghìn và VNĐ)
+    function formatNumberWithUnit(number) {
+      return Number(number).toLocaleString('vi-VN') + ' VNĐ';
     }
 
-    // Viết hoa chữ cái đầu
-    function capitalizeFirstLetter(str) {
-      if (!str) return '';
-      return str.toLowerCase().split(' ').map(word => 
-        word.charAt(0).toUpperCase() + word.slice(1)
-      ).join(' ');
-    }
+    // Lấy tham số từ URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const filterDate = urlParams.get('ngay'); // Lấy giá trị của tham số ngay
+    const filterStaff = urlParams.get('nv') ? urlParams.get('nv').split(',').map(name => name.trim().toLowerCase()) : []; // Lấy danh sách NV, tách bởi dấu phẩy
 
-    // Lọc dữ liệu theo ngày và tên tài xế
-    function filterData(data, driverMap) {
-      const ngayParam = getUrlParameter('ngay'); // e.g., 10/5/2025
-      const tenParam = getUrlParameter('ten');   // e.g., Phùng Như Quang
+    // Lấy dữ liệu từ Google Apps Script
+    fetch(scriptUrl)
+      .then(response => response.json())
+      .then(data => {
+        const dataContainer = document.getElementById('data-container');
+        let totalReceivable = 0;
+        let filteredData = data;
 
-      return data.filter(item => {
-        // Kiểm tra ngày nếu có tham số
-        let ngayMatch = true;
-        if (ngayParam) {
-          // Chuẩn hóa định dạng ngày để so sánh
-          const itemDate = item.AP ? item.AP.trim() : '';
-          ngayMatch = itemDate === ngayParam.trim();
+        // Lọc dữ liệu theo ngày (nếu có tham số ngay)
+        if (filterDate) {
+          filteredData = data.filter(row => formatDate(row.date) === filterDate);
         }
-        
-        // Kiểm tra tên tài xế nếu có tham số
-        let tenMatch = true;
-        if (tenParam) {
-          // Lấy danh sách tài xế từ cột AN (mã tài xế) và chuyển sang tên
-          const driverNames = item.AN.map(code => driverMap[code] || code);
-          tenMatch = driverNames.some(name => 
-            name.toLowerCase().includes(tenParam.toLowerCase().trim())
-          );
+
+        // Lọc dữ liệu theo NV giao hàng (nếu có tham số nv)
+        if (filterStaff.length > 0) {
+          filteredData = filteredData.filter(row => {
+            const staffName = row.warehouseKeeper ? row.warehouseKeeper.toLowerCase() : '';
+            return filterStaff.includes(staffName);
+          });
         }
-        
-        return ngayMatch && tenMatch;
+
+        // Thêm dữ liệu đã lọc vào bảng
+        filteredData.forEach(row => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${formatDate(row.date)}</td>
+            <td>${capitalizeWords(row.customerName)}</td>
+            <td class="driver-cell">${capitalizeWords(row.warehouseKeeper)}</td>
+            <td>${formatNumberWithUnit(row.totalAmount)}</td>
+          `;
+          dataContainer.appendChild(tr);
+
+          // Cộng dồn tổng tiền hàng
+          totalReceivable += Number(row.totalAmount) || 0;
+        });
+
+        // Cập nhật thông tin tổng đơn và tổng tiền
+        document.getElementById('total-orders').textContent = filteredData.length;
+        document.getElementById('total-receivable').textContent = formatNumberWithUnit(totalReceivable);
+
+        // Cập nhật ngày và giờ bàn giao
+        const now = new Date();
+        document.getElementById('delivery-date').textContent = filterDate || formatDate(now);
+        document.getElementById('delivery-time').textContent = now.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      })
+      .catch(error => {
+        console.error('Error fetching data:', error);
+        document.getElementById('data-container').innerHTML = '<tr><td colspan="4">Error loading data</td></tr>';
       });
-    }
-
-    // Nhóm dữ liệu theo khách hàng
-    function groupData(filteredData) {
-      return filteredData.reduce((acc, item) => {
-        if (!acc[item.H]) {
-          acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
-        } else {
-          acc[item.H].Q += item.Q;
-          item.AN.forEach(a => acc[item.H].AN.add(a));
-        }
-        return acc;
-      }, {});
-    }
-
-    // Hiển thị dữ liệu ra bảng
-    function displayData(data, driverMap) {
-      const totalOrders = data.length;
-      const totalOrdersStr = totalOrders < 10 ? '0' + totalOrders : totalOrders;
-      document.getElementById('total-orders').textContent = totalOrdersStr;
-      document.getElementById('total-receivable').textContent = formatCurrency(
-        data.reduce((s, i) => s + i.Q, 0)
-      );
-
-      let html = '';
-      if (data.length === 0) {
-        html = '<tr><td colspan="4">Không có dữ liệu phù hợp</td></tr>';
-      } else {
-        data.forEach(item => {
-          // Split driver names for display (one per line)
-          const drivers = item.AN.map(a => driverMap[a] || a).join('<br>');
-          html += `
-            <tr>
-              <td>${item.AP}</td>
-              <td style="text-align:left">${item.H}</td>
-              <td style="text-align:left" class="driver-cell">${drivers}</td>
-              <td style="text-align:right">${formatCurrency(item.Q)}</td>
-            </tr>`;
-        });
-      }
-      document.getElementById('data-container').innerHTML = html;
-    }
-
-    // Tải dữ liệu từ Google Sheets
-    function loadData() {
-      showDateTime();
-
-      // 1. Tải dữ liệu tra cứu tài xế
-      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
-        .then(res => res.text())
-        .then(txt => {
-          const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
-          const driverMap = lookupRows.reduce((map,row) => {
-            const key = row.c[0]?.v, val = row.c[2]?.v;
-            if (key && val) map[key] = val;
-            return map;
-          }, {});
-
-          // 2. Tải dữ liệu chính từ sheet Check kho
-          return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-            .then(res => res.text())
-            .then(txt2 => {
-              const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
-              
-              // 3. Xử lý dữ liệu từ sheet Check kho
-              originalData = rows.map(row => {
-                const dateText = row.c[11]?.f || row.c[11]?.v; // Column L (index 11) - Ngày
-                const customer = row.c[3]?.f || row.c[3]?.v || ''; // Column D (index 3) - Khách hàng
-                const driver = row.c[9]?.v || ''; // Column J (index 9) - Mã tài xế
-                const amount = parseInt(row.c[5]?.v) || 0; // Cột F (index 5) - Tổng tiền
-                
-                return dateText && customer.trim() ? {
-                  AP: dateText.toString().trim(), // Ngày
-                  H: customer.toString().trim(),  // Khách hàng
-                  AN: [driver],                  // Mã tài xế (chuyển thành mảng)
-                  Q: amount                     // Tổng tiền (từ cột F)
-                } : null;
-              }).filter(x => x);
-
-              // 4. Lọc dữ liệu theo ngày và tên tài xế
-              const filtered = filterData(originalData, driverMap);
-              
-              // 5. Nhóm dữ liệu theo khách hàng
-              const grouped = groupData(filtered);
-              
-              // 6. Chuẩn bị dữ liệu để hiển thị
-              const displayData = Object.entries(grouped).map(([_, v]) => ({
-                AP: v.AP, 
-                H: capitalizeFirstLetter(v.H), 
-                AN: Array.from(v.AN), 
-                Q: v.Q
-              })).sort((a, b) => {
-                return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
-              });
-
-              // 7. Hiển thị kết quả
-              displayData(displayData, driverMap);
-            });
-        })
-        .catch(err => {
-          console.error('Lỗi tải dữ liệu:', err);
-          document.getElementById('data-container').innerHTML =
-            '<tr><td colspan="4" style="padding:10px;">Không thể tải dữ liệu</td></tr>';
-        });
-    }
-
-    // Khởi chạy khi trang được tải
-    window.addEventListener('load', loadData);
-  })();
   </script>
 </body>
 </html>
