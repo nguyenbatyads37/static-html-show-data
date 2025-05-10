@@ -184,10 +184,8 @@
 
   <script>
   (function() {
-    const spreadsheetId = '1WpNbn9DRdRtRwV6uZge-KuzhWw1NVG65FBl2S4eC08Q';
-    const sheetIdMain = '449675231'; // Sheet Check kho
-    const sheetIdLookup = '2007395895'; // Sheet tra cứu
-    let originalData = [];
+    // URL của Google Apps Script web app
+    const webAppUrl = 'https://script.google.com/macros/s/AKfycbzxa3Tu7TMjk8_TeE3ihsq_caT1WuR48mK_OcCHJTf0Y5uk88qH0UA4Z0_6UCjDhK4z/exec';
 
     // Hiển thị ngày giờ hiện tại
     function showDateTime() {
@@ -214,99 +212,48 @@
       ).join(' ');
     }
 
-    // Nhóm dữ liệu theo khách hàng
-    function groupData(data) {
-      return data.reduce((acc, item) => {
-        if (!acc[item.H]) {
-          acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
-        } else {
-          acc[item.H].Q += item.Q;
-          item.AN.forEach(a => acc[item.H].AN.add(a));
-        }
-        return acc;
-      }, {});
-    }
-
     // Hiển thị dữ liệu ra bảng
-    function displayData(data, driverMap) {
+    function displayData(data) {
       const totalOrders = data.length;
       const totalOrdersStr = totalOrders < 10 ? '0' + totalOrders : totalOrders;
       document.getElementById('total-orders').textContent = totalOrdersStr;
-      document.getElementById('total-receivable').textContent = formatCurrency(
-        data.reduce((s, i) => s + i.Q, 0)
-      );
+      
+      // Tính tổng tiền
+      const totalAmount = data.reduce((sum, item) => sum + (parseInt(item.totalAmount) || 0), 0);
+      document.getElementById('total-receivable').textContent = formatCurrency(totalAmount);
 
       let html = '';
       if (data.length === 0) {
         html = '<tr><td colspan="4">Không có dữ liệu</td></tr>';
       } else {
         data.forEach(item => {
-          // Split driver names for display (one per line)
-          const drivers = item.AN.map(a => driverMap[a] || a).join('<br>');
           html += `
             <tr>
-              <td>${item.AP}</td>
-              <td style="text-align:left">${item.H}</td>
-              <td style="text-align:left" class="driver-cell">${drivers}</td>
-              <td style="text-align:right">${formatCurrency(item.Q)}</td>
+              <td>${item.date || ''}</td>
+              <td style="text-align:left">${capitalizeFirstLetter(item.customer || '')}</td>
+              <td style="text-align:left" class="driver-cell">${item.driver || ''}</td>
+              <td style="text-align:right">${formatCurrency(item.totalAmount)}</td>
             </tr>`;
         });
       }
       document.getElementById('data-container').innerHTML = html;
     }
 
-    // Tải dữ liệu từ Google Sheets
+    // Tải dữ liệu từ Google Apps Script web app
     function loadData() {
       showDateTime();
 
-      // 1. Tải dữ liệu tra cứu tài xế
-      fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdLookup}`)
-        .then(res => res.text())
-        .then(txt => {
-          const lookupRows = JSON.parse(txt.substring(47).slice(0,-2)).table.rows;
-          const driverMap = lookupRows.reduce((map,row) => {
-            const key = row.c[0]?.v, val = row.c[2]?.v;
-            if (key && val) map[key] = val;
-            return map;
-          }, {});
-
-          // 2. Tải dữ liệu chính từ sheet Check kho
-          return fetch(`https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?gid=${sheetIdMain}`)
-            .then(res => res.text())
-            .then(txt2 => {
-              const rows = JSON.parse(txt2.substring(47).slice(0,-2)).table.rows;
-              
-              // 3. Xử lý dữ liệu từ sheet Check kho
-              originalData = rows.map(row => {
-                const dateText = row.c[11]?.f || row.c[11]?.v; // Column L (index 11) - Ngày
-                const customer = row.c[3]?.f || row.c[3]?.v || ''; // Column D (index 3) - Khách hàng
-                const driver = row.c[9]?.v || ''; // Column J (index 9) - Mã tài xế
-                const amount = parseInt(row.c[5]?.v) || 0; // Cột F (index 5) - Tổng tiền
-                
-                return dateText && customer.trim() ? {
-                  AP: dateText.toString().trim(), // Ngày
-                  H: customer.toString().trim(),  // Khách hàng
-                  AN: [driver],                  // Mã tài xế (chuyển thành mảng)
-                  Q: amount                     // Tổng tiền (từ cột F)
-                } : null;
-              }).filter(x => x);
-
-              // 4. Nhóm dữ liệu theo khách hàng
-              const grouped = groupData(originalData);
-              
-              // 5. Chuẩn bị dữ liệu để hiển thị
-              const displayData = Object.entries(grouped).map(([_, v]) => ({
-                AP: v.AP, 
-                H: capitalizeFirstLetter(v.H), 
-                AN: Array.from(v.AN), 
-                Q: v.Q
-              })).sort((a, b) => {
-                return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
-              });
-
-              // 6. Hiển thị kết quả
-              displayData(displayData, driverMap);
-            });
+      fetch(webAppUrl)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Network response was not ok');
+          }
+          return response.json();
+        })
+        .then(data => {
+          // Giả sử dữ liệu trả về có cấu trúc:
+          // [{date: "...", customer: "...", driver: "...", totalAmount: "..."}, ...]
+          displayData(data);
         })
         .catch(err => {
           console.error('Lỗi tải dữ liệu:', err);
