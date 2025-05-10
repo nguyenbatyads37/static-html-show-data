@@ -189,15 +189,6 @@
     const sheetIdLookup = '2007395895'; // Sheet tra cứu
     let originalData = [];
 
-    // Hàm lấy tham số từ URL
-    function getUrlParameter(name) {
-      name = name.replace(/[[\]]/g, '\\$&');
-      const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
-      const results = regex.exec(window.location.href);
-      if (!results) return null;
-      return results[2] ? decodeURIComponent(results[2].replace(/\+/g, ' ')) : '';
-    }
-
     // Hiển thị ngày giờ hiện tại
     function showDateTime() {
       const now = new Date();
@@ -223,37 +214,9 @@
       ).join(' ');
     }
 
-    // Lọc dữ liệu theo ngày và tên tài xế
-    function filterData(data, driverMap) {
-      const ngayParam = getUrlParameter('ngay'); // e.g., 10/5/2025
-      const tenParam = getUrlParameter('ten');   // e.g., Phùng Như Quang
-
-      return data.filter(item => {
-        // Kiểm tra ngày nếu có tham số
-        let ngayMatch = true;
-        if (ngayParam) {
-          // Chuẩn hóa định dạng ngày để so sánh
-          const itemDate = item.AP ? item.AP.trim() : '';
-          ngayMatch = itemDate === ngayParam.trim();
-        }
-        
-        // Kiểm tra tên tài xế nếu có tham số
-        let tenMatch = true;
-        if (tenParam) {
-          // Lấy danh sách tài xế từ cột AN (mã tài xế) và chuyển sang tên
-          const driverNames = item.AN.map(code => driverMap[code] || code);
-          tenMatch = driverNames.some(name => 
-            name.toLowerCase().includes(tenParam.toLowerCase().trim())
-          );
-        }
-        
-        return ngayMatch && tenMatch;
-      });
-    }
-
     // Nhóm dữ liệu theo khách hàng
-    function groupData(filteredData) {
-      return filteredData.reduce((acc, item) => {
+    function groupData(data) {
+      return data.reduce((acc, item) => {
         if (!acc[item.H]) {
           acc[item.H] = { ...item, AN: new Set(item.AN), Q: item.Q };
         } else {
@@ -275,7 +238,7 @@
 
       let html = '';
       if (data.length === 0) {
-        html = '<tr><td colspan="4">Không có dữ liệu phù hợp</td></tr>';
+        html = '<tr><td colspan="4">Không có dữ liệu</td></tr>';
       } else {
         data.forEach(item => {
           // Split driver names for display (one per line)
@@ -328,13 +291,10 @@
                 } : null;
               }).filter(x => x);
 
-              // 4. Lọc dữ liệu theo ngày và tên tài xế
-              const filtered = filterData(originalData, driverMap);
+              // 4. Nhóm dữ liệu theo khách hàng
+              const grouped = groupData(originalData);
               
-              // 5. Nhóm dữ liệu theo khách hàng
-              const grouped = groupData(filtered);
-              
-              // 6. Chuẩn bị dữ liệu để hiển thị
+              // 5. Chuẩn bị dữ liệu để hiển thị
               const displayData = Object.entries(grouped).map(([_, v]) => ({
                 AP: v.AP, 
                 H: capitalizeFirstLetter(v.H), 
@@ -344,7 +304,7 @@
                 return a.AP.split('/').reverse().join('').localeCompare(b.AP.split('/').reverse().join(''));
               });
 
-              // 7. Hiển thị kết quả
+              // 6. Hiển thị kết quả
               displayData(displayData, driverMap);
             });
         })
