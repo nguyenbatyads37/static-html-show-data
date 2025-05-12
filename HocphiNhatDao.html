@@ -202,7 +202,7 @@
             color: var(--accent-color);
         }
         
-        .capture-btn {
+        .capture-btn, .retrieve-btn, .clear-btn {
             display: block;
             width: 200px;
             margin: 20px auto;
@@ -217,7 +217,7 @@
             text-align: center;
         }
         
-        .capture-btn:hover {
+        .capture-btn:hover, .retrieve-btn:hover, .clear-btn:hover {
             background-color: var(--primary-color);
         }
     </style>
@@ -228,7 +228,8 @@
             <h1>BÁO CÁO HỌC PHÍ</h1>
             <h2>Trung tâm Gia sư Nhất Đạo</h2>
             <div class="logo">
-                <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F2e9ac941.%E1%BA%A2nh.010800.jpg" alt="Logo Nhất Đạo Gia Sư">
+                <!-- Thay bằng chuỗi Base64 của logo thật hoặc URL cục bộ -->
+                <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChHALi8NV3QAAAABJRU5ErkJggg==" alt="Logo Nhất Đạo Gia Sư">
             </div>
         </div>
         
@@ -296,10 +297,12 @@
     </div>
 
     <button class="capture-btn" id="capture-btn">Chụp ảnh hóa đơn</button>
+    <button class="retrieve-btn" id="retrieve-btn">Xem ảnh đã lưu</button>
+    <button class="clear-btn" id="clear-btn">Xóa bộ nhớ tạm</button>
 
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <script>
-        // Function to get URL parameters
+        // Hàm lấy tham số URL
         function getUrlParameter(name) {
             name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
             var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
@@ -307,75 +310,167 @@
             return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
         }
 
-        // Get parameters from URL
+        // Lấy tham số từ URL
         var hoten = getUrlParameter('hoten');
         var lop = getUrlParameter('lop');
         var buoi = getUrlParameter('buoi');
         var hp = getUrlParameter('hp');
         var link = getUrlParameter('link');
 
-        // Update the page content with parameters
+        // Cập nhật nội dung trang
         if (hoten) document.getElementById('hoten').textContent = hoten;
         if (lop) document.getElementById('lop').textContent = lop;
         if (buoi) document.getElementById('buoi').textContent = buoi;
-        if (hp) {
+
+        // Tính toán và cập nhật các trường học phí
+        if (hp && buoi && !isNaN(parseInt(hp)) && !isNaN(parseInt(buoi))) {
             var formattedHp = parseInt(hp).toLocaleString('vi-VN') + ' ₫';
             document.getElementById('hp').textContent = formattedHp;
             
-            // Auto-calculate total amount if both buoi and hp are provided
-            if (buoi) {
-                var total = parseInt(buoi) * parseInt(hp);
-                var formattedTotal = total.toLocaleString('vi-VN') + ' ₫';
-                document.getElementById('total-amount').textContent = formattedTotal;
-                document.getElementById('total-sum').textContent = total.toLocaleString('vi-VN');
-            }
+            var total = parseInt(buoi) * parseInt(hp);
+            var formattedTotal = total.toLocaleString('vi-VN') + ' ₫';
+            document.getElementById('total-amount').textContent = formattedTotal;
+            document.getElementById('total-sum').textContent = total.toLocaleString('vi-VN');
+        } else {
+            document.getElementById('hp').textContent = 'Không xác định';
+            document.getElementById('total-amount').textContent = 'Không xác định';
+            document.getElementById('total-sum').textContent = 'Không xác định';
         }
 
-        // Update QR code if link is provided
+        // Cập nhật mã QR
         if (link) {
             document.getElementById('qr-link').src = link;
         } else if (hoten) {
-            // Generate default QR code with student name if no link provided
             document.getElementById('qr-link').src = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=NDGS_' + encodeURIComponent(hoten);
         }
 
-        // Capture screenshot functionality
+        // Tải trước ảnh để đảm bảo sẵn sàng cho html2canvas
+        function preloadImages(callback) {
+            var logoImg = new Image();
+            var qrImg = new Image();
+            var imagesLoaded = 0;
+            
+            logoImg.src = document.querySelector('.logo img').src;
+            qrImg.src = document.getElementById('qr-link').src;
+            
+            function onImageLoad() {
+                imagesLoaded++;
+                if (imagesLoaded === 2) callback();
+            }
+            
+            logoImg.onload = onImageLoad;
+            qrImg.onload = onImageLoad;
+            
+            logoImg.onerror = function() {
+                console.error('Không thể tải logo');
+                imagesLoaded++;
+                if (imagesLoaded === 2) callback();
+            };
+            qrImg.onerror = function() {
+                console.error('Không thể tải mã QR');
+                imagesLoaded++;
+                if (imagesLoaded === 2) callback();
+            };
+        }
+
+        // Chụp ảnh và lưu vào localStorage
         document.getElementById('capture-btn').addEventListener('click', function() {
-            // Show loading message
             var btn = document.getElementById('capture-btn');
             btn.disabled = true;
             btn.textContent = 'Đang chụp ảnh...';
             
-            html2canvas(document.getElementById('invoice-to-capture'), {
-                scale: 2, // Higher quality
-                logging: false,
-                useCORS: true
-            }).then(canvas => {
-                // Convert canvas to blob
-                canvas.toBlob(function(blob) {
-                    // Create object URL
-                    var imgUrl = URL.createObjectURL(blob);
+            preloadImages(function() {
+                html2canvas(document.getElementById('invoice-to-capture'), {
+                    scale: 1, // Giảm scale để giảm kích thước
+                    logging: true, // Bật log để gỡ lỗi
+                    useCORS: true
+                }).then(canvas => {
+                    // Chuyển canvas thành data URL
+                    var dataUrl = canvas.toDataURL('image/png');
                     
-                    // Create temporary link to download
-                    var link = document.createElement('a');
-                    link.download = 'hoc-phi-' + (hoten || 'hoc-vien') + '.png';
-                    link.href = imgUrl;
+                    // Ước tính kích thước (MB)
+                    var dataSizeMb = (dataUrl.length * 3 / 4) / (1024 * 1024);
                     
-                    // Trigger download
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    if (dataSizeMb > 5) {
+                        alert('Ảnh quá lớn để lưu vào bộ nhớ tạm. Vui lòng xóa bộ nhớ tạm hoặc thử lại.');
+                        btn.disabled = false;
+                        btn.textContent = 'Chụp ảnh hóa đơn';
+                        return;
+                    }
                     
-                    // Clean up
-                    setTimeout(function() {
-                        URL.revokeObjectURL(imgUrl);
-                    }, 100);
+                    // Lưu vào localStorage
+                    var storageKey = 'invoice_' + (hoten ? encodeURIComponent(hoten) : 'hoc-vien') + '_' + Date.now();
+                    try {
+                        localStorage.setItem(storageKey, dataUrl);
+                        alert('Ảnh hóa đơn đã được lưu vào bộ nhớ tạm với key: ' + storageKey);
+                    } catch (e) {
+                        console.error('Lỗi localStorage:', e);
+                        alert('Không thể lưu ảnh: ' + (e.message || 'Bộ nhớ đầy hoặc bị hạn chế. Vui lòng xóa bộ nhớ tạm.'));
+                    }
                     
-                    // Restore button
+                    // Khôi phục nút
                     btn.disabled = false;
                     btn.textContent = 'Chụp ảnh hóa đơn';
-                }, 'image/png');
+                }).catch(function(error) {
+                    console.error('Lỗi html2canvas:', error);
+                    btn.disabled = false;
+                    btn.textContent = 'Chụp ảnh hóa đơn';
+                    alert('Lỗi khi chụp ảnh: ' + (error.message || 'Không thể tạo ảnh. Vui lòng thử lại.'));
+                });
             });
+        });
+
+        // Xem ảnh đã lưu
+        document.getElementById('retrieve-btn').addEventListener('click', function() {
+            var keys = Object.keys(localStorage).filter(key => key.startsWith('invoice_'));
+            if (keys.length === 0) {
+                alert('Không có ảnh nào trong bộ nhớ tạm.');
+                return;
+            }
+            
+            // Hiển thị ảnh mới nhất
+            var latestKey = keys[keys.length - 1];
+            var dataUrl = localStorage.getItem(latestKey);
+            
+            // Tạo phần tử ảnh
+            var img = document.createElement('img');
+            img.src = dataUrl;
+            img.style.maxWidth = '100%';
+            img.style.border = '1px solid #ddd';
+            img.style.marginTop = '20px';
+            
+            // Tạo liên kết tải xuống
+            var downloadLink = document.createElement('a');
+            downloadLink.href = dataUrl;
+            downloadLink.download = latestKey + '.png';
+            downloadLink.textContent = 'Tải ảnh xuống';
+            downloadLink.style.display = 'block';
+            downloadLink.style.margin = '10px auto';
+            downloadLink.style.textAlign = 'center';
+            downloadLink.style.color = 'var(--accent-color)';
+            downloadLink.style.textDecoration = 'underline';
+            
+            // Thêm vào body
+            var container = document.createElement('div');
+            container.style.textAlign = 'center';
+            container.appendChild(img);
+            container.appendChild(downloadLink);
+            
+            // Xóa bản xem trước cũ
+            var existingPreview = document.getElementById('image-preview');
+            if (existingPreview) existingPreview.remove();
+            
+            container.id = 'image-preview';
+            document.body.appendChild(container);
+        });
+
+        // Xóa localStorage
+        document.getElementById('clear-btn').addEventListener('click', function() {
+            var keys = Object.keys(localStorage).filter(key => key.startsWith('invoice_'));
+            keys.forEach(key => localStorage.removeItem(key));
+            alert('Đã xóa tất cả ảnh hóa đơn trong bộ nhớ tạm.');
+            var existingPreview = document.getElementById('image-preview');
+            if (existingPreview) existingPreview.remove();
         });
     </script>
 </body>
