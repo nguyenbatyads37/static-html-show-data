@@ -318,13 +318,17 @@
         if (hoten) document.getElementById('hoten').textContent = hoten;
         if (lop) document.getElementById('lop').textContent = lop;
         if (buoi) document.getElementById('buoi').textContent = buoi;
-        if (hp) document.getElementById('hp').textContent = parseInt(hp).toLocaleString('vi-VN') + ' ₫';
-        
-        // Calculate and update total amount
-        if (buoi && hp) {
-            var total = parseInt(buoi) * parseInt(hp.replace(/\D/g,''));
-            document.getElementById('total-amount').textContent = total.toLocaleString('vi-VN') + ' ₫';
-            document.getElementById('total-sum').textContent = total.toLocaleString('vi-VN');
+        if (hp) {
+            var formattedHp = parseInt(hp).toLocaleString('vi-VN') + ' ₫';
+            document.getElementById('hp').textContent = formattedHp;
+            
+            // Auto-calculate total amount if both buoi and hp are provided
+            if (buoi) {
+                var total = parseInt(buoi) * parseInt(hp);
+                var formattedTotal = total.toLocaleString('vi-VN') + ' ₫';
+                document.getElementById('total-amount').textContent = formattedTotal;
+                document.getElementById('total-sum').textContent = total.toLocaleString('vi-VN');
+            }
         }
 
         // Update QR code if link is provided
@@ -337,15 +341,40 @@
 
         // Capture screenshot functionality
         document.getElementById('capture-btn').addEventListener('click', function() {
-            html2canvas(document.getElementById('invoice-to-capture')).then(canvas => {
-                // Convert canvas to image
-                var image = canvas.toDataURL('image/png');
-                
-                // Create a temporary link to download the image
-                var link = document.createElement('a');
-                link.download = 'hoc-phi-' + (hoten || 'hoc-vien') + '.png';
-                link.href = image;
-                link.click();
+            // Show loading message
+            var btn = document.getElementById('capture-btn');
+            btn.disabled = true;
+            btn.textContent = 'Đang chụp ảnh...';
+            
+            html2canvas(document.getElementById('invoice-to-capture'), {
+                scale: 2, // Higher quality
+                logging: false,
+                useCORS: true
+            }).then(canvas => {
+                // Convert canvas to blob
+                canvas.toBlob(function(blob) {
+                    // Create object URL
+                    var imgUrl = URL.createObjectURL(blob);
+                    
+                    // Create temporary link to download
+                    var link = document.createElement('a');
+                    link.download = 'hoc-phi-' + (hoten || 'hoc-vien') + '.png';
+                    link.href = imgUrl;
+                    
+                    // Trigger download
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    
+                    // Clean up
+                    setTimeout(function() {
+                        URL.revokeObjectURL(imgUrl);
+                    }, 100);
+                    
+                    // Restore button
+                    btn.disabled = false;
+                    btn.textContent = 'Chụp ảnh hóa đơn';
+                }, 'image/png');
             });
         });
     </script>
