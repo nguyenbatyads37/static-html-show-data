@@ -2,103 +2,115 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quét QR - Dự phòng AppSheet</title>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/dist/html5-qrcode.min.js"></script>
     <style>
-        /* Giữ nguyên phần CSS như trước */
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        #reader {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border: 2px solid #4285F4;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+            max-width: 400px;
+            margin-left: auto;
+            margin-right: auto;
+            word-break: break-word;
+        }
+        .error {
+            color: red;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
-    <!-- Giữ nguyên phần header và container như trước -->
+    <h1>Dự phòng AppSheet</h1>
+    <p>Quét mã QR bằng camera sau</p>
+    
+    <div id="reader"></div>
+    <div id="result">Kết quả sẽ hiển thị ở đây...</div>
+    <div id="error" class="error"></div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async function() {
-            const codeReader = new ZXing.BrowserQRCodeReader();
-            const resultElement = document.getElementById('result');
-            const scanInfoElement = document.getElementById('scan-info');
-            const restartBtn = document.getElementById('restart-btn');
-            const copyBtn = document.getElementById('copy-btn');
-            
-            // Hiển thị thông báo lỗi
-            function showError(message) {
-                scanInfoElement.innerHTML = `<span style="color: red;">${message}</span>`;
-                resultElement.textContent = "Lỗi truy cập camera";
-            }
+        const html5QrCode = new Html5Qrcode("reader");
+        const resultContainer = document.getElementById("result");
+        const errorContainer = document.getElementById("error");
 
-            // Kiểm tra quyền camera
-            async function checkCameraPermission() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                    stream.getTracks().forEach(track => track.stop());
-                    return true;
-                } catch (err) {
-                    console.error("Lỗi quyền camera:", err);
-                    return false;
-                }
-            }
+        // Ưu tiên camera sau
+        function getBackCameraId(cameras) {
+            const backCameras = cameras.filter(camera => 
+                camera.label.toLowerCase().includes('back') || 
+                camera.label.includes('2') || // Một số điện thoại đánh số camera
+                camera.label.includes('rear'));
+            return backCameras.length > 0 ? backCameras[0].id : cameras[0].id;
+        }
 
-            // Bắt đầu quét
-            async function startScanning() {
-                try {
-                    // Kiểm tra quyền trước
-                    const hasPermission = await checkCameraPermission();
-                    if (!hasPermission) {
-                        showError("Vui lòng cấp quyền truy cập camera!");
-                        return;
+        function startScanner() {
+            Html5Qrcode.getCameras()
+                .then(cameras => {
+                    if (cameras.length === 0) {
+                        throw new Error("Không tìm thấy camera nào");
                     }
-
-                    const videoInputDevices = await ZXing.BrowserCodeReader.listVideoInputDevices();
                     
-                    // Ưu tiên camera sau
-                    let selectedDeviceId = null;
-                    const backCamera = videoInputDevices.find(device => 
-                        device.label.toLowerCase().includes('back'));
-                    
-                    selectedDeviceId = backCamera?.deviceId || videoInputDevices[0]?.deviceId;
+                    const cameraId = getBackCameraId(cameras);
+                    const config = { 
+                        fps: 10, 
+                        qrbox: 250 
+                    };
 
-                    if (!selectedDeviceId) {
-                        showError("Không tìm thấy camera!");
-                        return;
-                    }
-
-                    await codeReader.decodeFromVideoDevice(
-                        selectedDeviceId,
-                        'scanner',
-                        (result, error) => {
-                            if (result) {
-                                resultElement.textContent = result.text;
-                                scanInfoElement.innerHTML = '<span style="color: #4285F4;">✓ Quét thành công!</span>';
-                                restartBtn.classList.remove('hidden');
-                                copyBtn.classList.remove('hidden');
-                            }
-                            if (error && !error.message.includes('No QR code found')) {
-                                console.error(error);
+                    return html5QrCode.start(
+                        cameraId,
+                        config,
+                        qrCodeMessage => {
+                            resultContainer.innerHTML = `
+                                <strong>Quét thành công:</strong><br>
+                                ${qrCodeMessage}
+                            `;
+                            html5QrCode.stop();
+                            setTimeout(() => startScanner(), 2000); // Tự động quét lại sau 2 giây
+                        },
+                        errorMessage => {
+                            // Bỏ qua các cảnh báo thông thường
+                            if (!errorMessage.includes("No QR code found")) {
+                                console.warn(errorMessage);
                             }
                         }
                     );
+                })
+                .catch(err => {
+                    errorContainer.textContent = `Lỗi: ${err.message}`;
+                    console.error(err);
+                });
+        }
 
-                    scanInfoElement.textContent = 'Đang quét...';
-                } catch (err) {
-                    console.error("Lỗi nghiêm trọng:", err);
-                    showError(`Lỗi: ${err.message || 'Không thể khởi động camera'}`);
-                }
-            }
+        // Xử lý quyền truy cập camera
+        function handleCameraPermission() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    stream.getTracks().forEach(track => track.stop());
+                    startScanner();
+                })
+                .catch(err => {
+                    errorContainer.textContent = `Vui lòng cho phép truy cập camera!`;
+                    console.error("Camera permission denied:", err);
+                });
+        }
 
-            // Bắt đầu quét khi trang load
-            startScanning();
-
-            // Các sự kiện nút như trước
-            restartBtn.addEventListener('click', startScanning);
-            copyBtn.addEventListener('click', async () => {
-                try {
-                    await navigator.clipboard.writeText(resultElement.textContent);
-                    scanInfoElement.innerHTML = '<span style="color: green;">Đã sao chép!</span>';
-                } catch (err) {
-                    showError("Lỗi khi sao chép");
-                }
-            });
-        });
+        // Bắt đầu khi trang tải xong
+        document.addEventListener('DOMContentLoaded', handleCameraPermission);
     </script>
 </body>
 </html>
