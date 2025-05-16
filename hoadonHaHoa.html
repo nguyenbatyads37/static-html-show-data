@@ -98,6 +98,12 @@
             text-align: center;
             width: 45%;
         }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -134,6 +140,8 @@
             <div><strong>SĐT NV:</strong> <span id="staff-phone"></span></div>
         </div>
     </div>
+
+    <div id="loading" class="loading">Đang tải dữ liệu hóa đơn...</div>
 
     <table>
         <thead>
@@ -181,7 +189,7 @@
 
         // Hàm định dạng số tiền với "Đồng"
         function formatCurrency(num) {
-            if (!num) return '';
+            if (!num) return '0 Đồng';
             return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' Đồng';
         }
 
@@ -226,7 +234,7 @@
             customerPhone: capitalizeFirstLetter(params.customerPhone)
         };
 
-        // Điền dữ liệu vào HTML
+        // Điền dữ liệu vào HTML từ query params
         document.getElementById('qr-code').src = capitalizedParams.qr;
         document.getElementById('customer').textContent = capitalizedParams.customer;
         document.getElementById('address').textContent = capitalizedParams.address;
@@ -246,54 +254,61 @@
         }
 
         // Hàm lấy dữ liệu từ Google Apps Script
-        async function fetchData() {
+        async function fetchInvoiceData() {
             const scriptUrl = 'https://script.google.com/macros/s/AKfycbx9U1nrnSIjsyAYkfFXJzl6Cjba0Ff4swZr1ulSn7HBYWzHc-H6u226TZWwaEkqwZ3t/exec';
+            
             try {
                 const response = await fetch(scriptUrl);
-                if (!response.ok) throw new Error('Network response was not ok');
+                if (!response.ok) throw new Error('Không thể kết nối đến server');
                 const data = await response.json();
-
-                // Lọc dữ liệu dựa trên Mã đơn so với cột C (chỉ số 2)
-                const filteredData = data.filter(row => row[2] === capitalizedParams.orderId);
-
-                // Render bảng dữ liệu
-                const tableBody = document.getElementById('table-body');
-                let total = 0;
-
-                filteredData.forEach(row => {
-                    // Giả sử các cột: 0 (Tên hàng), 1 (Số lượng), 2 (Mã đơn), 3 (Đơn giá), 4 (Thành tiền)
-                    const name = row[0] || '';
-                    const quantity = row[1] || '';
-                    const unitPrice = row[3] || '';
-                    const amount = row[4] || '';
-
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${name}</td>
-                        <td>${quantity}</td>
-                        <td>${formatCurrency(unitPrice)}</td>
-                        <td>${formatCurrency(amount)}</td>
-                    `;
-                    tableBody.appendChild(tr);
-
-                    // Tính tổng tiền từ cột Thành tiền
-                    const amountValue = parseInt(amount.toString().replace(/,/g, '')) || 0;
-                    total += amountValue;
-                });
-
-                // Điền tổng tiền với "Đồng"
-                const totalFormatted = formatCurrency(total);
-                document.getElementById('total-amount').textContent = totalFormatted;
-                document.getElementById('total-payable').textContent = totalFormatted;
-
+                
+                // Lọc dữ liệu chỉ lấy các dòng có ID trùng với mã đơn hàng
+                const invoiceItems = data.filter(item => item.id === capitalizedParams.orderId);
+                
+                if (invoiceItems.length === 0) {
+                    document.getElementById('loading').textContent = 'Không tìm thấy dữ liệu cho đơn hàng này';
+                    return;
+                }
+                
+                renderInvoiceTable(invoiceItems);
+                
             } catch (error) {
-                console.error('Error fetching data:', error);
-                document.getElementById('table-body').innerHTML = '<tr><td colspan="4">Không thể tải dữ liệu</td></tr>';
+                console.error('Error:', error);
+                document.getElementById('loading').textContent = 'Lỗi khi tải dữ liệu: ' + error.message;
             }
         }
 
-        // Gọi hàm lấy dữ liệu
-        fetchData();
+        // Hàm hiển thị dữ liệu hóa đơn
+        function renderInvoiceTable(items) {
+            const tableBody = document.getElementById('table-body');
+            let totalAmount = 0;
+            
+            items.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.tenHang || ''}</td>
+                    <td>${item.soLuong || '0'}</td>
+                    <td>${formatCurrency(item.donGia)}</td>
+                    <td>${formatCurrency(item.thanhTien)}</td>
+                `;
+                tableBody.appendChild(row);
+                
+                // Tính tổng tiền
+                if (item.thanhTien) {
+                    totalAmount += parseFloat(item.thanhTien) || 0;
+                }
+            });
+            
+            // Ẩn thông báo loading
+            document.getElementById('loading').style.display = 'none';
+            
+            // Hiển thị tổng tiền
+            document.getElementById('total-amount').textContent = formatCurrency(totalAmount);
+            document.getElementById('total-payable').textContent = formatCurrency(totalAmount);
+        }
+
+        // Gọi hàm lấy dữ liệu khi trang được tải
+        document.addEventListener('DOMContentLoaded', fetchInvoiceData);
     </script>
 </body>
 </html>
