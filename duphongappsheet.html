@@ -1,102 +1,207 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QR Code Scanner - Dự phòng AppSheet</title>
-    <script src="https://rawgit.com/schmalfuss/instascan/master/dist/instascan.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Quét QR - Dự phòng AppSheet</title>
+    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1"></script>
     <style>
+        * {
+            box-sizing: border-box;
+        }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Roboto', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .header {
+            background-color: #4285F4;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            position: fixed;
+            top: 0;
+            width: 100%;
+            z-index: 100;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .container {
+            margin-top: 80px;
+            padding: 15px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-        .header {
-            background-color: #4285F4; /* Màu xanh Google */
-            color: white;
-            padding: 15px 20px;
-            width: 100%;
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-            margin-bottom: 30px;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-        .header p {
-            margin: 5px 0 0;
-            font-size: 14px;
-            opacity: 0.9;
         }
         #scanner-container {
-            width: 300px;
-            height: 300px;
-            border: 2px solid #333;
-            margin-bottom: 20px;
-            position: relative;
+            width: 100%;
+            max-width: 400px;
+            height: 400px;
+            border: 3px solid #4285F4;
+            border-radius: 10px;
             overflow: hidden;
-            border-radius: 8px;
+            position: relative;
+            margin-bottom: 20px;
+            background-color: black;
         }
         #scanner {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        #result {
+        #result-container {
+            width: 100%;
+            max-width: 400px;
             padding: 15px;
-            font-size: 16px;
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            width: 300px;
-            text-align: center;
+            background-color: white;
+            border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        #result {
+            word-break: break-all;
+        }
+        .scan-info {
+            color: #666;
+            text-align: center;
+            font-size: 14px;
+            margin-top: 10px;
+        }
+        .btn {
+            background-color: #4285F4;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        .btn:hover {
+            background-color: #3367D6;
+        }
+        .hidden {
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Dự phòng AppSheet</h1>
-        <p>Quét mã QR để tiếp tục</p>
+        <p>Quét mã QR bằng camera sau</p>
     </div>
 
-    <div id="scanner-container">
-        <video id="scanner"></video>
+    <div class="container">
+        <div id="scanner-container">
+            <video id="scanner" playsinline></video>
+        </div>
+        
+        <div id="result-container">
+            <h3>Thông tin quét được:</h3>
+            <div id="result">Chưa có dữ liệu</div>
+            <div id="scan-info" class="scan-info">Đưa mã QR vào khung hình để quét</div>
+        </div>
+        
+        <div>
+            <button id="restart-btn" class="btn hidden">Quét lại</button>
+            <button id="copy-btn" class="btn hidden">Sao chép</button>
+        </div>
     </div>
-    <div id="result">Đưa mã QR vào khung hình để quét...</div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const scanner = new Instascan.Scanner({ video: document.getElementById('scanner') });
-            
-            scanner.addListener('scan', function(content) {
-                document.getElementById('result').innerHTML = `
-                    <strong>Kết quả:</strong><br>
-                    ${content}<br><br>
-                    <small style="color: #4285F4;">Đã quét thành công!</small>
-                `;
-                
-                // Tự động chuyển hướng nếu là URL
-                if (content.startsWith('http')) {
-                    setTimeout(() => { window.location.href = content; }, 1500);
+            const codeReader = new ZXing.BrowserQRCodeReader();
+            const resultElement = document.getElementById('result');
+            const scanInfoElement = document.getElementById('scan-info');
+            const restartBtn = document.getElementById('restart-btn');
+            const copyBtn = document.getElementById('copy-btn');
+            let scanning = false;
+
+            // Chọn camera sau (nếu có)
+            function getBackCamera() {
+                return new Promise((resolve, reject) => {
+                    navigator.mediaDevices.enumerateDevices()
+                        .then(devices => {
+                            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                            
+                            // Ưu tiên camera có từ "back" trong tên
+                            const backCamera = videoDevices.find(device => 
+                                device.label.toLowerCase().includes('back'));
+                            
+                            resolve(backCamera ? backCamera.deviceId : null);
+                        })
+                        .catch(err => {
+                            console.error(err);
+                            reject(err);
+                        });
+                });
+            }
+
+            async function startScanning() {
+                try {
+                    const backCameraId = await getBackCamera();
+                    const constraints = backCameraId ? { 
+                        deviceId: { exact: backCameraId } 
+                    } : { 
+                        facingMode: { ideal: 'environment' } 
+                    };
+
+                    await codeReader.decodeFromVideoDevice(
+                        constraints,
+                        'scanner',
+                        (result, error, controls) => {
+                            if (result) {
+                                showResult(result.text);
+                                controls.stop();
+                                scanning = false;
+                            }
+                            if (error) {
+                                // Bỏ qua một số lỗi không cần thiết
+                                if (!error.message.includes('No QR code found')) {
+                                    console.error(error);
+                                }
+                            }
+                        }
+                    );
+                    
+                    scanning = true;
+                    scanInfoElement.textContent = 'Đang quét...';
+                    restartBtn.classList.add('hidden');
+                    copyBtn.classList.add('hidden');
+                } catch (err) {
+                    console.error(err);
+                    scanInfoElement.textContent = 'Lỗi: ' + err.message;
                 }
-            });
-            
-            Instascan.Camera.getCameras().then(function(cameras) {
-                if (cameras.length > 0) {
-                    scanner.start(cameras[0]);
-                } else {
-                    document.getElementById('result').textContent = 'Lỗi: Không tìm thấy camera!';
-                }
-            }).catch(function(error) {
-                console.error(error);
-                document.getElementById('result').innerHTML = 'Lỗi: Không thể truy cập camera.<br>Vui lòng kiểm tra quyền truy cập.';
+            }
+
+            function showResult(resultText) {
+                resultElement.innerHTML = resultText;
+                scanInfoElement.innerHTML = '<span style="color: #4285F4;">✓ Quét thành công!</span>';
+                restartBtn.classList.remove('hidden');
+                copyBtn.classList.remove('hidden');
+            }
+
+            // Bắt đầu quét khi trang load
+            startScanning();
+
+            // Sự kiện nút quét lại
+            restartBtn.addEventListener('click', startScanning);
+
+            // Sự kiện nút sao chép
+            copyBtn.addEventListener('click', function() {
+                const textToCopy = resultElement.textContent;
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        scanInfoElement.innerHTML = '<span style="color: #4285F4;">Đã sao chép!</span>';
+                        setTimeout(() => {
+                            scanInfoElement.textContent = 'Đưa mã QR vào khung hình để quét';
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Lỗi khi sao chép: ', err);
+                        scanInfoElement.textContent = 'Sao chép thất bại';
+                    });
             });
         });
     </script>
