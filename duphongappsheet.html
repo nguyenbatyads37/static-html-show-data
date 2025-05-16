@@ -6,202 +6,97 @@
     <title>Quét QR - Dự phòng AppSheet</title>
     <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1"></script>
     <style>
-        * {
-            box-sizing: border-box;
-        }
-        body {
-            font-family: 'Roboto', Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        .header {
-            background-color: #4285F4;
-            color: white;
-            padding: 15px;
-            text-align: center;
-            position: fixed;
-            top: 0;
-            width: 100%;
-            z-index: 100;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .container {
-            margin-top: 80px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-        #scanner-container {
-            width: 100%;
-            max-width: 400px;
-            height: 400px;
-            border: 3px solid #4285F4;
-            border-radius: 10px;
-            overflow: hidden;
-            position: relative;
-            margin-bottom: 20px;
-            background-color: black;
-        }
-        #scanner {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        #result-container {
-            width: 100%;
-            max-width: 400px;
-            padding: 15px;
-            background-color: white;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        #result {
-            word-break: break-all;
-        }
-        .scan-info {
-            color: #666;
-            text-align: center;
-            font-size: 14px;
-            margin-top: 10px;
-        }
-        .btn {
-            background-color: #4285F4;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 5px;
-        }
-        .btn:hover {
-            background-color: #3367D6;
-        }
-        .hidden {
-            display: none;
-        }
+        /* Giữ nguyên phần CSS như trước */
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Dự phòng AppSheet</h1>
-        <p>Quét mã QR bằng camera sau</p>
-    </div>
-
-    <div class="container">
-        <div id="scanner-container">
-            <video id="scanner" playsinline></video>
-        </div>
-        
-        <div id="result-container">
-            <h3>Thông tin quét được:</h3>
-            <div id="result">Chưa có dữ liệu</div>
-            <div id="scan-info" class="scan-info">Đưa mã QR vào khung hình để quét</div>
-        </div>
-        
-        <div>
-            <button id="restart-btn" class="btn hidden">Quét lại</button>
-            <button id="copy-btn" class="btn hidden">Sao chép</button>
-        </div>
-    </div>
+    <!-- Giữ nguyên phần header và container như trước -->
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', async function() {
             const codeReader = new ZXing.BrowserQRCodeReader();
             const resultElement = document.getElementById('result');
             const scanInfoElement = document.getElementById('scan-info');
             const restartBtn = document.getElementById('restart-btn');
             const copyBtn = document.getElementById('copy-btn');
-            let scanning = false;
-
-            // Chọn camera sau (nếu có)
-            function getBackCamera() {
-                return new Promise((resolve, reject) => {
-                    navigator.mediaDevices.enumerateDevices()
-                        .then(devices => {
-                            const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                            
-                            // Ưu tiên camera có từ "back" trong tên
-                            const backCamera = videoDevices.find(device => 
-                                device.label.toLowerCase().includes('back'));
-                            
-                            resolve(backCamera ? backCamera.deviceId : null);
-                        })
-                        .catch(err => {
-                            console.error(err);
-                            reject(err);
-                        });
-                });
+            
+            // Hiển thị thông báo lỗi
+            function showError(message) {
+                scanInfoElement.innerHTML = `<span style="color: red;">${message}</span>`;
+                resultElement.textContent = "Lỗi truy cập camera";
             }
 
-            async function startScanning() {
+            // Kiểm tra quyền camera
+            async function checkCameraPermission() {
                 try {
-                    const backCameraId = await getBackCamera();
-                    const constraints = backCameraId ? { 
-                        deviceId: { exact: backCameraId } 
-                    } : { 
-                        facingMode: { ideal: 'environment' } 
-                    };
-
-                    await codeReader.decodeFromVideoDevice(
-                        constraints,
-                        'scanner',
-                        (result, error, controls) => {
-                            if (result) {
-                                showResult(result.text);
-                                controls.stop();
-                                scanning = false;
-                            }
-                            if (error) {
-                                // Bỏ qua một số lỗi không cần thiết
-                                if (!error.message.includes('No QR code found')) {
-                                    console.error(error);
-                                }
-                            }
-                        }
-                    );
-                    
-                    scanning = true;
-                    scanInfoElement.textContent = 'Đang quét...';
-                    restartBtn.classList.add('hidden');
-                    copyBtn.classList.add('hidden');
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    stream.getTracks().forEach(track => track.stop());
+                    return true;
                 } catch (err) {
-                    console.error(err);
-                    scanInfoElement.textContent = 'Lỗi: ' + err.message;
+                    console.error("Lỗi quyền camera:", err);
+                    return false;
                 }
             }
 
-            function showResult(resultText) {
-                resultElement.innerHTML = resultText;
-                scanInfoElement.innerHTML = '<span style="color: #4285F4;">✓ Quét thành công!</span>';
-                restartBtn.classList.remove('hidden');
-                copyBtn.classList.remove('hidden');
+            // Bắt đầu quét
+            async function startScanning() {
+                try {
+                    // Kiểm tra quyền trước
+                    const hasPermission = await checkCameraPermission();
+                    if (!hasPermission) {
+                        showError("Vui lòng cấp quyền truy cập camera!");
+                        return;
+                    }
+
+                    const videoInputDevices = await ZXing.BrowserCodeReader.listVideoInputDevices();
+                    
+                    // Ưu tiên camera sau
+                    let selectedDeviceId = null;
+                    const backCamera = videoInputDevices.find(device => 
+                        device.label.toLowerCase().includes('back'));
+                    
+                    selectedDeviceId = backCamera?.deviceId || videoInputDevices[0]?.deviceId;
+
+                    if (!selectedDeviceId) {
+                        showError("Không tìm thấy camera!");
+                        return;
+                    }
+
+                    await codeReader.decodeFromVideoDevice(
+                        selectedDeviceId,
+                        'scanner',
+                        (result, error) => {
+                            if (result) {
+                                resultElement.textContent = result.text;
+                                scanInfoElement.innerHTML = '<span style="color: #4285F4;">✓ Quét thành công!</span>';
+                                restartBtn.classList.remove('hidden');
+                                copyBtn.classList.remove('hidden');
+                            }
+                            if (error && !error.message.includes('No QR code found')) {
+                                console.error(error);
+                            }
+                        }
+                    );
+
+                    scanInfoElement.textContent = 'Đang quét...';
+                } catch (err) {
+                    console.error("Lỗi nghiêm trọng:", err);
+                    showError(`Lỗi: ${err.message || 'Không thể khởi động camera'}`);
+                }
             }
 
             // Bắt đầu quét khi trang load
             startScanning();
 
-            // Sự kiện nút quét lại
+            // Các sự kiện nút như trước
             restartBtn.addEventListener('click', startScanning);
-
-            // Sự kiện nút sao chép
-            copyBtn.addEventListener('click', function() {
-                const textToCopy = resultElement.textContent;
-                navigator.clipboard.writeText(textToCopy)
-                    .then(() => {
-                        scanInfoElement.innerHTML = '<span style="color: #4285F4;">Đã sao chép!</span>';
-                        setTimeout(() => {
-                            scanInfoElement.textContent = 'Đưa mã QR vào khung hình để quét';
-                        }, 2000);
-                    })
-                    .catch(err => {
-                        console.error('Lỗi khi sao chép: ', err);
-                        scanInfoElement.textContent = 'Sao chép thất bại';
-                    });
+            copyBtn.addEventListener('click', async () => {
+                try {
+                    await navigator.clipboard.writeText(resultElement.textContent);
+                    scanInfoElement.innerHTML = '<span style="color: green;">Đã sao chép!</span>';
+                } catch (err) {
+                    showError("Lỗi khi sao chép");
+                }
             });
         });
     </script>
