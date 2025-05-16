@@ -20,53 +20,20 @@
             margin-bottom: 15px;
         }
         .logo {
-            width: 180px; /* Tăng từ 120px */
+            width: 180px;
             height: auto;
         }
         .qr-code {
-            width: 100px; /* Tăng từ 70px */
-            height: 100px; /* Tăng từ 70px */
+            width: 100px;
+            height: 100px;
         }
         .company-info {
             text-align: center;
             flex-grow: 1;
             margin: 0 15px;
         }
-        .company-name {
-            font-size: 22px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .invoice-title {
-            text-align: center;
-            font-weight: bold;
-            font-size: 20px;
-            margin: 20px 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .order-info {
-            margin-bottom: 15px;
- linebacker: 1.5;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 15px;
-        }
-        .logo {
-            width: 180px; /* Tăng từ 120px */
-            height: auto;
-        }
-        .qr-code {
-            width: 100px; /* Tăng từ 70px */
-            height: 100px; /* Tăng từ 70px */
-        }
-        .company-info {
-            text-align: center;
-            flex-grow: 1;
-            margin: 0 15px;
+        .company-info div {
+            font-weight: bold; /* In đậm tất cả các dòng */
         }
         .company-name {
             font-size: 22px;
@@ -118,6 +85,10 @@
         .barcode canvas {
             height: 60px;
         }
+        .barcode .time-info {
+            margin-top: 10px;
+            font-size: 14px;
+        }
         .signature {
             display: flex;
             justify-content: space-between;
@@ -146,17 +117,20 @@
 
     <div class="barcode">
         <canvas id="barcode"></canvas>
+        <div class="time-info">
+            <div><strong>Thời gian đặt hàng:</strong> <span id="order-time"></span></div>
+            <div><strong>Thời gian in:</strong> <span id="print-time"></span></div>
+        </div>
     </div>
 
     <div class="order-info">
         <div>
-            <div><strong>Mã đơn hàng:</strong> <span id="order-id"></span></div>
             <div><strong>Khách hàng:</strong> <span id="customer"></span></div>
             <div><strong>Địa chỉ:</strong> <span id="address"></span></div>
+            <div><strong>SĐT:</strong> <span id="customer-phone"></span></div>
         </div>
         <div>
-            <div><strong>Thời gian đặt hàng:</strong> <span id="order-time"></span></div>
-            <div><strong>Thời gian in:</strong> <span id="print-time"></span></div>
+            <div><strong>NV bán hàng:</strong> <span id="staff-name"></span></div>
             <div><strong>SĐT NV:</strong> <span id="staff-phone"></span></div>
         </div>
     </div>
@@ -199,6 +173,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
     <script>
+        // Hàm viết hoa chữ cái đầu tiên
+        function capitalizeFirstLetter(str) {
+            if (!str) return str;
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
         // Hàm lấy query parameters từ URL
         function getQueryParams() {
             const params = new URLSearchParams(window.location.search);
@@ -209,6 +189,8 @@
                 address: params.get('DC') || '',
                 time: params.get('time') || '',
                 staffPhone: params.get('sđtnv') || '',
+                staffName: params.get('NV') || '',
+                customerPhone: params.get('sđt KH') || '',
                 data: params.get('data') || ''
             };
         }
@@ -227,18 +209,32 @@
         // Lấy dữ liệu từ query params
         const params = getQueryParams();
 
+        // Viết hoa chữ cái đầu tiên cho các biến
+        const capitalizedParams = {
+            qr: params.qr,
+            orderId: params.orderId,
+            customer: capitalizeFirstLetter(params.customer),
+            address: capitalizeFirstLetter(params.address),
+            time: capitalizeFirstLetter(params.time),
+            staffPhone: capitalizeFirstLetter(params.staffPhone),
+            staffName: capitalizeFirstLetter(params.staffName),
+            customerPhone: capitalizeFirstLetter(params.customerPhone),
+            data: params.data
+        };
+
         // Điền dữ liệu vào HTML
-        document.getElementById('qr-code').src = params.qr;
-        document.getElementById('order-id').textContent = params.orderId;
-        document.getElementById('customer').textContent = params.customer;
-        document.getElementById('address').textContent = params.address;
-        document.getElementById('order-time').textContent = params.time;
-        document.getElementById('staff-phone').textContent = params.staffPhone;
+        document.getElementById('qr-code').src = capitalizedParams.qr;
+        document.getElementById('customer').textContent = capitalizedParams.customer;
+        document.getElementById('address').textContent = capitalizedParams.address;
+        document.getElementById('customer-phone').textContent = capitalizedParams.customerPhone;
+        document.getElementById('order-time').textContent = capitalizedParams.time;
+        document.getElementById('staff-name').textContent = capitalizedParams.staffName;
+        document.getElementById('staff-phone').textContent = capitalizedParams.staffPhone;
         document.getElementById('print-time').textContent = formatCurrentTime();
 
         // Tạo barcode với nội dung là Mã đơn
-        if (params.orderId) {
-            JsBarcode("#barcode", params.orderId, {
+        if (capitalizedParams.orderId) {
+            JsBarcode("#barcode", capitalizedParams.orderId, {
                 format: "CODE128",
                 height: 60,
                 displayValue: true
@@ -248,8 +244,8 @@
         // Parse và render bảng dữ liệu
         const tableBody = document.getElementById('table-body');
         let total = 0;
-        if (params.data) {
-            const rows = params.data.split('_b_');
+        if (capitalizedParams.data) {
+            const rows = capitalizedParams.data.split('_b_');
             rows.forEach(row => {
                 if (row) {
                     const [name, quantity, unitPrice, amount] = row.split('_a_');
