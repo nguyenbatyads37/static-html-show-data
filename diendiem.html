@@ -6,7 +6,6 @@
     <title>BẢNG ĐIỂM HỌC SINH KHOA BẢNG</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Style từ giao diện đầu tiên */
         * {
             margin: 0;
             padding: 0;
@@ -45,7 +44,6 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
 
-        /* Style cho bảng động */
         .score-table {
             width: 100%;
             border-collapse: collapse;
@@ -92,7 +90,6 @@
 
 <body class="bg-gray-50 p-6 text-gray-800">
     <div class="max-w-6xl mx-auto">
-        <!-- Header với logo -->
         <header class="header">
             <div class="title-container">
                 <h1 class="main-title">BẢNG ĐIỂM HỌC SINH KHOA BẢNG</h1>
@@ -104,19 +101,16 @@
             </div>
         </header>
 
-        <!-- Các nút chức năng -->
         <div class="mb-4 space-x-2">
             <button id="btnEdit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Chỉnh sửa</button>
             <button id="btnSave" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded hidden">Lưu</button>
             <button id="btnCancel" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded hidden">Huỷ</button>
         </div>
 
-        <!-- Container cho bảng động -->
         <div id="tableContainer" class="overflow-x-auto shadow rounded bg-white p-4"></div>
     </div>
 
     <script>
-        // Toàn bộ JavaScript backend từ file thứ 2
         const urlParams = new URLSearchParams(window.location.search);
         const id = urlParams.get('id') || '123';
         const tenDiemRaw = urlParams.get('tenDiem') || 'BTVN,Toán,Lý,Hóa,% Về nhà';
@@ -126,6 +120,7 @@
         let tempData = [];
         let isEditing = false;
 
+        // API Functions
         async function callAppsheetAPI(action, table, rows, properties = {}) {
             const appId = '8dd1c446-18a3-4704-bb84-9e3e1e33ca76';
             const accessKey = 'V2-0VNG2-0pOdh-cAkPw-4UYbT-W2lqQ-thshv-WUqsM-GyzvT';
@@ -152,9 +147,13 @@
         }
 
         function toKey(str) {
-            return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "_");
+            return str.toLowerCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^a-z0-9]/g, "_");
         }
 
+        // Render Table
         function renderTable(data, editable = false) {
             const headers = ['Mã học sinh', 'Tên học sinh', ...tenDiem];
             const keys = ['maHS', 'tenHS', ...tenDiem.map(toKey)];
@@ -191,9 +190,126 @@
             }
         }
 
-        // Các hàm xử lý sự kiện và API còn lại giữ nguyên
-        // ... (giữ nguyên toàn bộ phần JavaScript phía sau từ file 2)
+        // Generate HTML Table
+        function generateHTMLTable(data, tenDiemParam) {
+            const tenDiem = tenDiemParam
+                .split(',')
+                .map(s => decodeURIComponent(s.trim()))
+                .filter(Boolean);
 
+            const headers = ['Mã học sinh', 'Tên học sinh', ...tenDiem];
+            const keys = ['maHS', 'tenHS', ...tenDiem.map(toKey)];
+
+            let html = `<table class="score-table"><tr>`;
+            html += headers.map(h => `<th>${h}</th>`).join('');
+            html += `</tr>`;
+            data.forEach(hs => {
+                html += `<tr>`;
+                keys.forEach(key => {
+                    html += `<td>${hs[key] ?? ''}</td>`;
+                });
+                html += `</tr>`;
+            });
+            html += `</table>`;
+            return html;
+        }
+
+        // Button Handlers
+        function toggleButtons(editing) {
+            document.getElementById("btnEdit").classList.toggle("hidden", editing);
+            document.getElementById("btnSave").classList.toggle("hidden", !editing);
+            document.getElementById("btnCancel").classList.toggle("hidden", !editing);
+        }
+
+        document.getElementById("btnEdit").onclick = () => {
+            isEditing = true;
+            tempData = JSON.parse(JSON.stringify(hocSinhData));
+            renderTable(tempData, true);
+            toggleButtons(true);
+        };
+
+        document.getElementById("btnCancel").onclick = () => {
+            isEditing = false;
+            renderTable(hocSinhData);
+            toggleButtons(false);
+        };
+
+        document.getElementById("btnSave").onclick = async () => {
+            isEditing = false;
+            hocSinhData = [...tempData];
+            renderTable(hocSinhData);
+            const htmlTable = generateHTMLTable(hocSinhData, tenDiemRaw);
+            toggleButtons(false);
+
+            try {
+                // Update điểm danh
+                const updates = hocSinhData.map(hs => {
+                    const updateRow = { "Id": hs.id };
+                    tenDiem.forEach((diem, index) => {
+                        const key = toKey(diem);
+                        const colMap = {
+                            "BTVN": "1",
+                            "% Về nhà": "% BTVN",
+                            "Về nhà": "% BTVN"
+                        };
+                        updateRow[colMap[diem] || (index + 1).toString()] = hs[key];
+                    });
+                    return updateRow;
+                });
+
+                // Update HTML table
+                const [diemDanhResult] = await callAppsheetAPI("Find", "Điểm kiểm tra", [], {
+                    Selector: `FILTER("Điểm kiểm tra", [id nhập] = "${id}")`
+                });
+
+                await Promise.all([
+                    callAppsheetAPI("Edit", "Điểm danh", updates),
+                    callAppsheetAPI("Edit", "Điểm kiểm tra", [{
+                        "id": diemDanhResult.id,
+                        "Url file": htmlTable
+                    }])
+                ]);
+
+                alert("Cập nhật thành công!");
+            } catch (error) {
+                console.error("Lỗi cập nhật:", error);
+                alert("Có lỗi xảy ra khi cập nhật dữ liệu");
+            }
+        };
+
+        // Init Data
+        window.addEventListener("DOMContentLoaded", async () => {
+            try {
+                const rawData = await callAppsheetAPI("Find", "Điểm danh", [], {
+                    Selector: `FILTER("Điểm danh", [Id điểm danh] = "${id}")`
+                });
+
+                hocSinhData = rawData.map(hs => {
+                    const item = {
+                        maHS: hs["id Học sinh"],
+                        tenHS: hs["TÊN HỌC SINH"],
+                        id: hs["id"]
+                    };
+
+                    tenDiem.forEach((diem, index) => {
+                        const key = toKey(diem);
+                        const valueMap = {
+                            "BTVN": hs["1"],
+                            "% Về nhà": hs["% BTVN"],
+                            "Về nhà": hs["% BTVN"]
+                        };
+                        item[key] = valueMap[diem] || hs[(index + 1).toString()];
+                    });
+
+                    return item;
+                });
+
+                renderTable(hocSinhData);
+            } catch (error) {
+                console.error("Lỗi tải dữ liệu:", error);
+                alert("Không thể tải dữ liệu từ hệ thống");
+            }
+        });
     </script>
 </body>
 </html>
