@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Phiếu giao nhận hàng</title>
+    <style>
+        @page {
+            size: A6;
+            margin: 5mm;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0 auto;
+            padding: 0;
+            width: 95mm; /* Giảm width để có lề khi in */
+            height: 138mm; /* Giảm height để có lề khi in */
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .content-wrapper {
+            padding: 4mm;
+            border: 1px solid #000;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        .barcode-container {
+            text-align: center;
+            margin-bottom: 6px;
+        }
+        .barcode {
+            font-family: 'Libre Barcode 128', cursive;
+            font-size: 32px; /* Barcode rất to */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 2px solid #000; /* Viền đậm */
+            margin-bottom: 8px;
+        }
+        tr {
+            border-bottom: 1.5px dashed #000;
+            height: 9mm; /* Dòng rộng */
+        }
+        tr:last-child {
+            border-bottom: none;
+        }
+        td {
+            padding: 5px 6px;
+            vertical-align: middle;
+            font-size: 15px; /* Chữ rất to */
+        }
+        td strong {
+            font-size: 16px; /* Chữ in đậm cực to */
+        }
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            gap: 6px;
+        }
+        .qr-container, .image-container {
+            flex: 1;
+            min-width: 0;
+            text-align: center;
+        }
+        .qr-code, .signature-image {
+            width: 100%;
+            height: 38mm; /* Ảnh rất lớn */
+            border: 2px solid #000;
+            box-sizing: border-box;
+            object-fit: contain;
+            background-color: #f9f9f9;
+        }
+        .label {
+            margin-top: 3px;
+            font-size: 14px; /* Label to */
+            font-weight: bold;
+            text-align: center;
+        }
+        @media print {
+            body {
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            .content-wrapper {
+                border: none;
+                box-shadow: none;
+                padding: 2mm;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Barcode+128&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="content-wrapper">
+        <!-- Barcode at the top -->
+        <div class="barcode-container">
+            <div class="barcode" id="barcode-display"></div>
+        </div>
+
+        <!-- Main table -->
+        <table>
+            <tr>
+                <td width="25%"><strong>MVD:</strong></td>
+                <td width="55%" id="mvd"></td>
+                <td width="20%" id="khoiluong"></td>
+            </tr>
+            <tr>
+                <td><strong>Gút:</strong></td>
+                <td id="guitai"></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td><strong>Người nhận:</strong></td>
+                <td id="nguoinhan"></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td><strong>Địa chỉ:</strong></td>
+                <td id="diachi"></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td><strong>SDT:</strong></td>
+                <td id="sdt"></td>
+                <td></td>
+            </tr>
+            <tr>
+                <td><strong>COD:</strong></td>
+                <td id="cod"></td>
+                <td><strong>Cước:</strong></td>
+            </tr>
+            <tr>
+                <td><strong>Đồng kiểm:</strong></td>
+                <td id="dongkiem"></td>
+                <td><strong>Freesthip:</strong></td>
+            </tr>
+        </table>
+
+        <!-- Footer with QR code and image -->
+        <div class="footer">
+            <div class="image-container">
+                <img class="signature-image" id="signature-image" src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F5af9df5c.%E1%BA%A2nh.115856.png" alt="Chữ ký/Nhãn hiệu">
+                <div class="label">CHỮ KÝ NGƯỜI NHẬN</div>
+            </div>
+            <div class="qr-container">
+                <img class="qr-code" id="qr-code" src="" alt="QR Code">
+                <div class="label">QUÉT MÃ KIỂM TRA</div>
+            </div>
+        </div>
+
+        <div class="no-print" style="text-align: center; margin-top: 8px;">
+            <button onclick="window.print()" style="padding: 6px 12px; font-size: 14px; background: #4CAF50; color: white; border: none; border-radius: 4px;">IN PHIẾU</button>
+        </div>
+    </div>
+
+    <script>
+        // Hàm lấy tham số từ URL
+        function getParameterByName(name, url) {
+            if (!url) url = window.location.href;
+            name = name.replace(/[\[\]]/g, '\\$&');
+            const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+            const results = regex.exec(url);
+            if (!results) return null;
+            if (!results[2]) return '';
+            return decodeURIComponent(results[2].replace(/\+/g, ' '));
+        }
+
+        // Lấy các giá trị từ URL và hiển thị
+        document.addEventListener('DOMContentLoaded', function() {
+            // Barcode
+            const barcode = getParameterByName('barcode') || '001-20250103-001';
+            document.getElementById('barcode-display').textContent = `*${barcode}*`;
+            
+            // Thông tin chính
+            document.getElementById('mvd').textContent = barcode;
+            document.getElementById('khoiluong').textContent = getParameterByName('khoiluong') || '100 KG';
+            document.getElementById('guitai').textContent = getParameterByName('guitai') || 'Cửa hàng ABC';
+            document.getElementById('nguoinhan').textContent = getParameterByName('nguoinhan') || '1';
+            document.getElementById('diachi').textContent = getParameterByName('diachi') || 'địa hợi a';
+            document.getElementById('sdt').textContent = getParameterByName('sdt') || '123456';
+            document.getElementById('cod').textContent = getParameterByName('cod') || '100,000';
+            document.getElementById('dongkiem').textContent = getParameterByName('dongkiem') || 'Có / Không';
+            
+            // QR code (tự động tạo nếu không có tham số)
+            const qrData = getParameterByName('qrdata') || window.location.href;
+            const qrCode = getParameterByName('qr') || `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qrData)}`;
+            document.getElementById('qr-code').src = qrCode;
+        });
+    </script>
+</body>
+</html>
