@@ -19,7 +19,7 @@
         
         body {
             width: 148mm;
-            height: 210mm;
+            min-height: 210mm;
             padding: 8mm;
             background-color: #f8f9fa;
             color: #333;
@@ -191,6 +191,17 @@
             border-left: 3px solid #3498db;
         }
         
+        .error-message {
+            background-color: #ffecec;
+            color: #e74c3c;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            border: 1px solid #e74c3c;
+            text-align: center;
+            font-weight: bold;
+        }
+        
         @media print {
             .print-btn {
                 display: none;
@@ -206,6 +217,10 @@
     <div class="container">
         <div class="header">
             <h1>PHIẾU GIAO NHẬN HÀNG</h1>
+        </div>
+        
+        <div id="error-message" class="error-message hidden">
+            Lỗi: Thiếu tham số barcode_img trong URL. Vui lòng truyền đầy đủ thông tin.
         </div>
         
         <div class="barcode-container">
@@ -251,14 +266,24 @@
                 return urlParams.get(name);
             }
             
-            // Thiết lập mã vạch
-            const barcodeImg = getUrlParam('barcode_img');
-            if (barcodeImg) {
-                document.getElementById('barcode-img').src = barcodeImg;
-            } else {
-                // Hiển thị thông báo lỗi nếu không có barcode_img
-                alert("Lỗi: Thiếu tham số 'barcode_img' trong URL");
+            // Hàm decode URL an toàn
+            function safeDecodeURI(value) {
+                try {
+                    return decodeURIComponent(value.replace(/\+/g, ' '));
+                } catch (e) {
+                    return value;
+                }
             }
+            
+            // Kiểm tra barcode_img bắt buộc
+            const barcodeImg = getUrlParam('barcode_img');
+            if (!barcodeImg) {
+                document.getElementById('error-message').classList.remove('hidden');
+                return;
+            }
+            
+            // Thiết lập mã vạch
+            document.getElementById('barcode-img').src = barcodeImg;
             
             // Thiết lập mã QR
             const qrImg = getUrlParam('qr');
@@ -272,16 +297,16 @@
             
             // Thiết lập thông tin chính
             const infoData = [
-                { label: 'MVD:', value: getUrlParam('mvd') || '001-20240530-001' },
-                { label: 'Người gửi:', value: getUrlParam('guitai') || 'Công Ty ABC' },
-                { label: 'Người nhận:', value: getUrlParam('nguoinhan') || 'Nguyễn Văn A' },
-                { label: 'Địa chỉ:', value: getUrlParam('diachi') || '123 Đường XYZ, Quận 1, TP.HCM' },
-                { label: 'SĐT:', value: getUrlParam('sdt') || '0901234567' },
-                { label: 'COD:', value: getUrlParam('cod') || '500,000 đ' },
-                { label: 'Đồng kiểm:', value: getUrlParam('dongkiem') || 'Có' },
-                { label: 'Khối lượng:', value: getUrlParam('khoiluong') || '2.5 kg' },
-                { label: 'Cước:', value: `<span class="info-highlight">${getUrlParam('cuoc') || '25,000 đ'}</span>` },
-                { label: 'Freeship:', value: `<span class="info-highlight">${getUrlParam('freeship') || '0 đ'}</span>` }
+                { label: 'MVD:', value: safeDecodeURI(getUrlParam('mvd') || '001-20240530-001') },
+                { label: 'Người gửi:', value: safeDecodeURI(getUrlParam('guitai') || 'Công Ty ABC') },
+                { label: 'Người nhận:', value: safeDecodeURI(getUrlParam('nguoinhan') || 'Nguyễn Văn A') },
+                { label: 'Địa chỉ:', value: safeDecodeURI(getUrlParam('diachi') || '123 Đường XYZ, Quận 1, TP.HCM') },
+                { label: 'SĐT:', value: safeDecodeURI(getUrlParam('sdt') || '0901234567') },
+                { label: 'COD:', value: safeDecodeURI(getUrlParam('cod') || '500,000 đ') },
+                { label: 'Đồng kiểm:', value: safeDecodeURI(getUrlParam('dongkiem') || 'Có') },
+                { label: 'Khối lượng:', value: safeDecodeURI(getUrlParam('khoiluong') || '2.5 kg') },
+                { label: 'Cước:', value: `<span class="info-highlight">${safeDecodeURI(getUrlParam('cuoc') || '25,000 đ')}</span>` },
+                { label: 'Freeship:', value: `<span class="info-highlight">${safeDecodeURI(getUrlParam('freeship') || '0 đ')}</span>` }
             ];
             
             const infoGrid = document.getElementById('info-grid');
@@ -312,14 +337,21 @@
             const notesParam = getUrlParam('ghichu');
             const notesTable = document.getElementById('notes-table');
             
-            // Dữ liệu mẫu nếu không có tham số
-            const defaultNotes = [
-                'Kiểm tra ngoại quan', 'Kiểm tra số lượng',
-                'Kiểm tra phụ kiện', 'Kiểm tra chức năng',
-                'Kiểm tra hạn sử dụng'
-            ];
-            
-            const notes = notesParam ? notesParam.split(',') : defaultNotes;
+            // Xử lý ghi chú - phân tách bằng dấu phẩy
+            let notes = [];
+            if (notesParam) {
+                // Phân tách bằng dấu phẩy và lọc bỏ các giá trị trống
+                notes = notesParam.split(',')
+                    .map(note => safeDecodeURI(note))
+                    .filter(note => note.trim() !== '');
+            } else {
+                // Dữ liệu mặc định nếu không có tham số
+                notes = [
+                    'Kiểm tra ngoại quan', 'Kiểm tra số lượng',
+                    'Kiểm tra phụ kiện', 'Kiểm tra chức năng',
+                    'Kiểm tra hạn sử dụng'
+                ];
+            }
             
             // Tạo bảng ghi chú động
             const maxColumns = 4; // Số cột tối đa
