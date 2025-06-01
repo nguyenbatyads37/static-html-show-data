@@ -308,7 +308,7 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%) rotate(-15deg);
-      opacity: 0.4; /* Giảm độ mờ xuống 40% */
+      opacity: 0.4;
       z-index: 100;
       pointer-events: none;
     }
@@ -500,7 +500,7 @@
         top: 50% !important;
         left: 50% !important;
         transform: translate(-50%, -50%) rotate(-15deg) !important;
-        opacity: 0.4 !important; /* Giữ nguyên độ mờ 40% khi in */
+        opacity: 0.4 !important;
         z-index: 100 !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
@@ -633,7 +633,7 @@
   </div>
 
   <div class="comment-stamp" id="commentStamp">
-    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%9F-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2Fae184aa6.%E1%BA%A2nh.054008.png" alt="Con dấu">
+    <img src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%9F-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2Fae184aa6.%E1%BA%A3nh.054008.png" alt="Con dấu">
   </div>
 
   <div class="stamp-signature">
@@ -653,6 +653,14 @@ function safeDecode(encoded) {
   }
 }
 
+// Hàm kiểm tra và điều chỉnh điểm số nếu cần
+function adjustScore(score) {
+  if (score === null || score === undefined) return null;
+  const num = parseFloat(score);
+  if (isNaN(num)) return null;
+  return num < 10 ? num * 100 : num;
+}
+
 // Hàm xử lý dữ liệu học tập và sắp xếp theo ngày tăng dần
 function processLearningData(dataStr) {
   if (!dataStr || dataStr.trim() === '') return [];
@@ -663,10 +671,15 @@ function processLearningData(dataStr) {
       return {
         ngay: safeDecode(parts[0]) || '',
         chuyenCan: safeDecode(parts[1]) || '',
-        hoanThanhBT: parts[2] ? parseInt(parts[2]) : null,
-        diemKiemTra: parts[3] ? parseInt(parts[3]) : null
+        hoanThanhBT: parts[2] ? adjustScore(parts[2]) : null,
+        diemKiemTra: parts[3] ? adjustScore(parts[3]) : null
       };
-    }).filter(item => item.ngay.trim() !== '').sort((a, b) => new Date(a.ngay) - new Date(b.ngay));  // Sắp xếp theo ngày
+    }).filter(item => item.ngay.trim() !== '').sort((a, b) => {
+      // Sắp xếp theo ngày tăng dần
+      const dateA = new Date(a.ngay);
+      const dateB = new Date(b.ngay);
+      return dateA - dateB;
+    });
   } catch (e) {
     console.error('Lỗi xử lý dữ liệu học tập:', e);
     return [];
@@ -683,9 +696,14 @@ function processTestData(testStr) {
       return {
         ngay: safeDecode(parts[0]) || '',
         tenBaiKiemTra: safeDecode(parts[1]) || '',
-        diem: parts[2] ? parseFloat(parts[2]) : null
+        diem: parts[2] ? adjustScore(parts[2]) : null
       };
-    }).filter(item => item.ngay.trim() !== '').sort((a, b) => new Date(a.ngay) - new Date(b.ngay));  // Sắp xếp theo ngày
+    }).filter(item => item.ngay.trim() !== '').sort((a, b) => {
+      // Sắp xếp theo ngày tăng dần
+      const dateA = new Date(a.ngay);
+      const dateB = new Date(b.ngay);
+      return dateA - dateB;
+    });
   } catch (e) {
     console.error('Lỗi xử lý dữ liệu điểm kiểm tra:', e);
     return [];
@@ -865,11 +883,11 @@ function init() {
   document.getElementById('report-date').textContent = params.get('ngay') || 
     today.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
   
-  // Xử lý các điểm số
+  // Xử lý các điểm số (áp dụng adjustScore cho các điểm số)
   document.getElementById('attendance').textContent = params.get('chuyencan') || '[Chuyên cần]';
-  document.getElementById('test-score').textContent = params.get('diem') || '[Điểm kiểm tra]';
-  document.getElementById('homework').textContent = params.get('btvn') || '[Điểm BTVN]';
-  document.getElementById('stars').textContent = params.get('sao') ? params.get('sao') + ' %' : '[Số sao]';
+  document.getElementById('test-score').textContent = params.get('diem') ? adjustScore(params.get('diem')) : '[Điểm kiểm tra]';
+  document.getElementById('homework').textContent = params.get('btvn') ? adjustScore(params.get('btvn')) : '[Điểm BTVN]';
+  document.getElementById('stars').textContent = params.get('sao') ? adjustScore(params.get('sao')) + ' %' : '[Số sao]';
   
   // Xử lý nhận xét
   const nhanxet = params.get('nhanxet');
