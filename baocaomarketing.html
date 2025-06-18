@@ -7,57 +7,56 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f0f2f5;
+            background-color: #f5f5f5;
             margin: 0;
             padding: 20px;
         }
         .container {
             background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
             padding: 20px;
-            max-width: 1200px;
-            margin: 0 auto;
+            max-width: 100%;
+            overflow-x: auto;
         }
         .header {
             text-align: center;
             margin-bottom: 20px;
-            padding-bottom: 15px;
+            padding-bottom: 10px;
             border-bottom: 2px solid #3498db;
         }
         .title {
             color: #2c3e50;
-            font-size: 24px;
+            font-size: 22px;
             font-weight: bold;
             margin: 0;
         }
         .subtitle {
             color: #e74c3c;
             font-weight: bold;
-            display: inline-block;
         }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 15px;
+            border: 1px solid #ddd;
+        }
+        th, td {
+            padding: 10px 8px;
+            text-align: center;
+            border: 1px solid #ddd;
         }
         th {
             background-color: #3498db;
             color: white;
-            padding: 12px 10px;
-            text-align: center;
             font-weight: bold;
-        }
-        td {
-            padding: 10px 8px;
-            border-bottom: 1px solid #e0e0e0;
-            text-align: center;
+            border: 1px solid #2980b9;
         }
         tr:nth-child(even) {
-            background-color: #f8f9fa;
+            background-color: #f9f9f9;
         }
         tr:hover {
-            background-color: #eaf2f8;
+            background-color: #f1f1f1;
         }
         .highlight-red {
             color: #e74c3c;
@@ -73,12 +72,11 @@
             font-size: 12px;
             color: #7f8c8d;
         }
-        .debug-info {
-            background-color: #fff8e1;
-            padding: 15px;
-            margin-bottom: 20px;
-            border-radius: 5px;
-            border-left: 4px solid #ffc107;
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -88,27 +86,20 @@
             <h1 class="title">THỐNG KÊ MARKETING <span class="subtitle">LUMI</span></h1>
         </div>
 
-        <div id="debugInfo" class="debug-info" style="display: none;">
-            <h3>Thông tin Debug:</h3>
-            <p><strong>URL hiện tại:</strong> <span id="currentUrl"></span></p>
-            <p><strong>Tham số data:</strong> <span id="dataParamValue"></span></p>
-            <p><strong>Dữ liệu đã giải mã:</strong> <pre id="decodedData"></pre></p>
-        </div>
-
         <table id="marketingTable">
             <thead>
                 <tr>
                     <th>STT</th>
                     <th>Tên MKT</th>
                     <th>Số Mess</th>
-                    <th>CPQC (VND)</th>
-                    <th>Ngân sách nhận (VND)</th>
+                    <th>CPQC (₫)</th>
+                    <th>Ngân sách (₫)</th>
                     <th>Số đơn</th>
-                    <th>DS chốt (VND)</th>
+                    <th>DS chốt (₫)</th>
                     <th>Tỉ lệ chốt</th>
                     <th>CPQC/Mess</th>
-                    <th>CPQC/Đơn hàng</th>
-                    <th>CPQC/DS chốt</th>
+                    <th>CPQC/Đơn</th>
+                    <th>CPQC/DS</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -122,100 +113,109 @@
     </div>
 
     <script>
-        // Hiển thị thông tin debug
-        document.getElementById('debugInfo').style.display = 'block';
-        document.getElementById('currentUrl').textContent = window.location.href;
-        
         // Lấy dữ liệu từ URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const dataParam = urlParams.get('data');
-        document.getElementById('dataParamValue').textContent = dataParam || 'Không có';
-        
-        // Định dạng ngày cập nhật
-        const today = new Date();
-        document.getElementById('updateDate').textContent = today.toLocaleDateString('vi-VN');
-        
-        // Xử lý dữ liệu nếu có
-        if (dataParam) {
-            // Giải mã dữ liệu (thay thế _a_ bằng dấu phẩy, _b_ bằng xuống dòng)
-            const decodedData = decodeURIComponent(dataParam)
-                .replace(/_a_/g, ',')
-                .replace(/_b_/g, '\n');
+        function getDataFromURL() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const dataParam = urlParams.get('data');
+                
+                if (!dataParam) {
+                    throw new Error("Không tìm thấy tham số 'data' trong URL");
+                }
+                
+                return decodeURIComponent(dataParam)
+                    .replace(/_a_/g, ',')
+                    .replace(/_b_/g, '\n');
+            } catch (error) {
+                console.error("Lỗi khi lấy dữ liệu từ URL:", error);
+                return null;
+            }
+        }
+
+        // Định dạng số
+        function formatNumber(value) {
+            if (!value) return '0';
             
-            document.getElementById('decodedData').textContent = decodedData;
+            // Giữ nguyên nếu là phần trăm
+            if (value.includes('%')) return value;
             
-            // Tách thành các hàng
-            const rows = decodedData.split('\n').filter(row => row.trim() !== '');
+            // Chuyển thành số
+            const num = parseFloat(value.replace(/[^\d.-]/g, ''));
+            if (isNaN(num)) return value;
             
+            // Định dạng tiền tệ
+            return new Intl.NumberFormat('vi-VN').format(num);
+        }
+
+        // Hiển thị dữ liệu
+        function displayData() {
             const tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = '';
+            
+            // Lấy ngày hiện tại
+            document.getElementById('updateDate').textContent = new Date().toLocaleDateString('vi-VN');
+            
+            // Lấy dữ liệu từ URL
+            const data = getDataFromURL();
+            
+            if (!data) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="11" class="error">
+                            Không có dữ liệu. Vui lòng thêm tham số data vào URL.<br>
+                            Ví dụ: ?data=Tên_a_100_a_1000000_b_Tên2_a_200_a_2000000
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            // Xử lý từng hàng
+            const rows = data.split('\n').filter(row => row.trim() !== '');
+            
+            if (rows.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="11" class="error">
+                            Dữ liệu không đúng định dạng. Vui lòng kiểm tra lại.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
             
             // Thêm dữ liệu vào bảng
-            rows.forEach((row, index) => {
-                const columns = row.split(',');
+            rows.forEach((row, rowIndex) => {
+                const cols = row.split(',');
                 
-                // Kiểm tra số lượng cột
-                if (columns.length < 10) {
-                    console.warn(`Hàng ${index + 1} thiếu dữ liệu. Chỉ có ${columns.length} cột.`);
+                if (cols.length < 10) {
+                    console.warn(`Hàng ${rowIndex + 1} thiếu dữ liệu (chỉ có ${cols.length} cột)`);
                     return;
                 }
                 
                 const tr = document.createElement('tr');
                 
-                // Thêm cột STT tự động
-                const stpTd = document.createElement('td');
-                stpTd.textContent = index + 1;
-                tr.appendChild(stpTd);
-                
-                // Thêm các cột dữ liệu
-                columns.forEach((col, colIndex) => {
-                    const td = document.createElement('td');
-                    const cleanedCol = col.trim();
-                    
-                    // Áp dụng highlight cho các cột cụ thể
-                    if (colIndex === 5) { // DS chốt
-                        td.className = 'highlight-blue';
-                        td.textContent = formatNumber(cleanedCol) + (cleanedCol.includes('%') ? '' : '₫');
-                    } 
-                    else if (colIndex === 9) { // CPQC/DS chốt
-                        td.className = 'highlight-red';
-                        td.textContent = cleanedCol.includes('%') ? cleanedCol : formatNumber(cleanedCol) + '₫';
-                    }
-                    else {
-                        td.textContent = formatNumber(cleanedCol);
-                    }
-                    
-                    tr.appendChild(td);
-                });
+                // STT
+                tr.innerHTML = `
+                    <td>${rowIndex + 1}</td>
+                    <td>${cols[0] || ''}</td>
+                    <td>${formatNumber(cols[1])}</td>
+                    <td>${formatNumber(cols[2])}₫</td>
+                    <td>${formatNumber(cols[3])}₫</td>
+                    <td>${formatNumber(cols[4])}</td>
+                    <td class="highlight-blue">${formatNumber(cols[5])}₫</td>
+                    <td>${cols[6] || '0%'}</td>
+                    <td>${formatNumber(cols[7])}₫</td>
+                    <td>${formatNumber(cols[8])}₫</td>
+                    <td class="highlight-red">${cols[9] || '0%'}</td>
+                `;
                 
                 tableBody.appendChild(tr);
             });
-        } else {
-            // Nếu không có dữ liệu, hiển thị hàng trống
-            const tr = document.createElement('tr');
-            const td = document.createElement('td');
-            td.colSpan = 11;
-            td.textContent = 'Không có dữ liệu. Vui lòng truyền dữ liệu qua tham số URL: ?data=...';
-            td.style.textAlign = 'center';
-            td.style.padding = '20px';
-            td.style.color = '#999';
-            tr.appendChild(td);
-            document.getElementById('tableBody').appendChild(tr);
         }
-        
-        // Hàm định dạng số
-        function formatNumber(num) {
-            if (!num) return num;
-            
-            // Nếu là phần trăm thì giữ nguyên
-            if (num.includes('%')) return num;
-            
-            // Thử chuyển thành số
-            const number = parseFloat(num.replace(/[^\d.-]/g, ''));
-            if (isNaN(number)) return num;
-            
-            // Định dạng số tiền VND
-            return new Intl.NumberFormat('vi-VN').format(number);
-        }
+
+        // Khởi chạy khi trang tải xong
+        document.addEventListener('DOMContentLoaded', displayData);
     </script>
 </body>
 </html>
