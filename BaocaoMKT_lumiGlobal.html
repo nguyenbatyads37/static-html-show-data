@@ -4,156 +4,143 @@
   <meta charset="UTF-8">
   <title>Dữ liệu chi phí từ Google Sheet</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      padding: 20px;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-    }
-    th, td {
-      border: 1px solid #ccc;
-      padding: 8px;
-      text-align: center;
-      font-size: 14px;
-    }
-    th {
-      background-color: #f2f2f2;
-    }
-    h2 {
-      text-align: center;
-      color: #333;
-    }
-    .summary {
-      margin-top: 40px;
-    }
-    .total-summary {
-      margin-bottom: 20px;
-      font-weight: bold;
-    }
-    .day-section {
-      margin-top: 40px;
-    }
-    .day-section h4 {
-      margin-top: 30px;
-      color: #2c3e50;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .sidebar { width: 260px; float: left; border: 1px solid #ccc; padding: 10px; background: #f9f9f9; box-sizing: border-box; }
+    .sidebar h3 { background: #2d7c2d; color: #fff; padding: 5px; margin-top: 10px; font-size: 16px; }
+    .sidebar label { display: block; margin: 6px 0; font-size: 14px; }
+    .sidebar .indent { margin-left: 16px; }
+    .sidebar input[type="date"] { width: 100%; padding: 4px; margin: 4px 0 10px; }
+    .main { margin-left: 280px; }
+    .header { display: flex; align-items: center; margin-bottom: 10px; }
+    .header img { height: 60px; margin-right: 10px; }
+    .header h2 { margin: 0; color: #2d7c2d; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 0; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    th.green-header { background: #a5d6a7; }
+    th.yellow-header { background: #fff59d; }
+    tr.total-row { background: #f1f1f1; font-weight: bold; }
+    .daily-breakdown h3 { margin-top: 20px; background: #f0f0f0; padding: 8px; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
-  <h2>DỮ LIỆU CHI PHÍ ADS</h2>
+  <div class="sidebar">
+    <h3>Ngày</h3>
+    <label>Từ ngày:<input type="date" id="start-date"></label>
+    <label>Đến ngày:<input type="date" id="end-date"></label>
 
-  <div class="summary">
-    <h3>Tổng hợp dữ liệu từ ngày tới ngày</h3>
-    <label>Từ ngày: <input type="date" id="start-date"></label>
-    <label>Đến ngày: <input type="date" id="end-date"></label>
-    <button onclick="filterAndSummarize()">Tổng hợp</button>
-    <div class="total-summary" id="total-summary"></div>
-    <div id="summary-output"></div>
+    <h3>Sản phẩm</h3>
+    <label><input type="checkbox" id="product-all" checked> Tất cả</label>
+    <div id="product-options"></div>
+
+    <h3>Ca</h3>
+    <label><input type="checkbox" id="ca-all" checked> Tất cả</label>
+    <div id="ca-options"></div>
+
+    <h3>Team</h3>
+    <label><input type="checkbox" id="team-all" checked> Tất cả</label>
+    <div id="team-options"></div>
+
+    <h3>Thị trường</h3>
+    <label><input type="checkbox" id="market-all" checked> Tất cả</label>
+    <div id="market-options"></div>
   </div>
 
-  <div id="daily-breakdown" class="day-section"></div>
+  <div class="main">
+    <div class="header">
+      <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo">
+      <h2>DỮ LIỆU CHI PHÍ ADS</h2>
+    </div>
+    <table id="summary-table">
+      <thead>
+        <tr>
+          <th class="green-header">Nhân sự</th>
+          <th class="green-header">Mess+Cmt</th>
+          <th class="green-header">Đơn</th>
+          <th class="green-header">DS Chốt</th>
+          <th class="green-header">CPQC</th>
+          <th class="yellow-header">Tỉ lệ chốt</th>
+          <th class="yellow-header">CPQC/Mess</th>
+          <th class="yellow-header">CPQC/Đơn hàng</th>
+          <th class="yellow-header">CPQC/DS chốt</th>
+          <th class="yellow-header">CPQC/Đơn hàng thực</th>
+        </tr>
+      </thead>
+      <tbody id="summary-body"></tbody>
+      <tfoot id="summary-foot"></tfoot>
+    </table>
+    <div id="daily-breakdown"></div>
+  </div>
 
   <script>
     let rawData = [];
+    const groupChildren = {
+      'Châu Á': ['Hàn Quốc','Nhật Bản','VN'],
+      'Ngoài Châu Á': ['Úc','US'],
+      'EU': ['Anh','Đức']
+    };
 
-    function formatDate(input) {
-      const date = new Date(input);
-      if (isNaN(date)) return input;
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
-    }
-
-    function parseDate(input) {
-      const parts = input.split("/");
-      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
-    }
-
-    function formatPrice(value) {
-      return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-    }
-
-    function filterAndSummarize() {
-      const start = new Date(document.getElementById("start-date").value);
-      const end = new Date(document.getElementById("end-date").value);
-      const summary = {};
-      const groupedByDate = {};
-      let totalDSChot = 0;
-      let totalChiPhiADS = 0;
-
-      rawData.forEach(row => {
-        const ngay = parseDate(formatDate(row.ngay));
-        if (ngay >= start && ngay <= end) {
-          const ngayStr = formatDate(row.ngay);
-          if (!groupedByDate[ngayStr]) groupedByDate[ngayStr] = [];
-          groupedByDate[ngayStr].push(row);
-
-          const ten = row.ten || "Không rõ";
-          if (!summary[ten]) {
-            summary[ten] = {
-              soMessCmt: 0,
-              soDon: 0,
-              dsChot: 0,
-              cpqc: 0
-            };
-          }
-          summary[ten].soMessCmt += Number(row.soMessCmt) || 0;
-          summary[ten].soDon += Number(row.soDon) || 0;
-          summary[ten].dsChot += Number(row.dsChot) || 0;
-          summary[ten].cpqc += Number(row.cpqc) || 0;
-
-          totalDSChot += Number(row.dsChot) || 0;
-          totalChiPhiADS += Number(row.chiPhiADS) || 0;
-        }
-      });
-
-      document.getElementById("total-summary").innerText =
-        `TỔNG DS Chốt: ${formatPrice(totalDSChot)} | TỔNG Chi phí ADS: ${formatPrice(totalChiPhiADS)}`;
-
-      let html = '<table><tr><th>Tên</th><th>Số Mess+Cmt</th><th>Số đơn</th><th>DS Chốt</th><th>CPQC</th></tr>';
-      for (const ten in summary) {
-        const s = summary[ten];
-        html += `<tr><td>${ten}</td><td>${s.soMessCmt}</td><td>${s.soDon}</td><td>${formatPrice(s.dsChot)}</td><td>${formatPrice(s.cpqc)}</td></tr>`;
+    function normalize(s) { return (s||'').trim().toLowerCase(); }
+    function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+    function getGroup(norm) {
+      for (let g in groupChildren) {
+        if (groupChildren[g].map(normalize).includes(norm)) return g;
       }
-      html += '</table>';
-      document.getElementById("summary-output").innerHTML = html;
-
-      const breakdown = document.getElementById("daily-breakdown");
-      breakdown.innerHTML = '';
-      for (const day in groupedByDate) {
-        let table = `<h4>Ngày: ${day}</h4>`;
-        table += `<table><thead><tr><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Số Mess+Cmt</th><th>Số đơn</th><th>DS Chốt</th><th>CPQC</th><th>Chi phí ADS</th></tr></thead><tbody>`;
-        groupedByDate[day].forEach(row => {
-          table += `<tr>
-            <td>${row.ten}</td>
-            <td>${row.ca}</td>
-            <td>${row.page}</td>
-            <td>${row.sanPham}</td>
-            <td>${row.soMessCmt}</td>
-            <td>${row.soDon}</td>
-            <td>${formatPrice(row.dsChot)}</td>
-            <td>${formatPrice(row.cpqc)}</td>
-            <td>${formatPrice(row.chiPhiADS)}</td>
-          </tr>`;
-        });
-        table += '</tbody></table>';
-        breakdown.innerHTML += table;
-      }
+      return capitalize(norm);
+    }
+    function formatDate(v) {
+      const d = new Date(v);
+      if (isNaN(d)) return v;
+      return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    }
+    function formatPrice(v) {
+      return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'});
     }
 
-    fetch("https://script.google.com/macros/s/AKfycbw5hCdhN6GBamt76LtlimLLjnBl1bUEyQZMnLGmYRp2oPr0X5rtbqr48vGJMmmYc93N/exec")
-      .then(response => response.json())
-      .then(data => {
-        rawData = data;
-      })
-      .catch(error => {
-        console.error("Lỗi khi tải dữ liệu:", error);
-        alert("Không thể tải dữ liệu từ Google Sheet.");
+    function populate(data) {
+      const prodSet=new Set(), caSet=new Set(), teamSet=new Set(), mktSet=new Set();
+      data.forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
+      document.getElementById('product-options').innerHTML = '';
+      document.getElementById('ca-options').innerHTML = '';
+      document.getElementById('team-options').innerHTML = '';
+      document.getElementById('market-options').innerHTML = '';
+      prodSet.forEach(p=>document.getElementById('product-options').innerHTML += `<label><input type='checkbox' class='filter-product' value='${p}' checked> ${p}</label>`);
+      caSet.forEach(c=>document.getElementById('ca-options').innerHTML += `<label class='indent'><input type='checkbox' class='filter-ca' value='${c}' checked> ${c}</label>`);
+      teamSet.forEach(t=>document.getElementById('team-options').innerHTML += `<label class='indent'><input type='checkbox' class='filter-team' value='${t}' checked> ${t}</label>`);
+      const mktDiv=document.getElementById('market-options');
+      ['Châu Á','Ngoài Châu Á','EU'].forEach(grp=>{
+        mktDiv.innerHTML += `<label><input type='checkbox' class='filter-market' value='${grp}' checked> ${grp}</label>`;
+        groupChildren[grp].forEach(ch=>mktDiv.innerHTML += `<label class='indent'><input type='checkbox' class='filter-market' value='${ch}' checked> ${ch}</label>`);
       });
+      mktSet.forEach(m=>{ const grp=getGroup(normalize(m)); if(!groupChildren.hasOwnProperty(grp)) mktDiv.innerHTML += `<label><input type='checkbox' class='filter-market' value='${m}' checked> ${m}</label>`; });
+    }
+
+    function applyFilters() {
+      const sd=new Date(document.getElementById('start-date').value), ed=new Date(document.getElementById('end-date').value);
+      const pAll=document.getElementById('product-all').checked, cAll=document.getElementById('ca-all').checked;
+      const tAll=document.getElementById('team-all').checked, mAll=document.getElementById('market-all').checked;
+      const selP=pAll?null:[...document.querySelectorAll('.filter-product:checked')].map(cb=>cb.value);
+      const selCa=cAll?null:[...document.querySelectorAll('.filter-ca:checked')].map(cb=>cb.value);
+      const selT=tAll?null:[...document.querySelectorAll('.filter-team:checked')].map(cb=>cb.value);
+      const selM=mAll?null:[...document.querySelectorAll('.filter-market:checked')].map(cb=>cb.value);
+      const filtered=rawData.filter(r=>{const okP=!selP||selP.includes(r.sanPham);const okCa=!selCa||selCa.includes(r.ca);const okT=!selT||selT.includes(r.team);const grp=getGroup(normalize(r.thiTruong));const okM=!selM||selM.includes(grp)||selM.includes(r.thiTruong);const d=new Date(r.ngay);const okD=(isNaN(sd)||isNaN(ed))||(d>=sd&&d<=ed);return okP&&okCa&&okT&&okM&&okD;});
+      renderSummary(filtered); renderDaily(filtered);
+    }
+
+    function renderSummary(data) {
+      const sum={}, tot={mess:0,don:0,chot:0,cpqc:0}; data.forEach(r=>{const n=r.ten||'',m=+r.soMessCmt||0,d=+r.soDon||0,c=+r.dsChot||0,p=+r.cpqc||0;sum[n]=sum[n]||{mess:0,don:0,chot:0,cpqc:0};sum[n].mess+=m;sum[n].don+=d;sum[n].chot+=c;sum[n].cpqc+=p;tot.mess+=m;tot.don+=d;tot.chot+=c;tot.cpqc+=p;});
+      const body=document.getElementById('summary-body'), foot=document.getElementById('summary-foot');body.innerHTML='';foot.innerHTML='';
+      Object.keys(sum).forEach(n=>{const s=sum[n];const rate=s.mess? s.don/s.mess:0;const pm=s.mess? s.cpqc/s.mess:0,pd=s.don? s.cpqc/s.don:0,pc=s.chot? s.cpqc/s.chot:0,pdt=s.don? s.cpqc/s.don:0;body.innerHTML+=`<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${s.chot}</td><td>${formatPrice(s.cpqc)}</td><td>${(rate*100).toFixed(2)}%</td><td>${formatPrice(pm)}</td><td>${formatPrice(pd)}</td><td>${formatPrice(pc)}</td><td>${formatPrice(pdt)}</td></tr>`;});
+      const rateTot=tot.mess? tot.don/tot.mess:0,pmTot=tot.mess? tot.cpqc/tot.mess:0,pdTot=tot.don? tot.cpqc/tot.don:0,pcTot=tot.chot? tot.cpqc/tot.chot:0,pdtTot=tot.don? tot.cpqc/tot.don:0;
+      foot.innerHTML=`<tr class='total-row'><td>Tổng</td><td>${tot.mess}</td><td>${tot.don}</td><td>${tot.chot}</td><td>${formatPrice(tot.cpqc)}</td><td>${(rateTot*100).toFixed(2)}%</td><td>${formatPrice(pmTot)}</td><td>${formatPrice(pdTot)}</td><td>${formatPrice(pcTot)}</td><td>${formatPrice(pdtTot)}</td></tr>`;
+    }
+
+    function renderDaily(data) {const c=document.getElementById('daily-breakdown');c.innerHTML='';const grpObj={};data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{const rows=grpObj[date];let html=`<h3>${date}</h3><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Chi phí ADS</th><th>Team</th></tr></thead><tbody>`;let m=0,d=0,ch=0,pc=0,ad=0;rows.forEach(r=>{m+=+r.soMessCmt||0;d+=+r.soDon||0;ch+=+r.dsChot||0;pc+=+r.cpqc||0;ad+=+r.chiPhiADS||0;html+=`<tr><td>${r.id}</td><td>${r.ten}</td><td>${r.ca}</td><td>${r.page}</td><td>${r.sanPham}</td><td>${r.thiTruong}</td><td>${r.soMessCmt}</td><td>${r.soDon}</td><td>${formatPrice(r.dsChot)}</td><td>${formatPrice(r.cpqc)}</td><td>${formatPrice(r.chiPhiADS)}</td><td>${r.team}</td></tr>`;});html+=`<tr class='total-row'><td colspan='6'>Tổng</td><td>${m}</td><td>${d}</td><td>${formatPrice(ch)}</td><td>${formatPrice(pc)}</td><td>${formatPrice(ad)}</td><td></td></tr></tbody></table>`;c.innerHTML+=html;});}
+
+    document.addEventListener('change',e=>{if(e.target.matches('.filter-market')){const val=e.target.value;if(groupChildren[val])groupChildren[val].forEach(ch=>{const cb=document.querySelector(`.filter-market[value='${ch}']`);if(cb)cb.checked=e.target.checked;});}if(e.target.matches('#product-all'))document.querySelectorAll('.filter-product').forEach(cb=>cb.checked=e.target.checked);if(e.target.matches('#ca-all'))document.querySelectorAll('.filter-ca').forEach(cb=>cb.checked=e.target.checked);if(e.target.matches('#team-all'))document.querySelectorAll('.filter-team').forEach(cb=>cb.checked=e.target.checked);if(e.target.matches('#market-all'))document.querySelectorAll('.filter-market').forEach(cb=>cb.checked=e.target.checked);if(e.target.matches('#product-all, #ca-all, #team-all, #market-all, .filter-product, .filter-ca, .filter-team, .filter-market') || e.target.type==='date') applyFilters();});
+
+    fetch('https://script.google.com/macros/s/AKfycbw5hCdhN6GBamt76LtlimLLjnBl1bUEyQZMnLGmYRp2oPr0X5rtbqr48vGJMmmYc93N/exec')
+      .then(res=>res.json()).then(data=>{rawData=data;populate(data);applyFilters();}).catch(err=>{console.error(err);alert('Không thể tải dữ liệu');});
   </script>
 </body>
 </html>
+
