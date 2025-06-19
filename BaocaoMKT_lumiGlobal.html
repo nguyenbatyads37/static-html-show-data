@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Dữ liệu chi phí từ Google Sheet</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+      font-size: 14px;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    h2 {
+      text-align: center;
+      color: #333;
+    }
+    .summary {
+      margin-top: 40px;
+    }
+    .total-summary {
+      margin-bottom: 20px;
+      font-weight: bold;
+    }
+    .day-section {
+      margin-top: 40px;
+    }
+    .day-section h4 {
+      margin-top: 30px;
+      color: #2c3e50;
+    }
+  </style>
+</head>
+<body>
+  <h2>DỮ LIỆU CHI PHÍ ADS</h2>
+
+  <div class="summary">
+    <h3>Tổng hợp dữ liệu từ ngày tới ngày</h3>
+    <label>Từ ngày: <input type="date" id="start-date"></label>
+    <label>Đến ngày: <input type="date" id="end-date"></label>
+    <button onclick="filterAndSummarize()">Tổng hợp</button>
+    <div class="total-summary" id="total-summary"></div>
+    <div id="summary-output"></div>
+  </div>
+
+  <div id="daily-breakdown" class="day-section"></div>
+
+  <script>
+    let rawData = [];
+
+    function formatDate(input) {
+      const date = new Date(input);
+      if (isNaN(date)) return input;
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+
+    function parseDate(input) {
+      const parts = input.split("/");
+      return new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+    }
+
+    function formatPrice(value) {
+      return Number(value).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+    }
+
+    function filterAndSummarize() {
+      const start = new Date(document.getElementById("start-date").value);
+      const end = new Date(document.getElementById("end-date").value);
+      const summary = {};
+      const groupedByDate = {};
+      let totalDSChot = 0;
+      let totalChiPhiADS = 0;
+
+      rawData.forEach(row => {
+        const ngay = parseDate(formatDate(row.ngay));
+        if (ngay >= start && ngay <= end) {
+          const ngayStr = formatDate(row.ngay);
+          if (!groupedByDate[ngayStr]) groupedByDate[ngayStr] = [];
+          groupedByDate[ngayStr].push(row);
+
+          const ten = row.ten || "Không rõ";
+          if (!summary[ten]) {
+            summary[ten] = {
+              soMessCmt: 0,
+              soDon: 0,
+              dsChot: 0,
+              cpqc: 0
+            };
+          }
+          summary[ten].soMessCmt += Number(row.soMessCmt) || 0;
+          summary[ten].soDon += Number(row.soDon) || 0;
+          summary[ten].dsChot += Number(row.dsChot) || 0;
+          summary[ten].cpqc += Number(row.cpqc) || 0;
+
+          totalDSChot += Number(row.dsChot) || 0;
+          totalChiPhiADS += Number(row.chiPhiADS) || 0;
+        }
+      });
+
+      document.getElementById("total-summary").innerText =
+        `TỔNG DS Chốt: ${formatPrice(totalDSChot)} | TỔNG Chi phí ADS: ${formatPrice(totalChiPhiADS)}`;
+
+      let html = '<table><tr><th>Tên</th><th>Số Mess+Cmt</th><th>Số đơn</th><th>DS Chốt</th><th>CPQC</th></tr>';
+      for (const ten in summary) {
+        const s = summary[ten];
+        html += `<tr><td>${ten}</td><td>${s.soMessCmt}</td><td>${s.soDon}</td><td>${formatPrice(s.dsChot)}</td><td>${formatPrice(s.cpqc)}</td></tr>`;
+      }
+      html += '</table>';
+      document.getElementById("summary-output").innerHTML = html;
+
+      const breakdown = document.getElementById("daily-breakdown");
+      breakdown.innerHTML = '';
+      for (const day in groupedByDate) {
+        let table = `<h4>Ngày: ${day}</h4>`;
+        table += `<table><thead><tr><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Số Mess+Cmt</th><th>Số đơn</th><th>DS Chốt</th><th>CPQC</th><th>Chi phí ADS</th></tr></thead><tbody>`;
+        groupedByDate[day].forEach(row => {
+          table += `<tr>
+            <td>${row.ten}</td>
+            <td>${row.ca}</td>
+            <td>${row.page}</td>
+            <td>${row.sanPham}</td>
+            <td>${row.soMessCmt}</td>
+            <td>${row.soDon}</td>
+            <td>${formatPrice(row.dsChot)}</td>
+            <td>${formatPrice(row.cpqc)}</td>
+            <td>${formatPrice(row.chiPhiADS)}</td>
+          </tr>`;
+        });
+        table += '</tbody></table>';
+        breakdown.innerHTML += table;
+      }
+    }
+
+    fetch("https://script.google.com/macros/s/AKfycbw5hCdhN6GBamt76LtlimLLjnBl1bUEyQZMnLGmYRp2oPr0X5rtbqr48vGJMmmYc93N/exec")
+      .then(response => response.json())
+      .then(data => {
+        rawData = data;
+      })
+      .catch(error => {
+        console.error("Lỗi khi tải dữ liệu:", error);
+        alert("Không thể tải dữ liệu từ Google Sheet.");
+      });
+  </script>
+</body>
+</html>
