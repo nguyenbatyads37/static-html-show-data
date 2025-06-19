@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Tổng CPQC & Tỉ lệ chốt theo ngày</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    .main { margin: 0 auto; max-width: 900px; }
+    h2 { color: #2d7c2d; }
+    label { display: inline-block; margin-right: 10px; }
+    input[type="date"] { padding: 4px; margin: 0 5px 20px 0; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #eef; }
+    .charts { display: flex; flex-direction: column; gap: 30px; }
+    .charts-row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .charts canvas { flex: 1; min-width: 300px; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+</head>
+<body>
+  <div class="main">
+    <h2>Tổng CPQC & Tỉ lệ chốt theo ngày</h2>
+
+    <label>Từ ngày: <input type="date" id="start-date"></label>
+    <label>Đến ngày: <input type="date" id="end-date"></label>
+    <button onclick="applyDateFilter()">Lọc</button>
+
+    <table id="date-summary-table">
+      <thead>
+        <tr>
+          <th>Ngày</th>
+          <th>Tổng CPQC</th>
+          <th>Tỉ lệ chốt TB</th>
+          <th>Giá Mess</th>
+          <th>CPS</th>
+        </tr>
+      </thead>
+      <tbody id="date-summary-body"></tbody>
+    </table>
+    <div class="charts">
+      <div class="charts-row">
+        <canvas id="date-chart" height="200"></canvas>
+        <canvas id="rate-chart" height="200"></canvas>
+      </div>
+      <div class="charts-row">
+        <canvas id="mess-chart" height="200"></canvas>
+        <canvas id="cps-chart" height="200"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let rawData = [];
+    let dateChart = null, rateChart = null, messChart = null, cpsChart = null;
+
+    function formatDate(v) {
+      const d = new Date(v);
+      return isNaN(d) ? v : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    }
+    function formatPrice(v) {
+      return Number(v || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+    }
+
+    function renderTable(data) {
+      const cpqc = {}, don = {}, mess = {};
+      data.forEach(r => {
+        const dateObj = new Date(r.ngay);
+        const dateKey = formatDate(dateObj);
+        cpqc[dateKey] = (cpqc[dateKey] || 0) + (+r.cpqc || 0);
+        don[dateKey]  = (don[dateKey]  || 0) + (+r.soDon || 0);
+        mess[dateKey] = (mess[dateKey] || 0) + (+r.soMessCmt || 0);
+      });
+      const sd = new Date(document.getElementById('start-date').value);
+      const ed = new Date(document.getElementById('end-date').value);
+      const tbody = document.getElementById('date-summary-body');
+      tbody.innerHTML = '';
+      Object.keys(cpqc).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')))
+        .forEach(d => {
+          const dateCheck = new Date(d.split('/').reverse().join('-'));
+          if ((!isNaN(sd) ? dateCheck >= sd : true) && (!isNaN(ed) ? dateCheck <= ed : true)) {
+            const avg = mess[d] ? don[d] / mess[d] : 0;
+            const giaMess = mess[d] ? cpqc[d] / mess[d] : 0;
+            const cps = don[d] ? cpqc[d] / don[d] : 0;
+            tbody.insertAdjacentHTML('beforeend',
+              `<tr><td>${d}</td><td>${formatPrice(cpqc[d])}</td><td>${(avg*100).toFixed(2)}%</td><td>${formatPrice(giaMess)}</td><td>${formatPrice(cps)}</td></tr>`
+            );
+          }
+        });
+    }
+
+    function initCharts() {
+      Chart.register(ChartDataLabels);
+
+      const ctx1 = document.getElementById('date-chart').getContext('2d');
+      dateChart = new Chart(ctx1, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'CPQC', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(54,162,235,0.2)', borderColor: 'rgba(54,162,235,1)', pointRadius: 5 }] },
+        options: {
+          responsive: true,
+          plugins: { datalabels: { formatter: v => formatPrice(v), anchor: 'end', align: 'top' } },
+          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'CPQC (VND)' } } }
+        }
+      });
+
+      const ctx2 = document.getElementById('rate-chart').getContext('2d');
+      rateChart = new Chart(ctx2, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Tỉ lệ chốt TB', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(255,99,132,0.2)', borderColor: 'rgba(255,99,132,1)', pointRadius: 5 }] },
+        options: {
+          responsive: true,
+          plugins: { datalabels: { formatter: v => v.toFixed(2) + '%', anchor: 'end', align: 'top' } },
+          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'Tỉ lệ chốt TB (%)' } } }
+        }
+      });
+
+      const ctx3 = document.getElementById('mess-chart').getContext('2d');
+      messChart = new Chart(ctx3, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'Giá Mess', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(255,206,86,0.2)', borderColor: 'rgba(255,206,86,1)', pointRadius: 5 }] },
+        options: {
+          responsive: true,
+          plugins: { datalabels: { formatter: v => formatPrice(v), anchor: 'end', align: 'top' } },
+          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'Giá / Mess (VND)' } } }
+        }
+      });
+
+      const ctx4 = document.getElementById('cps-chart').getContext('2d');
+      cpsChart = new Chart(ctx4, {
+        type: 'line',
+        data: { labels: [], datasets: [{ label: 'CPS', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(75,192,192,0.2)', borderColor: 'rgba(75,192,192,1)', pointRadius: 5 }] },
+        options: {
+          responsive: true,
+          plugins: { datalabels: { formatter: v => formatPrice(v), anchor: 'end', align: 'top' } },
+          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'CPS (VND)' } } }
+        }
+      });
+    }
+
+    function renderCharts(data) {
+      let sums = {}, labels = [], vals = [], rateVals = [], giaMessVals = [], cpsVals = [];
+      const don = {}, mess = {};
+      data.forEach(r => {
+        const d = formatDate(r.ngay);
+        sums[d] = (sums[d] || 0) + (+r.cpqc || 0);
+        don[d]  = (don[d]  || 0) + (+r.soDon || 0);
+        mess[d] = (mess[d] || 0) + (+r.soMessCmt || 0);
+      });
+      labels = Object.keys(sums).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+
+      const sd = new Date(document.getElementById('start-date').value);
+      const ed = new Date(document.getElementById('end-date').value);
+      const filteredLabels = labels.filter(d => {
+        const dt = new Date(d.split('/').reverse().join('-'));
+        return (!isNaN(sd) ? dt >= sd : true) && (!isNaN(ed) ? dt <= ed : true);
+      });
+
+      vals = filteredLabels.map(d => sums[d]);
+      rateVals = filteredLabels.map(d => mess[d] ? (don[d] / mess[d] * 100) : 0);
+      giaMessVals = filteredLabels.map(d => mess[d] ? (sums[d] / mess[d]) : 0);
+      cpsVals = filteredLabels.map(d => don[d] ? (sums[d] / don[d]) : 0);
+
+      if (dateChart) {
+        dateChart.data.labels = filteredLabels;
+        dateChart.data.datasets[0].data = vals;
+        dateChart.update();
+      }
+      if (rateChart) {
+        rateChart.data.labels = filteredLabels;
+        rateChart.data.datasets[0].data = rateVals;
+        rateChart.update();
+      }
+      if (messChart) {
+        messChart.data.labels = filteredLabels;
+        messChart.data.datasets[0].data = giaMessVals;
+        messChart.update();
+      }
+      if (cpsChart) {
+        cpsChart.data.labels = filteredLabels;
+        cpsChart.data.datasets[0].data = cpsVals;
+        cpsChart.update();
+      }
+    }
+
+    function applyDateFilter() {
+      const sd = new Date(document.getElementById('start-date').value);
+      const ed = new Date(document.getElementById('end-date').value);
+      const filtered = rawData.filter(r => {
+        const d = new Date(r.ngay);
+        return (!isNaN(sd) ? d >= sd : true) && (!isNaN(ed) ? d <= ed : true);
+      });
+      renderTable(filtered);
+      renderCharts(filtered);
+    }
+
+    fetch('https://script.google.com/macros/s/AKfycbw5hCdhN6GBamt76LtlimLLjnBl1bUEyQZMnLGmYRp2oPr0X5rtbqr48vGJMmmYc93N/exec')
+      .then(res => res.json())
+      .then(data => {
+        rawData = data;
+        renderTable(data);
+        initCharts();
+        renderCharts(data);
+      })
+      .catch(err => alert('Không thể tải dữ liệu'));
+  </script>
+</body>
+</html>
