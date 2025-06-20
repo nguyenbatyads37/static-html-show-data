@@ -361,19 +361,77 @@
         charts.ratioChart.data.datasets = [ createDataset('Tỉ lệ chốt', labels.map(d => daily[d].mess ? (daily[d].don / daily[d].mess) : 0), getChartColors().rate, 'line'), createDataset('%CPQC/DS chốt', labels.map(d => daily[d].chot ? (daily[d].cpqc / daily[d].chot) : 0), getChartColors().cpqcDsRatio, 'line') ];
         charts.ratioChart.update();
         
-        const productSales = {}, marketSales = {}; data.forEach(r => { productSales[r.sanPham] = (productSales[r.sanPham] || 0) + r.dsChot; marketSales[r.thiTruong] = (marketSales[r.thiTruong] || 0) + r.dsChot; });
+        const productSales = {}, marketSales = {}; data.forEach(r => { if (r.sanPham) productSales[r.sanPham] = (productSales[r.sanPham] || 0) + r.dsChot; if (r.thiTruong) marketSales[r.thiTruong] = (marketSales[r.thiTruong] || 0) + r.dsChot; });
         const sortedProducts = Object.entries(productSales).sort((a,b) => b[1] - a[1]);
         const sortedMarkets = Object.entries(marketSales).sort((a,b) => b[1] - a[1]);
-        charts.productSalesChart.data.labels = sortedProducts.map(p=>p[0]); charts.productSalesChart.data.datasets = [createDataset('DS theo SP', sortedProducts.map(p=>p[1]), getChartColors().product, 'bar')]; charts.productSalesChart.update();
-        charts.marketSalesChart.data.labels = sortedMarkets.map(m=>m[0]); charts.marketSalesChart.data.datasets = [createDataset('DS theo TT', sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar')]; charts.marketSalesChart.update();
+        
+        charts.productSalesChart.data.labels = sortedProducts.map(p=>p[0]);
+        charts.productSalesChart.data.datasets = [createDataset('DS theo SP', sortedProducts.map(p=>p[1]), getChartColors().product, 'bar')];
+        charts.productSalesChart.update();
+
+        charts.marketSalesChart.data.labels = sortedMarkets.map(m=>m[0]);
+        charts.marketSalesChart.data.datasets = [createDataset('DS theo TT', sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar')];
+        charts.marketSalesChart.update();
     }
 
-    // --- CHART CONFIGURATION & HELPERS ---
-    const chartPluginConfig = { interaction: { mode: 'index', intersect: false }, legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', boxPadding: 8, titleFont: {weight: 'bold'}, bodyFont: {size: 14} }, datalabels: { display: false } };
-    function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) { return { type: 'line', options: { ...chartPluginConfig, scales: { y: { title: { display: true, text: yTitle, font: {weight: 'bold'} }, ticks: { callback: formatter } } } } }; }
-    function getBarChartConfig() { return { type: 'bar', options: { ...chartPluginConfig, indexAxis: 'y', scales: { x: { ticks: { callback: v => formatPriceShort(v) } } }, plugins: { ...chartPluginConfig.plugins, legend: {display: false}, datalabels: { display: true, anchor: 'end', align: 'end', formatter: v => formatPriceShort(v), color: '#333', font: {weight: 'bold'}} } } }; }
-    function getComboChartConfig(axes) { const scales = {}; for (const key in axes) { scales[key] = { type: 'linear', display: true, position: axes[key].pos, title: { display: true, text: axes[key].title, font: {weight: 'bold'} }, ticks: { callback: v => formatPriceShort(v) } }; } scales[Object.keys(axes)[1]].grid = { drawOnChartArea: false }; return { type: 'bar', options: { ...chartPluginConfig, scales: scales, plugins: {...chartPluginConfig.plugins, datalabels: {display: true, formatter: (v, ctx) => ctx.dataset.type === 'line' ? formatPriceShort(v) : '', color: '#fff', backgroundColor: ctx.dataset.borderColor, borderRadius:4, padding: {top: 2, bottom: 2, left: 4, right: 4}, align: 'start', anchor: 'start', font: {weight: 'bold'} }} } }; }
-    function getChartColors() { return { cpqc: '#0D47A1', dsChot: '#1B5E20', rate: '#B71C1C', mess: '#E65100', cps: '#004D40', cpqcDsRatio: '#4A148C', product: '#263238', market: '#BF360C' }; }
+    // --- CHART CONFIGURATION & HELPERS (Đã sửa lỗi) ---
+    const baseChartPlugins = { interaction: { mode: 'index', intersect: false }, legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', boxPadding: 8, titleFont: {weight: 'bold'}, bodyFont: {size: 14} }, datalabels: { display: false } };
+    
+    function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) {
+        return {
+            type: 'line',
+            options: {
+                plugins: baseChartPlugins,
+                scales: { y: { title: { display: true, text: yTitle, font: {weight: 'bold'} }, ticks: { callback: formatter } } }
+            }
+        };
+    }
+    
+    function getBarChartConfig() {
+        return {
+            type: 'bar',
+            options: {
+                indexAxis: 'y',
+                plugins: {
+                    ...baseChartPlugins,
+                    legend: {display: false},
+                    datalabels: { display: true, anchor: 'end', align: 'end', formatter: v => formatPriceShort(v), color: '#333', font: {weight: 'bold'} }
+                },
+                scales: { x: { ticks: { callback: v => formatPriceShort(v) } } }
+            }
+        };
+    }
+
+    function getComboChartConfig(axes) {
+        const scales = {};
+        for (const key in axes) {
+            scales[key] = {
+                type: 'linear', display: true, position: axes[key].pos,
+                title: { display: true, text: axes[key].title, font: {weight: 'bold'} },
+                ticks: { callback: v => formatPriceShort(v) }
+            };
+        }
+        scales[Object.keys(axes)[1]].grid = { drawOnChartArea: false };
+        return {
+            type: 'bar',
+            options: {
+                plugins: {
+                    ...baseChartPlugins,
+                    datalabels: {
+                        display: true,
+                        formatter: (v, ctx) => ctx.dataset.type === 'line' ? formatPriceShort(v) : '',
+                        color: '#fff',
+                        backgroundColor: (ctx) => ctx.dataset.borderColor,
+                        borderRadius: 4, padding: {top: 2, bottom: 2, left: 4, right: 4},
+                        align: 'start', anchor: 'start', font: {weight: 'bold'}
+                    }
+                },
+                scales: scales
+            }
+        };
+    }
+
+    function getChartColors() { return { cpqc: '#0D47A1', dsChot: '#1B5E20', rate: '#B71C1C', mess: '#E65100', cps: '#004D40', cpqcDsRatio: '#4A148C', product: '#37474F', market: '#BF360C' }; }
     function createDataset(label, data, color, type = 'line', yAxisID = 'y') { return { label, data, backgroundColor: color, borderColor: color, type, yAxisID, fill: type === 'line', tension: 0.4, borderWidth: type === 'line' ? 4 : 1, pointRadius: type === 'line' ? 5 : undefined, pointBackgroundColor: '#fff', pointBorderWidth: 2 }; }
   </script>
 </body>
