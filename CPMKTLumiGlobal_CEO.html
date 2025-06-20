@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Báo cáo chi phí tổng hợp</title>
+  <style>
+    /* --- CÀI ĐẶT CHUNG & TABS --- */
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
+    .tab-container { overflow: hidden; border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+    .tab-container button {
+      background-color: #f1f1f1; float: left; border: none; outline: none; cursor: pointer;
+      padding: 14px 20px; transition: 0.3s; font-size: 17px; font-weight: bold;
+      border-radius: 8px 8px 0 0; margin-right: 5px;
+    }
+    .tab-container button:hover { background-color: #ddd; }
+    .tab-container button.active { background-color: #2d7c2d; color: white; }
+    .tab-content { display: none; padding: 6px 12px; border-top: none; }
+
+    /* --- STYLES CHUNG CHO BẢNG --- */
+    table { width: 100%; border-collapse: collapse; table-layout: auto; margin-top: 20px; background: #fff; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; white-space: nowrap; }
+    th.green-header { background: #a5d6a7; }
+    th.yellow-header { background: #fff59d; }
+    tr.total-row { background: #f1f1f1; font-weight: bold; }
+
+    /* --- ĐỊNH DẠNG CÓ ĐIỀU KIỆN --- */
+    .bg-green { background-color: #c8e6c9 !important; } /* Light Green */
+    .bg-yellow { background-color: #fff9c4 !important; } /* Light Yellow */
+    .bg-lightred { background-color: #ffcdd2 !important; } /* Light Red */
+    .bg-lightblue { background-color: #b3e5fc !important; } /* Light Blue */
+    
+    /* --- STYLES TAB 1: BÁO CÁO CHI TIẾT --- */
+    .report-container { display: flex; }
+    .sidebar { width: 260px; flex-shrink: 0; border: 1px solid #ccc; padding: 10px; background: #f9f9f9; box-sizing: border-box; }
+    .sidebar h3 { background: #2d7c2d; color: #fff; padding: 5px; margin-top: 10px; font-size: 16px; }
+    .sidebar label { display: block; margin: 6px 0; font-size: 14px; }
+    .sidebar .indent { margin-left: 16px; }
+    .sidebar input[type="date"] { width: 100%; box-sizing: border-box; padding: 4px; margin: 4px 0 10px; }
+    .main-detailed { flex-grow: 1; margin-left: 20px; }
+    .header { display: flex; align-items: center; margin-bottom: 10px; }
+    .header img { height: 60px; margin-right: 10px; }
+    .header h2 { margin: 0; color: #2d7c2d; }
+    #kpi-summary-table { margin-top: 30px; }
+    .daily-breakdown h3 { margin-top: 20px; background: #f0f0f0; padding: 8px; border: 1px solid #ccc; }
+
+    /* --- STYLES TAB 2: BÁO CÁO THEO NGÀY --- */
+    .daily-report-layout { display: flex; gap: 20px; }
+    .daily-report-layout .sidebar { width: 260px; }
+    .daily-report-layout .main-content { flex-grow: 1; }
+    .main-daily h2 { color: #2d7c2d; text-align: center; margin-bottom: 10px; }
+    .chart-toggle-controls { margin: 20px 0; padding: 10px; background: #eee; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
+    .chart-toggle-controls label { font-size: 14px; }
+    .chart-toggle-controls .toggle-all { font-weight: bold; }
+    .charts-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+    .chart-wrapper {
+        background: #fff; padding: 15px; border-radius: 12px;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+    }
+    .chart-wrapper.full-width { flex: 1 1 100%; }
+    .chart-wrapper.half-width { flex: 1 1 48%; min-width: 400px; }
+    .chart-wrapper canvas { width: 100% !important; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+</head>
+<body>
+
+  <div class="tab-container">
+    <button class="tablinks" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
+    <button class="tablinks" onclick="openTab(event, 'DailyReport')">Báo cáo theo ngày</button>
+  </div>
+
+  <!-- NỘI DUNG TAB 1 -->
+  <div id="DetailedReport" class="tab-content">
+    <div class="report-container">
+        <div class="sidebar">
+          <h3>Ngày</h3>
+          <label>Từ ngày:<input type="date" id="start-date-tab1"></label>
+          <label>Đến ngày:<input type="date" id="end-date-tab1"></label>
+          <h3>Sản phẩm</h3>
+          <label><input type="checkbox" id="product-all-tab1" checked> Tất cả</label>
+          <div id="product-options-tab1"></div>
+          <h3>Ca</h3>
+          <label><input type="checkbox" id="ca-all-tab1" checked> Tất cả</label>
+          <div id="ca-options-tab1"></div>
+          <h3>Team</h3>
+          <label><input type="checkbox" id="team-all-tab1" checked> Tất cả</label>
+          <div id="team-options-tab1"></div>
+          <h3>Thị trường</h3>
+          <label><input type="checkbox" id="market-all-tab1" checked> Tất cả</label>
+          <div id="market-options-tab1"></div>
+        </div>
+        <div class="main-detailed">
+          <div class="header">
+            <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo">
+            <h2>DỮ LIỆU CHI PHÍ ADS</h2>
+          </div>
+          <table id="summary-table">
+            <thead>
+              <tr>
+                <th class="green-header">Nhân sự</th><th class="green-header">Mess+Cmt</th><th class="green-header">Đơn</th>
+                <th class="green-header">DS Chốt</th><th class="green-header">CPQC</th><th class="yellow-header">Tỉ lệ chốt</th>
+                <th class="yellow-header">Giá Mess</th><th class="yellow-header">CPS</th><th class="yellow-header">CPQC/DS chốt</th>
+                <th class="yellow-header">Giá đơn hàng</th>
+              </tr>
+            </thead>
+            <tbody id="summary-body"></tbody><tfoot id="summary-foot"></tfoot>
+          </table>
+          <table id="kpi-summary-table">
+              <thead>
+                  <tr>
+                      <th class="green-header" style="width: 5%;">STT</th><th class="green-header">MKT</th><th class="green-header">CPQC</th>
+                      <th class="green-header">Doanh số thực</th><th class="green-header">DS đã đi</th><th class="green-header">DS thành công</th>
+                      <th class="green-header">DS sau ship</th><th class="yellow-header">% CP/DS</th><th class="yellow-header">% KPI</th>
+                  </tr>
+              </thead>
+              <tbody id="kpi-summary-body"></tbody><tfoot id="kpi-summary-foot"></tfoot>
+          </table>
+          <div id="daily-breakdown"></div>
+        </div>
+    </div>
+  </div>
+
+  <!-- NỘI DUNG TAB 2 -->
+  <div id="DailyReport" class="tab-content">
+    <div class="main-daily">
+      <h2>Báo cáo hiệu suất theo ngày</h2>
+      <div class="daily-report-layout">
+        <div class="sidebar">
+          <h3>Ngày</h3>
+          <label>Từ ngày:<input type="date" id="start-date-tab2"></label>
+          <label>Đến ngày:<input type="date" id="end-date-tab2"></label>
+          <h3>Sản phẩm</h3>
+          <label><input type="checkbox" id="product-all-tab2" checked> Tất cả</label>
+          <div id="product-options-tab2"></div>
+          <h3>Thị trường</h3>
+          <label><input type="checkbox" id="market-all-tab2" checked> Tất cả</label>
+          <div id="market-options-tab2"></div>
+        </div>
+        <div class="main-content">
+          <table id="date-summary-table">
+            <thead>
+              <tr>
+                <th>Ngày</th><th>Tổng CPQC</th><th>DS Chốt</th><th>Tỉ lệ chốt TB</th>
+                <th>Giá Mess</th><th>CPS</th><th>%CPQC/DS chốt</th>
+              </tr>
+            </thead>
+            <tbody id="date-summary-body"></tbody>
+          </table>
+          <div class="chart-toggle-controls">
+              <label class="toggle-all"><input type="checkbox" id="toggle-all-charts" checked> Chọn/Bỏ chọn tất cả</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="costRevenueChart" checked> Doanh thu & Chi phí</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="costEfficiencyChart" checked> Hiệu suất Chi phí</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="ratioChart" checked> Tỉ lệ & Hiệu quả</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="productSalesChart" checked> DS theo Sản phẩm</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="marketSalesChart" checked> DS theo Thị trường</label>
+          </div>
+          <div class="charts-container">
+            <div class="chart-wrapper full-width" data-chart="costRevenueChart"><canvas id="costRevenueChart"></canvas></div>
+            <div class="chart-wrapper full-width" data-chart="costEfficiencyChart"><canvas id="costEfficiencyChart"></canvas></div>
+            <div class="chart-wrapper full-width" data-chart="ratioChart"><canvas id="ratioChart"></canvas></div>
+            <div class="chart-wrapper half-width" data-chart="productSalesChart"><canvas id="productSalesChart"></canvas></div>
+            <div class="chart-wrapper half-width" data-chart="marketSalesChart"><canvas id="marketSalesChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let rawData = [];
+    const groupChildren = {
+      'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US'], 'EU': ['Anh','Đức']
+    };
+    let charts = {};
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById("defaultOpen").click();
+      addEventListeners();
+      fetchData();
+    });
+
+    function openTab(evt, tabName) {
+      document.querySelectorAll(".tab-content").forEach(tc => tc.style.display = "none");
+      document.querySelectorAll(".tablinks").forEach(tl => tl.classList.remove("active"));
+      document.getElementById(tabName).style.display = "block";
+      evt.currentTarget.classList.add("active");
+      if (tabName === 'DailyReport' && !charts.costRevenueChart) {
+          initAllCharts();
+          applyDailyFilters();
+      }
+    }
+
+    function addEventListeners() {
+      document.body.addEventListener('change', (e) => {
+        if (e.target.closest('#DetailedReport')) {
+          handleTab1Filters(e.target);
+        } else if (e.target.closest('#DailyReport')) {
+          handleTab2Filters(e.target);
+        }
+      });
+    }
+    
+    function fetchData() {
+        fetch('https://script.google.com/macros/s/AKfycbzTjGSkbsvE_y-J2ocpcNYJtlLGMZ_3a8vQ-LAc9-WYPlf4rcW2cRE4Huvidhu7ZC-Q/exec')
+        .then(res => res.json())
+        .then(data => {
+          rawData = data.map(r => ({...r, dsChot: +r.dsChot || 0, cpqc: +r.cpqc || 0, soDon: +r.soDon || 0, soMessCmt: +r.soMessCmt || 0, dsThanhCong: +r.dsThanhCong || 0, tienShip: +r.tienShip || 0}));
+          populateAllFilters(rawData);
+          applyTab1Filters();
+          if (document.getElementById('DailyReport').style.display === 'block') {
+             applyDailyFilters();
+          }
+        }).catch(err => {
+          console.error(err);
+          alert('Không thể tải dữ liệu.');
+        });
+    }
+    
+    // --- HELPERS & FORMATTERS ---
+    function normalize(s) { return (s||'').trim().toLowerCase(); }
+    function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+    function getGroup(norm) { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); }
+    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
+    function formatPriceShort(v) { const num = Number(v || 0); if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr'; if (num >= 1000) return (num / 1000).toFixed(0) + 'k'; return num.toLocaleString('vi-VN'); }
+    function formatPercent(v) { return `${(Number(v||0) * 100).toFixed(2)}%`; }
+    function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
+    
+    function getFilteredData(filterIds) {
+        const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
+        const sdVal = document.getElementById(startDateId).value, edVal = document.getElementById(endDateId).value;
+        const sd = sdVal ? new Date(sdVal) : null, ed = edVal ? new Date(edVal) : null;
+        if (ed) ed.setHours(23, 59, 59, 999);
+
+        const pAll = document.getElementById(productCbId).checked;
+        const selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
+
+        const mAll = document.getElementById(marketCbId).checked;
+        const selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
+
+        const cAll = caCbId ? document.getElementById(caCbId).checked : true;
+        const selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
+
+        const tAll = teamCbId ? document.getElementById(teamCbId).checked : true;
+        const selT = teamCbId && !tAll ? [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value) : null;
+
+        return rawData.filter(r => {
+            const d = new Date(r.ngay);
+            const okD = (!sd || d >= sd) && (!ed || d <= ed);
+            const okP = !selP || selP.includes(r.sanPham);
+            const grp = getGroup(normalize(r.thiTruong));
+            const okM = !selM || selM.includes(grp) || selM.includes(r.thiTruong);
+            const okCa = !selCa || selCa.includes(r.ca);
+            const okT = !selT || selT.includes(r.team);
+            return okD && okP && okM && okCa && okT;
+        });
+    }
+
+    function populateAllFilters(data) {
+        const prodSet=new Set(), caSet=new Set(), teamSet=new Set(), mktSet=new Set();
+        data.forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
+
+        const productHtml = Array.from(prodSet).sort().map(p => `<label><input type='checkbox' class='filter-product-tab1' value='${p}' checked> ${p}</label>`).join('');
+        document.getElementById('product-options-tab1').innerHTML = productHtml;
+        document.getElementById('product-options-tab2').innerHTML = productHtml.replaceAll('filter-product-tab1', 'filter-product-tab2');
+
+        const marketHtml = Object.keys(groupChildren).map(grp => `<label><input type='checkbox' class='filter-market-tab1' value='${grp}' checked> ${grp}</label>` + groupChildren[grp].map(ch => `<label class='indent'><input type='checkbox' class='filter-market-tab1' value='${ch}' checked> ${ch}</label>`).join('')).join('');
+        const otherMarkets = Array.from(mktSet).filter(m => !Object.values(groupChildren).flat().includes(m)).map(m => `<label><input type='checkbox' class='filter-market-tab1' value='${m}' checked> ${m}</label>`).join('');
+        document.getElementById('market-options-tab1').innerHTML = marketHtml + otherMarkets;
+        document.getElementById('market-options-tab2').innerHTML = (marketHtml + otherMarkets).replaceAll('filter-market-tab1', 'filter-market-tab2');
+        
+        document.getElementById('ca-options-tab1').innerHTML = Array.from(caSet).sort().map(c => `<label class='indent'><input type='checkbox' class='filter-ca-tab1' value='${c}' checked> ${c}</label>`).join('');
+        document.getElementById('team-options-tab1').innerHTML = Array.from(teamSet).sort().map(t => `<label class='indent'><input type='checkbox' class='filter-team-tab1' value='${t}' checked> ${t}</label>`).join('');
+    }
+
+    // --- LOGIC TAB 1 ---
+    function handleTab1Filters(target) { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); }
+    function applyTab1Filters() {
+        const filterIds = { startDateId: 'start-date-tab1', endDateId: 'end-date-tab1', productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1', marketCbId: 'market-all-tab1', marketOptionsClass: 'filter-market-tab1', caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1', teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1' };
+        const filtered = getFilteredData(filterIds);
+        const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
+        renderSummary(filtered, selectedMarkets); renderKpiSummary(filtered); renderDailyBreakdown(filtered);
+    }
+    
+    function getCpsCellStyle(cps, selectedMarkets) {
+        const isChauAOnly = selectedMarkets.every(m => groupChildren['Châu Á'].includes(m) || m === 'Châu Á') && selectedMarkets.length > 0;
+        if (isChauAOnly) {
+            if (cps > 1000000) return 'bg-lightred';
+            if (cps > 700000) return 'bg-yellow';
+        } else { // Ngoài Châu Á or All/Mixed
+            if (cps > 1500000) return 'bg-lightred';
+            if (cps > 1000000) return 'bg-yellow';
+        }
+        return '';
+    }
+
+    function renderSummary(data, selectedMarkets) {
+        const sum={}, tot={mess:0,don:0,chot:0,cpqc:0};
+        data.forEach(r=>{ const n=r.ten||'N/A'; if(!sum[n]) sum[n]={mess:0,don:0,chot:0,cpqc:0}; sum[n].mess+=r.soMessCmt; sum[n].don+=r.soDon; sum[n].chot+=r.dsChot; sum[n].cpqc+=r.cpqc; tot.mess+=r.soMessCmt; tot.don+=r.soDon; tot.chot+=r.dsChot; tot.cpqc+=r.cpqc; });
+        let bodyHtml = Object.keys(sum).sort().map(n => {
+            const s=sum[n]; const rate=s.mess? s.don/s.mess:0; const pm=s.mess? s.cpqc/s.mess:0; const pd=s.don? s.cpqc/s.don:0; const pc=s.chot? s.cpqc/s.chot:0; const pdt=s.don? s.cpqc/s.don:0;
+            const rateClass = rate > 0.1 ? 'bg-green' : 'bg-yellow';
+            const cpsClass = getCpsCellStyle(pd, selectedMarkets);
+            const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
+            return `<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${formatCurrency(s.chot)}</td><td>${formatCurrency(s.cpqc)}</td><td class="${rateClass}">${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td class="${cpsClass}">${formatCurrency(pd)}</td><td class="${cpdsClass}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
+        }).join('');
+        document.getElementById('summary-body').innerHTML = bodyHtml;
+        // Omitting footer calculation for brevity as it's not formatted
+    }
+    
+    function renderKpiSummary(data) {
+        const sum = {}, total = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0, dsChot: 0 };
+        data.forEach(r => { const mkt = r.ten || 'N/A'; if (!sum[mkt]) sum[mkt] = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0, dsChot: 0 }; const dsSauShip = r.dsThanhCong - r.tienShip; sum[mkt].cpqc += r.cpqc; sum[mkt].dsThuc += dsSauShip; sum[mkt].dsDaDi += r.dsChot; sum[mkt].dsThanhCong += r.dsThanhCong; sum[mkt].dsSauShip += dsSauShip; sum[mkt].dsChot += r.dsChot; });
+        let bodyHtml = Object.keys(sum).sort().map((mkt, i) => {
+            const s = sum[mkt]; const cp_ds = s.dsChot ? s.cpqc / s.dsChot : 0; const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0;
+            const dsThucClass = s.dsThuc > 400000000 ? 'bg-lightblue' : '';
+            const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : '';
+            return `<tr><td>${i+1}</td><td>${mkt}</td><td>${formatCurrency(s.cpqc)}</td><td class="${dsThucClass}">${formatCurrency(s.dsThuc)}</td><td>${formatCurrency(s.dsDaDi)}</td><td>${formatCurrency(s.dsThanhCong)}</td><td>${formatCurrency(s.dsSauShip)}</td><td class="${cpdsClass}">${formatPercent(cp_ds)}</td><td>${kpi.toFixed(2)}x</td></tr>`;
+        }).join('');
+        document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
+    }
+    
+    function renderDailyBreakdown(data) { const c=document.getElementById('daily-breakdown');c.innerHTML='';const grpObj={};data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{let m=0,d=0,ch=0,pc=0;const rowsHtml=grpObj[date].map(r=>{m+=r.soMessCmt;d+=r.soDon;ch+=r.dsChot;pc+=r.cpqc;return`<tr><td>${r.id}</td><td>${r.ten}</td><td>${r.ca}</td><td>${r.page}</td><td>${r.sanPham}</td><td>${r.thiTruong}</td><td>${r.soMessCmt}</td><td>${r.soDon}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td>${r.team}</td></tr>`}).join('');const footHtml=`<tr class='total-row'><td colspan='6'>Tổng</td><td>${m}</td><td>${d}</td><td>${formatCurrency(ch)}</td><td>${formatCurrency(pc)}</td><td></td></tr>`;c.innerHTML+=`<h3>${date}</h3><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Team</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table>`;}); }
+
+    // --- LOGIC TAB 2 ---
+    function handleTab2Filters(target) { handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); if (target.id === 'toggle-all-charts') { document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); } if (target.classList.contains('chart-toggle')) { document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); } if (target.classList.contains('chart-toggle') || target.id === 'toggle-all-charts') { toggleChartVisibility(); } else { applyDailyFilters(); } }
+    function applyDailyFilters() { if (!rawData.length) return; const filterIds = { startDateId: 'start-date-tab2', endDateId: 'end-date-tab2', productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2', marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2' }; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
+    function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
+    function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) wrapper.style.display = checkbox.checked ? 'block' : 'none'; }); }
+    
+    function initAllCharts() {
+        const createChart = (ctxId, config) => new Chart(document.getElementById(ctxId).getContext('2d'), config);
+        charts.costRevenueChart = createChart('costRevenueChart', getComboChartConfig( {y: {pos: 'left', title: 'DS Chốt (VND)'}, y1: {pos: 'right', title: 'CPQC (VND)'}} ));
+        charts.costEfficiencyChart = createChart('costEfficiencyChart', getLineChartConfig('Hiệu suất chi phí (VND)'));
+        charts.ratioChart = createChart('ratioChart', getLineChartConfig('Tỉ lệ (%)', v => formatPercent(v)));
+        charts.productSalesChart = createChart('productSalesChart', getBarChartConfig());
+        charts.marketSalesChart = createChart('marketSalesChart', getBarChartConfig());
+        toggleChartVisibility();
+    }
+    
+    function renderAllDailyCharts(data) {
+        if (!charts.costRevenueChart) return;
+        const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; });
+        const labels = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+        
+        charts.costRevenueChart.data.labels = labels;
+        charts.costRevenueChart.data.datasets = [ createDataset('DS Chốt', labels.map(d => daily[d].chot), getChartColors().dsChot, 'bar', 'y'), createDataset('CPQC', labels.map(d => daily[d].cpqc), getChartColors().cpqc, 'line', 'y1') ];
+        charts.costRevenueChart.update();
+
+        charts.costEfficiencyChart.data.labels = labels;
+        charts.costEfficiencyChart.data.datasets = [ createDataset('Giá Mess', labels.map(d => daily[d].mess ? (daily[d].cpqc / daily[d].mess) : 0), getChartColors().mess, 'line'), createDataset('CPS', labels.map(d => daily[d].don ? (daily[d].cpqc / daily[d].don) : 0), getChartColors().cps, 'line') ];
+        charts.costEfficiencyChart.update();
+        
+        charts.ratioChart.data.labels = labels;
+        charts.ratioChart.data.datasets = [ createDataset('Tỉ lệ chốt', labels.map(d => daily[d].mess ? (daily[d].don / daily[d].mess) : 0), getChartColors().rate, 'line'), createDataset('%CPQC/DS chốt', labels.map(d => daily[d].chot ? (daily[d].cpqc / daily[d].chot) : 0), getChartColors().cpqcDsRatio, 'line') ];
+        charts.ratioChart.update();
+        
+        const productSales = {}, marketSales = {}; data.forEach(r => { productSales[r.sanPham] = (productSales[r.sanPham] || 0) + r.dsChot; marketSales[r.thiTruong] = (marketSales[r.thiTruong] || 0) + r.dsChot; });
+        const sortedProducts = Object.entries(productSales).sort((a,b) => b[1] - a[1]);
+        const sortedMarkets = Object.entries(marketSales).sort((a,b) => b[1] - a[1]);
+        charts.productSalesChart.data.labels = sortedProducts.map(p=>p[0]); charts.productSalesChart.data.datasets = [createDataset('DS theo SP', sortedProducts.map(p=>p[1]), getChartColors().product, 'bar')]; charts.productSalesChart.update();
+        charts.marketSalesChart.data.labels = sortedMarkets.map(m=>m[0]); charts.marketSalesChart.data.datasets = [createDataset('DS theo TT', sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar')]; charts.marketSalesChart.update();
+    }
+
+    // --- CHART CONFIGURATION & HELPERS ---
+    const chartPluginConfig = { interaction: { mode: 'index', intersect: false }, legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', boxPadding: 8, titleFont: {weight: 'bold'}, bodyFont: {size: 14} }, datalabels: { display: false } };
+    function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) { return { type: 'line', options: { ...chartPluginConfig, scales: { y: { title: { display: true, text: yTitle, font: {weight: 'bold'} }, ticks: { callback: formatter } } } } }; }
+    function getBarChartConfig() { return { type: 'bar', options: { ...chartPluginConfig, indexAxis: 'y', scales: { x: { ticks: { callback: v => formatPriceShort(v) } } }, plugins: { ...chartPluginConfig.plugins, legend: {display: false}, datalabels: { display: true, anchor: 'end', align: 'end', formatter: v => formatPriceShort(v), color: '#333', font: {weight: 'bold'}} } } }; }
+    function getComboChartConfig(axes) { const scales = {}; for (const key in axes) { scales[key] = { type: 'linear', display: true, position: axes[key].pos, title: { display: true, text: axes[key].title, font: {weight: 'bold'} }, ticks: { callback: v => formatPriceShort(v) } }; } scales[Object.keys(axes)[1]].grid = { drawOnChartArea: false }; return { type: 'bar', options: { ...chartPluginConfig, scales: scales, plugins: {...chartPluginConfig.plugins, datalabels: {display: true, formatter: (v, ctx) => ctx.dataset.type === 'line' ? formatPriceShort(v) : '', color: '#fff', backgroundColor: ctx.dataset.borderColor, borderRadius:4, padding: {top: 2, bottom: 2, left: 4, right: 4}, align: 'start', anchor: 'start', font: {weight: 'bold'} }} } }; }
+    function getChartColors() { return { cpqc: '#1565C0', dsChot: '#2E7D32', rate: '#C62828', mess: '#FF6F00', cps: '#00695C', cpqcDsRatio: '#6A1B9A', product: '#455A64', market: '#D84315' }; }
+    function createDataset(label, data, color, type = 'line', yAxisID = 'y') { return { label, data, backgroundColor: color, borderColor: color, type, yAxisID, fill: type === 'line', tension: 0.4, borderWidth: type === 'line' ? 4 : 1, pointRadius: type === 'line' ? 5 : undefined, pointBackgroundColor: '#fff', pointBorderWidth: 2 }; }
+  </script>
+</body>
+</html>
