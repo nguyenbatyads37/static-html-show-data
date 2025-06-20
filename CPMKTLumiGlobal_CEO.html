@@ -53,11 +53,11 @@
     .chart-toggle-controls .toggle-all { font-weight: bold; }
     .charts-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
     .chart-wrapper {
+        flex: 1 1 48%; /* Cho phép 2 biểu đồ trên 1 hàng */
+        min-width: 400px; /* Đảm bảo biểu đồ không quá nhỏ */
         background: #fff; padding: 15px; border-radius: 12px;
         box-shadow: 0 6px 12px rgba(0,0,0,0.1);
     }
-    .chart-wrapper.full-width { flex: 1 1 100%; }
-    .chart-wrapper.half-width { flex: 1 1 48%; min-width: 400px; }
     .chart-wrapper canvas { width: 100% !important; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -149,18 +149,24 @@
           </table>
           <div class="chart-toggle-controls">
               <label class="toggle-all"><input type="checkbox" id="toggle-all-charts" checked> Chọn/Bỏ chọn tất cả</label>
-              <label><input type="checkbox" class="chart-toggle" data-chart="costRevenueChart" checked> Doanh thu & Chi phí</label>
-              <label><input type="checkbox" class="chart-toggle" data-chart="costEfficiencyChart" checked> Hiệu suất Chi phí</label>
-              <label><input type="checkbox" class="chart-toggle" data-chart="ratioChart" checked> Tỉ lệ & Hiệu quả</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="cpqcChart" checked> CPQC</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="dsChotChart" checked> DS Chốt</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="rateChart" checked> Tỉ lệ chốt</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="messChart" checked> Giá Mess</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="cpsChart" checked> CPS</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="cpqcDsRatioChart" checked> %CPQC/DS chốt</label>
               <label><input type="checkbox" class="chart-toggle" data-chart="productSalesChart" checked> DS theo Sản phẩm</label>
               <label><input type="checkbox" class="chart-toggle" data-chart="marketSalesChart" checked> DS theo Thị trường</label>
           </div>
           <div class="charts-container">
-            <div class="chart-wrapper full-width" data-chart="costRevenueChart"><canvas id="costRevenueChart"></canvas></div>
-            <div class="chart-wrapper full-width" data-chart="costEfficiencyChart"><canvas id="costEfficiencyChart"></canvas></div>
-            <div class="chart-wrapper full-width" data-chart="ratioChart"><canvas id="ratioChart"></canvas></div>
-            <div class="chart-wrapper half-width" data-chart="productSalesChart"><canvas id="productSalesChart"></canvas></div>
-            <div class="chart-wrapper half-width" data-chart="marketSalesChart"><canvas id="marketSalesChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="cpqcChart"><canvas id="cpqcChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="dsChotChart"><canvas id="dsChotChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="rateChart"><canvas id="rateChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="messChart"><canvas id="messChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="cpsChart"><canvas id="cpsChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="cpqcDsRatioChart"><canvas id="cpqcDsRatioChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="productSalesChart"><canvas id="productSalesChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="marketSalesChart"><canvas id="marketSalesChart"></canvas></div>
           </div>
         </div>
       </div>
@@ -186,7 +192,7 @@
       document.querySelectorAll(".tablinks").forEach(tl => tl.classList.remove("active"));
       document.getElementById(tabName).style.display = "block";
       evt.currentTarget.classList.add("active");
-      if (tabName === 'DailyReport' && !charts.costRevenueChart) {
+      if (tabName === 'DailyReport' && !charts.cpqcChart) {
           initAllCharts();
           applyDailyFilters();
       }
@@ -293,7 +299,7 @@
         if (isChauAOnly) {
             if (cps > 1000000) return 'bg-lightred';
             if (cps > 700000) return 'bg-yellow';
-        } else { // Ngoài Châu Á or All/Mixed
+        } else {
             if (cps > 1500000) return 'bg-lightred';
             if (cps > 1000000) return 'bg-yellow';
         }
@@ -301,8 +307,8 @@
     }
 
     function renderSummary(data, selectedMarkets) {
-        const sum={}, tot={mess:0,don:0,chot:0,cpqc:0, dsSauShip: 0};
-        data.forEach(r=>{ const n=r.ten||'N/A'; if(!sum[n]) sum[n]={mess:0,don:0,chot:0,cpqc:0, dsSauShip: 0}; sum[n].mess+=r.soMessCmt; sum[n].don+=r.soDon; sum[n].chot+=r.dsChot; sum[n].cpqc+=r.cpqc; sum[n].dsSauShip += (r.dsThanhCong - r.tienShip); tot.mess+=r.soMessCmt; tot.don+=r.soDon; tot.chot+=r.dsChot; tot.cpqc+=r.cpqc; tot.dsSauShip += (r.dsThanhCong - r.tienShip); });
+        const sum={};
+        data.forEach(r=>{ const n=r.ten||'N/A'; if(!sum[n]) sum[n]={mess:0,don:0,chot:0,cpqc:0, dsSauShip: 0}; sum[n].mess+=r.soMessCmt; sum[n].don+=r.soDon; sum[n].chot+=r.dsChot; sum[n].cpqc+=r.cpqc; sum[n].dsSauShip += (r.dsThanhCong - r.tienShip); });
         
         let bodyHtml = Object.keys(sum).sort().map(n => {
             const s=sum[n]; const rate=s.mess? s.don/s.mess:0; const pm=s.mess? s.cpqc/s.mess:0; const pd=s.don? s.cpqc/s.don:0; const pc=s.chot? s.cpqc/s.chot:0; const pdt=s.don? s.cpqc/s.don:0;
@@ -336,45 +342,38 @@
     
     function initAllCharts() {
         const createChart = (ctxId, config) => new Chart(document.getElementById(ctxId).getContext('2d'), config);
-        charts.costRevenueChart = createChart('costRevenueChart', getComboChartConfig( {y: {pos: 'left', title: 'DS Chốt (VND)'}, y1: {pos: 'right', title: 'CPQC (VND)'}} ));
-        charts.costEfficiencyChart = createChart('costEfficiencyChart', getLineChartConfig('Hiệu suất chi phí (VND)'));
-        charts.ratioChart = createChart('ratioChart', getLineChartConfig('Tỉ lệ (%)', v => formatPercent(v)));
+        charts.cpqcChart = createChart('cpqcChart', getLineChartConfig('CPQC (VND)'));
+        charts.dsChotChart = createChart('dsChotChart', getLineChartConfig('DS Chốt (VND)'));
+        charts.rateChart = createChart('rateChart', getLineChartConfig('Tỉ lệ chốt (%)', v => formatPercent(v)));
+        charts.messChart = createChart('messChart', getLineChartConfig('Giá Mess (VND)'));
+        charts.cpsChart = createChart('cpsChart', getLineChartConfig('CPS (VND)'));
+        charts.cpqcDsRatioChart = createChart('cpqcDsRatioChart', getLineChartConfig('%CPQC/DS chốt', v => formatPercent(v)));
         charts.productSalesChart = createChart('productSalesChart', getBarChartConfig());
         charts.marketSalesChart = createChart('marketSalesChart', getBarChartConfig());
         toggleChartVisibility();
     }
     
     function renderAllDailyCharts(data) {
-        if (!charts.costRevenueChart) return;
+        if (!charts.cpqcChart) return;
         const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; });
         const labels = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
         
-        charts.costRevenueChart.data.labels = labels;
-        charts.costRevenueChart.data.datasets = [ createDataset('DS Chốt', labels.map(d => daily[d].chot), getChartColors().dsChot, 'bar', 'y'), createDataset('CPQC', labels.map(d => daily[d].cpqc), getChartColors().cpqc, 'line', 'y1') ];
-        charts.costRevenueChart.update();
+        updateChart(charts.cpqcChart, 'CPQC', labels, labels.map(d => daily[d].cpqc), getChartColors().cpqc);
+        updateChart(charts.dsChotChart, 'DS Chốt', labels, labels.map(d => daily[d].chot), getChartColors().dsChot);
+        updateChart(charts.rateChart, 'Tỉ lệ chốt', labels, labels.map(d => daily[d].mess ? (daily[d].don / daily[d].mess) : 0), getChartColors().rate);
+        updateChart(charts.messChart, 'Giá Mess', labels, labels.map(d => daily[d].mess ? (daily[d].cpqc / daily[d].mess) : 0), getChartColors().mess);
+        updateChart(charts.cpsChart, 'CPS', labels, labels.map(d => daily[d].don ? (daily[d].cpqc / daily[d].don) : 0), getChartColors().cps);
+        updateChart(charts.cpqcDsRatioChart, '%CPQC/DS chốt', labels, labels.map(d => daily[d].chot ? (daily[d].cpqc / daily[d].chot) : 0), getChartColors().cpqcDsRatio);
 
-        charts.costEfficiencyChart.data.labels = labels;
-        charts.costEfficiencyChart.data.datasets = [ createDataset('Giá Mess', labels.map(d => daily[d].mess ? (daily[d].cpqc / daily[d].mess) : 0), getChartColors().mess, 'line'), createDataset('CPS', labels.map(d => daily[d].don ? (daily[d].cpqc / daily[d].don) : 0), getChartColors().cps, 'line') ];
-        charts.costEfficiencyChart.update();
-        
-        charts.ratioChart.data.labels = labels;
-        charts.ratioChart.data.datasets = [ createDataset('Tỉ lệ chốt', labels.map(d => daily[d].mess ? (daily[d].don / daily[d].mess) : 0), getChartColors().rate, 'line'), createDataset('%CPQC/DS chốt', labels.map(d => daily[d].chot ? (daily[d].cpqc / daily[d].chot) : 0), getChartColors().cpqcDsRatio, 'line') ];
-        charts.ratioChart.update();
-        
         const productSales = {}, marketSales = {}; data.forEach(r => { if (r.sanPham) productSales[r.sanPham] = (productSales[r.sanPham] || 0) + r.dsChot; if (r.thiTruong) marketSales[r.thiTruong] = (marketSales[r.thiTruong] || 0) + r.dsChot; });
         const sortedProducts = Object.entries(productSales).sort((a,b) => b[1] - a[1]);
         const sortedMarkets = Object.entries(marketSales).sort((a,b) => b[1] - a[1]);
         
-        charts.productSalesChart.data.labels = sortedProducts.map(p=>p[0]);
-        charts.productSalesChart.data.datasets = [createDataset('DS theo SP', sortedProducts.map(p=>p[1]), getChartColors().product, 'bar')];
-        charts.productSalesChart.update();
-
-        charts.marketSalesChart.data.labels = sortedMarkets.map(m=>m[0]);
-        charts.marketSalesChart.data.datasets = [createDataset('DS theo TT', sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar')];
-        charts.marketSalesChart.update();
+        updateChart(charts.productSalesChart, 'DS theo SP', sortedProducts.map(p=>p[0]), sortedProducts.map(p=>p[1]), getChartColors().product, 'bar');
+        updateChart(charts.marketSalesChart, 'DS theo TT', sortedMarkets.map(m=>m[0]), sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar');
     }
 
-    // --- CHART CONFIGURATION & HELPERS (Đã sửa lỗi) ---
+    // --- CHART CONFIGURATION & HELPERS (SỬA LỖI TẠI ĐÂY) ---
     const baseChartPlugins = { interaction: { mode: 'index', intersect: false }, legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', boxPadding: 8, titleFont: {weight: 'bold'}, bodyFont: {size: 14} }, datalabels: { display: false } };
     
     function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) {
@@ -402,37 +401,14 @@
         };
     }
 
-    function getComboChartConfig(axes) {
-        const scales = {};
-        for (const key in axes) {
-            scales[key] = {
-                type: 'linear', display: true, position: axes[key].pos,
-                title: { display: true, text: axes[key].title, font: {weight: 'bold'} },
-                ticks: { callback: v => formatPriceShort(v) }
-            };
-        }
-        scales[Object.keys(axes)[1]].grid = { drawOnChartArea: false };
-        return {
-            type: 'bar',
-            options: {
-                plugins: {
-                    ...baseChartPlugins,
-                    datalabels: {
-                        display: true,
-                        formatter: (v, ctx) => ctx.dataset.type === 'line' ? formatPriceShort(v) : '',
-                        color: '#fff',
-                        backgroundColor: (ctx) => ctx.dataset.borderColor,
-                        borderRadius: 4, padding: {top: 2, bottom: 2, left: 4, right: 4},
-                        align: 'start', anchor: 'start', font: {weight: 'bold'}
-                    }
-                },
-                scales: scales
-            }
-        };
+    function updateChart(chart, label, labels, data, color, type = 'line') {
+        chart.data.labels = labels;
+        chart.data.datasets = [createDataset(label, data, color, type)];
+        chart.update();
     }
 
     function getChartColors() { return { cpqc: '#0D47A1', dsChot: '#1B5E20', rate: '#B71C1C', mess: '#E65100', cps: '#004D40', cpqcDsRatio: '#4A148C', product: '#37474F', market: '#BF360C' }; }
-    function createDataset(label, data, color, type = 'line', yAxisID = 'y') { return { label, data, backgroundColor: color, borderColor: color, type, yAxisID, fill: type === 'line', tension: 0.4, borderWidth: type === 'line' ? 4 : 1, pointRadius: type === 'line' ? 5 : undefined, pointBackgroundColor: '#fff', pointBorderWidth: 2 }; }
+    function createDataset(label, data, color, type = 'line') { return { label, data, backgroundColor: color, borderColor: color, type, fill: type === 'line', tension: 0.4, borderWidth: type === 'line' ? 4 : 1, pointRadius: type === 'line' ? 5 : undefined, pointBackgroundColor: '#fff', pointBorderWidth: 2 }; }
   </script>
 </body>
 </html>
