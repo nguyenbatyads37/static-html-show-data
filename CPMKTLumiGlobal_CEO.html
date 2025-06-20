@@ -43,7 +43,7 @@
     #kpi-summary-table { margin-top: 30px; }
     .daily-breakdown h3 { margin-top: 20px; background: #f0f0f0; padding: 8px; border: 1px solid #ccc; }
 
-    /* --- STYLES TAB 2: BÁO CÁO THEO NGÀY --- */
+    /* --- STYLES TAB 2: BÁO CÁO THEO NGÀY (SỬA LỖI) --- */
     .daily-report-layout { display: flex; gap: 20px; }
     .daily-report-layout .sidebar { width: 260px; }
     .daily-report-layout .main-content { flex-grow: 1; }
@@ -51,14 +51,14 @@
     .chart-toggle-controls { margin: 20px 0; padding: 10px; background: #eee; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
     .chart-toggle-controls label { font-size: 14px; }
     .chart-toggle-controls .toggle-all { font-weight: bold; }
-    .charts-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; }
+    .charts-container { display: flex; flex-wrap: wrap; gap: 20px; justify-content: flex-start; }
     .chart-wrapper {
-        flex: 1 1 48%; /* Cho phép 2 biểu đồ trên 1 hàng */
-        min-width: 400px; /* Đảm bảo biểu đồ không quá nhỏ */
+        flex: 1 1 calc(50% - 10px); /* 2 chart/hàng, 10px là một nửa của gap */
+        min-width: 350px;
         background: #fff; padding: 15px; border-radius: 12px;
         box-shadow: 0 6px 12px rgba(0,0,0,0.1);
     }
-    .chart-wrapper canvas { width: 100% !important; }
+    .chart-wrapper canvas { width: 100% !important; height: 300px !important; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
@@ -334,8 +334,25 @@
     
     function renderDailyBreakdown(data) { const c=document.getElementById('daily-breakdown');c.innerHTML='';const grpObj={};data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{let m=0,d=0,ch=0,pc=0;const rowsHtml=grpObj[date].map(r=>{m+=r.soMessCmt;d+=r.soDon;ch+=r.dsChot;pc+=r.cpqc;return`<tr><td>${r.id}</td><td>${r.ten}</td><td>${r.ca}</td><td>${r.page}</td><td>${r.sanPham}</td><td>${r.thiTruong}</td><td>${r.soMessCmt}</td><td>${r.soDon}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td>${r.team}</td></tr>`}).join('');const footHtml=`<tr class='total-row'><td colspan='6'>Tổng</td><td>${m}</td><td>${d}</td><td>${formatCurrency(ch)}</td><td>${formatCurrency(pc)}</td><td></td></tr>`;c.innerHTML+=`<h3>${date}</h3><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Team</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table>`;}); }
 
-    // --- LOGIC TAB 2 ---
-    function handleTab2Filters(target) { handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); if (target.id === 'toggle-all-charts') { document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); } if (target.classList.contains('chart-toggle')) { document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); } if (target.classList.contains('chart-toggle') || target.id === 'toggle-all-charts') { toggleChartVisibility(); } else { applyDailyFilters(); } }
+    // --- LOGIC TAB 2 (SỬA LỖI TẠI ĐÂY) ---
+    function handleTab2Filters(target) {
+        // Logic cho việc ẩn/hiện biểu đồ
+        if (target.id === 'toggle-all-charts' || target.classList.contains('chart-toggle')) {
+            if (target.id === 'toggle-all-charts') {
+                document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked);
+            } else { 
+                document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked);
+            }
+            toggleChartVisibility();
+            return; // Chỉ ẩn/hiện, không lọc lại dữ liệu
+        }
+        
+        // Logic cho các bộ lọc dữ liệu khác (ngày, sản phẩm, thị trường)
+        handleCheckbox('product-all-tab2', 'filter-product-tab2', target);
+        handleCheckbox('market-all-tab2', 'filter-market-tab2', target);
+        applyDailyFilters();
+    }
+
     function applyDailyFilters() { if (!rawData.length) return; const filterIds = { startDateId: 'start-date-tab2', endDateId: 'end-date-tab2', productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2', marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2' }; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
     function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
     function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) wrapper.style.display = checkbox.checked ? 'block' : ''; }); }
@@ -373,7 +390,7 @@
         updateChart(charts.marketSalesChart, 'DS theo TT', sortedMarkets.map(m=>m[0]), sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar');
     }
 
-    // --- CHART CONFIGURATION & HELPERS (SỬA LỖI TẠI ĐÂY) ---
+    // --- CHART CONFIGURATION & HELPERS ---
     const baseChartPlugins = { interaction: { mode: 'index', intersect: false }, legend: { position: 'top' }, tooltip: { backgroundColor: 'rgba(0,0,0,0.8)', boxPadding: 8, titleFont: {weight: 'bold'}, bodyFont: {size: 14} }, datalabels: { display: false } };
     
     function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) {
