@@ -20,6 +20,7 @@
     th.yellow-header { background: #fff59d; }
     tr.total-row { background: #f1f1f1; font-weight: bold; }
     .daily-breakdown h3 { margin-top: 20px; background: #f0f0f0; padding: 8px; border: 1px solid #ccc; }
+    #kpi-summary-table { margin-top: 30px; } /* Thêm khoảng cách cho bảng mới */
   </style>
 </head>
 <body>
@@ -68,6 +69,27 @@
       <tbody id="summary-body"></tbody>
       <tfoot id="summary-foot"></tfoot>
     </table>
+
+    <!-- BẢNG TỔNG KẾT KPI MỚI -->
+    <table id="kpi-summary-table">
+        <thead>
+            <tr>
+                <th class="green-header" style="width: 5%;">STT</th>
+                <th class="green-header">MKT</th>
+                <th class="green-header">CPQC</th>
+                <th class="green-header">Doanh số thực</th>
+                <th class="green-header">DS đã đi</th>
+                <th class="green-header">DS thành công</th>
+                <th class="green-header">DS sau ship</th>
+                <th class="yellow-header">% CP/DS</th>
+                <th class="yellow-header">% KPI</th>
+            </tr>
+        </thead>
+        <tbody id="kpi-summary-body"></tbody>
+        <tfoot id="kpi-summary-foot"></tfoot>
+    </table>
+
+
     <div id="daily-breakdown"></div>
   </div>
 
@@ -94,6 +116,9 @@
     }
     function formatPrice(v) {
       return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'});
+    }
+    function formatPercent(v) {
+        return `${(Number(v||0) * 100).toFixed(2)}%`;
     }
 
     function populate(data) {
@@ -123,15 +148,98 @@
       const selT=tAll?null:[...document.querySelectorAll('.filter-team:checked')].map(cb=>cb.value);
       const selM=mAll?null:[...document.querySelectorAll('.filter-market:checked')].map(cb=>cb.value);
       const filtered=rawData.filter(r=>{const okP=!selP||selP.includes(r.sanPham);const okCa=!selCa||selCa.includes(r.ca);const okT=!selT||selT.includes(r.team);const grp=getGroup(normalize(r.thiTruong));const okM=!selM||selM.includes(grp)||selM.includes(r.thiTruong);const d=new Date(r.ngay);const okD=(isNaN(sd)||isNaN(ed))||(d>=sd&&d<=ed);return okP&&okCa&&okT&&okM&&okD;});
-      renderSummary(filtered); renderDaily(filtered);
+      
+      renderSummary(filtered); 
+      renderKpiSummary(filtered); // <-- GỌI HÀM RENDER BẢNG MỚI
+      renderDaily(filtered);
     }
 
     function renderSummary(data) {
       const sum={}, tot={mess:0,don:0,chot:0,cpqc:0}; data.forEach(r=>{const n=r.ten||'',m=+r.soMessCmt||0,d=+r.soDon||0,c=+r.dsChot||0,p=+r.cpqc||0;sum[n]=sum[n]||{mess:0,don:0,chot:0,cpqc:0};sum[n].mess+=m;sum[n].don+=d;sum[n].chot+=c;sum[n].cpqc+=p;tot.mess+=m;tot.don+=d;tot.chot+=c;tot.cpqc+=p;});
       const body=document.getElementById('summary-body'), foot=document.getElementById('summary-foot');body.innerHTML='';foot.innerHTML='';
-      Object.keys(sum).forEach(n=>{const s=sum[n];const rate=s.mess? s.don/s.mess:0;const pm=s.mess? s.cpqc/s.mess:0,pd=s.don? s.cpqc/s.don:0,pc=s.chot? s.cpqc/s.chot:0,pdt=s.don? s.cpqc/s.don:0;body.innerHTML+=`<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${s.chot}</td><td>${formatPrice(s.cpqc)}</td><td>${(rate*100).toFixed(2)}%</td><td>${formatPrice(pm)}</td><td>${formatPrice(pd)}</td><td>${formatPrice(pc)}</td><td>${formatPrice(pdt)}</td></tr>`;});
+      Object.keys(sum).sort().forEach(n=>{const s=sum[n];const rate=s.mess? s.don/s.mess:0;const pm=s.mess? s.cpqc/s.mess:0,pd=s.don? s.cpqc/s.don:0,pc=s.chot? s.cpqc/s.chot:0,pdt=s.don? s.cpqc/s.don:0;body.innerHTML+=`<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${formatPrice(s.chot)}</td><td>${formatPrice(s.cpqc)}</td><td>${formatPercent(rate)}</td><td>${formatPrice(pm)}</td><td>${formatPrice(pd)}</td><td>${formatPrice(pc)}</td><td>${formatPrice(pdt)}</td></tr>`;});
       const rateTot=tot.mess? tot.don/tot.mess:0,pmTot=tot.mess? tot.cpqc/tot.mess:0,pdTot=tot.don? tot.cpqc/tot.don:0,pcTot=tot.chot? tot.cpqc/tot.chot:0,pdtTot=tot.don? tot.cpqc/tot.don:0;
-      foot.innerHTML=`<tr class='total-row'><td>Tổng</td><td>${tot.mess}</td><td>${tot.don}</td><td>${tot.chot}</td><td>${formatPrice(tot.cpqc)}</td><td>${(rateTot*100).toFixed(2)}%</td><td>${formatPrice(pmTot)}</td><td>${formatPrice(pdTot)}</td><td>${formatPrice(pcTot)}</td><td>${formatPrice(pdtTot)}</td></tr>`;
+      foot.innerHTML=`<tr class='total-row'><td>Tổng</td><td>${tot.mess}</td><td>${tot.don}</td><td>${formatPrice(tot.chot)}</td><td>${formatPrice(tot.cpqc)}</td><td>${formatPercent(rateTot)}</td><td>${formatPrice(pmTot)}</td><td>${formatPrice(pdTot)}</td><td>${formatPrice(pcTot)}</td><td>${formatPrice(pdtTot)}</td></tr>`;
+    }
+    
+    // HÀM MỚI ĐỂ RENDER BẢNG TỔNG KẾT KPI
+    function renderKpiSummary(data) {
+        const sum = {};
+        const total = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0 };
+        
+        data.forEach(r => {
+            const mkt = r.ten || 'N/A';
+            if (!sum[mkt]) {
+                sum[mkt] = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0 };
+            }
+            
+            // Lấy dữ liệu từ rawData.
+            // QUAN TRỌNG: Các trường như donHuy, dsDaDi, dsThanhCong, tienShip cần được cung cấp từ Google Sheet.
+            // Hiện tại, chúng được giả định là 0 nếu không tồn tại.
+            const cpqc = +r.cpqc || 0;
+            const dsSaleLen = +r.dsChot || 0; // Sử dụng dsChot làm "doanh số sale lên"
+            const donHuy = +r.donHuy || 0; // Cần thêm trường này từ sheet
+            const dsDaDi = +r.dsDaDi || 0; // Cần thêm trường này từ sheet
+            const dsThanhCong = +r.dsThanhCong || 0; // Cần thêm trường này từ sheet
+            const tienShip = +r.tienShip || 0; // Cần thêm trường này từ sheet
+
+            const dsThuc = dsSaleLen - donHuy;
+            const dsSauShip = dsThanhCong - tienShip;
+
+            sum[mkt].cpqc += cpqc;
+            sum[mkt].dsThuc += dsThuc;
+            sum[mkt].dsDaDi += dsDaDi;
+            sum[mkt].dsThanhCong += dsThanhCong;
+            sum[mkt].dsSauShip += dsSauShip;
+
+            total.cpqc += cpqc;
+            total.dsThuc += dsThuc;
+            total.dsDaDi += dsDaDi;
+            total.dsThanhCong += dsThanhCong;
+            total.dsSauShip += dsSauShip;
+        });
+
+        const body = document.getElementById('kpi-summary-body');
+        const foot = document.getElementById('kpi-summary-foot');
+        body.innerHTML = '';
+        foot.innerHTML = '';
+
+        let stt = 1;
+        Object.keys(sum).sort().forEach(mkt => {
+            const s = sum[mkt];
+            const cp_ds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0;
+            const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0; // Tính KPI là Doanh số sau ship / CPQC (ROAS)
+
+            body.innerHTML += `
+                <tr>
+                    <td>${stt++}</td>
+                    <td>${mkt}</td>
+                    <td>${formatPrice(s.cpqc)}</td>
+                    <td>${formatPrice(s.dsThuc)}</td>
+                    <td>${formatPrice(s.dsDaDi)}</td>
+                    <td>${formatPrice(s.dsThanhCong)}</td>
+                    <td>${formatPrice(s.dsSauShip)}</td>
+                    <td>${formatPercent(cp_ds)}</td>
+                    <td>${kpi.toFixed(2)}x</td>
+                </tr>
+            `;
+        });
+
+        const total_cp_ds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0;
+        const total_kpi = total.cpqc ? total.dsSauShip / total.cpqc : 0;
+
+        foot.innerHTML = `
+            <tr class="total-row">
+                <td colspan="2">Tổng</td>
+                <td>${formatPrice(total.cpqc)}</td>
+                <td>${formatPrice(total.dsThuc)}</td>
+                <td>${formatPrice(total.dsDaDi)}</td>
+                <td>${formatPrice(total.dsThanhCong)}</td>
+                <td>${formatPrice(total.dsSauShip)}</td>
+                <td>${formatPercent(total_cp_ds)}</td>
+                <td>${total_kpi.toFixed(2)}x</td>
+            </tr>
+        `;
     }
 
     function renderDaily(data) {const c=document.getElementById('daily-breakdown');c.innerHTML='';const grpObj={};data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{const rows=grpObj[date];let html=`<h3>${date}</h3><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Chi phí ADS</th><th>Team</th></tr></thead><tbody>`;let m=0,d=0,ch=0,pc=0,ad=0;rows.forEach(r=>{m+=+r.soMessCmt||0;d+=+r.soDon||0;ch+=+r.dsChot||0;pc+=+r.cpqc||0;ad+=+r.chiPhiADS||0;html+=`<tr><td>${r.id}</td><td>${r.ten}</td><td>${r.ca}</td><td>${r.page}</td><td>${r.sanPham}</td><td>${r.thiTruong}</td><td>${r.soMessCmt}</td><td>${r.soDon}</td><td>${formatPrice(r.dsChot)}</td><td>${formatPrice(r.cpqc)}</td><td>${formatPrice(r.chiPhiADS)}</td><td>${r.team}</td></tr>`;});html+=`<tr class='total-row'><td colspan='6'>Tổng</td><td>${m}</td><td>${d}</td><td>${formatPrice(ch)}</td><td>${formatPrice(pc)}</td><td>${formatPrice(ad)}</td><td></td></tr></tbody></table>`;c.innerHTML+=html;});}
