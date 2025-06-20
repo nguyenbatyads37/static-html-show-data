@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Báo cáo chi phí tổng hợp</title>
+  <style>
+    /* --- CÀI ĐẶT CHUNG & TABS --- */
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
+    .tab-container { overflow: hidden; border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+    .tab-container button {
+      background-color: #f1f1f1;
+      float: left;
+      border: none;
+      outline: none;
+      cursor: pointer;
+      padding: 14px 20px;
+      transition: 0.3s;
+      font-size: 17px;
+      font-weight: bold;
+      border-radius: 8px 8px 0 0;
+      margin-right: 5px;
+    }
+    .tab-container button:hover { background-color: #ddd; }
+    .tab-container button.active { background-color: #2d7c2d; color: white; }
+    .tab-content { display: none; padding: 6px 12px; border-top: none; }
+
+    /* --- STYLES TỪ TRANG 1: BÁO CÁO CHI TIẾT --- */
+    .report-container { display: flex; }
+    .sidebar { width: 260px; flex-shrink: 0; border: 1px solid #ccc; padding: 10px; background: #f9f9f9; box-sizing: border-box; }
+    .sidebar h3 { background: #2d7c2d; color: #fff; padding: 5px; margin-top: 10px; font-size: 16px; }
+    .sidebar label { display: block; margin: 6px 0; font-size: 14px; }
+    .sidebar .indent { margin-left: 16px; }
+    .sidebar input[type="date"] { width: 100%; box-sizing: border-box; padding: 4px; margin: 4px 0 10px; }
+    .main-detailed { flex-grow: 1; margin-left: 20px; }
+    .header { display: flex; align-items: center; margin-bottom: 10px; }
+    .header img { height: 60px; margin-right: 10px; }
+    .header h2 { margin: 0; color: #2d7c2d; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 0; background: #fff; }
+    th, td { border: 1px solid #ccc; padding: 6px; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    th.green-header { background: #a5d6a7; }
+    th.yellow-header { background: #fff59d; }
+    tr.total-row { background: #f1f1f1; font-weight: bold; }
+    #kpi-summary-table { margin-top: 30px; }
+    .daily-breakdown h3 { margin-top: 20px; background: #f0f0f0; padding: 8px; border: 1px solid #ccc; }
+    .daily-breakdown table { table-layout: auto; } /* Cho phép bảng daily tự điều chỉnh */
+    .daily-breakdown td, .daily-breakdown th { white-space: normal; word-break: break-word; }
+
+
+    /* --- STYLES TỪ TRANG 2: BÁO CÁO THEO NGÀY --- */
+    .main-daily { margin: 0 auto; max-width: 1000px; }
+    .main-daily h2 { color: #2d7c2d; }
+    .main-daily label { display: inline-block; margin-right: 10px; }
+    .main-daily input[type="date"] { padding: 4px; margin: 0 5px 20px 0; }
+    .main-daily button { padding: 5px 15px; background-color: #2d7c2d; color: white; border: none; cursor: pointer; border-radius: 4px; }
+    #date-summary-table { margin-bottom: 30px; }
+    #date-summary-table th { background: #eef; font-weight: bold; }
+    #date-summary-table .bold-text { font-weight: bold; }
+    .charts { display: flex; flex-direction: column; gap: 30px; }
+    .charts-row { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+    .charts canvas { flex: 1; min-width: 400px; max-width: 48%; background: #fff; padding: 10px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+</head>
+<body>
+
+  <!-- NÚT CHUYỂN TAB -->
+  <div class="tab-container">
+    <button class="tablinks" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
+    <button class="tablinks" onclick="openTab(event, 'DailyReport')">Báo cáo theo ngày</button>
+  </div>
+
+  <!-- NỘI DUNG TAB 1: BÁO CÁO CHI TIẾT -->
+  <div id="DetailedReport" class="tab-content">
+    <div class="report-container">
+        <div class="sidebar">
+          <h3>Ngày</h3>
+          <label>Từ ngày:<input type="date" id="start-date"></label>
+          <label>Đến ngày:<input type="date" id="end-date"></label>
+
+          <h3>Sản phẩm</h3>
+          <label><input type="checkbox" id="product-all" checked> Tất cả</label>
+          <div id="product-options"></div>
+
+          <h3>Ca</h3>
+          <label><input type="checkbox" id="ca-all" checked> Tất cả</label>
+          <div id="ca-options"></div>
+
+          <h3>Team</h3>
+          <label><input type="checkbox" id="team-all" checked> Tất cả</label>
+          <div id="team-options"></div>
+
+          <h3>Thị trường</h3>
+          <label><input type="checkbox" id="market-all" checked> Tất cả</label>
+          <div id="market-options"></div>
+        </div>
+
+        <div class="main-detailed">
+          <div class="header">
+            <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo">
+            <h2>DỮ LIỆU CHI PHÍ ADS</h2>
+          </div>
+          <table id="summary-table">
+            <thead>
+              <tr>
+                <th class="green-header">Nhân sự</th><th class="green-header">Mess+Cmt</th><th class="green-header">Đơn</th>
+                <th class="green-header">DS Chốt</th><th class="green-header">CPQC</th><th class="yellow-header">Tỉ lệ chốt</th>
+                <th class="yellow-header">CPQC/Mess</th><th class="yellow-header">CPQC/Đơn hàng</th><th class="yellow-header">CPQC/DS chốt</th>
+                <th class="yellow-header">CPQC/Đơn hàng thực</th>
+              </tr>
+            </thead>
+            <tbody id="summary-body"></tbody><tfoot id="summary-foot"></tfoot>
+          </table>
+
+          <table id="kpi-summary-table">
+              <thead>
+                  <tr>
+                      <th class="green-header" style="width: 5%;">STT</th><th class="green-header">MKT</th><th class="green-header">CPQC</th>
+                      <th class="green-header">Doanh số thực</th><th class="green-header">DS đã đi</th><th class="green-header">DS thành công</th>
+                      <th class="green-header">DS sau ship</th><th class="yellow-header">% CP/DS</th><th class="yellow-header">% KPI</th>
+                  </tr>
+              </thead>
+              <tbody id="kpi-summary-body"></tbody><tfoot id="kpi-summary-foot"></tfoot>
+          </table>
+          <div id="daily-breakdown"></div>
+        </div>
+    </div>
+  </div>
+
+  <!-- NỘI DUNG TAB 2: BÁO CÁO THEO NGÀY -->
+  <div id="DailyReport" class="tab-content">
+      <div class="main-daily">
+          <h2>Tổng CPQC & Tỉ lệ chốt theo ngày</h2>
+          <label>Từ ngày: <input type="date" id="start-date-daily"></label>
+          <label>Đến ngày: <input type="date" id="end-date-daily"></label>
+          <button onclick="applyDateFilter()">Lọc</button>
+
+          <table id="date-summary-table">
+            <thead><tr><th>Ngày</th><th>Tổng CPQC</th><th>Tỉ lệ chốt TB</th><th>Giá Mess</th><th>CPS</th></tr></thead>
+            <tbody id="date-summary-body"></tbody>
+          </table>
+          <div class="charts">
+            <div class="charts-row">
+              <canvas id="date-chart" height="200"></canvas>
+              <canvas id="rate-chart" height="200"></canvas>
+            </div>
+            <div class="charts-row">
+              <canvas id="mess-chart" height="200"></canvas>
+              <canvas id="cps-chart" height="200"></canvas>
+            </div>
+          </div>
+        </div>
+  </div>
+
+  <script>
+    // --- BIẾN TOÀN CỤC VÀ KHAI BÁO ---
+    let rawData = [];
+    const groupChildren = {
+      'Châu Á': ['Hàn Quốc','Nhật Bản','VN'],
+      'Ngoài Châu Á': ['Úc','US'],
+      'EU': ['Anh','Đức']
+    };
+    let dateChart = null, rateChart = null, messChart = null, cpsChart = null;
+
+    // --- LOGIC CHUYỂN TAB ---
+    function openTab(evt, tabName) {
+      let i, tabcontent, tablinks;
+      tabcontent = document.getElementsByClassName("tab-content");
+      for (i = 0; i < tabcontent.length; i++) {
+        tabcontent[i].style.display = "none";
+      }
+      tablinks = document.getElementsByClassName("tablinks");
+      for (i = 0; i < tablinks.length; i++) {
+        tablinks[i].className = tablinks[i].className.replace(" active", "");
+      }
+      document.getElementById(tabName).style.display = "block";
+      evt.currentTarget.className += " active";
+      
+      // Khởi tạo chart khi tab được hiển thị lần đầu
+      if (tabName === 'DailyReport' && !dateChart) {
+          initCharts();
+          renderDailyReportView(rawData);
+      }
+    }
+
+    // --- HÀM HELPER CHUNG ---
+    function normalize(s) { return (s||'').trim().toLowerCase(); }
+    function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+    function getGroup(norm) {
+      for (let g in groupChildren) {
+        if (groupChildren[g].map(normalize).includes(norm)) return g;
+      }
+      return capitalize(norm);
+    }
+    function formatDate(v) {
+      const d = new Date(v);
+      if (isNaN(d)) return v;
+      return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+    }
+    function formatCurrency(v) { // Dùng cho bảng chi tiết
+      return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'});
+    }
+    function formatPriceShort(v) { // Dùng cho báo cáo ngày và biểu đồ
+      const num = Number(v || 0);
+      if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr';
+      if (num >= 1000) return (num / 1000).toFixed(0) + 'k';
+      return num.toLocaleString('vi-VN');
+    }
+    function formatPercent(v) {
+        return `${(Number(v||0) * 100).toFixed(2)}%`;
+    }
+
+    // --- CÁC HÀM CHO TAB 1: BÁO CÁO CHI TIẾT ---
+    function populate(data) {
+      const prodSet=new Set(), caSet=new Set(), teamSet=new Set(), mktSet=new Set();
+      data.forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
+      document.getElementById('product-options').innerHTML = Array.from(prodSet).sort().map(p => `<label><input type='checkbox' class='filter-product' value='${p}' checked> ${p}</label>`).join('');
+      document.getElementById('ca-options').innerHTML = Array.from(caSet).sort().map(c => `<label class='indent'><input type='checkbox' class='filter-ca' value='${c}' checked> ${c}</label>`).join('');
+      document.getElementById('team-options').innerHTML = Array.from(teamSet).sort().map(t => `<label class='indent'><input type='checkbox' class='filter-team' value='${t}' checked> ${t}</label>`).join('');
+      const mktDiv=document.getElementById('market-options'); mktDiv.innerHTML = '';
+      ['Châu Á','Ngoài Châu Á','EU'].forEach(grp=>{
+        mktDiv.innerHTML += `<label><input type='checkbox' class='filter-market' value='${grp}' checked> ${grp}</label>`;
+        groupChildren[grp].forEach(ch=>mktDiv.innerHTML += `<label class='indent'><input type='checkbox' class='filter-market' value='${ch}' checked> ${ch}</label>`);
+      });
+      mktSet.forEach(m=>{ const grp=getGroup(normalize(m)); if(!groupChildren.hasOwnProperty(grp)) mktDiv.innerHTML += `<label><input type='checkbox' class='filter-market' value='${m}' checked> ${m}</label>`; });
+    }
+    
+    function applyFilters() {
+      const sd=new Date(document.getElementById('start-date').value), ed=new Date(document.getElementById('end-date').value);
+      ed.setHours(23, 59, 59, 999); // Chắc chắn bao gồm cả ngày kết thúc
+      const pAll=document.getElementById('product-all').checked, cAll=document.getElementById('ca-all').checked;
+      const tAll=document.getElementById('team-all').checked, mAll=document.getElementById('market-all').checked;
+      const selP=pAll?null:[...document.querySelectorAll('.filter-product:checked')].map(cb=>cb.value);
+      const selCa=cAll?null:[...document.querySelectorAll('.filter-ca:checked')].map(cb=>cb.value);
+      const selT=tAll?null:[...document.querySelectorAll('.filter-team:checked')].map(cb=>cb.value);
+      const selM=mAll?null:[...document.querySelectorAll('.filter-market:checked')].map(cb=>cb.value);
+      const filtered=rawData.filter(r=>{
+          const okP=!selP||selP.includes(r.sanPham);
+          const okCa=!selCa||selCa.includes(r.ca);
+          const okT=!selT||selT.includes(r.team);
+          const grp=getGroup(normalize(r.thiTruong));
+          const okM=!selM||selM.includes(grp)||selM.includes(r.thiTruong);
+          const d=new Date(r.ngay);
+          const okD=(!document.getElementById('start-date').value || isNaN(sd))||(d>=sd&&d<=ed);
+          return okP&&okCa&&okT&&okM&&okD;
+      });
+      renderSummary(filtered); renderKpiSummary(filtered); renderDaily(filtered);
+    }
+
+    function renderSummary(data) {
+      const sum={}, tot={mess:0,don:0,chot:0,cpqc:0}; data.forEach(r=>{const n=r.ten||'',m=+r.soMessCmt||0,d=+r.soDon||0,c=+r.dsChot||0,p=+r.cpqc||0;sum[n]=sum[n]||{mess:0,don:0,chot:0,cpqc:0};sum[n].mess+=m;sum[n].don+=d;sum[n].chot+=c;sum[n].cpqc+=p;tot.mess+=m;tot.don+=d;tot.chot+=c;tot.cpqc+=p;});
+      const body=document.getElementById('summary-body'), foot=document.getElementById('summary-foot');body.innerHTML='';foot.innerHTML='';
+      Object.keys(sum).sort().forEach(n=>{const s=sum[n];const rate=s.mess? s.don/s.mess:0;const pm=s.mess? s.cpqc/s.mess:0,pd=s.don? s.cpqc/s.don:0,pc=s.chot? s.cpqc/s.chot:0,pdt=s.don? s.cpqc/s.don:0;body.innerHTML+=`<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${formatCurrency(s.chot)}</td><td>${formatCurrency(s.cpqc)}</td><td>${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td>${formatCurrency(pd)}</td><td>${formatCurrency(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;});
+      const rateTot=tot.mess? tot.don/tot.mess:0,pmTot=tot.mess? tot.cpqc/tot.mess:0,pdTot=tot.don? tot.cpqc/tot.don:0,pcTot=tot.chot? tot.cpqc/tot.chot:0,pdtTot=tot.don? tot.cpqc/tot.don:0;
+      foot.innerHTML=`<tr class='total-row'><td>Tổng</td><td>${tot.mess}</td><td>${tot.don}</td><td>${formatCurrency(tot.chot)}</td><td>${formatCurrency(tot.cpqc)}</td><td>${formatPercent(rateTot)}</td><td>${formatCurrency(pmTot)}</td><td>${formatCurrency(pdTot)}</td><td>${formatCurrency(pcTot)}</td><td>${formatCurrency(pdtTot)}</td></tr>`;
+    }
+    
+    function renderKpiSummary(data) {
+        const sum = {}, total = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0 };
+        data.forEach(r => {
+            const mkt = r.ten || 'N/A';
+            if (!sum[mkt]) sum[mkt] = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0 };
+            const cpqc = +r.cpqc || 0, dsSaleLen = +r.dsChot || 0, donHuy = +r.donHuy || 0;
+            const dsDaDi = +r.dsDaDi || 0, dsThanhCong = +r.dsThanhCong || 0, tienShip = +r.tienShip || 0;
+            const dsThuc = dsSaleLen - donHuy, dsSauShip = dsThanhCong - tienShip;
+            sum[mkt].cpqc += cpqc; sum[mkt].dsThuc += dsThuc; sum[mkt].dsDaDi += dsDaDi; sum[mkt].dsThanhCong += dsThanhCong; sum[mkt].dsSauShip += dsSauShip;
+            total.cpqc += cpqc; total.dsThuc += dsThuc; total.dsDaDi += dsDaDi; total.dsThanhCong += dsThanhCong; total.dsSauShip += dsSauShip;
+        });
+        const body=document.getElementById('kpi-summary-body'), foot=document.getElementById('kpi-summary-foot'); body.innerHTML=''; foot.innerHTML='';
+        let stt = 1;
+        Object.keys(sum).sort().forEach(mkt => {
+            const s = sum[mkt]; const cp_ds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0; const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0;
+            body.innerHTML += `<tr><td>${stt++}</td><td>${mkt}</td><td>${formatCurrency(s.cpqc)}</td><td>${formatCurrency(s.dsThuc)}</td><td>${formatCurrency(s.dsDaDi)}</td><td>${formatCurrency(s.dsThanhCong)}</td><td>${formatCurrency(s.dsSauShip)}</td><td>${formatPercent(cp_ds)}</td><td>${kpi.toFixed(2)}x</td></tr>`;
+        });
+        const total_cp_ds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0, total_kpi = total.cpqc ? total.dsSauShip / total.cpqc : 0;
+        foot.innerHTML = `<tr class="total-row"><td colspan="2">Tổng</td><td>${formatCurrency(total.cpqc)}</td><td>${formatCurrency(total.dsThuc)}</td><td>${formatCurrency(total.dsDaDi)}</td><td>${formatCurrency(total.dsThanhCong)}</td><td>${formatCurrency(total.dsSauShip)}</td><td>${formatPercent(total_cp_ds)}</td><td>${total_kpi.toFixed(2)}x</td></tr>`;
+    }
+
+    function renderDaily(data) {const c=document.getElementById('daily-breakdown');c.innerHTML='';const grpObj={};data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{const rows=grpObj[date];let html=`<h3>${date}</h3><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Team</th></tr></thead><tbody>`;let m=0,d=0,ch=0,pc=0;rows.forEach(r=>{m+=+r.soMessCmt||0;d+=+r.soDon||0;ch+=+r.dsChot||0;pc+=+r.cpqc||0;html+=`<tr><td>${r.id}</td><td>${r.ten}</td><td>${r.ca}</td><td>${r.page}</td><td>${r.sanPham}</td><td>${r.thiTruong}</td><td>${r.soMessCmt}</td><td>${r.soDon}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td>${r.team}</td></tr>`;});html+=`<tr class='total-row'><td colspan='6'>Tổng</td><td>${m}</td><td>${d}</td><td>${formatCurrency(ch)}</td><td>${formatCurrency(pc)}</td><td></td></tr></tbody></table>`;c.innerHTML+=html;});}
+
+
+    // --- CÁC HÀM CHO TAB 2: BÁO CÁO THEO NGÀY ---
+    function renderDailyTable(data) {
+        const cpqc = {}, don = {}, mess = {};
+        data.forEach(r => {
+            const dateKey = formatDate(r.ngay);
+            cpqc[dateKey] = (cpqc[dateKey] || 0) + (+r.cpqc || 0);
+            don[dateKey]  = (don[dateKey]  || 0) + (+r.soDon || 0);
+            mess[dateKey] = (mess[dateKey] || 0) + (+r.soMessCmt || 0);
+        });
+        const tbody = document.getElementById('date-summary-body'); tbody.innerHTML = '';
+        Object.keys(cpqc).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')))
+          .forEach(d => {
+              const avg = mess[d] ? don[d] / mess[d] : 0;
+              const giaMess = mess[d] ? cpqc[d] / mess[d] : 0;
+              const cps = don[d] ? cpqc[d] / don[d] : 0;
+              tbody.insertAdjacentHTML('beforeend',`<tr><td class="bold-text">${d}</td><td class="bold-text">${formatPriceShort(cpqc[d])}</td><td class="bold-text">${(avg*100).toFixed(2)}%</td><td class="bold-text">${formatPriceShort(giaMess)}</td><td class="bold-text">${formatPriceShort(cps)}</td></tr>`);
+          });
+    }
+    
+    function initCharts() {
+      Chart.register(ChartDataLabels);
+      const commonFont = { family: 'Arial', size: 12, weight: 'bold' };
+      const createChart = (ctxId, label, color, yLabel, formatter) => {
+          const ctx = document.getElementById(ctxId).getContext('2d');
+          return new Chart(ctx, {
+              type: 'line', data: { labels: [], datasets: [{ label: label, data: [], fill: true, backgroundColor: color.bg, borderColor: color.border, pointBackgroundColor: color.border }] },
+              options: { responsive: true, plugins: { legend: { labels: { font: commonFont, padding: 20 }}, datalabels: { font: commonFont, anchor: 'end', align: 'top', color: '#333', formatter: formatter }, tooltip: { titleFont: commonFont, bodyFont: commonFont, footerFont: commonFont }},
+                  scales: { x: { ticks: { font: commonFont }, grid: { drawOnChartArea: false }}, y: { title: { display: true, text: yLabel, font: commonFont }, ticks: { font: commonFont }}},
+                  elements: { line: { borderWidth: 3, tension: 0.4 }, point: { radius: 5, hoverRadius: 7 }}
+              }
+          });
+      };
+      dateChart = createChart('date-chart', 'CPQC', {bg: 'rgba(54,162,235,0.2)', border: 'rgba(54,162,235,1)'}, 'CPQC (VND)', v => formatPriceShort(v));
+      rateChart = createChart('rate-chart', 'Tỉ lệ chốt TB', {bg: 'rgba(255,99,132,0.2)', border: 'rgba(255,99,132,1)'}, 'Tỉ lệ chốt TB (%)', v => v.toFixed(2) + '%');
+      messChart = createChart('mess-chart', 'Giá Mess', {bg: 'rgba(255,206,86,0.2)', border: 'rgba(255,206,86,1)'}, 'Giá / Mess (VND)', v => formatPriceShort(v));
+      cpsChart = createChart('cps-chart', 'CPS', {bg: 'rgba(75,192,192,0.2)', border: 'rgba(75,192,192,1)'}, 'CPS (VND)', v => formatPriceShort(v));
+    }
+    
+    function renderCharts(data) {
+        if (!dateChart) return;
+        const sums = {}, don = {}, mess = {};
+        data.forEach(r => {
+            const d = formatDate(r.ngay);
+            sums[d] = (sums[d] || 0) + (+r.cpqc || 0);
+            don[d]  = (don[d]  || 0) + (+r.soDon || 0);
+            mess[d] = (mess[d] || 0) + (+r.soMessCmt || 0);
+        });
+        const labels = Object.keys(sums).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+        
+        const updateChart = (chart, data) => { chart.data.labels = labels; chart.data.datasets[0].data = data; chart.update(); };
+        updateChart(dateChart, labels.map(d => sums[d]));
+        updateChart(rateChart, labels.map(d => mess[d] ? (don[d] / mess[d] * 100) : 0));
+        updateChart(messChart, labels.map(d => mess[d] ? (sums[d] / mess[d]) : 0));
+        updateChart(cpsChart, labels.map(d => don[d] ? (sums[d] / don[d]) : 0));
+    }
+    
+    function applyDateFilter() {
+        const sd = new Date(document.getElementById('start-date-daily').value);
+        const ed = new Date(document.getElementById('end-date-daily').value);
+        ed.setHours(23, 59, 59, 999);
+        const filtered = rawData.filter(r => {
+            const d = new Date(r.ngay);
+            return (!document.getElementById('start-date-daily').value || isNaN(sd)) || (d >= sd && d <= ed);
+        });
+        renderDailyTable(filtered);
+        renderCharts(filtered);
+    }
+    
+    function renderDailyReportView(data) {
+        renderDailyTable(data);
+        renderCharts(data);
+    }
+
+    // --- SỰ KIỆN VÀ TẢI DỮ LIỆU ---
+    document.addEventListener('DOMContentLoaded', () => {
+      // Mở tab mặc định
+      document.getElementById("defaultOpen").click();
+
+      // Thêm event listeners cho bộ lọc của tab 1
+      document.addEventListener('change', e => {
+        if (e.target.matches('.filter-market')) {
+          const val = e.target.value;
+          if (groupChildren[val]) {
+            groupChildren[val].forEach(ch => {
+              const cb = document.querySelector(`.filter-market[value='${ch}']`);
+              if (cb) cb.checked = e.target.checked;
+            });
+          }
+        }
+        if (e.target.matches('#product-all')) document.querySelectorAll('.filter-product').forEach(cb => cb.checked = e.target.checked);
+        if (e.target.matches('#ca-all')) document.querySelectorAll('.filter-ca').forEach(cb => cb.checked = e.target.checked);
+        if (e.target.matches('#team-all')) document.querySelectorAll('.filter-team').forEach(cb => cb.checked = e.target.checked);
+        if (e.target.matches('#market-all')) document.querySelectorAll('.filter-market').forEach(cb => cb.checked = e.target.checked);
+        if (e.target.closest('#DetailedReport')) applyFilters();
+      });
+      
+      // Tải dữ liệu từ Google Sheet
+      fetch('https://script.google.com/macros/s/AKfycbw5hCdhN6GBamt76LtlimLLjnBl1bUEyQZMnLGmYRp2oPr0X5rtbqr48vGJMmmYc93N/exec')
+        .then(res => res.json())
+        .then(data => {
+          rawData = data;
+          // Khởi tạo tab 1 (chi tiết)
+          populate(data);
+          applyFilters();
+          
+          // Khởi tạo tab 2 (theo ngày) nếu nó đang active, nếu không thì dữ liệu đã sẵn sàng
+          if(document.getElementById('DailyReport').style.display === 'block') {
+             initCharts();
+             renderDailyReportView(rawData);
+          }
+
+        }).catch(err => {
+          console.error(err);
+          alert('Không thể tải dữ liệu từ Google Sheet. Vui lòng kiểm tra lại đường dẫn hoặc thử lại sau.');
+        });
+    });
+  </script>
+</body>
+</html>
