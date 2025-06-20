@@ -23,11 +23,11 @@
     th.yellow-header { background: #fff59d; }
     tr.total-row { background: #f1f1f1; font-weight: bold; }
 
-    /* --- ĐỊNH DẠNG CÓ ĐIỀU KIỆN --- */
-    .bg-green { background-color: #c8e6c9 !important; } /* Light Green */
-    .bg-yellow { background-color: #fff9c4 !important; } /* Light Yellow */
-    .bg-lightred { background-color: #ffcdd2 !important; } /* Light Red */
-    .bg-lightblue { background-color: #b3e5fc !important; } /* Light Blue */
+    /* --- ĐỊNH DẠNG CÓ ĐIỀU KIỆN (MÀU ĐẬM) --- */
+    .bg-green { background-color: #4CAF50 !important; color: white; } /* Green */
+    .bg-yellow { background-color: #FFEB3B !important; color: #424242; } /* Yellow */
+    .bg-lightred { background-color: #F44336 !important; color: white; } /* Red */
+    .bg-lightblue { background-color: #2196F3 !important; color: white; } /* Blue */
     
     /* --- STYLES TAB 1: BÁO CÁO CHI TIẾT --- */
     .report-container { display: flex; }
@@ -99,9 +99,9 @@
             <thead>
               <tr>
                 <th class="green-header">Nhân sự</th><th class="green-header">Mess+Cmt</th><th class="green-header">Đơn</th>
-                <th class="green-header">DS Chốt</th><th class="green-header">CPQC</th><th class="yellow-header">Tỉ lệ chốt</th>
-                <th class="yellow-header">Giá Mess</th><th class="yellow-header">CPS</th><th class="yellow-header">CPQC/DS chốt</th>
-                <th class="yellow-header">Giá đơn hàng</th>
+                <th class="green-header">DS Chốt</th><th class="green-header">CPQC</th><th class="green-header">DS sau ship</th>
+                <th class="yellow-header">Tỉ lệ chốt</th><th class="yellow-header">Giá Mess</th><th class="yellow-header">CPS</th>
+                <th class="yellow-header">CPQC/DS chốt</th><th class="yellow-header">Giá đơn hàng</th>
               </tr>
             </thead>
             <tbody id="summary-body"></tbody><tfoot id="summary-foot"></tfoot>
@@ -170,7 +170,8 @@
   <script>
     let rawData = [];
     const groupChildren = {
-      'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US'], 'EU': ['Anh','Đức']
+      'Châu Á': ['Hàn Quốc','Nhật Bản','VN'],
+      'Ngoài Châu Á': ['Úc','US', 'Canada']
     };
     let charts = {};
 
@@ -217,16 +218,6 @@
         });
     }
     
-    // --- HELPERS & FORMATTERS ---
-    function normalize(s) { return (s||'').trim().toLowerCase(); }
-    function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
-    function getGroup(norm) { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); }
-    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
-    function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
-    function formatPriceShort(v) { const num = Number(v || 0); if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr'; if (num >= 1000) return (num / 1000).toFixed(0) + 'k'; return num.toLocaleString('vi-VN'); }
-    function formatPercent(v) { return `${(Number(v||0) * 100).toFixed(2)}%`; }
-    function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
-    
     function getFilteredData(filterIds) {
         const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
         const sdVal = document.getElementById(startDateId).value, edVal = document.getElementById(endDateId).value;
@@ -266,13 +257,24 @@
         document.getElementById('product-options-tab2').innerHTML = productHtml.replaceAll('filter-product-tab1', 'filter-product-tab2');
 
         const marketHtml = Object.keys(groupChildren).map(grp => `<label><input type='checkbox' class='filter-market-tab1' value='${grp}' checked> ${grp}</label>` + groupChildren[grp].map(ch => `<label class='indent'><input type='checkbox' class='filter-market-tab1' value='${ch}' checked> ${ch}</label>`).join('')).join('');
-        const otherMarkets = Array.from(mktSet).filter(m => !Object.values(groupChildren).flat().includes(m)).map(m => `<label><input type='checkbox' class='filter-market-tab1' value='${m}' checked> ${m}</label>`).join('');
+        const otherMarkets = Array.from(mktSet).filter(m => !Object.values(groupChildren).flat().map(c => c.toLowerCase()).includes(m.toLowerCase()))
+                                        .sort().map(m => `<label><input type='checkbox' class='filter-market-tab1' value='${m}' checked> ${m}</label>`).join('');
+        
         document.getElementById('market-options-tab1').innerHTML = marketHtml + otherMarkets;
         document.getElementById('market-options-tab2').innerHTML = (marketHtml + otherMarkets).replaceAll('filter-market-tab1', 'filter-market-tab2');
         
         document.getElementById('ca-options-tab1').innerHTML = Array.from(caSet).sort().map(c => `<label class='indent'><input type='checkbox' class='filter-ca-tab1' value='${c}' checked> ${c}</label>`).join('');
         document.getElementById('team-options-tab1').innerHTML = Array.from(teamSet).sort().map(t => `<label class='indent'><input type='checkbox' class='filter-team-tab1' value='${t}' checked> ${t}</label>`).join('');
     }
+    
+    function normalize(s) { return (s||'').trim().toLowerCase(); }
+    function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
+    function getGroup(norm) { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); }
+    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
+    function formatPriceShort(v) { const num = Number(v || 0); if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr'; if (num >= 1000) return (num / 1000).toFixed(0) + 'k'; return num.toLocaleString('vi-VN'); }
+    function formatPercent(v) { return `${(Number(v||0) * 100).toFixed(2)}%`; }
+    function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
 
     // --- LOGIC TAB 1 ---
     function handleTab1Filters(target) { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); }
@@ -284,7 +286,10 @@
     }
     
     function getCpsCellStyle(cps, selectedMarkets) {
-        const isChauAOnly = selectedMarkets.every(m => groupChildren['Châu Á'].includes(m) || m === 'Châu Á') && selectedMarkets.length > 0;
+        const hasChauA = selectedMarkets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m));
+        const hasNgoaiChauA = selectedMarkets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m));
+        const isChauAOnly = hasChauA && !hasNgoaiChauA && selectedMarkets.length > 0;
+
         if (isChauAOnly) {
             if (cps > 1000000) return 'bg-lightred';
             if (cps > 700000) return 'bg-yellow';
@@ -296,21 +301,21 @@
     }
 
     function renderSummary(data, selectedMarkets) {
-        const sum={}, tot={mess:0,don:0,chot:0,cpqc:0};
-        data.forEach(r=>{ const n=r.ten||'N/A'; if(!sum[n]) sum[n]={mess:0,don:0,chot:0,cpqc:0}; sum[n].mess+=r.soMessCmt; sum[n].don+=r.soDon; sum[n].chot+=r.dsChot; sum[n].cpqc+=r.cpqc; tot.mess+=r.soMessCmt; tot.don+=r.soDon; tot.chot+=r.dsChot; tot.cpqc+=r.cpqc; });
+        const sum={}, tot={mess:0,don:0,chot:0,cpqc:0, dsSauShip: 0};
+        data.forEach(r=>{ const n=r.ten||'N/A'; if(!sum[n]) sum[n]={mess:0,don:0,chot:0,cpqc:0, dsSauShip: 0}; sum[n].mess+=r.soMessCmt; sum[n].don+=r.soDon; sum[n].chot+=r.dsChot; sum[n].cpqc+=r.cpqc; sum[n].dsSauShip += (r.dsThanhCong - r.tienShip); tot.mess+=r.soMessCmt; tot.don+=r.soDon; tot.chot+=r.dsChot; tot.cpqc+=r.cpqc; tot.dsSauShip += (r.dsThanhCong - r.tienShip); });
+        
         let bodyHtml = Object.keys(sum).sort().map(n => {
             const s=sum[n]; const rate=s.mess? s.don/s.mess:0; const pm=s.mess? s.cpqc/s.mess:0; const pd=s.don? s.cpqc/s.don:0; const pc=s.chot? s.cpqc/s.chot:0; const pdt=s.don? s.cpqc/s.don:0;
             const rateClass = rate > 0.1 ? 'bg-green' : 'bg-yellow';
             const cpsClass = getCpsCellStyle(pd, selectedMarkets);
             const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
-            return `<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${formatCurrency(s.chot)}</td><td>${formatCurrency(s.cpqc)}</td><td class="${rateClass}">${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td class="${cpsClass}">${formatCurrency(pd)}</td><td class="${cpdsClass}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
+            return `<tr><td>${n}</td><td>${s.mess}</td><td>${s.don}</td><td>${formatCurrency(s.chot)}</td><td>${formatCurrency(s.cpqc)}</td><td>${formatCurrency(s.dsSauShip)}</td><td class="${rateClass}">${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td class="${cpsClass}">${formatCurrency(pd)}</td><td class="${cpdsClass}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
         }).join('');
         document.getElementById('summary-body').innerHTML = bodyHtml;
-        // Omitting footer calculation for brevity as it's not formatted
     }
     
     function renderKpiSummary(data) {
-        const sum = {}, total = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0, dsChot: 0 };
+        const sum = {};
         data.forEach(r => { const mkt = r.ten || 'N/A'; if (!sum[mkt]) sum[mkt] = { cpqc: 0, dsThuc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0, dsChot: 0 }; const dsSauShip = r.dsThanhCong - r.tienShip; sum[mkt].cpqc += r.cpqc; sum[mkt].dsThuc += dsSauShip; sum[mkt].dsDaDi += r.dsChot; sum[mkt].dsThanhCong += r.dsThanhCong; sum[mkt].dsSauShip += dsSauShip; sum[mkt].dsChot += r.dsChot; });
         let bodyHtml = Object.keys(sum).sort().map((mkt, i) => {
             const s = sum[mkt]; const cp_ds = s.dsChot ? s.cpqc / s.dsChot : 0; const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0;
@@ -327,7 +332,7 @@
     function handleTab2Filters(target) { handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); if (target.id === 'toggle-all-charts') { document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); } if (target.classList.contains('chart-toggle')) { document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); } if (target.classList.contains('chart-toggle') || target.id === 'toggle-all-charts') { toggleChartVisibility(); } else { applyDailyFilters(); } }
     function applyDailyFilters() { if (!rawData.length) return; const filterIds = { startDateId: 'start-date-tab2', endDateId: 'end-date-tab2', productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2', marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2' }; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
     function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
-    function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) wrapper.style.display = checkbox.checked ? 'block' : 'none'; }); }
+    function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) wrapper.style.display = checkbox.checked ? 'block' : ''; }); }
     
     function initAllCharts() {
         const createChart = (ctxId, config) => new Chart(document.getElementById(ctxId).getContext('2d'), config);
@@ -368,7 +373,7 @@
     function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) { return { type: 'line', options: { ...chartPluginConfig, scales: { y: { title: { display: true, text: yTitle, font: {weight: 'bold'} }, ticks: { callback: formatter } } } } }; }
     function getBarChartConfig() { return { type: 'bar', options: { ...chartPluginConfig, indexAxis: 'y', scales: { x: { ticks: { callback: v => formatPriceShort(v) } } }, plugins: { ...chartPluginConfig.plugins, legend: {display: false}, datalabels: { display: true, anchor: 'end', align: 'end', formatter: v => formatPriceShort(v), color: '#333', font: {weight: 'bold'}} } } }; }
     function getComboChartConfig(axes) { const scales = {}; for (const key in axes) { scales[key] = { type: 'linear', display: true, position: axes[key].pos, title: { display: true, text: axes[key].title, font: {weight: 'bold'} }, ticks: { callback: v => formatPriceShort(v) } }; } scales[Object.keys(axes)[1]].grid = { drawOnChartArea: false }; return { type: 'bar', options: { ...chartPluginConfig, scales: scales, plugins: {...chartPluginConfig.plugins, datalabels: {display: true, formatter: (v, ctx) => ctx.dataset.type === 'line' ? formatPriceShort(v) : '', color: '#fff', backgroundColor: ctx.dataset.borderColor, borderRadius:4, padding: {top: 2, bottom: 2, left: 4, right: 4}, align: 'start', anchor: 'start', font: {weight: 'bold'} }} } }; }
-    function getChartColors() { return { cpqc: '#1565C0', dsChot: '#2E7D32', rate: '#C62828', mess: '#FF6F00', cps: '#00695C', cpqcDsRatio: '#6A1B9A', product: '#455A64', market: '#D84315' }; }
+    function getChartColors() { return { cpqc: '#0D47A1', dsChot: '#1B5E20', rate: '#B71C1C', mess: '#E65100', cps: '#004D40', cpqcDsRatio: '#4A148C', product: '#263238', market: '#BF360C' }; }
     function createDataset(label, data, color, type = 'line', yAxisID = 'y') { return { label, data, backgroundColor: color, borderColor: color, type, yAxisID, fill: type === 'line', tension: 0.4, borderWidth: type === 'line' ? 4 : 1, pointRadius: type === 'line' ? 5 : undefined, pointBackgroundColor: '#fff', pointBorderWidth: 2 }; }
   </script>
 </body>
