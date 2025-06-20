@@ -11,10 +11,11 @@
     input[type="date"] { padding: 4px; margin: 0 5px 20px 0; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
     th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
-    th { background: #eef; }
+    th { background: #eef; font-weight: bold; }
     .charts { display: flex; flex-direction: column; gap: 30px; }
     .charts-row { display: flex; gap: 20px; flex-wrap: wrap; }
     .charts canvas { flex: 1; min-width: 300px; }
+    .bold-text { font-weight: bold; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
@@ -59,8 +60,15 @@
       const d = new Date(v);
       return isNaN(d) ? v : `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
     }
+    
     function formatPrice(v) {
-      return Number(v || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
+      const num = Number(v || 0);
+      if (num >= 1000000) {
+        return (num / 1000000).toFixed(1) + 'tr';
+      } else if (num >= 1000) {
+        return (num / 1000).toFixed(0) + 'k';
+      }
+      return num.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
     }
 
     function renderTable(data) {
@@ -84,7 +92,13 @@
             const giaMess = mess[d] ? cpqc[d] / mess[d] : 0;
             const cps = don[d] ? cpqc[d] / don[d] : 0;
             tbody.insertAdjacentHTML('beforeend',
-              `<tr><td>${d}</td><td>${formatPrice(cpqc[d])}</td><td>${(avg*100).toFixed(2)}%</td><td>${formatPrice(giaMess)}</td><td>${formatPrice(cps)}</td></tr>`
+              `<tr>
+                <td class="bold-text">${d}</td>
+                <td class="bold-text">${formatPrice(cpqc[d])}</td>
+                <td class="bold-text">${(avg*100).toFixed(2)}%</td>
+                <td class="bold-text">${formatPrice(giaMess)}</td>
+                <td class="bold-text">${formatPrice(cps)}</td>
+              </tr>`
             );
           }
         });
@@ -93,47 +107,212 @@
     function initCharts() {
       Chart.register(ChartDataLabels);
 
+      const commonFontSettings = {
+        family: 'Arial',
+        size: 12,
+        weight: 'bold'
+      };
+
+      const commonOptions = {
+        responsive: true,
+        plugins: {
+          legend: {
+            labels: {
+              font: commonFontSettings,
+              padding: 20
+            }
+          },
+          datalabels: {
+            font: commonFontSettings,
+            anchor: 'end',
+            align: 'top',
+            color: '#333'
+          },
+          tooltip: {
+            titleFont: commonFontSettings,
+            bodyFont: commonFontSettings,
+            footerFont: commonFontSettings
+          }
+        },
+        scales: {
+          x: {
+            title: {
+              display: true,
+              font: commonFontSettings
+            },
+            ticks: {
+              font: commonFontSettings
+            },
+            grid: {
+              drawOnChartArea: false
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              font: commonFontSettings
+            },
+            ticks: {
+              font: commonFontSettings
+            },
+            grid: {
+              color: ctx => ctx.tick.value === 0 ? '#000' : 'rgba(0,0,0,0.1)'
+            }
+          }
+        },
+        elements: {
+          line: {
+            borderWidth: 3,
+            tension: 0.4
+          },
+          point: {
+            radius: 5,
+            hoverRadius: 7
+          }
+        }
+      };
+
       const ctx1 = document.getElementById('date-chart').getContext('2d');
       dateChart = new Chart(ctx1, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: 'CPQC', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(54,162,235,0.2)', borderColor: 'rgba(54,162,235,1)', pointRadius: 5 }] },
+        data: { 
+          labels: [], 
+          datasets: [{
+            label: 'CPQC', 
+            data: [], 
+            fill: true, 
+            backgroundColor: 'rgba(54,162,235,0.2)', 
+            borderColor: 'rgba(54,162,235,1)', 
+            pointBackgroundColor: 'rgba(54,162,235,1)'
+          }] 
+        },
         options: {
-          responsive: true,
-          plugins: { datalabels: { formatter: v => formatPrice(v), anchor: 'end', align: 'top' } },
-          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'CPQC (VND)' } } }
+          ...commonOptions,
+          plugins: { 
+            ...commonOptions.plugins,
+            datalabels: { 
+              ...commonOptions.plugins.datalabels,
+              formatter: v => formatPrice(v)
+            } 
+          },
+          scales: { 
+            ...commonOptions.scales,
+            y: { 
+              ...commonOptions.scales.y,
+              title: { 
+                ...commonOptions.scales.y.title,
+                text: 'CPQC (VND)' 
+              } 
+            } 
+          }
         }
       });
 
       const ctx2 = document.getElementById('rate-chart').getContext('2d');
       rateChart = new Chart(ctx2, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: 'Tỉ lệ chốt TB', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(255,99,132,0.2)', borderColor: 'rgba(255,99,132,1)', pointRadius: 5 }] },
+        data: { 
+          labels: [], 
+          datasets: [{
+            label: 'Tỉ lệ chốt TB', 
+            data: [], 
+            fill: true, 
+            backgroundColor: 'rgba(255,99,132,0.2)', 
+            borderColor: 'rgba(255,99,132,1)', 
+            pointBackgroundColor: 'rgba(255,99,132,1)'
+          }] 
+        },
         options: {
-          responsive: true,
-          plugins: { datalabels: { formatter: v => v.toFixed(2) + '%', anchor: 'end', align: 'top' } },
-          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'Tỉ lệ chốt TB (%)' } } }
+          ...commonOptions,
+          plugins: { 
+            ...commonOptions.plugins,
+            datalabels: { 
+              ...commonOptions.plugins.datalabels,
+              formatter: v => v.toFixed(2) + '%'
+            } 
+          },
+          scales: { 
+            ...commonOptions.scales,
+            y: { 
+              ...commonOptions.scales.y,
+              title: { 
+                ...commonOptions.scales.y.title,
+                text: 'Tỉ lệ chốt TB (%)' 
+              } 
+            } 
+          }
         }
       });
 
       const ctx3 = document.getElementById('mess-chart').getContext('2d');
       messChart = new Chart(ctx3, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: 'Giá Mess', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(255,206,86,0.2)', borderColor: 'rgba(255,206,86,1)', pointRadius: 5 }] },
+        data: { 
+          labels: [], 
+          datasets: [{
+            label: 'Giá Mess', 
+            data: [], 
+            fill: true, 
+            backgroundColor: 'rgba(255,206,86,0.2)', 
+            borderColor: 'rgba(255,206,86,1)', 
+            pointBackgroundColor: 'rgba(255,206,86,1)'
+          }] 
+        },
         options: {
-          responsive: true,
-          plugins: { datalabels: { formatter: v => formatPrice(v), anchor: 'end', align: 'top' } },
-          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'Giá / Mess (VND)' } } }
+          ...commonOptions,
+          plugins: { 
+            ...commonOptions.plugins,
+            datalabels: { 
+              ...commonOptions.plugins.datalabels,
+              formatter: v => formatPrice(v)
+            } 
+          },
+          scales: { 
+            ...commonOptions.scales,
+            y: { 
+              ...commonOptions.scales.y,
+              title: { 
+                ...commonOptions.scales.y.title,
+                text: 'Giá / Mess (VND)' 
+              } 
+            } 
+          }
         }
       });
 
       const ctx4 = document.getElementById('cps-chart').getContext('2d');
       cpsChart = new Chart(ctx4, {
         type: 'line',
-        data: { labels: [], datasets: [{ label: 'CPS', data: [], tension: 0.4, fill: true, backgroundColor: 'rgba(75,192,192,0.2)', borderColor: 'rgba(75,192,192,1)', pointRadius: 5 }] },
+        data: { 
+          labels: [], 
+          datasets: [{
+            label: 'CPS', 
+            data: [], 
+            fill: true, 
+            backgroundColor: 'rgba(75,192,192,0.2)', 
+            borderColor: 'rgba(75,192,192,1)', 
+            pointBackgroundColor: 'rgba(75,192,192,1)'
+          }] 
+        },
         options: {
-          responsive: true,
-          plugins: { datalabels: { formatter: v => formatPrice(v), anchor: 'end', align: 'top' } },
-          scales: { x: { title: { display: true, text: 'Ngày' } }, y: { title: { display: true, text: 'CPS (VND)' } } }
+          ...commonOptions,
+          plugins: { 
+            ...commonOptions.plugins,
+            datalabels: { 
+              ...commonOptions.plugins.datalabels,
+              formatter: v => formatPrice(v)
+            } 
+          },
+          scales: { 
+            ...commonOptions.scales,
+            y: { 
+              ...commonOptions.scales.y,
+              title: { 
+                ...commonOptions.scales.y.title,
+                text: 'CPS (VND)' 
+              } 
+            } 
+          }
         }
       });
     }
