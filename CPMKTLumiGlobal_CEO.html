@@ -128,7 +128,9 @@
           </div>
           <div class="table-responsive-container">
             <table id="kpi-summary-table">
-                <thead> <tr> <th class="green-header">STT</th><th class="green-header">Team</th><th class="green-header">MKT</th><th class="green-header">CPQC</th><th class="green-header">DS đã đi</th><th class="green-header">DS thành công</th> <th class="green-header">DS sau ship</th><th class="yellow-header">%CP/DS</th><th class="yellow-header">% KPI</th> </tr> </thead>
+                <!-- === BẮT ĐẦU THAY ĐỔI: CẬP NHẬT TIÊU ĐỀ BẢNG KPI === -->
+                <thead> <tr> <th class="green-header">STT</th><th class="green-header">Team</th><th class="green-header">MKT</th><th class="green-header">CPQC</th><th class="green-header">DS Chốt</th><th class="green-header">DS Thành Công</th> <th class="green-header">DS Sau Ship</th><th class="yellow-header">%CP/DS</th><th class="yellow-header">% KPI</th> </tr> </thead>
+                <!-- === KẾT THÚC THAY ĐỔI === -->
                 <tbody id="kpi-summary-body"></tbody>
                 <tfoot id="kpi-summary-foot"></tfoot>
             </table>
@@ -368,19 +370,21 @@
         document.getElementById('summary-foot').innerHTML = footerHtml;
     }
 
+    // === BẮT ĐẦU THAY ĐỔI: CẬP NHẬT HÀM renderKpiSummary ===
     function renderKpiSummary(data) { 
         const sum = {}; 
-        let total = { cpqc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0 };
+        let total = { cpqc: 0, dsChot: 0, dsThanhCong: 0, dsSauShip: 0 };
 
         data.forEach(r => { 
             const mkt = r.ten;
-            if (!sum[mkt]) sum[mkt] = { cpqc: 0, dsDaDi: 0, dsThanhCong: 0, dsSauShip: 0, dsChot: 0, team: r.team }; 
+            if (!sum[mkt]) {
+                sum[mkt] = { cpqc: 0, dsChot: 0, dsThanhCong: 0, dsSauShip: 0, team: r.team }; 
+            }
             const dsSauShip = r.dsThanhCong - r.tienShip; 
             sum[mkt].cpqc += r.cpqc;
-            sum[mkt].dsDaDi += r.dsChot;
+            sum[mkt].dsChot += r.dsChot;
             sum[mkt].dsThanhCong += r.dsThanhCong;
             sum[mkt].dsSauShip += dsSauShip;
-            sum[mkt].dsChot += r.dsChot; 
         });
         
         const sortedMktKeys = Object.keys(sum).sort((a, b) => {
@@ -391,16 +395,21 @@
 
         let bodyHtml = sortedMktKeys.map((mkt, i) => { 
             const s = sum[mkt]; 
-            total.cpqc += s.cpqc; total.dsDaDi += s.dsDaDi; total.dsThanhCong += s.dsThanhCong; total.dsSauShip += s.dsSauShip;
+            total.cpqc += s.cpqc; 
+            total.dsChot += s.dsChot; 
+            total.dsThanhCong += s.dsThanhCong; 
+            total.dsSauShip += s.dsSauShip;
+
             const cp_ds = s.dsChot ? s.cpqc / s.dsChot : 0;
             const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0; 
             const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : ''; 
+            
             return `<tr>
                 <td class="text-center">${i+1}</td>
                 <td class="text-left">${s.team}</td>
                 <td class="text-left">${mkt}</td>
                 <td>${formatCurrency(s.cpqc)}</td>
-                <td>${formatCurrency(s.dsDaDi)}</td>
+                <td>${formatCurrency(s.dsChot)}</td>
                 <td>${formatCurrency(s.dsThanhCong)}</td>
                 <td>${formatCurrency(s.dsSauShip)}</td>
                 <td class="${cpdsClass}">${formatPercent(cp_ds)}</td>
@@ -409,12 +418,13 @@
         }).join(''); 
         document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
 
-        const totalCpds = total.dsDaDi ? total.cpqc / total.dsDaDi : 0;
+        const totalCpds = total.dsChot ? total.cpqc / total.dsChot : 0;
         const totalKpi = total.cpqc ? total.dsSauShip / total.cpqc : 0;
+        
         const footerHtml = `<tr class="total-row">
                 <td class="total-label" colspan="3">TỔNG CỘNG</td>
                 <td class="total-value">${formatCurrency(total.cpqc)}</td>
-                <td class="total-value">${formatCurrency(total.dsDaDi)}</td>
+                <td class="total-value">${formatCurrency(total.dsChot)}</td>
                 <td class="total-value">${formatCurrency(total.dsThanhCong)}</td>
                 <td class="total-value">${formatCurrency(total.dsSauShip)}</td>
                 <td class="total-value">${formatPercent(totalCpds)}</td>
@@ -422,6 +432,7 @@
             </tr>`;
         document.getElementById('kpi-summary-foot').innerHTML = footerHtml;
     }
+    // === KẾT THÚC THAY ĐỔI ===
     
     function renderDailyBreakdown(data) { 
         const c=document.getElementById('daily-breakdown'); c.innerHTML='';
