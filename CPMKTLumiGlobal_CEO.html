@@ -33,13 +33,6 @@
     tbody tr:nth-child(even) { background-color: #f9f9f9; }
     tbody tr:not(.team-header-row):hover { background-color: #eff5fb; }
     
-    /* DÒNG TIÊU ĐỀ TEAM */
-    .team-header-row, .team-header-row:hover {
-        background-color: #e8f5e9; /* Màu xanh lá cây nhạt */
-        font-weight: 700;
-        color: #1b5e20;
-    }
-
     th.green-header { background: #4CAF50; color: white; font-weight: 500; }
     th.yellow-header { background: #FFC107; color: #424242; font-weight: 500; }
     
@@ -126,7 +119,7 @@
         <div class="main-detailed">
           <div class="header"> <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo"> <h2>DỮ LIỆU CHI PHÍ ADS</h2> </div>
           <table id="summary-table">
-            <thead> <tr> <th class="green-header">STT</th><th class="green-header">Nhân sự</th><th class="green-header">Mess+Cmt</th><th class="green-header">Đơn</th> <th class="green-header">DS Chốt</th><th class="green-header">CPQC</th><th class="yellow-header">Tỉ lệ chốt</th><th class="yellow-header">Giá Mess</th><th class="yellow-header">CPS</th> <th class="yellow-header">%CP/DS</th><th class="yellow-header">Giá đơn hàng</th> </tr> </thead>
+            <thead> <tr> <th class="green-header">STT</th><th class="green-header">Team</th><th class="green-header">Nhân sự</th><th class="green-header">Mess+Cmt</th><th class="green-header">Đơn</th> <th class="green-header">DS Chốt</th><th class="green-header">CPQC</th><th class="yellow-header">Tỉ lệ chốt</th><th class="yellow-header">Giá Mess</th><th class="yellow-header">CPS</th> <th class="yellow-header">%CP/DS</th><th class="yellow-header">Giá đơn hàng</th> </tr> </thead>
             <tbody id="summary-body"></tbody>
             <tfoot id="summary-foot"></tfoot>
           </table>
@@ -294,55 +287,79 @@
     }
     function getCpsCellStyle(cps, selectedMarkets) { const hasChauA = selectedMarkets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m)); const hasNgoaiChauA = selectedMarkets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m)); const isChauAOnly = hasChauA && !hasNgoaiChauA && selectedMarkets.length > 0; if (isChauAOnly) { if (cps > 1000000) return 'bg-lightred'; if (cps > 700000) return 'bg-yellow'; } else { if (cps > 1500000) return 'bg-lightred'; if (cps > 1000000) return 'bg-yellow'; } return ''; }
     
-    function renderSummary(data, selectedMarkets) { 
-        const groupedByTeam = {};
+    function renderSummary(data, selectedMarkets) {
+        const summaryData = {};
         let total = { mess: 0, don: 0, chot: 0, cpqc: 0 };
-        
+
         data.forEach(r => {
-            const team = r.team; const name = r.ten;
-            if (!groupedByTeam[team]) groupedByTeam[team] = {};
-            if (!groupedByTeam[team][name]) groupedByTeam[team][name] = { mess: 0, don: 0, chot: 0, cpqc: 0, dsSauShip: 0 };
-            groupedByTeam[team][name].mess += r.soMessCmt; groupedByTeam[team][name].don += r.soDon;
-            groupedByTeam[team][name].chot += r.dsChot; groupedByTeam[team][name].cpqc += r.cpqc;
-            groupedByTeam[team][name].dsSauShip += (r.dsThanhCong - r.tienShip);
+            const name = r.ten;
+            if (!summaryData[name]) {
+                summaryData[name] = { team: r.team, mess: 0, don: 0, chot: 0, cpqc: 0 };
+            }
+            summaryData[name].mess += r.soMessCmt;
+            summaryData[name].don += r.soDon;
+            summaryData[name].chot += r.dsChot;
+            summaryData[name].cpqc += r.cpqc;
         });
 
-        let bodyHtml = '';
-        Object.keys(groupedByTeam).sort().forEach(team => {
-            let team_total = { mess: 0, don: 0, chot: 0, cpqc: 0, dsSauShip: 0 };
-            let team_body_html = '';
-
-            Object.keys(groupedByTeam[team]).sort().forEach(name => {
-                const s = groupedByTeam[team][name];
-                team_total.mess += s.mess; team_total.don += s.don; team_total.chot += s.chot;
-                team_total.cpqc += s.cpqc; team_total.dsSauShip += s.dsSauShip;
-
-                const rate = s.mess ? s.don / s.mess : 0; const pm = s.mess ? s.cpqc / s.mess : 0;
-                const pd = s.don ? s.cpqc / s.don : 0; const pc = s.chot ? s.cpqc / s.chot : 0;
-                const pdt = s.don ? s.cpqc / s.don : 0;
-                const rateClass = rate > 0.1 ? 'bg-green' : 'bg-yellow'; const cpsClass = getCpsCellStyle(pd, selectedMarkets);
-                const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
-
-                team_body_html += `<tr><td class="text-left">${name}</td><td>${s.mess.toLocaleString('vi-VN')}</td><td>${s.don.toLocaleString('vi-VN')}</td><td>${formatCurrency(s.chot)}</td><td>${formatCurrency(s.cpqc)}</td><td>${formatCurrency(s.dsSauShip)}</td><td class="${rateClass}">${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td class="${cpsClass}">${formatCurrency(pd)}</td><td class="${cpdsClass}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
-            });
-            
-            total.mess += team_total.mess; total.don += team_total.don; total.chot += team_total.chot;
-            total.cpqc += team_total.cpqc; total.dsSauShip += team_total.dsSauShip;
-
-            const team_rate = team_total.mess ? team_total.don / team_total.mess : 0; const team_pm = team_total.mess ? team_total.cpqc / team_total.mess : 0;
-            const team_pd = team_total.don ? team_total.cpqc / team_total.don : 0; const team_pc = team_total.chot ? team_total.cpqc / team_total.chot : 0;
-            const team_pdt = team_total.don ? team_total.cpqc / team_total.don : 0;
-
-            bodyHtml += `<tr class="team-header-row"><td class="total-label text-left">TEAM: ${team}</td><td class="total-value">${team_total.mess.toLocaleString('vi-VN')}</td><td class="total-value">${team_total.don.toLocaleString('vi-VN')}</td><td class="total-value">${formatCurrency(team_total.chot)}</td><td class="total-value">${formatCurrency(team_total.cpqc)}</td><td class="total-value">${formatCurrency(team_total.dsSauShip)}</td><td class="total-value">${formatPercent(team_rate)}</td><td class="total-value">${formatCurrency(team_pm)}</td><td class="total-value">${formatCurrency(team_pd)}</td><td class="total-value">${formatPercent(team_pc)}</td><td class="total-value">${formatCurrency(team_pdt)}</td></tr>`;
-            bodyHtml += team_body_html;
+        const flatList = Object.keys(summaryData).map(name => ({
+            name: name,
+            team: summaryData[name].team,
+            data: summaryData[name]
+        }));
+        
+        flatList.sort((a, b) => {
+            if (a.team < b.team) return -1;
+            if (a.team > b.team) return 1;
+            return a.name.localeCompare(b.name);
         });
 
+        let bodyHtml = flatList.map((item, index) => {
+            const s = item.data;
+            total.mess += s.mess; total.don += s.don; total.chot += s.chot; total.cpqc += s.cpqc;
+
+            const rate = s.mess ? s.don / s.mess : 0;
+            const pm = s.mess ? s.cpqc / s.mess : 0;
+            const pd = s.don ? s.cpqc / s.don : 0;
+            const pc = s.chot ? s.cpqc / s.chot : 0;
+            const pdt = s.don ? s.cpqc / s.don : 0;
+
+            const rateClass = rate > 0.1 ? 'bg-green' : 'bg-yellow';
+            const cpsClass = getCpsCellStyle(pd, selectedMarkets);
+            const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
+
+            return `<tr>
+                <td class="text-center">${index + 1}</td>
+                <td class="text-left">${item.team}</td>
+                <td class="text-left">${item.name}</td>
+                <td>${s.mess.toLocaleString('vi-VN')}</td>
+                <td>${s.don.toLocaleString('vi-VN')}</td>
+                <td>${formatCurrency(s.chot)}</td>
+                <td>${formatCurrency(s.cpqc)}</td>
+                <td class="${rateClass}">${formatPercent(rate)}</td>
+                <td>${formatCurrency(pm)}</td>
+                <td class="${cpsClass}">${formatCurrency(pd)}</td>
+                <td class="${cpdsClass}">${formatPercent(pc)}</td>
+                <td>${formatCurrency(pdt)}</td>
+            </tr>`;
+        }).join('');
         document.getElementById('summary-body').innerHTML = bodyHtml;
 
         const totalRate = total.mess ? total.don / total.mess : 0; const totalPm = total.mess ? total.cpqc / total.mess : 0;
         const totalPd = total.don ? total.cpqc / total.don : 0; const totalPc = total.chot ? total.cpqc / total.chot : 0;
         const totalPdt = total.don ? total.cpqc / total.don : 0;
-        const footerHtml = `<tr class="total-row"><td class="total-label">TỔNG CỘNG</td><td class="total-value">${total.mess.toLocaleString('vi-VN')}</td><td class="total-value">${total.don.toLocaleString('vi-VN')}</td><td class="total-value">${formatCurrency(total.chot)}</td><td class="total-value">${formatCurrency(total.cpqc)}</td><td class="total-value">${formatCurrency(total.dsSauShip)}</td><td class="total-value">${formatPercent(totalRate)}</td><td class="total-value">${formatCurrency(totalPm)}</td><td class="total-value">${formatCurrency(totalPd)}</td><td class="total-value">${formatPercent(totalPc)}</td><td class="total-value">${formatCurrency(totalPdt)}</td></tr>`;
+        const footerHtml = `<tr class="total-row">
+                <td class="total-label" colspan="3">TỔNG CỘNG</td>
+                <td class="total-value">${total.mess.toLocaleString('vi-VN')}</td>
+                <td class="total-value">${total.don.toLocaleString('vi-VN')}</td>
+                <td class="total-value">${formatCurrency(total.chot)}</td>
+                <td class="total-value">${formatCurrency(total.cpqc)}</td>
+                <td class="total-value">${formatPercent(totalRate)}</td>
+                <td class="total-value">${formatCurrency(totalPm)}</td>
+                <td class="total-value">${formatCurrency(totalPd)}</td>
+                <td class="total-value">${formatPercent(totalPc)}</td>
+                <td class="total-value">${formatCurrency(totalPdt)}</td>
+            </tr>`;
         document.getElementById('summary-foot').innerHTML = footerHtml;
     }
 
@@ -394,6 +411,7 @@
             c.innerHTML+=`<h3>${date}</h3><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Team</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table>`;
         }); 
     }
+
     function handleTab2Filters(target) { showLoader(); setTimeout(() => { if (target.id === 'toggle-all-charts' || target.classList.contains('chart-toggle')) { if (target.id === 'toggle-all-charts') document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); else document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); toggleChartVisibility(); hideLoader(); return; } handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); applyDailyFilters(); hideLoader(); }, 10); }
     function applyDailyFilters() { if (!rawData.length) return; const filterIds = { startDateId: 'start-date-tab2', endDateId: 'end-date-tab2', productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2', marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2' }; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
     function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td class="text-left"><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
@@ -401,7 +419,7 @@
     
     function initAllCharts() {
         const createChart = (ctxId, config) => new Chart(document.getElementById(ctxId).getContext('2d'), config);
-        charts.cpqcChart = createChart('cpqcChart', getLineChartConfig('CPQC (VND)')); charts.dsChotChart = createChart('dsChotChart', getLineChartConfig('DS Chốt (VND)')); charts.rateChart = createChart('rateChart', getLineChartConfig('Tỉ lệ chốt (%)', v => formatPercent(v))); charts.messChart = createChart('messChart', getLineChartConfig('Giá Mess (VND)')); charts.cpsChart = createChart('cpsChart', getLineChartConfig('CPS (VND)')); charts.cpqcDsRatioChart = createChart('cpqcDsRatioChart', getLineChartConfig('%CP/DS', v => formatPercent(v))); charts.productSalesChart = createChart('productSalesChart', getBarChartConfig()); charts.marketSalesChart = createChart('marketSalesChart', getBarChartConfig());
+        charts.cpqcChart = createChart('cpqcChart', getLineChartConfig('CPQC (VND)')); charts.dsChotChart = createChart('dsChotChart', getLineChartConfig('DS Chốt (VND)')); charts.rateChart = createChart('rateChart', getLineChartConfig('Tỉ lệ chốt (%)', v => formatPercent(v))); charts.messChart = createChart('messChart', getLineChartConfig('Giá Mess (VND)')); charts.cpsChart = createChart('cpsChart', getLineChartConfig('CPS (VND)')); charts.cpDsRatioChart = createChart('cpDsRatioChart', getLineChartConfig('%CP/DS', v => formatPercent(v))); charts.productSalesChart = createChart('productSalesChart', getBarChartConfig()); charts.marketSalesChart = createChart('marketSalesChart', getBarChartConfig());
         toggleChartVisibility();
     }
     
@@ -414,14 +432,15 @@
         updateChart(charts.rateChart, 'Tỉ lệ chốt', labels, labels.map(d => daily[d].mess ? (daily[d].don / daily[d].mess) : 0), getChartColors().rate);
         updateChart(charts.messChart, 'Giá Mess', labels, labels.map(d => daily[d].mess ? (daily[d].cpqc / daily[d].mess) : 0), getChartColors().mess);
         updateChart(charts.cpsChart, 'CPS', labels, labels.map(d => daily[d].don ? (daily[d].cpqc / daily[d].don) : 0), getChartColors().cps);
-        updateChart(charts.cpqcDsRatioChart, '%CP/DS', labels, labels.map(d => daily[d].chot ? (daily[d].cpqc / daily[d].chot) : 0), getChartColors().cpqcDsRatio);
+        updateChart(charts.cpDsRatioChart, '%CP/DS', labels, labels.map(d => daily[d].chot ? (daily[d].cpqc / daily[d].chot) : 0), getChartColors().cpDsRatio);
         const productSales = {}, marketSales = {}; data.forEach(r => { if (r.sanPham) productSales[r.sanPham] = (productSales[r.sanPham] || 0) + r.dsChot; if (r.thiTruong) marketSales[r.thiTruong] = (marketSales[r.thiTruong] || 0) + r.dsChot; });
         const sortedProducts = Object.entries(productSales).sort((a,b) => b[1] - a[1]); const sortedMarkets = Object.entries(marketSales).sort((a,b) => b[1] - a[1]);
         updateChart(charts.productSalesChart, 'DS theo SP', sortedProducts.map(p=>p[0]), sortedProducts.map(p=>p[1]), getChartColors().product, 'bar');
         updateChart(charts.marketSalesChart, 'DS theo TT', sortedMarkets.map(m=>m[0]), sortedMarkets.map(m=>m[1]), getChartColors().market, 'bar');
     }
+
     // --- CHART CONFIGURATION & HELPERS ---
-    function getChartColors() { return { cpqc: { border: '#3F51B5', fill: 'rgba(63, 81, 181, 0.2)' }, dsChot: { border: '#4CAF50', fill: 'rgba(76, 175, 80, 0.2)' }, rate: { border: '#F44336', fill: 'rgba(244, 67, 54, 0.2)' }, mess: { border: '#FF9800', fill: 'rgba(255, 152, 0, 0.2)' }, cps: { border: '#009688', fill: 'rgba(0, 150, 136, 0.2)' }, cpqcDsRatio: { border: '#9C27B0', fill: 'rgba(156, 39, 176, 0.2)' }, product: { border: '#607D8B', fill: '#607D8B' }, market: { border: '#795548', fill: '#795548' } }; }
+    function getChartColors() { return { cpqc: { border: '#3F51B5', fill: 'rgba(63, 81, 181, 0.2)' }, dsChot: { border: '#4CAF50', fill: 'rgba(76, 175, 80, 0.2)' }, rate: { border: '#F44336', fill: 'rgba(244, 67, 54, 0.2)' }, mess: { border: '#FF9800', fill: 'rgba(255, 152, 0, 0.2)' }, cps: { border: '#009688', fill: 'rgba(0, 150, 136, 0.2)' }, cpDsRatio: { border: '#9C27B0', fill: 'rgba(156, 39, 176, 0.2)' }, product: { border: '#607D8B', fill: '#607D8B' }, market: { border: '#795548', fill: '#795548' } }; }
     function getLineChartConfig(yTitle, formatter = v => formatPriceShort(v)) { return { type: 'line', options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top', labels: { font: { size: 14, weight: '500' }, padding: 20, usePointStyle: true, pointStyle: 'circle' } }, tooltip: { backgroundColor: 'rgba(0,0,0,0.9)', titleFont: { size: 16, weight: 'bold' }, bodyFont: { size: 14 }, padding: 12, cornerRadius: 8, displayColors: true, boxPadding: 6, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${formatter(ctx.raw)}` } }, datalabels: { display: (ctx) => ctx.dataIndex % 2 === 0 && ctx.dataset.data[ctx.dataIndex] !== 0, align: 'top', anchor: 'end', backgroundColor: (ctx) => ctx.dataset.borderColor, borderColor: '#fff', borderWidth: 1, borderRadius: 12, color: '#fff', font: { weight: 'bold', size: 10 }, formatter: formatter, padding: 6, offset: 4 } }, interaction: { intersect: false, mode: 'index' }, scales: { x: { grid: { display: false, drawBorder: false }, ticks: { font: { size: 12 }, maxRotation: 45, minRotation: 45 } }, y: { title: { display: true, text: yTitle, font: { size: 14, weight: '500' }, padding: {top: 10, bottom: 20} }, ticks: { callback: formatter, font: { size: 12 } }, grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false } } }, elements: { line: { borderWidth: 3, tension: 0.3 }, point: { radius: 5, hoverRadius: 8, hitRadius: 10, backgroundColor: '#fff' } }, layout: { padding: 20 } } }; }
     function getBarChartConfig() { return { type: 'bar', options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(0,0,0,0.9)', titleFont: { size: 16, weight: 'bold' }, bodyFont: { size: 14 }, padding: 12, cornerRadius: 8, displayColors: false, callbacks: { label: (ctx) => `${ctx.parsed.x.toLocaleString()} VND` } }, datalabels: { display: true, anchor: 'end', align: 'end', formatter: v => formatPriceShort(v), color: '#fff', font: { weight: 'bold', size: 12 }, padding: { right: 10 } } }, scales: { x: { display: false, grid: { display: false } }, y: { grid: { display: false }, ticks: { font: { size: 13 }, mirror: true, padding: 0 } } }, layout: { padding: { left: 0, right: 10, top: 20, bottom: 20 } }, barPercentage: 0.8, categoryPercentage: 0.9 } }; }
     function updateChart(chart, label, labels, data, colors, type = 'line') { chart.data.labels = labels; chart.data.datasets = [createDataset(label, data, colors, type)]; chart.update('none'); }
