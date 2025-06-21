@@ -121,7 +121,6 @@
           <div class="header"> <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo"> <h2>DỮ LIỆU CHI PHÍ ADS</h2> </div>
           <div class="table-responsive-container">
             <table id="summary-table">
-              <!-- === THAY ĐỔI: SẮP XẾP LẠI CỘT BẢNG 1 === -->
               <thead>
                 <tr>
                   <th class="green-header">STT</th>
@@ -144,7 +143,7 @@
           </div>
           <div class="table-responsive-container">
             <table id="kpi-summary-table">
-                <!-- === THAY ĐỔI: SẮP XẾP LẠI CỘT BẢNG 2 === -->
+                <!-- === THAY ĐỔI: SẮP XẾP LẠI CỘT BẢNG 2 THEO YÊU CẦU MỚI === -->
                 <thead>
                   <tr>
                     <th class="green-header">STT</th>
@@ -152,6 +151,7 @@
                     <th class="green-header">Marketing</th>
                     <th class="green-header">CPQC</th>
                     <th class="green-header">DS Chốt</th>
+                    <th class="green-header">DS Đi</th>
                     <th class="green-header">DS Sau Ship</th>
                     <th class="green-header">DS Thành Công</th>
                     <th class="yellow-header">%CP/DS</th>
@@ -254,12 +254,26 @@
       });
     }
     
+    // === THAY ĐỔI: CẬP NHẬT LINK FETCH VÀ XỬ LÝ DỮ LIỆU MỚI ===
     function fetchData() {
         showLoader();
-        fetch('https://script.google.com/macros/s/AKfycbzTjGSkbsvE_y-J2ocpcNYJtlLGMZ_3a8vQ-LAc9-WYPlf4rcW2cRE4Huvidhu7ZC-Q/exec')
+        fetch('https://script.google.com/macros/s/AKfycbz2aXgagcdxO7sCH1QSRQ9Pm_bTkJja_0zWKveI7lNjLrFltGdOc0SER-bIa08uIISL/exec')
         .then(res => res.json())
         .then(data => {
-          rawData = data.map(r => ({...r, team: r.team || 'Khác', ten: r.ten || 'N/A', dsChot: +r.dsChot || 0, cpqc: +r.cpqc || 0, soDon: +r.soDon || 0, soMessCmt: +r.soMessCmt || 0, dsThanhCong: +r.dsThanhCong || 0, tienShip: +r.tienShip || 0}));
+          // Xử lý các trường dữ liệu mới
+          rawData = data.map(r => ({
+              ...r, 
+              team: r.team || 'Khác', 
+              ten: r.ten || 'N/A', 
+              dsChot: +r.dsChot || 0, 
+              cpqc: +r.cpqc || 0, 
+              soDon: +r.soDon || 0, 
+              soMessCmt: +r.soMessCmt || 0, 
+              dsThanhCong: +r.dsThanhCong || 0, 
+              tienShip: +r.tienShip || 0,
+              doanhSo: +r.doanhSo || 0, // Thêm trường mới
+              doanhSoSauShip: +r.doanhSoSauShip || 0 // Thêm trường mới
+            }));
           populateAllFilters(rawData);
           applyTab1Filters();
           if (document.getElementById('DailyReport').style.display === 'block') { 
@@ -323,7 +337,6 @@
     }
     function getCpsCellStyle(cps, selectedMarkets) { const hasChauA = selectedMarkets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m)); const hasNgoaiChauA = selectedMarkets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m)); const isChauAOnly = hasChauA && !hasNgoaiChauA && selectedMarkets.length > 0; if (isChauAOnly) { if (cps > 1000000) return 'bg-lightred'; if (cps > 700000) return 'bg-yellow'; } else { if (cps > 1500000) return 'bg-lightred'; if (cps > 1000000) return 'bg-yellow'; } return ''; }
     
-    // === THAY ĐỔI: CẬP NHẬT HÀM renderSummary (BẢNG 1) ===
     function renderSummary(data, selectedMarkets) {
         const summaryData = {};
         let total = { mess: 0, don: 0, chot: 0, cpqc: 0 };
@@ -363,7 +376,6 @@
             const cpsClass = getCpsCellStyle(pd, selectedMarkets);
             const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
 
-            // Sắp xếp lại thứ tự các cột <td>
             return `<tr>
                 <td class="text-center">${index + 1}</td>
                 <td class="text-left">${item.team}</td>
@@ -385,7 +397,6 @@
         const totalPd = total.don ? total.cpqc / total.don : 0; const totalPc = total.chot ? total.cpqc / total.chot : 0;
         const totalPdt = total.don ? total.chot / total.don : 0;
         
-        // Sắp xếp lại thứ tự các cột <td> cho dòng tổng cộng
         const footerHtml = `<tr class="total-row">
                 <td class="total-label" colspan="3">TỔNG CỘNG</td>
                 <td class="total-value">${total.mess.toLocaleString('vi-VN')}</td>
@@ -401,21 +412,21 @@
         document.getElementById('summary-foot').innerHTML = footerHtml;
     }
 
-    // === THAY ĐỔI: CẬP NHẬT HÀM renderKpiSummary (BẢNG 2) ===
+    // === THAY ĐỔI: CẬP NHẬT HOÀN TOÀN HÀM renderKpiSummary (BẢNG 2) ===
     function renderKpiSummary(data) { 
         const sum = {}; 
-        let total = { cpqc: 0, dsChot: 0, dsThanhCong: 0, dsSauShip: 0 };
+        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0 };
 
         data.forEach(r => { 
             const mkt = r.ten;
             if (!sum[mkt]) {
-                sum[mkt] = { cpqc: 0, dsChot: 0, dsThanhCong: 0, dsSauShip: 0, team: r.team }; 
+                sum[mkt] = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, team: r.team }; 
             }
-            const dsSauShip = r.dsThanhCong - r.tienShip; 
             sum[mkt].cpqc += r.cpqc;
             sum[mkt].dsChot += r.dsChot;
+            sum[mkt].dsDi += r.doanhSo; // Tổng hợp dữ liệu mới
+            sum[mkt].dsSauShip += r.doanhSoSauShip; // Tổng hợp dữ liệu mới
             sum[mkt].dsThanhCong += r.dsThanhCong;
-            sum[mkt].dsSauShip += dsSauShip;
         });
         
         const sortedMktKeys = Object.keys(sum).sort((a, b) => {
@@ -428,20 +439,23 @@
             const s = sum[mkt]; 
             total.cpqc += s.cpqc; 
             total.dsChot += s.dsChot; 
-            total.dsThanhCong += s.dsThanhCong; 
+            total.dsDi += s.dsDi;
             total.dsSauShip += s.dsSauShip;
+            total.dsThanhCong += s.dsThanhCong; 
 
             const cp_ds = s.dsChot ? s.cpqc / s.dsChot : 0;
+            // KPI giờ sẽ tính trên DS Sau Ship (doanhSoSauShip)
             const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0; 
             const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : ''; 
             
-            // Sắp xếp lại thứ tự các cột <td>
+            // Sắp xếp lại thứ tự các cột <td> theo yêu cầu mới
             return `<tr>
                 <td class="text-center">${i+1}</td>
                 <td class="text-left">${s.team}</td>
                 <td class="text-left">${mkt}</td>
                 <td>${formatCurrency(s.cpqc)}</td>
                 <td>${formatCurrency(s.dsChot)}</td>
+                <td>${formatCurrency(s.dsDi)}</td>
                 <td>${formatCurrency(s.dsSauShip)}</td>
                 <td>${formatCurrency(s.dsThanhCong)}</td>
                 <td class="${cpdsClass}">${formatPercent(cp_ds)}</td>
@@ -458,6 +472,7 @@
                 <td class="total-label" colspan="3">TỔNG CỘNG</td>
                 <td class="total-value">${formatCurrency(total.cpqc)}</td>
                 <td class="total-value">${formatCurrency(total.dsChot)}</td>
+                <td class="total-value">${formatCurrency(total.dsDi)}</td>
                 <td class="total-value">${formatCurrency(total.dsSauShip)}</td>
                 <td class="total-value">${formatCurrency(total.dsThanhCong)}</td>
                 <td class="total-value">${formatPercent(totalCpds)}</td>
@@ -527,9 +542,9 @@
                     datalabels: { 
                         display: true, 
                         anchor: 'end', 
-                        align: 'right', // Đẩy nhãn ra ngoài cột
-                        offset: 8, // Khoảng cách từ cuối cột
-                        color: '#333', // Màu chữ tối để nổi bật
+                        align: 'right',
+                        offset: 8,
+                        color: '#333',
                         font: { weight: '600', size: 12 },
                         formatter: v => formatPriceShort(v)
                     } 
@@ -538,7 +553,7 @@
                     x: { display: false, grid: { display: false } }, 
                     y: { grid: { display: false }, ticks: { font: { size: 13 }, mirror: true, padding: 0 } } 
                 }, 
-                layout: { padding: { left: 0, right: 50, top: 20, bottom: 20 } }, // Thêm padding bên phải cho nhãn
+                layout: { padding: { left: 0, right: 50, top: 20, bottom: 20 } }, 
                 barPercentage: 0.8, 
                 categoryPercentage: 0.9 
             } 
