@@ -154,7 +154,6 @@
                     <th class="green-header">DS Sau Ship</th>
                     <th class="green-header">DS Thành Công</th>
                     <th class="yellow-header">%CP/DS</th>
-                    <!-- 1. CẬP NHẬT LẠI TÊN CỘT -->
                     <th class="yellow-header">% KPI</th>
                   </tr>
                 </thead>
@@ -401,27 +400,45 @@
         data.forEach(r => { 
             const mkt = r.ten;
             if (!sum[mkt]) {
-                sum[mkt] = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0, team: r.team }; 
+                // 1. Khởi tạo đối tượng cho nhân sự mới
+                sum[mkt] = { 
+                    cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, 
+                    // THAY ĐỔI: Không cộng dồn kpis, chỉ lưu lại giá trị kpis gốc của nhân sự
+                    kpiValue: r.kpis, 
+                    team: r.team 
+                }; 
             }
+            // Các giá trị khác vẫn cộng dồn bình thường
             sum[mkt].cpqc += r.cpqc;
             sum[mkt].dsChot += r.dsChot;
             sum[mkt].dsDi += r.doanhSo; 
             sum[mkt].dsSauShip += r.doanhSoSauShip;
             sum[mkt].dsThanhCong += r.doanhsoTC;
-            sum[mkt].kpis += r.kpis;
         });
         
         const sortedMktKeys = Object.keys(sum).sort((a, b) => {
             return (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b));
         });
 
+        // Reset lại total trước khi tính tổng mới
+        total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
+
         let bodyHtml = sortedMktKeys.map((mkt, i) => { 
             const s = sum[mkt]; 
-            Object.keys(total).forEach(key => total[key] += s[key]);
+
+            // Cộng dồn vào dòng tổng
+            total.cpqc += s.cpqc;
+            total.dsChot += s.dsChot;
+            total.dsDi += s.dsDi;
+            total.dsSauShip += s.dsSauShip;
+            total.dsThanhCong += s.dsThanhCong;
+            // THAY ĐỔI: Cộng dồn giá trị KPI gốc của từng nhân sự vào tổng
+            total.kpis += s.kpiValue;
+
             const cp_ds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0;
             
-            // 2. TÍNH TOÁN KPI THEO CÔNG THỨC MỚI
-            const kpiPercentage = s.kpis ? s.dsSauShip / s.kpis : 0; 
+            // 2. TÍNH TOÁN KPI BẰNG CÁCH SỬ DỤNG GIÁ TRỊ KPI GỐC (kpiValue)
+            const kpiPercentage = s.kpiValue ? s.dsSauShip / s.kpiValue : 0; 
             const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : ''; 
             
             return `<tr>
@@ -431,12 +448,12 @@
                 <td>${formatCurrency(s.dsDi)}</td><td>${formatCurrency(s.dsSauShip)}</td>
                 <td>${formatCurrency(s.dsThanhCong)}</td>
                 <td class="${cpdsClass}">${formatPercent(cp_ds)}</td>
-                <td>${formatPercent(kpiPercentage)}</td></tr>`; // 3. HIỂN THỊ DẠNG %
+                <td>${formatPercent(kpiPercentage)}</td></tr>`;
         }).join(''); 
         document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
 
         const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0;
-        // 4. TÍNH TOÁN TỔNG KPI THEO CÔNG THỨC MỚI
+        // 3. TÍNH TOÁN TỔNG KPI: Tổng DS Sau Ship / Tổng KPI của các nhân sự có trong bảng
         const totalKpiPercentage = total.kpis ? total.dsSauShip / total.kpis : 0;
         
         const footerHtml = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td>
@@ -446,7 +463,7 @@
                 <td class="total-value">${formatCurrency(total.dsSauShip)}</td>
                 <td class="total-value">${formatCurrency(total.dsThanhCong)}</td>
                 <td class="total-value">${formatPercent(totalCpds)}</td>
-                <td class="total-value">${formatPercent(totalKpiPercentage)}</td></tr>`; // 5. HIỂN THỊ TỔNG DẠNG %
+                <td class="total-value">${formatPercent(totalKpiPercentage)}</td></tr>`;
         document.getElementById('kpi-summary-foot').innerHTML = footerHtml;
     }
     
