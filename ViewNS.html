@@ -95,6 +95,21 @@
       visibility: hidden; opacity: 0;
     }
     #loading-overlay.visible { visibility: visible; opacity: 1; }
+
+    /* --- MỚI: Thông báo khi không có ID --- */
+    #no-id-message {
+      display: none;
+      text-align: center;
+      padding: 50px;
+      font-size: 1.2em;
+      color: #555;
+    }
+    #no-id-message code {
+      background-color: #e0e0e0;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
@@ -102,6 +117,13 @@
 <body>
   
   <div id="loading-overlay">Đang tải dữ liệu...</div>
+
+  <!-- MỚI: Thêm vùng chứa thông báo -->
+  <div id="no-id-message">
+    Vui lòng cung cấp mã ID nhân sự trong đường dẫn URL để xem báo cáo.
+    <br><br>
+    Ví dụ: <code>.../report.html?id=ABC123</code>
+  </div>
 
   <div class="tab-container">
     <button class="tablinks" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
@@ -210,7 +232,6 @@
 
 <script>
     let rawData = [];
-    // MỚI: Thêm biến để lưu trữ ID từ URL
     let urlIdParam = null;
     const groupChildren = { 'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US', 'Canada'] };
     let charts = {};
@@ -219,23 +240,31 @@
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
     
-    document.addEventListener('DOMContentLoaded', () => {
-      // MỚI: Lấy tham số 'id' từ URL khi trang tải
+    // THAY ĐỔI: Toàn bộ logic khởi tạo được chuyển vào hàm này
+    document.addEventListener('DOMContentLoaded', initializeReport);
+
+    function initializeReport() {
       const urlParams = new URLSearchParams(window.location.search);
       urlIdParam = urlParams.get('id');
 
-      // MỚI: Nếu có ID, hiển thị thông báo trong console để dễ debug
+      // THAY ĐỔI: Logic kiểm tra ID
       if (urlIdParam) {
-          console.log(`Báo cáo được lọc theo ID: ${urlIdParam}`);
-          // Nếu có ID, ẩn các bộ lọc không cần thiết để tránh gây nhầm lẫn
+          // Nếu có ID, tiến hành tải báo cáo
+          console.log(`Báo cáo được lọc theo ID nhân sự (idNS): ${urlIdParam}`);
+          // Ẩn các bộ lọc vì không cần thiết khi xem theo ID cụ thể
           document.querySelectorAll('.sidebar').forEach(sb => sb.style.display = 'none');
+          
+          document.getElementById("defaultOpen").click();
+          addEventListeners();
+          setDefaultDates();
+          fetchData();
+      } else {
+          // Nếu KHÔNG có ID, ẩn giao diện báo cáo và hiển thị thông báo
+          document.querySelector('.tab-container').style.display = 'none';
+          document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+          document.getElementById('no-id-message').style.display = 'block';
       }
-
-      document.getElementById("defaultOpen").click();
-      addEventListeners();
-      setDefaultDates();
-      fetchData(); // Hàm này giờ sẽ sử dụng urlIdParam để lọc
-    });
+    }
 
     function setDefaultDates() {
         const today = new Date();
@@ -260,6 +289,8 @@
     }
 
     function addEventListeners() {
+      // Vì đã ẩn sidebar khi có ID, các event này sẽ không được kích hoạt,
+      // nhưng giữ lại để không bị lỗi nếu sau này thay đổi logic
       document.body.addEventListener('change', (e) => {
         if (e.target.closest('#DetailedReport')) { handleTab1Filters(e.target); }
         else if (e.target.closest('#DailyReport')) { handleTab2Filters(e.target); }
@@ -271,7 +302,6 @@
         fetch('https://script.google.com/macros/s/AKfycby0LgECp3bLyBYG1xOTt6TLqumhULYOS8UzdCLOki5JLIRr8VIcovfgtOOPosJa32N2/exec')
         .then(res => res.json())
         .then(data => {
-          // THAY ĐỔI: Chuyển logic xử lý và lọc vào biến tạm thời
           let processedData = data.map(r => ({
               ...r, 
               team: r.team || 'Khác', 
@@ -287,16 +317,15 @@
               kpis: +r.kpis || 0 
             }));
 
-          // THAY ĐỔI: Logic lọc dữ liệu chính
-          // Nếu có ID từ URL, lọc `processedData` và gán kết quả cho `rawData`
-          // Nếu không, gán toàn bộ `processedData` cho `rawData` như cũ
-          if (urlIdParam) {
-              rawData = processedData.filter(r => String(r.id) === String(urlIdParam));
-          } else {
-              rawData = processedData;
-          }
+          // THAY ĐỔI: Lọc dữ liệu theo `idNS` từ tham số `id` trên URL
+          // Chúng ta biết chắc chắn urlIdParam có giá trị ở đây
+          rawData = processedData.filter(r => String(r.idNS) === String(urlIdParam));
           
-          // Các hàm bên dưới sẽ hoạt động trên `rawData` đã được lọc (nếu có)
+          // Kiểm tra nếu ID không hợp lệ (không tìm thấy dữ liệu)
+          if (rawData.length === 0) {
+              alert(`Không tìm thấy dữ liệu cho ID nhân sự: ${urlIdParam}`);
+          }
+
           populateAllFilters(rawData);
           applyTab1Filters();
           if (document.getElementById('DailyReport').style.display === 'block') { 
@@ -311,32 +340,14 @@
     }
     
     function getFilteredData(filterIds) {
-        // THAY ĐỔI: Nếu có ID từ URL, bỏ qua tất cả các bộ lọc khác và trả về luôn `rawData` đã được lọc trước đó.
-        if (urlIdParam) {
-            return rawData;
-        }
-
-        const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
-        const sdVal = document.getElementById(startDateId).value, edVal = document.getElementById(endDateId).value;
-        const sd = sdVal ? new Date(sdVal) : null, ed = edVal ? new Date(edVal) : null;
-        if (ed) ed.setHours(23, 59, 59, 999);
-        const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
-        const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
-        const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
-        const tAll = teamCbId ? document.getElementById(teamCbId).checked : true, selT = tAll ? null : [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value);
-        return rawData.filter(r => {
-            const d = new Date(r.ngay);
-            const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
-            const isProductOk = !selP || selP.includes(r.sanPham);
-            const marketGroup = getGroup(normalize(r.thiTruong));
-            const isMarketOk = !selM || selM.includes(marketGroup) || selM.includes(r.thiTruong);
-            const isCaOk = !selCa || selCa.includes(r.ca);
-            const isTeamOk = !selT || selT.includes(r.team);
-            return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
-        });
+        // THAY ĐỔI: Vì báo cáo chỉ hoạt động khi có ID, hàm này chỉ cần trả về `rawData` đã được lọc trước đó.
+        // Các bộ lọc trên giao diện không còn tác dụng.
+        return rawData;
     }
 
     function populateAllFilters(data) {
+        // Hàm này vẫn chạy nhưng sẽ không tạo ra checkbox nào nếu rawData rỗng,
+        // hoặc chỉ tạo ra các lựa chọn có trong dữ liệu của ID đó.
         const prodSet=new Set(), caSet=new Set(), teamSet=new Set(), mktSet=new Set();
         data.forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
         const productHtml = Array.from(prodSet).sort().map(p => `<label class='indent'><input type='checkbox' class='filter-product-tab1' value='${p}' checked> ${p}</label>`).join('');
@@ -362,7 +373,7 @@
 
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
     function applyTab1Filters() {
-        const filterIds = { startDateId: 'start-date-tab1', endDateId: 'end-date-tab1', productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1', marketCbId: 'market-all-tab1', marketOptionsClass: 'filter-market-tab1', caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1', teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1' };
+        const filterIds = {}; // Không cần ID nữa vì getFilteredData đã được đơn giản hóa
         const filtered = getFilteredData(filterIds);
         const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
         renderSummary(filtered, selectedMarkets); 
@@ -485,9 +496,8 @@
     
     function renderDailyBreakdown(data) { 
         const c=document.getElementById('daily-breakdown'); c.innerHTML='';
-        // THAY ĐỔI: Chỉ hiển thị bảng chi tiết nếu có dữ liệu
         if (data.length === 0) {
-            c.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không tìm thấy dữ liệu phù hợp.</p>';
+            c.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không có dữ liệu chi tiết để hiển thị.</p>';
             return;
         }
 
@@ -508,7 +518,7 @@
     }
 
     function handleTab2Filters(target) { showLoader(); setTimeout(() => { if (target.id === 'toggle-all-charts' || target.classList.contains('chart-toggle')) { if (target.id === 'toggle-all-charts') document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); else document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); toggleChartVisibility(); hideLoader(); return; } handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); applyDailyFilters(); hideLoader(); }, 10); }
-    function applyDailyFilters() { if (!rawData.length) return; const filterIds = { startDateId: 'start-date-tab2', endDateId: 'end-date-tab2', productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2', marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2' }; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
+    function applyDailyFilters() { if (!rawData.length && !urlIdParam) return; const filterIds = {}; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
     function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td class="text-left"><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
     function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) { wrapper.style.display = checkbox.checked ? 'block' : 'none'; wrapper.style.opacity = checkbox.checked ? '0' : '1'; setTimeout(() => { wrapper.style.opacity = checkbox.checked ? '1' : '0'; }, 10); } }); }
     
