@@ -253,12 +253,15 @@
       });
     }
     
+    // ==========================================================
+    // CẬP NHẬT TRONG HÀM NÀY
+    // ==========================================================
     function fetchData() {
         showLoader();
-        fetch('https://script.google.com/macros/s/AKfycbxZkPrTevmqBX99uf2l4tsDvG8VkUfgk79dfOf2YiDC8E74s7Z6evu3wIB-l2rCBGqy/exec')
+        // 1. THAY ĐỔI LINK FETCH
+        fetch('https://script.google.com/macros/s/AKfycby0LgECp3bLyBYG1xOTt6TLqumhULYOS8UzdCLOki5JLIRr8VIcovfgtOOPosJa32N2/exec')
         .then(res => res.json())
         .then(data => {
-          // Ánh xạ dữ liệu và chuyển đổi sang số, đảm bảo các trường cần thiết tồn tại
           rawData = data.map(r => ({
               ...r, 
               team: r.team || 'Khác', 
@@ -267,52 +270,43 @@
               cpqc: +r.cpqc || 0, 
               soDon: +r.soDon || 0, 
               soMessCmt: +r.soMessCmt || 0, 
-              doanhsoTC: +r.doanhsoTC || 0, // Đảm bảo trường này được lấy và chuyển thành số
+              doanhsoTC: +r.doanhsoTC || 0,
               tienShip: +r.tienShip || 0,
               doanhSo: +r.doanhSo || 0, 
-              doanhSoSauShip: +r.doanhSoSauShip || 0 
+              doanhSoSauShip: +r.doanhSoSauShip || 0,
+              // 2. ĐỌC THÊM TRƯỜNG 'kpis' VÀ CHUYỂN THÀNH SỐ
+              kpis: +r.kpis || 0 
             }));
           populateAllFilters(rawData);
-          applyTab1Filters(); // Áp dụng bộ lọc lần đầu cho Tab 1
+          applyTab1Filters();
           if (document.getElementById('DailyReport').style.display === 'block') { 
-            applyDailyFilters(); // Áp dụng bộ lọc lần đầu cho Tab 2 nếu nó đang mở
+            applyDailyFilters(); 
           }
         }).catch(err => { 
-          console.error(err); 
+          console.error("Lỗi khi tải dữ liệu:", err); 
           alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
         }).finally(() => {
           hideLoader();
         });
     }
     
-    // HÀM LỌC DỮ LIỆU GỐC - CORE LOGIC
-    // Hàm này sẽ được gọi mỗi khi có thay đổi trong bộ lọc
     function getFilteredData(filterIds) {
         const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
-        
-        // Lấy giá trị ngày tháng
         const sdVal = document.getElementById(startDateId).value, edVal = document.getElementById(endDateId).value;
         const sd = sdVal ? new Date(sdVal) : null, ed = edVal ? new Date(edVal) : null;
-        if (ed) ed.setHours(23, 59, 59, 999); // Đảm bảo lọc đến hết ngày cuối
-        
-        // Lấy các bộ lọc khác
+        if (ed) ed.setHours(23, 59, 59, 999);
         const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
         const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
         const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
         const tAll = teamCbId ? document.getElementById(teamCbId).checked : true, selT = tAll ? null : [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value);
-        
-        // Thực hiện lọc trên `rawData`
         return rawData.filter(r => {
             const d = new Date(r.ngay);
-            
-            // KIỂM TRA TẤT CẢ CÁC ĐIỀU KIỆN
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
             const marketGroup = getGroup(normalize(r.thiTruong));
             const isMarketOk = !selM || selM.includes(marketGroup) || selM.includes(r.thiTruong);
             const isCaOk = !selCa || selCa.includes(r.ca);
             const isTeamOk = !selT || selT.includes(r.team);
-            
             return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
         });
     }
@@ -344,9 +338,8 @@
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
     function applyTab1Filters() {
         const filterIds = { startDateId: 'start-date-tab1', endDateId: 'end-date-tab1', productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1', marketCbId: 'market-all-tab1', marketOptionsClass: 'filter-market-tab1', caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1', teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1' };
-        const filtered = getFilteredData(filterIds); // Lấy dữ liệu đã lọc
+        const filtered = getFilteredData(filterIds);
         const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
-        // Render các bảng với dữ liệu đã được lọc
         renderSummary(filtered, selectedMarkets); 
         renderKpiSummary(filtered); 
         renderDailyBreakdown(filtered);
@@ -357,7 +350,6 @@
     function renderSummary(data, selectedMarkets) {
         const summaryData = {};
         let total = { mess: 0, don: 0, chot: 0, cpqc: 0 };
-        // Dữ liệu 'data' ở đây đã được lọc, chỉ chứa các bản ghi trong khoảng ngày đã chọn
         data.forEach(r => {
             const name = r.ten;
             if (!summaryData[name]) {
@@ -369,12 +361,12 @@
             summaryData[name].cpqc += r.cpqc;
         });
 
-        const flatList = Object.keys(summaryData).map(name => ({ name: name, team: summaryData[name].team, data: summaryData[name] }))
+        const flatList = Object.keys(summaryData).map(name => ({ name, team: summaryData[name].team, data: summaryData[name] }))
             .sort((a,b) => a.team.localeCompare(b.team) || a.name.localeCompare(b.name));
         
         let bodyHtml = flatList.map((item, index) => {
             const s = item.data;
-            total.mess += s.mess; total.don += s.don; total.chot += s.chot; total.cpqc += s.cpqc;
+            Object.keys(total).forEach(key => total[key] += s[key]);
             const rate = s.mess ? s.don / s.mess : 0; const pm = s.mess ? s.cpqc / s.mess : 0;
             const pd = s.don ? s.cpqc / s.don : 0; const pc = s.chot ? s.cpqc / s.chot : 0;
             const pdt = s.don ? s.chot / s.don : 0;
@@ -403,33 +395,40 @@
         document.getElementById('summary-foot').innerHTML = footerHtml;
     }
 
+    // ==========================================================
+    // CẬP NHẬT TRONG HÀM NÀY
+    // ==========================================================
     function renderKpiSummary(data) { 
         const sum = {}; 
-        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0 };
-        // Dữ liệu 'data' ở đây đã được lọc
+        // 1. Thêm 'kpis' vào đối tượng tổng
+        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
+        
         data.forEach(r => { 
             const mkt = r.ten;
             if (!sum[mkt]) {
-                sum[mkt] = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, team: r.team }; 
+                // 2. Thêm 'kpis' vào đối tượng của từng nhân sự
+                sum[mkt] = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0, team: r.team }; 
             }
             sum[mkt].cpqc += r.cpqc;
             sum[mkt].dsChot += r.dsChot;
             sum[mkt].dsDi += r.doanhSo; 
             sum[mkt].dsSauShip += r.doanhSoSauShip;
-            sum[mkt].dsThanhCong += r.doanhsoTC; // Lấy dữ liệu từ 'doanhsoTC' đã được xử lý
+            sum[mkt].dsThanhCong += r.doanhsoTC;
+            // 3. Cộng dồn kpis cho mỗi nhân sự
+            sum[mkt].kpis += r.kpis;
         });
         
         const sortedMktKeys = Object.keys(sum).sort((a, b) => {
-            const teamA = sum[a].team; const teamB = sum[b].team;
-            if (teamA < teamB) return -1; if (teamA > teamB) return 1;
-            return a.localeCompare(b);
+            return (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b));
         });
 
         let bodyHtml = sortedMktKeys.map((mkt, i) => { 
             const s = sum[mkt]; 
             Object.keys(total).forEach(key => total[key] += s[key]);
             const cp_ds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0;
-            const kpi = s.cpqc ? s.dsSauShip / s.cpqc : 0; 
+            
+            // 4. THAY ĐỔI CÔNG THỨC TÍNH KPI
+            const kpiPercentage = s.kpis ? s.dsSauShip / s.kpis : 0; 
             const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : ''; 
             
             return `<tr>
@@ -438,18 +437,23 @@
                 <td>${formatCurrency(s.cpqc)}</td><td>${formatCurrency(s.dsChot)}</td>
                 <td>${formatCurrency(s.dsDi)}</td><td>${formatCurrency(s.dsSauShip)}</td>
                 <td>${formatCurrency(s.dsThanhCong)}</td>
-                <td class="${cpdsClass}">${formatPercent(cp_ds)}</td><td>${kpi.toFixed(2)}x</td></tr>`; 
+                <td class="${cpdsClass}">${formatPercent(cp_ds)}</td>
+                <td>${formatPercent(kpiPercentage)}</td></tr>`; // 5. HIỂN THỊ DẠNG %
         }).join(''); 
         document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
 
+        // 6. THAY ĐỔI CÔNG THỨC TÍNH TỔNG KPI
         const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0;
-        const totalKpi = total.cpqc ? total.dsSauShip / total.cpqc : 0;
+        const totalKpiPercentage = total.kpis ? total.dsSauShip / total.kpis : 0;
         
         const footerHtml = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td>
-                <td class="total-value">${formatCurrency(total.cpqc)}</td><td class="total-value">${formatCurrency(total.dsChot)}</td>
-                <td class="total-value">${formatCurrency(total.dsDi)}</td><td class="total-value">${formatCurrency(total.dsSauShip)}</td>
+                <td class="total-value">${formatCurrency(total.cpqc)}</td>
+                <td class="total-value">${formatCurrency(total.dsChot)}</td>
+                <td class="total-value">${formatCurrency(total.dsDi)}</td>
+                <td class="total-value">${formatCurrency(total.dsSauShip)}</td>
                 <td class="total-value">${formatCurrency(total.dsThanhCong)}</td>
-                <td class="total-value">${formatPercent(totalCpds)}</td><td class="total-value">${totalKpi.toFixed(2)}x</td></tr>`;
+                <td class="total-value">${formatPercent(totalCpds)}</td>
+                <td class="total-value">${formatPercent(totalKpiPercentage)}</td></tr>`; // 7. HIỂN THỊ TỔNG DẠNG %
         document.getElementById('kpi-summary-foot').innerHTML = footerHtml;
     }
     
@@ -477,7 +481,6 @@
     function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) { wrapper.style.display = checkbox.checked ? 'block' : 'none'; wrapper.style.opacity = checkbox.checked ? '0' : '1'; setTimeout(() => { wrapper.style.opacity = checkbox.checked ? '1' : '0'; }, 10); } }); }
     
     // --- Các hàm khởi tạo và cập nhật biểu đồ ---
-    // (Không thay đổi so với phiên bản gốc)
     function initAllCharts() {
         const createChart = (ctxId, config) => new Chart(document.getElementById(ctxId).getContext('2d'), config);
         charts.cpqcChart = createChart('cpqcChart', getLineChartConfig('CPQC (VND)')); charts.dsChotChart = createChart('dsChotChart', getLineChartConfig('DS Chốt (VND)')); charts.rateChart = createChart('rateChart', getLineChartConfig('Tỉ lệ chốt (%)', v => formatPercent(v))); charts.messChart = createChart('messChart', getLineChartConfig('Giá Mess (VND)')); charts.cpsChart = createChart('cpsChart', getLineChartConfig('CPS (VND)')); charts.cpDsRatioChart = createChart('cpDsRatioChart', getLineChartConfig('%CP/DS', v => formatPercent(v))); charts.productSalesChart = createChart('productSalesChart', getBarChartConfig()); charts.marketSalesChart = createChart('marketSalesChart', getBarChartConfig());
