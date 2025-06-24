@@ -11,7 +11,7 @@
     input[readonly] { background: #f5f5f5; }
     button { cursor: pointer; }
     #responseMessage { margin-top: 12px; font-weight: bold; }
-    .addSimilar { margin-left: 4px; }
+    .addSimilar, .addSimilarPage { margin-left: 4px; }
   </style>
 </head>
 <body>
@@ -67,7 +67,12 @@
         <td><input name="Tên"          value="${data.Tên        || ''}" readonly></td>
         <td><input name="Ngày"   type="date"  value="${data.Ngày       || ''}" readonly></td>
         <td><input name="ca"           value="${data.ca         || ''}" readonly></td>
-        <td><input name="page"         value="${data.page       || ''}" readonly></td>
+        <td>
+          <div style="display:flex; align-items:center;">
+            <input name="page"         value="${data.page       || ''}" readonly>
+            <button type="button" class="addSimilarPage">➕</button>
+          </div>
+        </td>
         <td><input name="TKQC"         value="${data.TKQC       || ''}"></td>
         <td><input name="Via_log"      value="${data.Via_log    || ''}"></td>
         <td><input name="Sản_phẩm"     value="${data.Sản_phẩm   || ''}" readonly></td>
@@ -88,9 +93,7 @@
         <td><input name="id_NS"        value="${data.id_NS      || ''}" readonly></td>
         <td><button type="button" class="removeRow">❌</button></td>
       `;
-      // xóa row
       tr.querySelector('.removeRow').addEventListener('click', () => tr.remove());
-      // nút ➕: clone thị trường + sản phẩm, auto id mới
       tr.querySelector('.addSimilar').addEventListener('click', () => {
         const prod   = tr.querySelector('[name="Sản_phẩm"]').value;
         const market = tr.querySelector('[name="Thị_trường"]').value;
@@ -101,25 +104,31 @@
           Thị_trường: market
         });
       });
+      tr.querySelector('.addSimilarPage').addEventListener('click', () => {
+        const inputs = tr.querySelectorAll('input');
+        const newData = {};
+        inputs.forEach(inp => newData[inp.name] = inp.value);
+        newData.id = 'id_' + Date.now();
+        createRow(newData);
+      });
       tbody.appendChild(tr);
     }
 
     // Prefill: nếu có ?rows=JSON thì parse và danh sách
-    (()=>{
+    (() => {
       const params = new URLSearchParams(window.location.search);
       const rowsParam = params.get('rows');
       if (rowsParam) {
         try {
           const arr = JSON.parse(decodeURIComponent(rowsParam));
           if (Array.isArray(arr)) arr.forEach(r => createRow(r));
-        } catch(e){
+        } catch(e) {
           console.warn('Không parse được rows param:', e);
         }
       }
     })();
 
-    // thêm dòng trống (chỉ SKQC/Via/Số Mess/CPQC là nhập được,
-    // các readonly sẽ để trống => server sẽ insert mới)
+    // thêm dòng trống
     addRowBtn.addEventListener('click', () => {
       createRow({ id: 'id_' + Date.now() });
     });
@@ -129,9 +138,7 @@
       e.preventDefault();
       const allRows = Array.from(tbody.querySelectorAll('tr')).map(tr => {
         const obj = {};
-        tr.querySelectorAll('input, textarea').forEach(inp => {
-          obj[inp.name] = inp.value;
-        });
+        tr.querySelectorAll('input').forEach(inp => obj[inp.name] = inp.value);
         return obj;
       });
       if (!allRows.length) {
@@ -162,6 +169,7 @@
   </script>
 </body>
 </html>
+
 
 
 
