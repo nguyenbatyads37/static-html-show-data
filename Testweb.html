@@ -1,6 +1,3 @@
-
-
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -44,7 +41,8 @@
     const tbody     = document.querySelector('#dataTable tbody');
     const form      = document.getElementById('dataForm');
     const respMsg   = document.getElementById('responseMessage');
-    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz-flEPJ5ck8Sdc51YJLBmxFjyA5GHxg5B4ei5L0A2YcLrgIdiwuXOo4rJmRh1sZ5U9ZQ/exec';
+    // Thay URL ở đây bằng link của bạn
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaUEejeUBCQkjG-gzozGdwu2nh_ZZxA_MbddvgwARsNzyCliCE-1zZkW3wN32UTjYQGA/exec';
 
     // Tạo một dòng mới, data = {name, email, message, dogf}
     function createRow(data = {}) {
@@ -56,49 +54,45 @@
         <td><input name="dogf"    value="${data.dogf || ''}"></td>
         <td><button type="button" class="removeRow">❌</button></td>
       `;
-      // gắn event xóa dòng
       tr.querySelector('.removeRow').addEventListener('click', () => tr.remove());
       tbody.appendChild(tr);
     }
 
-    // Xử lý nếu URL có param `rows=[{...},{...}]`
-    (() => {
+    // Nếu URL có param `rows`, prefill
+    (()=>{
       const params = new URLSearchParams(window.location.search);
       const rowsParam = params.get('rows');
       if (rowsParam) {
         try {
           const rows = JSON.parse(decodeURIComponent(rowsParam));
-          if (Array.isArray(rows)) {
-            rows.forEach(r => createRow(r));
-          }
+          if (Array.isArray(rows)) rows.forEach(r => createRow(r));
         } catch (e) {
           console.warn('Không parse được rows param:', e);
         }
       }
     })();
 
-    // Thêm dòng khi click
+    // Click thêm dòng
     addRowBtn.addEventListener('click', () => createRow());
 
-    // Gửi tất cả
+    // Submit form
     form.addEventListener('submit', e => {
       e.preventDefault();
-      const allRows = Array.from(tbody.querySelectorAll('tr'))
-        .map(tr => ({
-          name:    tr.querySelector('[name="name"]').value,
-          email:   tr.querySelector('[name="email"]').value,
-          message: tr.querySelector('[name="message"]').value,
-          dogf:    tr.querySelector('[name="dogf"]').value
-        }));
+      const allRows = Array.from(tbody.querySelectorAll('tr')).map(tr => ({
+        name:    tr.querySelector('[name="name"]').value,
+        email:   tr.querySelector('[name="email"]').value,
+        message: tr.querySelector('[name="message"]').value,
+        dogf:    tr.querySelector('[name="dogf"]').value
+      }));
       if (!allRows.length) {
         respMsg.style.color = 'red';
         return respMsg.innerText = 'Chưa có dòng nào để gửi!';
       }
-
+      // Gửi dưới dạng form-urlencoded để tránh CORS preflight
+      const payload = new URLSearchParams({ rows: JSON.stringify(allRows) });
       fetch(SCRIPT_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: allRows })
+        body: payload
       })
       .then(r => r.json())
       .then(json => {
@@ -108,7 +102,6 @@
         } else {
           respMsg.style.color = 'green';
           respMsg.innerText = json.message;
-          // nếu muốn xóa hết form sau gửi thành công:
           tbody.innerHTML = '';
         }
       })
@@ -120,3 +113,4 @@
   </script>
 </body>
 </html>
+
