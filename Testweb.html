@@ -4,26 +4,42 @@
   <meta charset="UTF-8" />
   <title>Form Gửi Nhiều Dòng</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; }
+    body { font-family: Arial, sans-serif; max-width: 1000px; margin: 30px auto; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
-    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
-    input, textarea { width: 100%; box-sizing: border-box; }
-    button { padding: 6px 12px; margin: 4px; }
+    th, td { border: 1px solid #ccc; padding: 6px; vertical-align: middle; }
+    input, textarea, button { box-sizing: border-box; }
+    input[readonly] { background: #f5f5f5; }
+    button { cursor: pointer; }
     #responseMessage { margin-top: 12px; font-weight: bold; }
+    .addSimilar { margin-left: 4px; }
   </style>
 </head>
 <body>
   <h2>Thêm / Chỉnh sửa nhiều dòng</h2>
-  <button id="addRow" type="button">➕ Thêm dòng</button>
+  <button id="addRow" type="button">➕ Thêm dòng trống</button>
 
   <form id="dataForm">
     <table id="dataTable">
       <thead>
         <tr>
+          <th>id</th>
           <th>Tên</th>
-          <th>Email</th>
-          <th>Message</th>
-          <th>Dogf</th>
+          <th>Ngày</th>
+          <th>Ca</th>
+          <th>Page</th>
+          <th>TKQC</th>
+          <th>Via log</th>
+          <th>Sản phẩm</th>
+          <th>Thị trường</th>
+          <th>Số Mess+Cmt</th>
+          <th>Số đơn</th>
+          <th>DS Chốt</th>
+          <th>Số đơn Hoàn/Hủy</th>
+          <th>DS sau Hoàn/Hủy</th>
+          <th>Số đơn sau hoàn huỷ</th>
+          <th>CPQC</th>
+          <th>Team</th>
+          <th>id NS</th>
           <th>Hành động</th>
         </tr>
       </thead>
@@ -43,57 +59,81 @@
     const respMsg   = document.getElementById('responseMessage');
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIjM0XaM1FvQoquodYmuoCnWO-RBTko6z1PnE3rHEOcfr2Xih48jkzCa1pWus8QuntTQ/exec';
 
-    // Tạo một dòng mới, data = {name, email, message, dogf}
+    // Tạo một dòng mới, data = object với key trùng name attribute
     function createRow(data = {}) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td><input name="name"    value="${data.name || ''}"    required></td>
-        <td><input name="email"   type="email" value="${data.email || ''}"   required></td>
-        <td><textarea name="message" rows="2">${data.message || ''}</textarea></td>
-        <td><input name="dogf"    value="${data.dogf || ''}"></td>
+        <td><input name="id"           value="${data.id         || ''}" readonly></td>
+        <td><input name="Tên"          value="${data.Tên        || ''}" readonly></td>
+        <td><input name="Ngày"   type="date"  value="${data.Ngày       || ''}" readonly></td>
+        <td><input name="ca"           value="${data.ca         || ''}" readonly></td>
+        <td><input name="page"         value="${data.page       || ''}" readonly></td>
+        <td><input name="TKQC"         value="${data.TKQC       || ''}"></td>
+        <td><input name="Via_log"      value="${data.Via_log    || ''}"></td>
+        <td><input name="Sản_phẩm"     value="${data.Sản_phẩm   || ''}" readonly></td>
+        <td>
+          <div style="display:flex; align-items:center;">
+            <input name="Thị_trường"   value="${data.Thị_trường || ''}" readonly>
+            <button type="button" class="addSimilar">➕</button>
+          </div>
+        </td>
+        <td><input name="Số_Mess_Cmt"  value="${data.Số_Mess_Cmt|| ''}"></td>
+        <td><input name="Số_đơn"       value="${data.Số_đơn    || ''}" readonly></td>
+        <td><input name="DS_Chốt"      value="${data.DS_Chốt   || ''}" readonly></td>
+        <td><input name="Số_đơn_Hoàn_Hủy"   value="${data.Số_đơn_Hoàn_Hủy   || ''}" readonly></td>
+        <td><input name="DS_sau_Hoàn_Hủy"   value="${data.DS_sau_Hoàn_Hủy   || ''}" readonly></td>
+        <td><input name="Số_đơn_sau_hoàn_hủy" value="${data.Số_đơn_sau_hoàn_hủy|| ''}" readonly></td>
+        <td><input name="CPQC"         value="${data.CPQC       || ''}"></td>
+        <td><input name="Team"         value="${data.Team       || ''}" readonly></td>
+        <td><input name="id_NS"        value="${data.id_NS      || ''}" readonly></td>
         <td><button type="button" class="removeRow">❌</button></td>
       `;
+      // xóa row
       tr.querySelector('.removeRow').addEventListener('click', () => tr.remove());
+      // nút ➕: clone thị trường + sản phẩm, auto id mới
+      tr.querySelector('.addSimilar').addEventListener('click', () => {
+        const prod   = tr.querySelector('[name="Sản_phẩm"]').value;
+        const market = tr.querySelector('[name="Thị_trường"]').value;
+        const newId  = 'id_' + Date.now();
+        createRow({ 
+          id: newId,
+          Sản_phẩm: prod,
+          Thị_trường: market
+        });
+      });
       tbody.appendChild(tr);
     }
 
-    // Prefill từ URL:
-    ;(function(){
-      const params   = new URLSearchParams(window.location.search);
-
-      // 1) hàng loạt: ?rows=[{…},{…},…]
+    // Prefill: nếu có ?rows=JSON thì parse và danh sách
+    (()=>{
+      const params = new URLSearchParams(window.location.search);
       const rowsParam = params.get('rows');
       if (rowsParam) {
         try {
           const arr = JSON.parse(decodeURIComponent(rowsParam));
           if (Array.isArray(arr)) arr.forEach(r => createRow(r));
-        } catch (e) {
+        } catch(e){
           console.warn('Không parse được rows param:', e);
         }
       }
-      // 2) đơn lẻ: ?name=..&email=..&message=..&dogf=..
-      else if (params.has('name')) {
-        createRow({
-          name:    params.get('name')    || '',
-          email:   params.get('email')   || '',
-          message: params.get('message') || '',
-          dogf:    params.get('dogf')    || ''
-        });
-      }
     })();
 
-    // Click thêm dòng
-    addRowBtn.addEventListener('click', () => createRow());
+    // thêm dòng trống (chỉ SKQC/Via/Số Mess/CPQC là nhập được,
+    // các readonly sẽ để trống => server sẽ insert mới)
+    addRowBtn.addEventListener('click', () => {
+      createRow({ id: 'id_' + Date.now() });
+    });
 
-    // Submit form
+    // submit
     form.addEventListener('submit', e => {
       e.preventDefault();
-      const allRows = Array.from(tbody.querySelectorAll('tr')).map(tr => ({
-        name:    tr.querySelector('[name="name"]').value,
-        email:   tr.querySelector('[name="email"]').value,
-        message: tr.querySelector('[name="message"]').value,
-        dogf:    tr.querySelector('[name="dogf"]').value
-      }));
+      const allRows = Array.from(tbody.querySelectorAll('tr')).map(tr => {
+        const obj = {};
+        tr.querySelectorAll('input, textarea').forEach(inp => {
+          obj[inp.name] = inp.value;
+        });
+        return obj;
+      });
       if (!allRows.length) {
         respMsg.style.color = 'red';
         return respMsg.innerText = 'Chưa có dòng nào để gửi!';
@@ -122,5 +162,6 @@
   </script>
 </body>
 </html>
+
 
 
