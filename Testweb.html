@@ -1,84 +1,122 @@
+
+
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <title>Form Gửi Dữ Liệu</title>
+  <title>Form Gửi Nhiều Dòng</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 500px; margin: 30px auto; }
-    label { display: block; margin-top: 12px; }
-    input, textarea { width: 100%; padding: 8px; box-sizing: border-box; margin-top: 4px; }
-    button { margin-top: 16px; padding: 10px 16px; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+    input, textarea { width: 100%; box-sizing: border-box; }
+    button { padding: 6px 12px; margin: 4px; }
     #responseMessage { margin-top: 12px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h2 id="formTitle">Thêm thông tin mới</h2>
+  <h2>Thêm / Chỉnh sửa nhiều dòng</h2>
+  <button id="addRow" type="button">➕ Thêm dòng</button>
 
   <form id="dataForm">
-    <label for="name">Tên:</label>
-    <input type="text" id="name" name="name" required>
-
-    <label for="email">Email:</label>
-    <input type="email" id="email" name="email" required>
-
-    <label for="message">Tin nhắn:</label>
-    <textarea id="message" name="message" rows="4"></textarea>
-
-    <button type="submit" id="submitBtn">Gửi dữ liệu</button>
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Tên</th>
+          <th>Email</th>
+          <th>Message</th>
+          <th>Dogf</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Các dòng sẽ được thêm tự động vào đây -->
+      </tbody>
+    </table>
+    <button type="submit" id="submitBtn">🚀 Gửi tất cả</button>
   </form>
 
   <p id="responseMessage"></p>
 
   <script>
-    // 1) Lấy tham số từ URL
-    const params = new URLSearchParams(window.location.search);
-    const nameVal    = params.get('name');
-    const emailVal   = params.get('email');
-    const messageVal = params.get('message');
+    const addRowBtn = document.getElementById('addRow');
+    const tbody     = document.querySelector('#dataTable tbody');
+    const form      = document.getElementById('dataForm');
+    const respMsg   = document.getElementById('responseMessage');
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz-flEPJ5ck8Sdc51YJLBmxFjyA5GHxg5B4ei5L0A2YcLrgIdiwuXOo4rJmRh1sZ5U9ZQ/exec';
 
-    // 2) Pre-fill nếu có
-    if (nameVal || emailVal || messageVal) {
-      if (nameVal)    document.getElementById('name').value    = nameVal;
-      if (emailVal)   document.getElementById('email').value   = emailVal;
-      if (messageVal) document.getElementById('message').value = messageVal;
-      document.getElementById('formTitle').innerText   = 'Chỉnh sửa thông tin';
-      document.getElementById('submitBtn').innerText   = 'Lưu thay đổi';
+    // Tạo một dòng mới, data = {name, email, message, dogf}
+    function createRow(data = {}) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input name="name"    value="${data.name || ''}"    required></td>
+        <td><input name="email"   type="email" value="${data.email || ''}"   required></td>
+        <td><textarea name="message" rows="2">${data.message || ''}</textarea></td>
+        <td><input name="dogf"    value="${data.dogf || ''}"></td>
+        <td><button type="button" class="removeRow">❌</button></td>
+      `;
+      // gắn event xóa dòng
+      tr.querySelector('.removeRow').addEventListener('click', () => tr.remove());
+      tbody.appendChild(tr);
     }
 
-    // 3) Xử lý khi submit
-    document.getElementById('dataForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      const formData = new URLSearchParams(new FormData(this)).toString();
-
-      fetch(
-        'https://script.google.com/macros/s/AKfycbzkYxcYwruJ_JOtlZKyFXpkL9Q-36cyrUt4pC4JGjfxVDRxhWXYOyaoCIeESeUFl95RVQ/exec',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: formData
+    // Xử lý nếu URL có param `rows=[{...},{...}]`
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      const rowsParam = params.get('rows');
+      if (rowsParam) {
+        try {
+          const rows = JSON.parse(decodeURIComponent(rowsParam));
+          if (Array.isArray(rows)) {
+            rows.forEach(r => createRow(r));
+          }
+        } catch (e) {
+          console.warn('Không parse được rows param:', e);
         }
-      )
-      .then(r => r.text())
-      .then(txt => {
-        const p = document.getElementById('responseMessage');
-        if (txt.startsWith('Lỗi')) {
-          p.style.color = 'red';
-          p.innerText = txt;
+      }
+    })();
+
+    // Thêm dòng khi click
+    addRowBtn.addEventListener('click', () => createRow());
+
+    // Gửi tất cả
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const allRows = Array.from(tbody.querySelectorAll('tr'))
+        .map(tr => ({
+          name:    tr.querySelector('[name="name"]').value,
+          email:   tr.querySelector('[name="email"]').value,
+          message: tr.querySelector('[name="message"]').value,
+          dogf:    tr.querySelector('[name="dogf"]').value
+        }));
+      if (!allRows.length) {
+        respMsg.style.color = 'red';
+        return respMsg.innerText = 'Chưa có dòng nào để gửi!';
+      }
+
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: allRows })
+      })
+      .then(r => r.json())
+      .then(json => {
+        if (json.error) {
+          respMsg.style.color = 'red';
+          respMsg.innerText = 'Lỗi: ' + json.error;
         } else {
-          p.style.color = 'green';
-          p.innerText = txt;
-          // Nếu bạn muốn clear form khi thêm mới:
-          if (!nameVal && !emailVal && !messageVal) this.reset();
+          respMsg.style.color = 'green';
+          respMsg.innerText = json.message;
+          // nếu muốn xóa hết form sau gửi thành công:
+          tbody.innerHTML = '';
         }
       })
       .catch(err => {
-        const p = document.getElementById('responseMessage');
-        p.style.color = 'red';
-        p.innerText = 'Lỗi gửi: ' + err;
+        respMsg.style.color = 'red';
+        respMsg.innerText = 'Lỗi gửi: ' + err;
       });
     });
   </script>
 </body>
 </html>
-
-
