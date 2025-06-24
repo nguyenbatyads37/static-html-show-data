@@ -366,11 +366,12 @@
       tr.querySelector('.removeRow').addEventListener('click', () => tr.remove());
       
       // Xử lý khi chọn tên nhân viên
-      tr.querySelector('.name-select').addEventListener('change', function() {
+      const nameSelect = tr.querySelector('.name-select');
+      const tkqcSelect = tr.querySelector('.tkqc-select');
+
+      nameSelect.addEventListener('change', function() {
         const selectedName = this.value;
-        const tkqcSelect = tr.querySelector('.tkqc-select');
-        
-        tkqcSelect.innerHTML = '<option value="">-- Chọn TKQC --</option>';
+        tkqcSelect.innerHTML = '<option value="">-- Chọn TKQC --</option>'; // Reset
         if (selectedName && tkqcData[selectedName]) {
           tkqcData[selectedName].forEach(tkqc => {
             const option = document.createElement('option');
@@ -380,6 +381,12 @@
           });
         }
       });
+      // Kích hoạt sự kiện change để tải TKQC nếu tên đã được điền sẵn
+      if (nameSelect.value) {
+          nameSelect.dispatchEvent(new Event('change'));
+          // Phải đặt lại giá trị TKQC sau khi danh sách được tải
+          tkqcSelect.value = data.TKQC || '';
+      }
       
       // Nút thêm dòng từ thị trường
       tr.querySelector('.addSimilarMarket').addEventListener('click', () => {
@@ -490,8 +497,50 @@
       });
     });
 
-    // Tự động thêm dòng đầu tiên khi tải trang
-    createRow();
+    // ===== BẮT ĐẦU MÃ MỚI: TỰ ĐỘNG THÊM DÒNG TỪ URL =====
+    function initializeRowsFromUrl() {
+        // Lấy tham số 'data' từ URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const dataParam = urlParams.get('data');
+
+        if (dataParam) {
+            // Tách các dòng bằng dấu "_a_"
+            const rowsData = dataParam.split('_a_');
+            
+            rowsData.forEach(rowString => {
+                if (rowString.trim() === '') return; // Bỏ qua các chuỗi rỗng
+
+                // Tách các trường trong mỗi dòng bằng dấu "_b_"
+                const fields = rowString.split('_b_');
+
+                // Tạo đối tượng dữ liệu dựa trên thứ tự đã quy ước
+                // Dùng decodeURIComponent để giải mã các ký tự đặc biệt như %20 (dấu cách)
+                const rowDataObject = {
+                    Tên:         fields[0] ? decodeURIComponent(fields[0]) : '',
+                    Sản_phẩm:   fields[1] ? decodeURIComponent(fields[1]) : '',
+                    Thị_trường:  fields[2] ? decodeURIComponent(fields[2]) : '',
+                    page:        fields[3] ? decodeURIComponent(fields[3]) : '',
+                    TKQC:        fields[4] ? decodeURIComponent(fields[4]) : '',
+                };
+
+                // Tạo dòng mới với dữ liệu đã được phân tích
+                createRow(rowDataObject);
+            });
+
+            // Nếu không có dòng hợp lệ nào từ URL, thêm một dòng trống
+            if (tbody.children.length === 0) {
+                createRow();
+            }
+        } else {
+            // Nếu không có tham số 'data', thêm một dòng trống như mặc định
+            createRow();
+        }
+    }
+
+    // Gọi hàm để khởi tạo các dòng khi trang được tải
+    initializeRowsFromUrl();
+    // ===== KẾT THÚC MÃ MỚI =====
+    
   </script>
 </body>
 </html>
