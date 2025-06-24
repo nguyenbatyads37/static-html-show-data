@@ -1,50 +1,178 @@
-// Đặt mã này vào file Code.gs của bạn
-function doPost(e) {
-  try {
-    // 1. Phân tích dữ liệu JSON từ request
-    var data = JSON.parse(e.postData.contents);
-    var rows = data.rows; 
-    
-    // 2. Mở trang tính
-    // Thay 'Sheet1' bằng tên trang tính thực tế của bạn, ví dụ 'FormEntries'
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("Sheet1"); 
-    
-    // 3. Lấy tiêu đề để đảm bảo ghi đúng cột
-    // Tiêu đề trong Sheet phải là: name, email, message, dogf
-    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-    var headerMap = {};
-    headers.forEach(function(h, i) { headerMap[h.toLowerCase().trim()] = i; });
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Form Gửi Dữ Liệu (Nâng Cấp)</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 30px auto; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: middle; }
+    th { background-color: #f2f2f2; }
+    input, textarea { width: 100%; box-sizing: border-box; padding: 6px; border-radius: 3px; border: 1px solid #ddd; }
+    button { padding: 6px 12px; margin: 0; cursor: pointer; border-radius: 4px; border: 1px solid transparent; }
+    #addRow { background-color: #28a745; color: white; margin-bottom: 15px; }
+    #submitBtn { background-color: #007bff; color: white; width: 100%; margin-top: 15px; font-weight: bold; }
+    #submitBtn:disabled { background-color: #6c757d; cursor: not-allowed; }
+    #responseMessage { margin-top: 12px; font-weight: bold; text-align: center; }
+    .action-cell { display: flex; gap: 5px; justify-content: center; }
+    .removeRow { background-color: #dc3545; color: white; }
+    .addSimilar { background-color: #17a2b8; color: white; }
+  </style>
+</head>
+<body>
+  <h2>Thêm / Chỉnh sửa nhiều dòng</h2>
+  <button id="addRow" type="button">➕ Thêm dòng trống</button>
 
-    // 4. Chuẩn bị dữ liệu để ghi
-    var valuesToAppend = rows.map(function(rowData) {
-      var newRow = new Array(headers.length); // Tạo một mảng trống
-      for (var key in rowData) {
-        var normalizedKey = key.toLowerCase().trim();
-        if (headerMap.hasOwnProperty(normalizedKey)) {
-          var colIndex = headerMap[normalizedKey];
-          newRow[colIndex] = rowData[key];
-        }
-      }
-      return newRow;
-    });
-    
-    // 5. Ghi dữ liệu vào trang tính
-    if (valuesToAppend.length > 0) {
-      sheet.getRange(sheet.getLastRow() + 1, 1, valuesToAppend.length, headers.length).setValues(valuesToAppend);
+  <form id="dataForm">
+    <table id="dataTable">
+      <thead>
+        <tr>
+          <th>Tên</th>
+          <th>Email</th>
+          <th>Message</th>
+          <th>Dogf</th>
+          <th style="width: 15%;">Hành động</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Các dòng sẽ được thêm tự động vào đây -->
+      </tbody>
+    </table>
+    <button type="submit" id="submitBtn">🚀 Gửi tất cả</button>
+  </form>
+
+  <p id="responseMessage"></p>
+
+  <script>
+    const addRowBtn = document.getElementById('addRow');
+    const tbody     = document.querySelector('#dataTable tbody');
+    const form      = document.getElementById('dataForm');
+    const respMsg   = document.getElementById('responseMessage');
+    const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIjM0XaM1FvQoquodYmuoCnWO-RBTko6z1PnE3rHEOcfr2Xih48jkzCa1pWus8QuntTQ/exec';
+
+    // Hàm tạo một dòng mới trong bảng
+    function createRow(data = {}) {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td><input name="name"    value="${data.name || ''}"    required></td>
+        <td><input name="email"   type="email" value="${data.email || ''}"   required></td>
+        <td><textarea name="message" rows="2">${data.message || ''}</textarea></td>
+        <td><input name="dogf"    value="${data.dogf || ''}" placeholder="Dữ liệu phụ..."></td>
+        <td>
+          <div class="action-cell">
+            <button type="button" class="addSimilar" title="Sao chép dòng này">➕</button>
+            <button type="button" class="removeRow" title="Xóa dòng này">❌</button>
+          </div>
+        </td>
+      `;
+      
+      // Sự kiện xóa dòng
+      tr.querySelector('.removeRow').addEventListener('click', () => tr.remove());
+      
+      // NÂNG CẤP: Sự kiện sao chép dòng
+      tr.querySelector('.addSimilar').addEventListener('click', () => {
+        const currentRowData = {
+          name:    tr.querySelector('[name="name"]').value,
+          email:   tr.querySelector('[name="email"]').value,
+          message: tr.querySelector('[name="message"]').value,
+          dogf:    tr.querySelector('[name="dogf"]').value
+        };
+        createRow(currentRowData); // Tạo dòng mới với dữ liệu vừa sao chép
+      });
+
+      tbody.appendChild(tr);
     }
 
-    // 6. Trả về phản hồi thành công (CỰC KỲ QUAN TRỌNG ĐỂ TRÁNH LỖI CORS)
-    return ContentService
-      .createTextOutput(JSON.stringify({ "status": "success", "message": "Đã nhận và xử lý " + rows.length + " dòng." }))
-      .setMimeType(ContentService.MimeType.JSON);
+    // Hàm đọc dữ liệu từ URL để điền sẵn vào form
+    function prefillFromUrl() {
+      const params = new URLSearchParams(window.location.search);
+      const rowsParam = params.get('rows');
 
-  } catch (error) {
-    // 7. Trả về phản hồi lỗi nếu có vấn đề
-    return ContentService
-      .createTextOutput(JSON.stringify({ "status": "error", "message": error.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
+      if (rowsParam) { // Ưu tiên tham số 'rows' chứa mảng JSON
+        try {
+          const arr = JSON.parse(decodeURIComponent(rowsParam));
+          if (Array.isArray(arr) && arr.length > 0) {
+            arr.forEach(r => createRow(r));
+            return; // Dừng lại sau khi đã xử lý
+          }
+        } catch (e) {
+          console.warn('Không thể phân tích tham số "rows":', e);
+        }
+      } else if (params.has('name')) { // Xử lý tham số đơn lẻ
+        createRow({
+          name:    params.get('name')    || '',
+          email:   params.get('email')   || '',
+          message: params.get('message') || '',
+          dogf:    params.get('dogf')    || ''
+        });
+        return; // Dừng lại sau khi đã xử lý
+      }
+      
+      // Nếu không có dữ liệu từ URL, tạo một dòng trống
+      createRow();
+    }
+    
+    // GỌI CÁC HÀM KHỞI TẠO
+    document.addEventListener('DOMContentLoaded', prefillFromUrl);
+    addRowBtn.addEventListener('click', () => createRow());
+
+    // NÂNG CẤP: Xử lý sự kiện SUBMIT một cách ổn định
+    form.addEventListener('submit', e => {
+      e.preventDefault(); // Ngăn form tải lại trang
+
+      // Kiểm tra xem form có hợp lệ không (dựa vào 'required', 'type="email"')
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      respMsg.style.color = 'orange';
+      respMsg.innerText = 'Đang gửi dữ liệu...';
+
+      const allRows = Array.from(tbody.querySelectorAll('tr')).map(tr => ({
+        name:    tr.querySelector('[name="name"]').value,
+        email:   tr.querySelector('[name="email"]').value,
+        message: tr.querySelector('[name="message"]').value,
+        dogf:    tr.querySelector('[name="dogf"]').value
+      }));
+
+      if (!allRows.length) {
+        respMsg.style.color = 'red';
+        respMsg.innerText = 'Chưa có dòng nào để gửi!';
+        submitBtn.disabled = false;
+        return;
+      }
+      
+      // SỬA LỖI: Gửi dữ liệu bằng phương thức POST JSON đúng chuẩn
+      fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: allRows })
+      })
+      .then(r => r.json())
+      .then(json => {
+        if (json.status === "error") { // Giả sử server trả về {status: 'error', ...}
+          throw new Error(json.message);
+        }
+        respMsg.style.color = 'green';
+        respMsg.innerText = json.message || "Gửi thành công!";
+        tbody.innerHTML = ''; // Xóa các dòng đã gửi
+        createRow(); // NÂNG CẤP: Tạo lại một dòng trống mới
+      })
+      .catch(err => {
+        respMsg.style.color = 'red';
+        respMsg.innerText = 'Lỗi: ' + err.message;
+      })
+      .finally(() => {
+        submitBtn.disabled = false; // Luôn bật lại nút sau khi hoàn thành
+      });
+    });
+  </script>
+</body>
+</html>
 
 
 
