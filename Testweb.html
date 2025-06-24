@@ -16,7 +16,7 @@
     }
     
     .container {
-      max-width: 1400px; /* Increased container width */
+      max-width: 1400px; /* <<<<< THAY ĐỔI 1: Tăng chiều rộng của vùng chứa chính */
       margin: 20px auto;
       background-color: rgba(255, 255, 255, 0.9);
       border-radius: 10px;
@@ -65,18 +65,18 @@
       top: 0;
     }
     
-    /* Set specific column widths */
-    th:nth-child(1), td:nth-child(1) { width: 100px; } /* Hành động */
-    th:nth-child(2), td:nth-child(2) { width: 150px; } /* Tên */
-    th:nth-child(3), td:nth-child(3) { width: 120px; } /* Ngày */
+    /* <<<<< THAY ĐỔI 2: Phân bổ lại chiều rộng các cột để rõ ràng hơn */
+    th:nth-child(1), td:nth-child(1) { width: 60px; }  /* Hành động */
+    th:nth-child(2), td:nth-child(2) { width: 150px; } /* Tên - Rộng hơn cho tên dài */
+    th:nth-child(3), td:nth-child(3) { width: 110px; } /* Ngày */
     th:nth-child(4), td:nth-child(4) { width: 100px; } /* Ca */
-    th:nth-child(5), td:nth-child(5) { width: 150px; } /* Sản phẩm */
+    th:nth-child(5), td:nth-child(5) { width: 140px; } /* Sản phẩm */
     th:nth-child(6), td:nth-child(6) { width: 120px; } /* Thị trường */
-    th:nth-child(7), td:nth-child(7) { width: 200px; } /* Page - Wider column */
+    th:nth-child(7), td:nth-child(7) { width: 200px; } /* Page - Cần nhiều không gian */
     th:nth-child(8), td:nth-child(8) { width: 150px; } /* TKQC */
     th:nth-child(9), td:nth-child(9) { width: 100px; } /* CPQC */
     th:nth-child(10), td:nth-child(10) { width: 120px; } /* Via log */
-    th:nth-child(11), td:nth-child(11) { width: 150px; } /* Số Mess+Cmt */
+    th:nth-child(11), td:nth-child(11) { width: 130px; } /* Số Mess+Cmt - Rộng hơn cho tiêu đề */
     
     tr:nth-child(even) {
       background-color: #f9f9f9;
@@ -202,7 +202,7 @@
     }
     
     .page-container input {
-      min-width: 150px; /* Minimum width for page input */
+      min-width: 150px;
     }
   </style>
 </head>
@@ -351,9 +351,9 @@
             ).join('') : ''}
           </select>
         </td>
-        <td><input name="CPQC" value="${data.CPQC || ''}"></td>
-        <td><input name="Via_log" value="${data.Via_log || ''}"></td>
-        <td><input name="Số_Mess_Cmt" value="${data.Số_Mess_Cmt || ''}"></td>
+        <td><input name="CPQC" value="${data.CPQC || ''}" class="editable"></td>
+        <td><input name="Via_log" value="${data.Via_log || ''}" class="editable"></td>
+        <td><input name="Số_Mess_Cmt" value="${data.Số_Mess_Cmt || ''}" class="editable"></td>
         <td class="hidden"><input name="id" value="${data.id || 'id_' + Date.now()}" readonly></td>
         <td class="hidden"><input name="Team" value="${data.Team || ''}" readonly></td>
         <td class="hidden"><input name="id_NS" value="${data.id_NS || ''}" readonly></td>
@@ -393,7 +393,7 @@
         }, tr);
         
         // Focus vào ô đầu tiên có thể edit của dòng mới
-        const firstEditable = newRow.querySelector('.editable');
+        const firstEditable = newRow.querySelector('[name="page"]');
         if (firstEditable) firstEditable.focus();
       });
       
@@ -408,13 +408,10 @@
           Thị_trường: tr.querySelector('[name="Thị_trường"]').value,
           page: tr.querySelector('[name="page"]').value,
           TKQC: tr.querySelector('[name="TKQC"]').value,
-          CPQC: tr.querySelector('[name="CPQC"]').value,
-          Via_log: tr.querySelector('[name="Via_log"]').value,
-          Số_Mess_Cmt: tr.querySelector('[name="Số_Mess_Cmt"]').value
         }, tr);
         
         // Focus vào ô đầu tiên có thể edit của dòng mới
-        const firstEditable = newRow.querySelector('.editable');
+        const firstEditable = newRow.querySelector('[name="CPQC"]');
         if (firstEditable) firstEditable.focus();
       });
 
@@ -439,6 +436,13 @@
     // Xử lý submit form
     form.addEventListener('submit', e => {
       e.preventDefault();
+      
+      const submitButton = document.getElementById('submitBtn');
+      submitButton.disabled = true;
+      submitButton.textContent = 'Đang gửi...';
+      respMsg.className = '';
+      respMsg.textContent = '';
+
       const allRows = Array.from(tbody.querySelectorAll('tr')).map(tr => {
         const obj = {};
         tr.querySelectorAll('input, textarea, select').forEach(inp => {
@@ -448,8 +452,10 @@
       });
       
       if (!allRows.length) {
-        respMsg.style.color = 'red';
+        respMsg.className = 'error';
         respMsg.innerText = 'Chưa có dòng nào để gửi!';
+        submitButton.disabled = false;
+        submitButton.textContent = '🚀 Gửi báo cáo';
         return;
       }
       
@@ -460,13 +466,23 @@
       })
       .then(r => r.json())
       .then(json => {
-        respMsg.style.color = json.error ? 'red' : 'green';
-        respMsg.innerText = json.error ? 'Lỗi: ' + json.error : json.message;
-        if (!json.error) tbody.innerHTML = '';
+        if (json.error) {
+            respMsg.className = 'error';
+            respMsg.innerText = 'Lỗi: ' + json.error;
+        } else {
+            respMsg.className = 'success';
+            respMsg.innerText = json.message;
+            tbody.innerHTML = ''; // Xóa các dòng đã gửi
+            createRow({ id: 'id_' + Date.now() }); // Thêm lại một dòng trống
+        }
       })
       .catch(err => {
-        respMsg.style.color = 'red';
-        respMsg.innerText = 'Lỗi gửi: ' + err;
+        respMsg.className = 'error';
+        respMsg.innerText = 'Lỗi kết nối: ' + err;
+      })
+      .finally(() => {
+        submitButton.disabled = false;
+        submitButton.textContent = '🚀 Gửi báo cáo';
       });
     });
 
