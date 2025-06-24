@@ -251,7 +251,6 @@
     const form = document.getElementById('dataForm');
     const respMsg = document.getElementById('responseMessage');
     
-    // <<<<< URL SCRIPT ĐÃ ĐƯỢC CẬP NHẬT
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby1sa7N9MgCUrfwvRbUTisn4OBbVAxGSxlq4pLLKWuhEiMZWzuppRMiadJzcANfIPdBHA/exec';
 
     // Danh sách data
@@ -283,7 +282,6 @@
     // Tạo một dòng mới
     function createRow(data = {}, insertAfter = null) {
       const tr = document.createElement('tr');
-      // LUÔN TẠO ID MỚI NẾU KHÔNG ĐƯỢC CUNG CẤP
       const uniqueId = `id_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       tr.innerHTML = `
@@ -373,7 +371,7 @@
 
     addRowBtn.addEventListener('click', () => {
       const newRow = createRow();
-      newRow.querySelector('.editable').focus();
+      newRow.querySelector('[name="Tên"]').focus();
     });
 
     form.addEventListener('submit', e => {
@@ -419,6 +417,7 @@
             respMsg.className = 'error'; respMsg.innerText = 'Lỗi từ server: ' + json.error;
         } else {
             respMsg.className = 'success'; respMsg.innerText = json.message;
+            // Xóa các dòng đã gửi và làm mới với một dòng trống
             tbody.innerHTML = '';
             createRow();
         }
@@ -431,33 +430,81 @@
       });
     });
 
-    // TỰ ĐỘNG THÊM DÒNG TỪ URL
+    // ========== LOGIC CẬP NHẬT TRANG THÔNG MINH ==========
+
+    // Hàm phụ trợ để cập nhật giá trị của một dòng đã có
+    function updateRowInPlace(tr, data) {
+      // Cập nhật tất cả các trường input/select
+      tr.querySelector('[name="Tên"]').value = data.Tên || '';
+      tr.querySelector('[name="Ngày"]').value = data.Ngày || getToday();
+      tr.querySelector('[name="ca"]').value = data.ca || 'Hết ca';
+      tr.querySelector('[name="Sản_phẩm"]').value = data.Sản_phẩm || '';
+      tr.querySelector('[name="Thị_trường"]').value = data.Thị_trường || '';
+      tr.querySelector('[name="page"]').value = data.page || '';
+      tr.querySelector('[name="CPQC"]').value = data.CPQC || '';
+      tr.querySelector('[name="Via_log"]').value = data.Via_log || '';
+      tr.querySelector('[name="Số_Mess_Cmt"]').value = data.Số_Mess_Cmt || '';
+      
+      // Xử lý đặc biệt cho TKQC
+      const nameSelect = tr.querySelector('.name-select');
+      nameSelect.dispatchEvent(new Event('change')); // Kích hoạt để tải lại danh sách TKQC
+      tr.querySelector('.tkqc-select').value = data.TKQC || '';
+    }
+
+    // Hàm chính để đồng bộ hóa trang với URL
     function initializeRowsFromUrl() {
         const urlParams = new URLSearchParams(window.location.search);
         const dataParam = urlParams.get('data');
 
+        const incomingDataMap = new Map();
+
+        // 1. Phân tích dữ liệu từ URL và đưa vào Map
         if (dataParam) {
             const rowsData = dataParam.split('_a_');
-            
             rowsData.forEach(rowString => {
                 if (rowString.trim() === '') return;
-
                 const fields = rowString.split('_b_');
-                // Quy ước mới: id_b_Tên_b_Sản phẩm...
-                const rowDataObject = {
-                    id:          fields[0] ? decodeURIComponent(fields[0]) : '', // Nếu id trống, createRow sẽ tự tạo
-                    Tên:         fields[1] ? decodeURIComponent(fields[1]) : '',
-                    Sản_phẩm:   fields[2] ? decodeURIComponent(fields[2]) : '',
-                    Thị_trường:  fields[3] ? decodeURIComponent(fields[3]) : '',
-                    page:        fields[4] ? decodeURIComponent(fields[4]) : '',
-                    TKQC:        fields[5] ? decodeURIComponent(fields[5]) : '',
-                };
-
-                createRow(rowDataObject);
+                const id = fields[0] ? decodeURIComponent(fields[0]) : null;
+                if (id) {
+                    const rowDataObject = {
+                        id:          id,
+                        Tên:         fields[1] ? decodeURIComponent(fields[1]) : '',
+                        Sản_phẩm:   fields[2] ? decodeURIComponent(fields[2]) : '',
+                        Thị_trường:  fields[3] ? decodeURIComponent(fields[3]) : '',
+                        page:        fields[4] ? decodeURIComponent(fields[4]) : '',
+                        TKQC:        fields[5] ? decodeURIComponent(fields[5]) : '',
+                    };
+                    incomingDataMap.set(id, rowDataObject);
+                }
             });
         }
+
+        const existingRows = Array.from(tbody.querySelectorAll('tr'));
+        const rowsToRemove = [];
+
+        // 2. Lặp qua các dòng đang có để CẬP NHẬT hoặc ĐÁNH DẤU XÓA
+        existingRows.forEach(tr => {
+            const existingId = tr.querySelector('[name="id"]').value;
+            if (incomingDataMap.has(existingId)) {
+                // ID này cần được CẬP NHẬT
+                updateRowInPlace(tr, incomingDataMap.get(existingId));
+                // Xóa ID khỏi Map để đánh dấu là đã xử lý
+                incomingDataMap.delete(existingId);
+            } else {
+                // ID này không có trong URL, đánh dấu để XÓA
+                rowsToRemove.push(tr);
+            }
+        });
+
+        // 3. Xóa các dòng không còn tồn tại
+        rowsToRemove.forEach(tr => tr.remove());
+
+        // 4. Thêm các dòng mới (những dòng còn lại trong Map)
+        for (const newDataObject of incomingDataMap.values()) {
+            createRow(newDataObject);
+        }
         
-        // Nếu không có dòng nào được tạo từ URL (hoặc không có param), tạo 1 dòng trống
+        // 5. Đảm bảo luôn có ít nhất một dòng
         if (tbody.children.length === 0) {
             createRow();
         }
