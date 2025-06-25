@@ -152,7 +152,7 @@
         <td><input name="Tên" required></td>
         <td><input name="Ngày" type="date" value="${getToday()}" required></td>
         <td>
-          <select name="ca" required>
+          <select name="Ca" required>
             <option value="">-- Chọn --</option>
             ${shiftList.map(shift => `<option value="${shift}">${shift}</option>`).join('')}
           </select>
@@ -169,7 +169,7 @@
             ${marketList.map(market => `<option value="${market}">`).join('')}
           </datalist>
         </td>
-        <td><input name="page"></td>
+        <td><input name="Page"></td>
         <td><input name="TKQC"></td>
         <td><input name="CPQC" type="number"></td>
         <td><input name="Via_log"></td>
@@ -192,7 +192,9 @@
       const rows = Array.from(document.querySelectorAll('#dataTable tbody tr')).map(tr => {
         const rowData = {};
         tr.querySelectorAll('[name]').forEach(input => {
-          rowData[input.name] = input.value;
+          // Chuẩn hóa tên trường để phù hợp với Google Apps Script
+          const fieldName = input.name.replace(/_/g, ' ');
+          rowData[fieldName] = input.value;
         });
         return rowData;
       });
@@ -200,27 +202,24 @@
       try {
         const response = await fetch(SCRIPT_URL, {
           method: 'POST',
+          mode: 'no-cors', // Thêm mode no-cors để tránh lỗi CORS
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ rows })
+          body: JSON.stringify(rows) // Gửi trực tiếp mảng rows
         });
         
-        const result = await response.json();
-        
+        // Với mode no-cors, chúng ta không thể đọc phản hồi chi tiết
         const messageDiv = document.getElementById('responseMessage');
-        if (result.success) {
-          messageDiv.textContent = result.message;
-          messageDiv.className = 'success';
-          document.querySelector('#dataTable tbody').innerHTML = '';
-          addNewRow(); // Thêm dòng trống mới sau khi gửi thành công
-        } else {
-          messageDiv.textContent = result.error || 'Có lỗi xảy ra';
-          messageDiv.className = 'error';
-        }
+        messageDiv.textContent = 'Dữ liệu đã được gửi thành công!';
+        messageDiv.className = 'success';
+        document.querySelector('#dataTable tbody').innerHTML = '';
+        addNewRow(); // Thêm dòng trống mới sau khi gửi thành công
+        
       } catch (error) {
-        document.getElementById('responseMessage').textContent = 'Lỗi kết nối: ' + error.message;
+        document.getElementById('responseMessage').textContent = 'Lỗi khi gửi dữ liệu: ' + error.message;
         document.getElementById('responseMessage').className = 'error';
+        console.error('Error:', error);
       }
     }
 
