@@ -169,14 +169,12 @@
         justify-content: center;
     }
 
-    /* Debug styles */
-    .debug-info {
+    .status {
       background: #e9ecef;
       padding: 10px;
       margin: 10px 0;
       border-radius: 4px;
-      font-family: monospace;
-      font-size: 12px;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -187,10 +185,7 @@
       <h1>Báo Cáo MKT LumiGlobal</h1>
     </div>
 
-    <!-- Debug info -->
-    <div class="debug-info">
-      <strong>Debug Info:</strong> <span id="debugInfo">Đang tải...</span>
-    </div>
+    <div class="status" id="status">Đã sẵn sàng</div>
 
     <button id="addRow" type="button" class="add-row-btn">➕ Thêm dòng trống</button>
     
@@ -215,7 +210,7 @@
               <th class="hidden">id NS</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody id="tableBody">
             <!-- Dữ liệu sẽ được thêm tự động vào đây -->
           </tbody>
         </table>
@@ -227,33 +222,28 @@
   </div>
 
   <script>
-    // Debug function
-    function debug(message) {
-      console.log('[DEBUG]', message);
-      const debugInfo = document.getElementById('debugInfo');
-      if (debugInfo) {
-        debugInfo.textContent = new Date().toLocaleTimeString() + ': ' + message;
-      }
+    // Status update function
+    function updateStatus(message) {
+      console.log('[STATUS]', message);
+      document.getElementById('status').textContent = new Date().toLocaleTimeString() + ': ' + message;
     }
 
-    // === DOM Elements ===
+    // Global variables
+    let rowCounter = 0;
+    
+    // DOM Elements
+    const tableBody = document.getElementById('tableBody');
     const addRowBtn = document.getElementById('addRow');
-    const tbody = document.querySelector('#dataTable tbody');
     const form = document.getElementById('dataForm');
     const respMsg = document.getElementById('responseMessage');
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwNYTpMqLITYXVaBYIvu3H_xwt3klyJEiuUELR6VFWeZGuwXDUy65eYKB64yeqOlOR5/exec';
 
-    // === Data Lists ===
+    // Data Lists
     const productList = ["Kem body","CF FG","CB BAKU","Bakuchiol","Cà phê","Nám","Kẹo Dâu","Serum Sâm","Kẹo Dâu New","Body TBN","Baku TBN","DG","Kẹo Táo"];
     const marketList = ["Nhật","Hàn","Canada","US","Úc","Anh"];
     const shiftList = ["Hết ca","Giữa ca","Ca Chiều"];
     const employeeList = ["Phạm Tiến Thành","Lê Đình Toản","Trần Quốc Khải","Mạnh Cường","Nguyễn Thị Hiếu","Vũ Viết Anh","Lục Trần Minh Trí","Đoàn Ngọc Huân","Nguyễn Hiền Lương","Trần Huy Hùng","Nguyễn Anh Tuấn","Trần Tiến","Nguyễn Thị Như Quỳnh","Nguyễn Quang Trường"];
     
-    // Normalize name function to handle spacing issues
-    function normalizeName(name) {
-      return name.replace(/\s+/g, '');
-    }
-
     const tkqcData = {
       "Lê Đình Toản": ["lumi hn 07(1)","tcm 365(1)","tcm 386(1)","tcm 389-b(1)","tcm 427-b"],
       "Lục Trần Minh Trí": ["tcm 399-b","tcm 456"],
@@ -285,69 +275,68 @@
       "Lục Trần Minh Trí": ["Fitgum Collagen Chia Coffee - Store Mintres in Japan","Fitgum Collagen Chia Coffee - Store Mintres in US"]
     };
 
-    debug('Data loaded: ' + Object.keys(tkqcData).length + ' employees with TKQC, ' + Object.keys(pageData).length + ' employees with Pages');
-
-    const escapeAttr = (str) => str.toString().replace(/"/g, '&quot;');
-
+    // Utility functions
     function formatDate(date) {
       const d = new Date(date);
-      let month = "" + (d.getMonth() + 1);
-      let day = "" + d.getDate();
+      let month = String(d.getMonth() + 1).padStart(2, '0');
+      let day = String(d.getDate()).padStart(2, '0');
       let year = d.getFullYear();
-      if (month.length < 2) month = "0" + month;
-      if (day.length < 2) day = "0" + day;
-      return [year, month, day].join("-");
+      return `${year}-${month}-${day}`;
     }
 
     function getToday() {
       return formatDate(new Date());
     }
 
-    function updateDataLists(nameSelect, row) {
-      const selectedName = nameSelect.value;
-      const tkqcInput = row.querySelector('.tkqc-input');
-      const tkqcDatalist = row.querySelector('.tkqc-datalist');
-      const pageInput = row.querySelector('.page-input'); 
-      const pageDatalist = row.querySelector('.page-datalist');
-
-      debug('Updating datalists for: ' + selectedName);
-
-      // Clear current values and datalists
-      tkqcInput.value = "";
-      pageInput.value = "";
-      tkqcDatalist.innerHTML = "";
-      pageDatalist.innerHTML = "";
-
-      if (selectedName) {
-        // Update TKQC datalist
-        if (tkqcData[selectedName]) {
-          tkqcData[selectedName].forEach(tkqc => {
-            const option = document.createElement("option");
-            option.value = tkqc;
-            tkqcDatalist.appendChild(option);
-          });
-          debug('Added ' + tkqcData[selectedName].length + ' TKQC options for ' + selectedName);
-        } else {
-          debug('No TKQC data found for ' + selectedName);
-        }
-
-        // Update Page datalist
-        if (pageData[selectedName]) {
-          pageData[selectedName].forEach(page => {
-            const option = document.createElement("option");
-            option.value = page;
-            pageDatalist.appendChild(option);
-          });
-          debug('Added ' + pageData[selectedName].length + ' Page options for ' + selectedName);
-        } else {
-          debug('No Page data found for ' + selectedName);
-        }
-      }
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
     }
-    
-    function createRow(data = {}, insertAfter = null) {
-      const tr = document.createElement("tr");
-      const uniqueId = "id_" + Date.now() + Math.random().toString(36).substr(2, 9);
+
+    // Update data lists based on selected employee
+    function updateDataLists(employeeName, row) {
+      updateStatus(`Cập nhật dữ liệu cho: ${employeeName}`);
+      
+      const tkqcInput = row.querySelector('.tkqc-input');
+      const pageInput = row.querySelector('.page-input');
+      
+      // Clear current values
+      tkqcInput.value = '';
+      pageInput.value = '';
+      
+      // Update TKQC options
+      const tkqcList = tkqcData[employeeName] || [];
+      tkqcInput.setAttribute('list', 'tkqc-list-' + row.dataset.rowId);
+      let tkqcDatalist = document.getElementById('tkqc-list-' + row.dataset.rowId);
+      if (!tkqcDatalist) {
+        tkqcDatalist = document.createElement('datalist');
+        tkqcDatalist.id = 'tkqc-list-' + row.dataset.rowId;
+        document.body.appendChild(tkqcDatalist);
+      }
+      tkqcDatalist.innerHTML = tkqcList.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
+      
+      // Update Page options
+      const pageList = pageData[employeeName] || [];
+      pageInput.setAttribute('list', 'page-list-' + row.dataset.rowId);
+      let pageDatalist = document.getElementById('page-list-' + row.dataset.rowId);
+      if (!pageDatalist) {
+        pageDatalist = document.createElement('datalist');
+        pageDatalist.id = 'page-list-' + row.dataset.rowId;
+        document.body.appendChild(pageDatalist);
+      }
+      pageDatalist.innerHTML = pageList.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
+      
+      updateStatus(`Đã cập nhật ${tkqcList.length} TKQC và ${pageList.length} Page cho ${employeeName}`);
+    }
+
+    // Create a new row
+    function createRow(data = {}) {
+      rowCounter++;
+      const rowId = 'row-' + rowCounter;
+      
+      const tr = document.createElement('tr');
+      tr.dataset.rowId = rowId;
       
       tr.innerHTML = `
         <td class="action-buttons">
@@ -357,215 +346,276 @@
           <select name="Tên" class="name-select">
             <option value="">-- Chọn tên --</option>
             ${employeeList.map(name => 
-              `<option value="${escapeAttr(name)}" ${data.Tên === name ? "selected" : ""}>${name}</option>`
-            ).join("")}
+              `<option value="${escapeHtml(name)}" ${data.Tên === name ? 'selected' : ''}>${escapeHtml(name)}</option>`
+            ).join('')}
           </select>
         </td>
         <td>
-          <input name="Ngày" type="date" value="${data.Ngày ? formatDate(data.Ngày) : getToday()}">
+          <input name="Ngày" type="date" value="${data.Ngày || getToday()}">
         </td>
         <td>
           <select name="ca">
+            <option value="">-- Chọn ca --</option>
             ${shiftList.map(shift => 
-              `<option value="${escapeAttr(shift)}" ${data.ca === shift ? "selected" : ""}>${shift}</option>`
-            ).join("")}
+              `<option value="${escapeHtml(shift)}" ${data.ca === shift ? 'selected' : ''}>${escapeHtml(shift)}</option>`
+            ).join('')}
           </select>
         </td>
         <td>
-          <input name="Sản_phẩm" list="productList_${uniqueId}" value="${data.Sản_phẩm || ""}">
-          <datalist id="productList_${uniqueId}">
-            ${productList.map(product => `<option value="${escapeAttr(product)}"></option>`).join("")}
+          <input name="Sản_phẩm" list="product-list-${rowId}" value="${escapeHtml(data.Sản_phẩm || '')}">
+          <datalist id="product-list-${rowId}">
+            ${productList.map(product => `<option value="${escapeHtml(product)}"></option>`).join('')}
           </datalist>
         </td>
         <td>
           <div class="input-container">
-            <input name="Thị_trường" list="marketList_${uniqueId}" value="${data.Thị_trường || ""}">
-            <button type="button" class="addSimilar addSimilarMarket" title="Thêm dòng tương tự (giữ lại thị trường)">➕</button>
-            <datalist id="marketList_${uniqueId}">
-              ${marketList.map(market => `<option value="${escapeAttr(market)}"></option>`).join("")}
+            <input name="Thị_trường" list="market-list-${rowId}" value="${escapeHtml(data.Thị_trường || '')}">
+            <button type="button" class="addSimilar addSimilarMarket" title="Thêm dòng tương tự">➕</button>
+            <datalist id="market-list-${rowId}">
+              ${marketList.map(market => `<option value="${escapeHtml(market)}"></option>`).join('')}
             </datalist>
           </div>
         </td>
         <td>
           <div class="input-container">
-            <input name="page" value="${data.page || ""}" class="page-input" list="pageList_${uniqueId}">
+            <input name="page" class="page-input" value="${escapeHtml(data.page || '')}">
             <button type="button" class="addSimilar addSimilarPage" title="Thêm dòng giống hệt">➕</button>
-            <datalist id="pageList_${uniqueId}" class="page-datalist">
-              ${data.Tên && pageData[data.Tên] ? 
-                pageData[data.Tên].map(p => `<option value="${escapeAttr(p)}"></option>`).join("") : 
-                ""}
-            </datalist>
           </div>
         </td>
         <td>
-          <input name="TKQC" class="tkqc-input" value="${data.TKQC || ""}" list="tkqcList_${uniqueId}">
-          <datalist id="tkqcList_${uniqueId}" class="tkqc-datalist">
-            ${data.Tên && tkqcData[data.Tên] ? 
-              tkqcData[data.Tên].map(tkqc => `<option value="${escapeAttr(tkqc)}"></option>`).join("") : 
-              ""}
-          </datalist>
+          <input name="TKQC" class="tkqc-input" value="${escapeHtml(data.TKQC || '')}">
         </td>
         <td>
-          <input name="CPQC" type="number" value="${data.CPQC || ""}">
+          <input name="CPQC" type="number" value="${data.CPQC || ''}">
         </td>
         <td>
-          <input name="Via_log" value="${data.Via_log || ""}">
+          <input name="Via_log" value="${escapeHtml(data.Via_log || '')}">
         </td>
         <td>
-          <input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ""}">
+          <input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ''}">
         </td>
         <td class="hidden">
-          <input name="id" value="${data.id || "id_" + Date.now()}" readonly>
+          <input name="id" value="${data.id || 'id_' + Date.now()}" readonly>
         </td>
         <td class="hidden">
-          <input name="Team" value="${data.Team || ""}" readonly>
+          <input name="Team" value="${escapeHtml(data.Team || '')}" readonly>
         </td>
         <td class="hidden">
-          <input name="id_NS" value="${data.id_NS || ""}" readonly>
+          <input name="id_NS" value="${escapeHtml(data.id_NS || '')}" readonly>
         </td>
       `;
+
+      // Add event listeners
+      setupRowEventListeners(tr);
       
-      // Add event listener for name selection
-      const nameSelect = tr.querySelector(".name-select");
-      nameSelect.addEventListener("change", function() {
-        debug('Name changed to: ' + this.value);
-        updateDataLists(this, tr);
-      });
-      
-      // Remove row functionality
-      tr.querySelector(".removeRow").addEventListener("click", () => {
-        debug('Removing row');
-        tr.remove();
-      });
-
-      // Add similar row functionality
-      const addSimilar = (keepPageAndBelow) => {
-        const rowData = {
-          id: "id_" + Date.now(),
-          Tên: tr.querySelector('[name="Tên"]').value,
-          Ngày: tr.querySelector('[name="Ngày"]').value,
-          ca: tr.querySelector('[name="ca"]').value,
-          Sản_phẩm: tr.querySelector('[name="Sản_phẩm"]').value,
-          Thị_trường: tr.querySelector('[name="Thị_trường"]').value
-        };
-
-        if (keepPageAndBelow) {
-          rowData.page = tr.querySelector('[name="page"]').value;
-          rowData.TKQC = tr.querySelector('[name="TKQC"]').value;
-          rowData.Via_log = tr.querySelector('[name="Via_log"]').value;
-        }
-
-        const newRow = createRow(rowData, tr);
-        const firstInput = newRow.querySelector(keepPageAndBelow ? '[name="CPQC"]' : '[name="page"]');
-        if (firstInput) firstInput.focus();
-      };
-
-      tr.querySelector(".addSimilarMarket").addEventListener("click", () => addSimilar(false));
-      tr.querySelector(".addSimilarPage").addEventListener("click", () => addSimilar(true));
-
-      // Insert row
-      if (insertAfter) {
-        tbody.insertBefore(tr, insertAfter.nextSibling);
-      } else {
-        tbody.appendChild(tr);
+      // If initial data has employee name, update data lists
+      if (data.Tên) {
+        setTimeout(() => updateDataLists(data.Tên, tr), 0);
       }
-
-      debug('Row created with ID: ' + uniqueId);
+      
+      tableBody.appendChild(tr);
+      updateStatus(`Đã thêm dòng ${rowCounter}`);
+      
       return tr;
     }
 
-    function parseUrlData(dataString) {
-      const result = [];
-      const rows = dataString.split("_b_");
-      const fieldMap = {
-        id: "id",
-        Tên: "Tên", 
-        Ngày: "Ngày",
-        Ca: "ca",
-        Sảnphẩm: "Sản_phẩm",
-        Thịtrường: "Thị_trường", 
-        Page: "page",
-        TKQC: "TKQC",
-        CPQC: "CPQC",
-        Vialog: "Via_log",
-        SốMessCmt: "Số_Mess_Cmt"
-      };
-
-      rows.forEach((rowStr, index) => {
-        if (!rowStr) return;
-        
-        const rowData = {};
-        const fields = rowStr.split("_a_");
-        
-        for (let i = 0; i < fields.length; i += 2) {
-          const fieldName = fields[i];
-          const fieldValue = fields[i + 1];
-          
-          if (fieldMap[fieldName] && fieldValue !== undefined) {
-            rowData[fieldMap[fieldName]] = decodeURIComponent(fieldValue.replace(/\+/g, " "));
-          }
-        }
-        
-        if (Object.keys(rowData).length > 0) {
-          rowData.id = rowData.id || `id_url_${Date.now()}_${index}`;
-          result.push(rowData);
+    // Setup event listeners for a row
+    function setupRowEventListeners(row) {
+      // Employee name change
+      const nameSelect = row.querySelector('.name-select');
+      nameSelect.addEventListener('change', function() {
+        if (this.value) {
+          updateDataLists(this.value, row);
         }
       });
 
-      return result;
+      // Remove row
+      const removeBtn = row.querySelector('.removeRow');
+      removeBtn.addEventListener('click', function() {
+        row.remove();
+        updateStatus('Đã xóa dòng');
+      });
+
+      // Add similar market row
+      const addSimilarMarketBtn = row.querySelector('.addSimilarMarket');
+      addSimilarMarketBtn.addEventListener('click', function() {
+        const newRowData = getRowData(row);
+        delete newRowData.page;
+        delete newRowData.TKQC;
+        delete newRowData.CPQC;
+        delete newRowData.Via_log;
+        delete newRowData.Số_Mess_Cmt;
+        createRow(newRowData);
+      });
+
+      // Add similar page row
+      const addSimilarPageBtn = row.querySelector('.addSimilarPage');
+      addSimilarPageBtn.addEventListener('click', function() {
+        const newRowData = getRowData(row);
+        delete newRowData.CPQC;
+        delete newRowData.Số_Mess_Cmt;
+        createRow(newRowData);
+      });
     }
 
+    // Get data from a row
+    function getRowData(row) {
+      const data = {};
+      const inputs = row.querySelectorAll('input, select');
+      inputs.forEach(input => {
+        if (input.name && input.value) {
+          data[input.name] = input.value;
+        }
+      });
+      return data;
+    }
+
+    // Parse URL data
+    function parseUrlData(dataString) {
+      try {
+        const result = [];
+        const rows = dataString.split('_b_');
+        
+        const fieldMap = {
+          'id': 'id',
+          'Tên': 'Tên',
+          'Ngày': 'Ngày', 
+          'Ca': 'ca',
+          'Sảnphẩm': 'Sản_phẩm',
+          'Thịtrường': 'Thị_trường',
+          'Page': 'page',
+          'TKQC': 'TKQC',
+          'CPQC': 'CPQC',
+          'Vialog': 'Via_log',
+          'SốMessCmt': 'Số_Mess_Cmt',
+          'Team': 'Team',
+          'idNS': 'id_NS'
+        };
+
+        rows.forEach((rowStr, index) => {
+          if (!rowStr.trim()) return;
+          
+          const rowData = {};
+          const fields = rowStr.split('_a_');
+          
+          for (let i = 0; i < fields.length; i += 2) {
+            const fieldName = fields[i];
+            const fieldValue = fields[i + 1];
+            
+            if (fieldMap[fieldName] && fieldValue !== undefined) {
+              rowData[fieldMap[fieldName]] = decodeURIComponent(fieldValue.replace(/\+/g, ' '));
+            }
+          }
+          
+          if (Object.keys(rowData).length > 0) {
+            rowData.id = rowData.id || `id_url_${Date.now()}_${index}`;
+            result.push(rowData);
+          }
+        });
+
+        return result;
+      } catch (error) {
+        console.error('Error parsing URL data:', error);
+        return [];
+      }
+    }
+
+    // Load data from URL
     function loadDataFromUrl() {
       const urlParams = new URLSearchParams(window.location.search);
-      const dataString = urlParams.get("data");
+      const dataString = urlParams.get('data');
       
-      if (!dataString) return false;
-      
+      if (!dataString) {
+        updateStatus('Không có dữ liệu từ URL');
+        return false;
+      }
+
       try {
         const data = parseUrlData(dataString);
-        if (data.length === 0) throw new Error("Dữ liệu trong URL không hợp lệ hoặc rỗng.");
-        
-        tbody.innerHTML = "";
+        if (data.length === 0) {
+          throw new Error('Dữ liệu trong URL không hợp lệ hoặc rỗng');
+        }
+
+        // Clear existing rows
+        tableBody.innerHTML = '';
+        rowCounter = 0;
+
+        // Add data rows
         data.forEach(rowData => createRow(rowData));
-        
-        respMsg.className = "success";
-        respMsg.innerText = `Đã tải thành công ${data.length} dòng từ URL.`;
-        setTimeout(() => respMsg.innerText = "", 5000);
-        
+
+        respMsg.className = 'success';
+        respMsg.textContent = `Đã tải thành công ${data.length} dòng từ URL`;
+        setTimeout(() => respMsg.textContent = '', 5000);
+
+        updateStatus(`Đã tải ${data.length} dòng từ URL`);
         return true;
       } catch (error) {
-        respMsg.className = "error";
-        respMsg.innerText = "Lỗi khi đọc dữ liệu từ URL: " + error.message;
+        respMsg.className = 'error';
+        respMsg.textContent = 'Lỗi khi đọc dữ liệu từ URL: ' + error.message;
+        updateStatus('Lỗi tải URL: ' + error.message);
         return false;
       }
     }
 
+    // Validate form
     function validateForm() {
-      document.querySelectorAll(".error-cell").forEach(cell => cell.classList.remove("error-cell"));
+      // Clear previous errors
+      document.querySelectorAll('.error-cell').forEach(cell => {
+        cell.classList.remove('error-cell');
+      });
+
       let isValid = true;
-      const rows = tbody.querySelectorAll("tr");
+      const rows = tableBody.querySelectorAll('tr');
       
       if (rows.length === 0) {
-        respMsg.className = "error";
-        respMsg.innerText = "Chưa có dòng nào để gửi!";
+        respMsg.className = 'error';
+        respMsg.textContent = 'Chưa có dòng nào để gửi!';
         return false;
       }
 
-      const requiredFields = ["Tên", "Ngày", "ca", "Sản_phẩm", "Thị_trường", "page", "TKQC", "CPQC", "Via_log", "Số_Mess_Cmt"];
+      const requiredFields = ['Tên', 'Ngày', 'ca', 'Sản_phẩm', 'Thị_trường', 'page', 'TKQC', 'CPQC', 'Via_log', 'Số_Mess_Cmt'];
       
       rows.forEach(row => {
         requiredFields.forEach(fieldName => {
           const input = row.querySelector(`[name="${fieldName}"]`);
           if (input && !input.value.trim()) {
             isValid = false;
-            input.closest("td").classList.add("error-cell");
+            input.closest('td').classList.add('error-cell');
           }
         });
       });
 
       if (!isValid) {
-        respMsg.className = "error";
-        respMsg.innerText = "Lỗ
+        respMsg.className = 'error';
+        respMsg.textContent = 'Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ';
+      } else {
+        respMsg.className = '';
+        respMsg.textContent = '';
+      }
+
+      return isValid;
+    }
+
+    // Handle form submission
+    function handleFormSubmit(e) {
+      e.preventDefault();
+      
+      if (!validateForm()) {
+        return;
+      }
+
+      const submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Đang gửi...';
+
+      // Collect all row data
+      const allRows = Array.from(tableBody.querySelectorAll('tr')).map(row => {
+        return getRowData(row);
+      });
+
+      // Prepare form data
+      const formData = new FormData();
+      formData.append('rows', JSON.stringify(allRows
 
 
 
