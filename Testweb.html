@@ -463,6 +463,93 @@
       return isValid;
     }
 
+    // Parse URL data function
+    function parseUrlData(dataString) {
+      try {
+        const result = [];
+        const rows = dataString.split('_b_');
+        
+        const fieldMap = {
+          'id': 'id',
+          'Tên': 'Tên',
+          'Ngày': 'Ngày', 
+          'Ca': 'ca',
+          'Sảnphẩm': 'Sản_phẩm',
+          'Thịtrường': 'Thị_trường',
+          'Page': 'page',
+          'TKQC': 'TKQC',
+          'CPQC': 'CPQC',
+          'Vialog': 'Via_log',
+          'SốMessCmt': 'Số_Mess_Cmt',
+          'Team': 'Team',
+          'idNS': 'id_NS'
+        };
+
+        rows.forEach((rowStr, index) => {
+          if (!rowStr.trim()) return;
+          
+          const rowData = {};
+          const fields = rowStr.split('_a_');
+          
+          for (let i = 0; i < fields.length; i += 2) {
+            const fieldName = fields[i];
+            const fieldValue = fields[i + 1];
+            
+            if (fieldMap[fieldName] && fieldValue !== undefined) {
+              rowData[fieldMap[fieldName]] = decodeURIComponent(fieldValue.replace(/\+/g, ' '));
+            }
+          }
+          
+          if (Object.keys(rowData).length > 0) {
+            rowData.id = rowData.id || `id_url_${Date.now()}_${index}`;
+            result.push(rowData);
+          }
+        });
+
+        return result;
+      } catch (error) {
+        console.error('Error parsing URL data:', error);
+        return [];
+      }
+    }
+
+    // Load data from URL
+    function loadDataFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dataString = urlParams.get('data');
+      
+      if (!dataString) {
+        updateStatus('Không có dữ liệu từ URL');
+        return false;
+      }
+
+      try {
+        const data = parseUrlData(dataString);
+        if (data.length === 0) {
+          throw new Error('Dữ liệu trong URL không hợp lệ hoặc rỗng');
+        }
+
+        // Clear existing rows
+        tableBody.innerHTML = '';
+        rowCounter = 0;
+
+        // Add data rows
+        data.forEach(rowData => addNewRow(rowData));
+
+        respMsg.className = 'success';
+        respMsg.textContent = `Đã tải thành công ${data.length} dòng từ URL`;
+        setTimeout(() => respMsg.textContent = '', 5000);
+
+        updateStatus(`Đã tải ${data.length} dòng từ URL`);
+        return true;
+      } catch (error) {
+        respMsg.className = 'error';
+        respMsg.textContent = 'Lỗi khi đọc dữ liệu từ URL: ' + error.message;
+        updateStatus('Lỗi tải URL: ' + error.message);
+        return false;
+      }
+    }
+
     // Form submission
     function handleSubmit(e) {
       e.preventDefault();
@@ -492,21 +579,38 @@
         }
       });
 
-      // Simulate sending (replace with actual API call)
-      setTimeout(() => {
-        respMsg.className = 'success';
-        respMsg.textContent = `Đã gửi thành công ${allRows.length} dòng dữ liệu!`;
-        
-        // Reset form
-        tableBody.innerHTML = '';
-        rowCounter = 0;
-        addNewRow(); // Add one empty row
-        
+      // Send to Google Apps Script
+      const formData = new FormData();
+      formData.append('rows', JSON.stringify(allRows));
+
+      fetch('https://script.google.com/macros/s/AKfycbwNYTpMqLITYXVaBYIvu3H_xwt3klyJEiuUELR6VFWeZGuwXDUy65eYKB64yeqOlOR5/exec', {
+        method: 'POST',
+        body: formData
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.error) {
+          respMsg.className = 'error';
+          respMsg.textContent = 'Lỗi: ' + result.error;
+        } else {
+          respMsg.className = 'success';
+          respMsg.textContent = result.message || `Đã gửi thành công ${allRows.length} dòng dữ liệu!`;
+          
+          // Reset form
+          tableBody.innerHTML = '';
+          rowCounter = 0;
+          addNewRow(); // Add one empty row
+        }
+      })
+      .catch(error => {
+        respMsg.className = 'error';
+        respMsg.textContent = 'Lỗi khi gửi dữ liệu: ' + error.message;
+      })
+      .finally(() => {
         submitBtn.disabled = false;
         submitBtn.textContent = '🚀 Gửi báo cáo';
-        
-        updateStatus('Gửi báo cáo thành công');
-      }, 1000);
+        updateStatus('Hoàn thành gửi báo cáo');
+      });
     }
 
     // Event listeners
@@ -519,7 +623,14 @@
     // Initialize with one empty row
     document.addEventListener('DOMContentLoaded', () => {
       updateStatus('Ứng dụng đã sẵn sàng');
-      addNewRow();
+      
+      // Try to load data from URL first
+      const hasUrlData = loadDataFromUrl();
+      
+      // If no URL data, add one empty row
+      if (!hasUrlData) {
+        addNewRow();
+      }
     });
   </script>
 </body>
