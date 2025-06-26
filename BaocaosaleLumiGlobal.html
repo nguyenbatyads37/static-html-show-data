@@ -100,9 +100,9 @@
     }
     
     td input, td select {
-        white-space: normal; /* Cho phép text wrap */
-        height: auto;       /* Chiều cao tự động theo nội dung */
-        min-height: 38px;   /* Đảm bảo chiều cao tối thiểu để giao diện không bị vỡ */
+        white-space: normal;
+        height: auto;
+        min-height: 38px;
     }
     
     input:focus, select:focus {
@@ -176,30 +176,16 @@
     }
 
     /* CSS để điều chỉnh chiều rộng cột */
-    #dataTable th:nth-child(1), /* Hành động */
-    #dataTable td:nth-child(1) {
-      width: 80px;
-    }
+    #dataTable th:nth-child(1) { width: 80px; } /* Hành động */
 
     #dataTable th:nth-child(2), /* Tên */
-    #dataTable td:nth-child(2),
-    #dataTable th:nth-child(5) /* Sản phẩm */
-    #dataTable td:nth-child(5) {
-      width: 200px;
-    }
+    #dataTable th:nth-child(5) { width: 250px; } /* Sản phẩm */
     
+    #dataTable th:nth-child(3), /* Ngày */
+    #dataTable th:nth-child(4), /* Ca */
     #dataTable th:nth-child(6), /* Thị trường */
-    #dataTable td:nth-child(6),
     #dataTable th:nth-child(7), /* Số Mess */
-    #dataTable td:nth-child(7) {
-      width: 120px;
-    }
-    
-    #dataTable th:nth-child(8), /* Phản hồi */
-    #dataTable td:nth-child(8) {
-        width: 250px;
-        white-space: normal; /* Cho phép text wrap */
-    }
+    #dataTable th:nth-child(8) { width: 150px; } /* Phản hồi */
 
   </style>
 </head>
@@ -241,12 +227,12 @@
   </div>
 
   <script>
+    // [ĐÃ THAY ĐỔI] - Loại bỏ feedbackList
     let appData = {
       employeeList: [],
       productList: [],
       marketList: [],
-      shiftList: [],
-      feedbackList: ["Ngon", "Không ngon", "Đắt", "Rẻ", "Ship lâu"]
+      shiftList: []
     };
 
     // DOM elements
@@ -288,7 +274,7 @@
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
       
-      // Các `name` ở đây khớp với `row['key']` trong Google Script
+      // [ĐÃ CẬP NHẬT] - Thay đổi các loại input theo yêu cầu
       row.innerHTML = `
         <td class="action-buttons">
           <button type="button" class="removeRow" onclick="removeRow(this)">❌</button>
@@ -299,7 +285,7 @@
         <td><input name="Sản phẩm" list="product-${rowId}" value="${escapeHtml(data['Sản phẩm'])}"><datalist id="product-${rowId}">${createDatalistOptions(appData.productList || [])}</datalist></td>
         <td><div class="input-container"><input name="Thị trường" list="market-${rowId}" value="${escapeHtml(data['Thị trường'])}"><button type="button" class="addSimilar" onclick="addSimilarRow(this)">➕</button><datalist id="market-${rowId}">${createDatalistOptions(appData.marketList || [])}</datalist></div></td>
         <td><input name="Số Mess" type="number" value="${data['Số Mess'] || ''}"></td>
-        <td><input name="Phản hồi" list="feedback-${rowId}" value="${escapeHtml(data['Phản hồi'])}"><datalist id="feedback-${rowId}">${createDatalistOptions(appData.feedbackList || [])}</datalist></td>
+        <td><input name="Phản hồi" type="number" value="${data['Phản hồi'] || ''}"></td>
         <td class="hidden"><input name="id" value="${data.id || 'id_' + Date.now() + rowCounter}" readonly></td>
       `;
 
@@ -364,57 +350,6 @@
       return isValid;
     }
 
-    function parseUrlData(dataString) {
-      try {
-        const result = [];
-        const rows = dataString.split('_b_');
-        const fieldMap = { 'id': 'id', 'Tên': 'Tên', 'Ngày': 'Ngày', 'Ca': 'Ca', 'Sảnphẩm': 'Sản phẩm', 'Thịtrường': 'Thị trường', 'SốMess': 'Số Mess', 'PhảnHồi': 'Phản hồi' };
-        rows.forEach((rowStr) => {
-          if (!rowStr.trim()) return;
-          const rowData = {};
-          const fields = rowStr.split('_a_');
-          for (let i = 0; i < fields.length; i += 2) {
-            const fieldName = fields[i];
-            const fieldValue = fields[i + 1];
-            if (fieldMap[fieldName] && fieldValue !== undefined) {
-              rowData[fieldMap[fieldName]] = decodeURIComponent(fieldValue.replace(/\+/g, ' '));
-            }
-          }
-          if (Object.keys(rowData).length > 0) result.push(rowData);
-        });
-        return result;
-      } catch (error) {
-        console.error('Error parsing URL data:', error);
-        return [];
-      }
-    }
-
-    function loadDataFromUrl() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const dataString = urlParams.get('data');
-      if (!dataString) {
-        updateStatus('Không có dữ liệu từ URL để tải trước');
-        return false;
-      }
-      try {
-        const data = parseUrlData(dataString);
-        if (data.length === 0) throw new Error('Dữ liệu trong URL không hợp lệ hoặc rỗng');
-        tableBody.innerHTML = '';
-        rowCounter = 0;
-        data.forEach(rowData => addNewRow(rowData));
-        respMsg.className = 'success';
-        respMsg.textContent = `Đã tải thành công ${data.length} dòng từ URL`;
-        setTimeout(() => respMsg.textContent = '', 5000);
-        updateStatus(`Đã tải ${data.length} dòng từ URL`);
-        return true;
-      } catch (error) {
-        respMsg.className = 'error';
-        respMsg.textContent = 'Lỗi khi đọc dữ liệu từ URL: ' + error.message;
-        updateStatus('Lỗi tải URL: ' + error.message, true);
-        return false;
-      }
-    }
-
     function handleSubmit(e) {
       e.preventDefault();
       if (!validateForm()) return;
@@ -476,17 +411,12 @@
             appData.productList = loadedData.productList || [];
             appData.marketList = loadedData.marketList || [];
             appData.shiftList = loadedData.shiftList || [];
-            if(loadedData.feedbackList && loadedData.feedbackList.length > 0) {
-                 appData.feedbackList = loadedData.feedbackList;
-            }
             
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
             updateStatus('Tải dữ liệu thành công. Ứng dụng đã sẵn sàng!');
 
-            if (!loadDataFromUrl()) {
-                addNewRow();
-            }
+            addNewRow();
 
         } catch(error) {
             console.error("Lỗi nghiêm trọng khi tải dữ liệu:", error);
