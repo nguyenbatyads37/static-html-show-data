@@ -64,6 +64,7 @@
       width: 100%;
       border-collapse: collapse;
       background-color: white;
+      table-layout: fixed; /* Giúp kiểm soát chiều rộng cột tốt hơn */
     }
     
     th, td {
@@ -72,6 +73,7 @@
       text-align: left;
       vertical-align: middle;
       white-space: nowrap;
+      word-wrap: break-word; /* Hỗ trợ ngắt từ nếu cần */
     }
     
     th {
@@ -173,7 +175,7 @@
       color: #495057;
     }
 
-    /* [ĐÃ CẬP NHẬT] CSS để điều chỉnh chiều rộng cột */
+    /* CSS để điều chỉnh chiều rộng cột */
     #dataTable th:nth-child(1), /* Hành động */
     #dataTable td:nth-child(1) {
       width: 80px;
@@ -183,7 +185,7 @@
     #dataTable td:nth-child(2),
     #dataTable th:nth-child(5) /* Sản phẩm */
     #dataTable td:nth-child(5) {
-      width: 250px;
+      width: 200px;
     }
     
     #dataTable th:nth-child(6), /* Thị trường */
@@ -191,6 +193,12 @@
     #dataTable th:nth-child(7), /* Số Mess */
     #dataTable td:nth-child(7) {
       width: 120px;
+    }
+    
+    #dataTable th:nth-child(8), /* Phản hồi */
+    #dataTable td:nth-child(8) {
+        width: 250px;
+        white-space: normal; /* Cho phép text wrap */
     }
 
   </style>
@@ -210,7 +218,6 @@
       <div class="table-wrapper">
         <table id="dataTable">
           <thead>
-            <!-- [ĐÃ CẬP NHẬT] - Các cột mới -->
             <tr>
               <th>Hành động</th>
               <th>Tên</th>
@@ -219,6 +226,7 @@
               <th>Sản phẩm</th>
               <th>Thị trường</th>
               <th>Số Mess</th>
+              <th>Phản hồi</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -238,6 +246,7 @@
       productList: [],
       marketList: [],
       shiftList: [],
+      feedbackList: ["Ngon", "Không ngon", "Đắt", "Rẻ", "Ship lâu"]
     };
 
     // DOM elements
@@ -279,7 +288,7 @@
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
       
-      // [ĐÃ CẬP NHẬT] - Cấu trúc dòng mới với các trường mới và tên `name` chính xác
+      // Các `name` ở đây khớp với `row['key']` trong Google Script
       row.innerHTML = `
         <td class="action-buttons">
           <button type="button" class="removeRow" onclick="removeRow(this)">❌</button>
@@ -290,6 +299,7 @@
         <td><input name="Sản phẩm" list="product-${rowId}" value="${escapeHtml(data['Sản phẩm'])}"><datalist id="product-${rowId}">${createDatalistOptions(appData.productList || [])}</datalist></td>
         <td><div class="input-container"><input name="Thị trường" list="market-${rowId}" value="${escapeHtml(data['Thị trường'])}"><button type="button" class="addSimilar" onclick="addSimilarRow(this)">➕</button><datalist id="market-${rowId}">${createDatalistOptions(appData.marketList || [])}</datalist></div></td>
         <td><input name="Số Mess" type="number" value="${data['Số Mess'] || ''}"></td>
+        <td><input name="Phản hồi" list="feedback-${rowId}" value="${escapeHtml(data['Phản hồi'])}"><datalist id="feedback-${rowId}">${createDatalistOptions(appData.feedbackList || [])}</datalist></td>
         <td class="hidden"><input name="id" value="${data.id || 'id_' + Date.now() + rowCounter}" readonly></td>
       `;
 
@@ -308,7 +318,6 @@
       updateStatus('Đã xóa dòng');
     }
 
-    // [ĐÃ CẬP NHẬT] - Logic đơn giản hơn cho addSimilarRow
     function addSimilarRow(button) {
       const currentRow = button.closest('tr');
       const data = {};
@@ -318,9 +327,9 @@
         }
       });
 
-      // Xóa ID cũ và các trường cần nhập mới
       delete data.id;
       delete data['Số Mess'];
+      delete data['Phản hồi'];
 
       addNewRow(data, currentRow);
     }
@@ -328,7 +337,6 @@
     window.removeRow = removeRow;
     window.addSimilarRow = addSimilarRow;
 
-    // [ĐÃ CẬP NHẬT] - Validation cho các trường mới
     function validateForm() {
       document.querySelectorAll('.error-cell').forEach(cell => cell.classList.remove('error-cell'));
       let isValid = true;
@@ -338,8 +346,8 @@
         respMsg.textContent = 'Chưa có dòng nào để gửi!';
         return false;
       }
-      // Chú ý các tên có dấu cách
-      const requiredFields = ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường', 'Số Mess'];
+      
+      const requiredFields = ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường', 'Số Mess', 'Phản hồi'];
       rows.forEach(row => {
         requiredFields.forEach(fieldName => {
           const input = row.querySelector(`[name="${fieldName}"]`);
@@ -357,13 +365,10 @@
     }
 
     function parseUrlData(dataString) {
-      // Hàm này có thể không cần thiết nữa nếu không có tính năng tải lại dữ liệu từ URL,
-      // nhưng giữ lại cũng không ảnh hưởng
       try {
         const result = [];
         const rows = dataString.split('_b_');
-        // Cập nhật fieldMap nếu cần
-        const fieldMap = { 'id': 'id', 'Tên': 'Tên', 'Ngày': 'Ngày', 'Ca': 'Ca', 'Sảnphẩm': 'Sản phẩm', 'Thịtrường': 'Thị trường', 'SốMess': 'Số Mess' };
+        const fieldMap = { 'id': 'id', 'Tên': 'Tên', 'Ngày': 'Ngày', 'Ca': 'Ca', 'Sảnphẩm': 'Sản phẩm', 'Thịtrường': 'Thị trường', 'SốMess': 'Số Mess', 'PhảnHồi': 'Phản hồi' };
         rows.forEach((rowStr) => {
           if (!rowStr.trim()) return;
           const rowData = {};
@@ -466,11 +471,14 @@
                 throw new Error(`Lỗi mạng: ${response.status} ${response.statusText}`);
             }
             const loadedData = await response.json();
-            // Chỉ lấy các trường dữ liệu cần thiết
+            
             appData.employeeList = loadedData.employeeList || [];
             appData.productList = loadedData.productList || [];
             appData.marketList = loadedData.marketList || [];
             appData.shiftList = loadedData.shiftList || [];
+            if(loadedData.feedbackList && loadedData.feedbackList.length > 0) {
+                 appData.feedbackList = loadedData.feedbackList;
+            }
             
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
