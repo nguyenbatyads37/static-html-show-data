@@ -258,19 +258,18 @@
         fetch('https://script.google.com/macros/s/AKfycbyHoTt9ez4TFxrazG9ulLV7lABHKuZbv38NxHzYRpElCBPGLSl9JHiMuTJIbRtFbWzD/exec')
         .then(res => res.json())
         .then(data => {
-          // *** FIX: ĐIỀU CHỈNH ĐỂ KHỚP VỚI GOOGLE SCRIPT ***
-          // Đảm bảo các trường số liệu được chuyển thành kiểu Number và có giá trị mặc định là 0 nếu rỗng.
           rawData = data.map(r => ({
-              ...r, // Giữ lại tất cả các trường gốc từ API
+              ...r, 
               team: r.team || 'Khác', 
               ten: r.ten || 'N/A', 
               dsChot: +r.dsChot || 0, 
               cpqc: +r.cpqc || 0, 
               soDon: +r.soDon || 0, 
               soMessCmt: +r.soMessCmt || 0, 
+              doanhsoTC: +r.doanhsoTC || 0,
+              tienShip: +r.tienShip || 0,
               doanhSo: +r.doanhSo || 0, 
               doanhSoSauShip: +r.doanhSoSauShip || 0,
-              doanhsoTC: +r.doanhsoTC || 0,
               kpis: +r.kpis || 0 
             }));
           populateAllFilters(rawData);
@@ -294,7 +293,7 @@
         const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
         const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
         const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
-        const tAll = teamCbId ? document.getElementById(teamCbId).checked : true, selT = tAll ? null : [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value) : null;
+        const tAll = teamCbId ? document.getElementById(teamCbId).checked : true, selT = tAll ? null : [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value);
         return rawData.filter(r => {
             const d = new Date(r.ngay);
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
@@ -391,50 +390,54 @@
         document.getElementById('summary-foot').innerHTML = footerHtml;
     }
 
-    // *** FIX: CẬP NHẬT HÀM ĐỂ SỬ DỤNG ĐÚNG TRƯỜNG DỮ LIỆU VÀ LOGIC KPI ***
+    // ==========================================================
+    // CẬP NHẬT TRONG HÀM NÀY
+    // ==========================================================
     function renderKpiSummary(data) { 
         const sum = {}; 
+        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
         
         data.forEach(r => { 
             const mkt = r.ten;
             if (!sum[mkt]) {
-                // Khởi tạo đối tượng cho nhân sự mới
-                // Thuộc tính `kpiValue` sẽ lưu KPI gốc (không cộng dồn)
+                // 1. Khởi tạo đối tượng cho nhân sự mới
                 sum[mkt] = { 
                     cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, 
-                    kpiValue: r.kpis, // Chỉ gán KPI một lần, không cộng dồn.
+                    // THAY ĐỔI: Không cộng dồn kpis, chỉ lưu lại giá trị kpis gốc của nhân sự
+                    kpiValue: r.kpis, 
                     team: r.team 
                 }; 
             }
-            // Cộng dồn các giá trị khác như bình thường, sử dụng đúng tên trường từ API
+            // Các giá trị khác vẫn cộng dồn bình thường
             sum[mkt].cpqc += r.cpqc;
             sum[mkt].dsChot += r.dsChot;
-            sum[mkt].dsDi += r.doanhSo; // Cột 'DS Đi' lấy từ trường 'doanhSo'
-            sum[mkt].dsSauShip += r.doanhSoSauShip; // Cột 'DS Sau Ship' lấy từ trường 'doanhSoSauShip'
-            sum[mkt].dsThanhCong += r.doanhsoTC; // Cột 'DS Thành Công' lấy từ trường 'doanhsoTC'
+            sum[mkt].dsDi += r.doanhSo; 
+            sum[mkt].dsSauShip += r.doanhSoSauShip;
+            sum[mkt].dsThanhCong += r.doanhsoTC;
         });
         
         const sortedMktKeys = Object.keys(sum).sort((a, b) => {
             return (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b));
         });
 
-        // Khởi tạo lại dòng tổng để tính toán lại từ đầu
-        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
+        // Reset lại total trước khi tính tổng mới
+        total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
 
         let bodyHtml = sortedMktKeys.map((mkt, i) => { 
             const s = sum[mkt]; 
 
-            // Cộng dồn các giá trị vào dòng tổng
+            // Cộng dồn vào dòng tổng
             total.cpqc += s.cpqc;
             total.dsChot += s.dsChot;
             total.dsDi += s.dsDi;
             total.dsSauShip += s.dsSauShip;
             total.dsThanhCong += s.dsThanhCong;
-            total.kpis += s.kpiValue; // Cộng dồn KPI gốc của từng nhân sự vào tổng KPI.
+            // THAY ĐỔI: Cộng dồn giá trị KPI gốc của từng nhân sự vào tổng
+            total.kpis += s.kpiValue;
 
             const cp_ds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0;
             
-            // Tính toán %KPI bằng cách sử dụng giá trị KPI gốc (kpiValue)
+            // 2. TÍNH TOÁN KPI BẰNG CÁCH SỬ DỤNG GIÁ TRỊ KPI GỐC (kpiValue)
             const kpiPercentage = s.kpiValue ? s.dsSauShip / s.kpiValue : 0; 
             const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : ''; 
             
@@ -450,7 +453,7 @@
         document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
 
         const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0;
-        // Tính toán tổng %KPI: Tổng DS Sau Ship / Tổng KPI của các nhân sự có trong bảng
+        // 3. TÍNH TOÁN TỔNG KPI: Tổng DS Sau Ship / Tổng KPI của các nhân sự có trong bảng
         const totalKpiPercentage = total.kpis ? total.dsSauShip / total.kpis : 0;
         
         const footerHtml = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td>
@@ -518,3 +521,4 @@
   </script>
 </body>
 </html>
+
