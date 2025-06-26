@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Báo Cáo MKT LumiGlobal (v2)</title>
+  <title>Báo Cáo Sale LumiGlobal</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -64,7 +64,6 @@
       width: 100%;
       border-collapse: collapse;
       background-color: white;
-      table-layout: fixed; /* Giúp kiểm soát chiều rộng cột tốt hơn */
     }
     
     th, td {
@@ -73,7 +72,6 @@
       text-align: left;
       vertical-align: middle;
       white-space: nowrap;
-      word-wrap: break-word; /* Hỗ trợ ngắt từ nếu cần */
     }
     
     th {
@@ -175,38 +173,33 @@
       color: #495057;
     }
 
-    /* CSS để điều chỉnh chiều rộng cột */
+    /* [ĐÃ CẬP NHẬT] CSS để điều chỉnh chiều rộng cột */
     #dataTable th:nth-child(1), /* Hành động */
     #dataTable td:nth-child(1) {
       width: 80px;
     }
+
+    #dataTable th:nth-child(2), /* Tên */
+    #dataTable td:nth-child(2),
+    #dataTable th:nth-child(5) /* Sản phẩm */
+    #dataTable td:nth-child(5) {
+      width: 250px;
+    }
     
     #dataTable th:nth-child(6), /* Thị trường */
     #dataTable td:nth-child(6),
-    #dataTable th:nth-child(8), /* TKQC */
-    #dataTable td:nth-child(8),
-    #dataTable th:nth-child(9), /* CPQC */
-    #dataTable td:nth-child(9),
-    #dataTable th:nth-child(10), /* Via log */
-    #dataTable td:nth-child(10),
-    #dataTable th:nth-child(11), /* Số Mess+Cmt */
-    #dataTable td:nth-child(11) {
-      width: 120px; /* Đặt chiều rộng cố định nhỏ hơn cho các cột này */
+    #dataTable th:nth-child(7), /* Số Mess */
+    #dataTable td:nth-child(7) {
+      width: 120px;
     }
 
-    #dataTable th:nth-child(7), /* Page */
-    #dataTable td:nth-child(7) {
-      width: 30%; /* Cho phép cột Page chiếm một phần lớn không gian */
-      min-width: 300px; /* Đảm bảo cột có chiều rộng tối thiểu hợp lý */
-      white-space: normal; /* Quan trọng: cho phép nội dung trong ô này xuống dòng */
-    }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header">
       <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="LumiGlobal Logo" class="logo">
-      <h1>Báo Cáo MKT LumiGlobal</h1>
+      <h1>Báo Cáo Sale LumiGlobal</h1>
     </div>
 
     <div class="status" id="status">Đang tải dữ liệu, vui lòng chờ...</div>
@@ -217,6 +210,7 @@
       <div class="table-wrapper">
         <table id="dataTable">
           <thead>
+            <!-- [ĐÃ CẬP NHẬT] - Các cột mới -->
             <tr>
               <th>Hành động</th>
               <th>Tên</th>
@@ -224,11 +218,7 @@
               <th>Ca</th>
               <th>Sản phẩm</th>
               <th>Thị trường</th>
-              <th>Page</th>
-              <th>TKQC</th>
-              <th>CPQC</th>
-              <th>Via log</th>
-              <th>Số Mess+Cmt</th>
+              <th>Số Mess</th>
             </tr>
           </thead>
           <tbody id="tableBody">
@@ -243,14 +233,11 @@
   </div>
 
   <script>
-    // [ĐÃ THAY ĐỔI] - Dữ liệu sẽ được tải từ API thay vì gán cứng
     let appData = {
       employeeList: [],
       productList: [],
       marketList: [],
       shiftList: [],
-      tkqcData: {},
-      pageData: {}
     };
 
     // DOM elements
@@ -271,17 +258,6 @@
       statusDiv.style.backgroundColor = isError ? '#f8d7da' : '#e9ecef';
     }
 
-    function formatCurrency(input) {
-        let rawValue = input.value.replace(/[^0-9]/g, '');
-        if (!rawValue) {
-            input.value = '';
-            return;
-        }
-        const formattedValue = parseInt(rawValue, 10).toLocaleString('vi-VN');
-        input.value = formattedValue;
-    }
-    window.formatCurrency = formatCurrency;
-
     function getToday() {
       const today = new Date();
       return today.toISOString().split('T')[0];
@@ -295,24 +271,6 @@
 
     function createOptions(list, selectedValue = '') { return list.map(item => `<option value="${escapeHtml(item)}" ${item === selectedValue ? 'selected' : ''}>${escapeHtml(item)}</option>`).join(''); }
     function createDatalistOptions(list) { return list.map(item => `<option value="${escapeHtml(item)}"></option>`).join(''); }
-
-    function updateEmployeeData(employeeName, row) {
-      const tkqcInput = row.querySelector('.tkqc-input');
-      const pageInput = row.querySelector('.page-input');
-      const rowId = row.dataset.rowId;
-      
-      tkqcInput.value = '';
-      pageInput.value = '';
-
-      // [ĐÃ THAY ĐỔI] - Sử dụng dữ liệu từ appData
-      const tkqcList = (appData.tkqcData || {})[employeeName] || [];
-      document.getElementById(`tkqc-${rowId}`).innerHTML = createDatalistOptions(tkqcList);
-      
-      const pageList = (appData.pageData || {})[employeeName] || [];
-      document.getElementById(`page-${rowId}`).innerHTML = createDatalistOptions(pageList);
-
-      updateStatus(`Cập nhật dữ liệu cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page`);
-    }
     
     function addNewRow(data = {}, insertAfterElement = null) {
       rowCounter++;
@@ -321,24 +279,18 @@
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
       
-      // [ĐÃ THAY ĐỔI] - Sử dụng dữ liệu từ appData để tạo các dropdown/datalist
+      // [ĐÃ CẬP NHẬT] - Cấu trúc dòng mới với các trường mới và tên `name` chính xác
       row.innerHTML = `
         <td class="action-buttons">
           <button type="button" class="removeRow" onclick="removeRow(this)">❌</button>
         </td>
-        <td><select name="Tên" onchange="updateEmployeeData(this.value, this.closest('tr'))"><option value="">-- Chọn tên --</option>${createOptions(appData.employeeList || [], data.Tên)}</select></td>
+        <td><select name="Tên"><option value="">-- Chọn tên --</option>${createOptions(appData.employeeList || [], data.Tên)}</select></td>
         <td><input name="Ngày" type="date" value="${data.Ngày || getToday()}"></td>
-        <td><select name="ca"><option value="">-- Chọn ca --</option>${createOptions(appData.shiftList || [], data.ca)}</select></td>
-        <td><input name="Sản_phẩm" list="product-${rowId}" value="${escapeHtml(data.Sản_phẩm)}"><datalist id="product-${rowId}">${createDatalistOptions(appData.productList || [])}</datalist></td>
-        <td><div class="input-container"><input name="Thị_trường" list="market-${rowId}" value="${escapeHtml(data.Thị_trường)}"><button type="button" class="addSimilar" onclick="addSimilarRow(this, false)">➕</button><datalist id="market-${rowId}">${createDatalistOptions(appData.marketList || [])}</datalist></div></td>
-        <td><div class="input-container"><input name="page" class="page-input" list="page-${rowId}" value="${escapeHtml(data.page)}"><button type="button" class="addSimilar" onclick="addSimilarRow(this, true)">➕</button><datalist id="page-${rowId}">${createDatalistOptions((appData.pageData || {})[data.Tên] || [])}</datalist></div></td>
-        <td><input name="TKQC" class="tkqc-input" list="tkqc-${rowId}" value="${escapeHtml(data.TKQC)}"><datalist id="tkqc-${rowId}">${createDatalistOptions((appData.tkqcData || {})[data.Tên] || [])}</datalist></td>
-        <td><input name="CPQC" type="text" value="${data.CPQC || ''}" oninput="formatCurrency(this)"></td>
-        <td><input name="Via_log" value="${escapeHtml(data.Via_log)}"></td>
-        <td><input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ''}"></td>
+        <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(appData.shiftList || [], data.Ca)}</select></td>
+        <td><input name="Sản phẩm" list="product-${rowId}" value="${escapeHtml(data['Sản phẩm'])}"><datalist id="product-${rowId}">${createDatalistOptions(appData.productList || [])}</datalist></td>
+        <td><div class="input-container"><input name="Thị trường" list="market-${rowId}" value="${escapeHtml(data['Thị trường'])}"><button type="button" class="addSimilar" onclick="addSimilarRow(this)">➕</button><datalist id="market-${rowId}">${createDatalistOptions(appData.marketList || [])}</datalist></div></td>
+        <td><input name="Số Mess" type="number" value="${data['Số Mess'] || ''}"></td>
         <td class="hidden"><input name="id" value="${data.id || 'id_' + Date.now() + rowCounter}" readonly></td>
-        <td class="hidden"><input name="Team" value="${data.Team || ''}"></td>
-        <td class="hidden"><input name="id_NS" value="${data.id_NS || ''}"></td>
       `;
 
       if (insertAfterElement) {
@@ -347,11 +299,6 @@
         tableBody.appendChild(row);
       }
       
-      const cpqcInput = row.querySelector('[name="CPQC"]');
-      if (cpqcInput.value) {
-          formatCurrency(cpqcInput);
-      }
-
       updateStatus(`Đã thêm dòng ${rowCounter}`);
       return row;
     }
@@ -361,31 +308,27 @@
       updateStatus('Đã xóa dòng');
     }
 
-    function addSimilarRow(button, keepPageData) {
+    // [ĐÃ CẬP NHẬT] - Logic đơn giản hơn cho addSimilarRow
+    function addSimilarRow(button) {
       const currentRow = button.closest('tr');
       const data = {};
       currentRow.querySelectorAll('input, select').forEach(input => {
         if (input.name && input.value) {
-            if (input.name === 'CPQC') {
-                data[input.name] = input.value.replace(/\./g, '');
-            } else {
-                data[input.name] = input.value;
-            }
+          data[input.name] = input.value;
         }
       });
+
+      // Xóa ID cũ và các trường cần nhập mới
       delete data.id;
-      if (!keepPageData) {
-        ['page', 'TKQC', 'CPQC', 'Via_log', 'Số_Mess_Cmt'].forEach(k => delete data[k]);
-      } else {
-        ['CPQC', 'Số_Mess_Cmt'].forEach(k => delete data[k]);
-      }
+      delete data['Số Mess'];
+
       addNewRow(data, currentRow);
     }
 
-    window.updateEmployeeData = updateEmployeeData;
     window.removeRow = removeRow;
     window.addSimilarRow = addSimilarRow;
 
+    // [ĐÃ CẬP NHẬT] - Validation cho các trường mới
     function validateForm() {
       document.querySelectorAll('.error-cell').forEach(cell => cell.classList.remove('error-cell'));
       let isValid = true;
@@ -395,7 +338,8 @@
         respMsg.textContent = 'Chưa có dòng nào để gửi!';
         return false;
       }
-      const requiredFields = ['Tên', 'Ngày', 'ca', 'Sản_phẩm', 'Thị_trường', 'page', 'TKQC', 'CPQC', 'Via_log', 'Số_Mess_Cmt'];
+      // Chú ý các tên có dấu cách
+      const requiredFields = ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường', 'Số Mess'];
       rows.forEach(row => {
         requiredFields.forEach(fieldName => {
           const input = row.querySelector(`[name="${fieldName}"]`);
@@ -413,11 +357,14 @@
     }
 
     function parseUrlData(dataString) {
+      // Hàm này có thể không cần thiết nữa nếu không có tính năng tải lại dữ liệu từ URL,
+      // nhưng giữ lại cũng không ảnh hưởng
       try {
         const result = [];
         const rows = dataString.split('_b_');
-        const fieldMap = { 'id': 'id', 'Tên': 'Tên', 'Ngày': 'Ngày', 'Ca': 'ca', 'Sảnphẩm': 'Sản_phẩm', 'Thịtrường': 'Thị_trường', 'Page': 'page', 'TKQC': 'TKQC', 'CPQC': 'CPQC', 'Vialog': 'Via_log', 'SốMessCmt': 'Số_Mess_Cmt', 'Team': 'Team', 'idNS': 'id_NS' };
-        rows.forEach((rowStr, index) => {
+        // Cập nhật fieldMap nếu cần
+        const fieldMap = { 'id': 'id', 'Tên': 'Tên', 'Ngày': 'Ngày', 'Ca': 'Ca', 'Sảnphẩm': 'Sản phẩm', 'Thịtrường': 'Thị trường', 'SốMess': 'Số Mess' };
+        rows.forEach((rowStr) => {
           if (!rowStr.trim()) return;
           const rowData = {};
           const fields = rowStr.split('_a_');
@@ -473,11 +420,7 @@
         const rowData = {};
         row.querySelectorAll('input, select').forEach(input => {
           if (input.name) {
-            if (input.name === 'CPQC') {
-                rowData[input.name] = input.value.replace(/\./g, '');
-            } else {
-                rowData[input.name] = input.value;
-            }
+             rowData[input.name] = input.value;
           }
         });
         if (Object.keys(rowData).length > 0) allRows.push(rowData);
@@ -486,7 +429,6 @@
       const formData = new FormData();
       formData.append('rows', JSON.stringify(allRows));
       
-      // [ĐÃ THAY ĐỔI] - Sử dụng link Google Script mới để gửi dữ liệu
       const SUBMIT_URL = 'https://script.google.com/macros/s/AKfycbwUAOe09h3bKgaqdAae64a1WSFHkiksKWTnri0TqxuckwX41nQXnLPwJDS3UVGFk3Va/exec';
 
       fetch(SUBMIT_URL, { method: 'POST', body: formData })
@@ -516,7 +458,6 @@
       });
     }
 
-    // [ĐÃ THAY ĐỔI] - Hàm khởi tạo chính, tải dữ liệu trước khi cho phép sử dụng
     async function initializeApp() {
         const DATA_URL = 'https://script.google.com/macros/s/AKfycbwUAOe09h3bKgaqdAae64a1WSFHkiksKWTnri0TqxuckwX41nQXnLPwJDS3UVGFk3Va/exec';
         try {
@@ -524,14 +465,17 @@
             if (!response.ok) {
                 throw new Error(`Lỗi mạng: ${response.status} ${response.statusText}`);
             }
-            appData = await response.json();
+            const loadedData = await response.json();
+            // Chỉ lấy các trường dữ liệu cần thiết
+            appData.employeeList = loadedData.employeeList || [];
+            appData.productList = loadedData.productList || [];
+            appData.marketList = loadedData.marketList || [];
+            appData.shiftList = loadedData.shiftList || [];
             
-            // Kích hoạt các nút sau khi tải dữ liệu thành công
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
             updateStatus('Tải dữ liệu thành công. Ứng dụng đã sẵn sàng!');
 
-            // Tải dữ liệu từ URL (nếu có) hoặc thêm dòng mới
             if (!loadDataFromUrl()) {
                 addNewRow();
             }
