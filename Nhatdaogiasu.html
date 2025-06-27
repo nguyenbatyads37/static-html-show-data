@@ -6,7 +6,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Thông Báo Kết Quả Học Tập</title>
   <style>
-    /* Toàn bộ phần style giữ nguyên như bạn gửi */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       line-height: 1.6;
@@ -312,7 +311,7 @@
     </div>
   </div>
 
-  <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình báo cáo</button>
+  <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình và lưu vào bộ nhớ tạm</button>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script>
     async function loadData() {
@@ -338,7 +337,6 @@
         const json = await res.json();
 
         const data = json[0];
-        // console.log(data);
         
         document.getElementById('report-date').innerText = data["Ngày"] || '';
         document.getElementById('student-name').innerText = data["Học sinh"] || '';
@@ -361,6 +359,70 @@
       const error = document.getElementById('error');
       error.innerText = msg;
       error.style.display = 'block';
+    }
+
+    // Xử lý chụp màn hình và copy vào clipboard
+    document.getElementById('screenshot-btn').addEventListener('click', async function() {
+      const btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Đang xử lý...';
+
+      try {
+        const canvas = await html2canvas(document.getElementById('report-content'));
+        
+        // Phương pháp hiện đại (Chrome/Firefox/Edge)
+        if (navigator.clipboard && navigator.clipboard.write) {
+          canvas.toBlob(async (blob) => {
+            try {
+              await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+              ]);
+              alert('✅ Đã lưu ảnh vào bộ nhớ tạm!');
+            } catch (err) {
+              console.error('Lỗi clipboard hiện đại:', err);
+              fallbackCopy(canvas);
+            }
+          }, 'image/png');
+        } 
+        // Fallback cho trình duyệt cũ
+        else {
+          fallbackCopy(canvas);
+        }
+      } catch (err) {
+        console.error('Lỗi khi chụp màn hình:', err);
+        alert('❌ Có lỗi khi chụp màn hình. Vui lòng thử lại.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Chụp màn hình và lưu vào bộ nhớ tạm';
+      }
+    });
+
+    // Phương pháp dự phòng (copy dataURL)
+    function fallbackCopy(canvas) {
+      const dataURL = canvas.toDataURL('image/png');
+      const input = document.createElement('input');
+      input.value = dataURL;
+      document.body.appendChild(input);
+      input.select();
+      
+      try {
+        document.execCommand('copy');
+        alert('✅ Đã copy ảnh vào clipboard! Dán vào ứng dụng hỗ trợ (như Word, Zalo)');
+      } catch (err) {
+        console.error('Lỗi fallback copy:', err);
+        alert('❌ Trình duyệt không hỗ trợ. Vui lòng tải ảnh xuống thủ công.');
+        downloadImage(canvas);
+      } finally {
+        document.body.removeChild(input);
+      }
+    }
+
+    // Tải ảnh xuống nếu copy thất bại
+    function downloadImage(canvas) {
+      const link = document.createElement('a');
+      link.download = 'Bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
     }
 
     document.addEventListener('DOMContentLoaded', loadData);
