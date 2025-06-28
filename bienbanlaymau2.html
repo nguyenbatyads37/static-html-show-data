@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Biên bản lấy mẫu kiểm nghiệm</title>
+  <script>
+    function getParameterByName(name, url = window.location.href) {
+      name = name.replace(/[\[\]]/g, '\\$&');
+      const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'),
+            results = regex.exec(url);
+      if (!results) return null;
+      if (!results[2]) return '';
+      return decodeURIComponent(results[2].replace(/\+/g, ' '));
+    }
+
+    function parseTableData(dataString) {
+      if (!dataString) return [];
+      const rows = dataString.split('_b_');
+      return rows.map(row => {
+        const cells = row.split('_a_');
+        return cells.map(cell => cell.trim());
+      });
+    }
+
+    function generateTable(tableId, headers, dataArray) {
+      const table = document.getElementById(tableId);
+      if (!table) return;
+      
+      // Xóa nội dung cũ
+      while (table.rows.length > 1) {
+        table.deleteRow(1);
+      }
+      
+      // Thêm dữ liệu mới
+      dataArray.forEach((rowData, index) => {
+        const row = table.insertRow();
+        
+        // Thêm cột STT tự động
+        const sttCell = row.insertCell(0);
+        sttCell.className = 'text-center';
+        sttCell.textContent = index + 1;
+        
+        // Thêm các cột dữ liệu
+        for (let i = 0; i < rowData.length; i++) {
+          const cell = row.insertCell(i + 1);
+          cell.textContent = rowData[i];
+          if (headers[i + 1] && headers[i + 1].align) {
+            cell.className = headers[i + 1].align;
+          }
+        }
+        
+        // Đảm bảo đủ số cột
+        while (row.cells.length < headers.length) {
+          row.insertCell();
+        }
+      });
+    }
+
+    function loadFormData() {
+      // Load thông tin cơ bản
+      const params = [
+        'tenKhachHang', 'maSoThue', 'diaChi', 'nguoiLienHe',
+        'coSoSanXuat', 'maSoCoSo', 'ngayLayMau', 'gioLayMau',
+        'diaDiemLayMau', 'mucDichLayMau', 'quyDinhThamChieu',
+        'nguoiLayMau', 'nguoiChungKien', 'phuongPhapLayMau',
+        'dieuKienBaoQuan', 'ghiChu'
+      ];
+
+      params.forEach(param => {
+        const value = getParameterByName(param);
+        if (value !== null) {
+          const element = document.getElementById(param);
+          if (element) element.textContent = value;
+        }
+      });
+
+      // Load dữ liệu bảng thông tin mẫu
+      const bang1Data = parseTableData(getParameterByName('bang1'));
+      const bang1Headers = [
+        { text: 'STT', align: 'text-center' },
+        { text: 'Tên sản phẩm' },
+        { text: 'Mã lô', align: 'text-center' },
+        { text: 'NSX', align: 'text-center' },
+        { text: 'HSD', align: 'text-center' },
+        { text: 'Số lượng', align: 'text-center' },
+        { text: 'Tình trạng mẫu' }
+      ];
+      generateTable('bangThongTinMau', bang1Headers, bang1Data);
+
+      // Load dữ liệu bảng chỉ tiêu kiểm nghiệm
+      const bang2Data = parseTableData(getParameterByName('bang2'));
+      const bang2Headers = [
+        { text: 'STT', align: 'text-center' },
+        { text: 'Chỉ tiêu' },
+        { text: 'Phương pháp' },
+        { text: 'Giới hạn', align: 'text-center' },
+        { text: 'Ghi chú' }
+      ];
+      generateTable('bangChiTieu', bang2Headers, bang2Data);
+
+      // Cập nhật QR code với thông tin động
+      const qrData = [
+        `BB-${getParameterByName('ngayLayMau') || '0000'}`,
+        `KH-${getParameterByName('tenKhachHang') || 'NO-DATA'}`,
+        `M-${bang1Data.length || 0}`,
+        `CT-${bang2Data.length || 0}`
+      ].join('|');
+      
+      const qrCodeImg = document.getElementById('qrCodeImage');
+      if (qrCodeImg) {
+        qrCodeImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(qrData)}`;
+      }
+    }
+
+    window.onload = loadFormData;
+  </script>
+  <style>
+    @page {
+      size: A4;
+      margin: 2cm;
+    }
+  
+    body {
+      font-family: "Times New Roman", serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+  
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+  
+    .logo {
+      float: left;
+      margin-right: 20px;
+      width: 80px;
+    }
+  
+    .title {
+      font-weight: bold;
+      font-size: 18px;
+      text-transform: uppercase;
+      margin: 10px 0;
+    }
+  
+    .subtitle {
+      font-weight: bold;
+      font-size: 16px;
+      margin: 5px 0;
+    }
+  
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0;
+    }
+  
+    td, th {
+      border: 1px solid black;
+      padding: 8px;
+      vertical-align: top;
+    }
+  
+    .no-border td, .no-border th {
+      border: none;
+      padding: 3px 8px;
+    }
+  
+    .section-title {
+      font-weight: bold;
+      margin: 15px 0 5px 0;
+      font-size: 15px;
+    }
+  
+    .sign-box {
+      height: 100px;
+      text-align: center;
+      vertical-align: bottom;
+      position: relative;
+    }
+  
+    .sign-line {
+      border-top: 1px dashed #333;
+      width: 80%;
+      margin: 0 auto;
+      padding-top: 25px;
+    }
+  
+    .italic {
+      font-style: italic;
+    }
+  
+    .qr-box {
+      text-align: center;
+      margin: 20px 0;
+    }
+  
+    .note {
+      text-align: center;
+      font-size: 12px;
+      margin-top: 5px;
+      font-style: italic;
+    }
+    
+    .text-center {
+      text-align: center;
+    }
+    
+    .text-right {
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div style="overflow: hidden; margin-bottom: 10px;">
+      <img src="https://via.placeholder.com/80x80" alt="Logo" class="logo">
+      <div>
+        <strong>BỘ NÔNG NGHIỆP VÀ PHÁT TRIỂN NÔNG THÔN</strong><br>
+        <strong>CỤC CHẤT LƯỢNG, CHẾ BIẾN VÀ PHÁT TRIỂN THỊ TRƯỜNG</strong><br>
+        <strong>TRUNG TÂM CHẤT LƯỢNG VÙNG 3</strong>
+      </div>
+    </div>
+    
+    <div class="title">biên bản lấy mẫu kiểm nghiệm</div>
+    <div class="subtitle">Số: <u>BBLM-<span id="soBienBan">2025-0256</span></u></div>
+    <div>Ngày lập biên bản: <span id="ngayLapBB">16/05/2025</span></div>
+  </div>
+  
+  <div class="section-title">I. THÔNG TIN KHÁCH HÀNG:</div>
+  <table class="no-border">
+    <tr>
+      <td width="30%"><strong>Tên khách hàng:</strong></td>
+      <td id="tenKhachHang"></td>
+    </tr>
+    <tr>
+      <td><strong>Mã số thuế:</strong></td>
+      <td id="maSoThue"></td>
+    </tr>
+    <tr>
+      <td><strong>Địa chỉ:</strong></td>
+      <td id="diaChi"></td>
+    </tr>
+    <tr>
+      <td><strong>Người liên hệ:</strong></td>
+      <td id="nguoiLienHe"></td>
+    </tr>
+    <tr>
+      <td><strong>Cơ sở sản xuất:</strong></td>
+      <td id="coSoSanXuat"></td>
+    </tr>
+    <tr>
+      <td><strong>Mã số cơ sở:</strong></td>
+      <td id="maSoCoSo"></td>
+    </tr>
+  </table>
+  
+  <div class="section-title">II. THÔNG TIN LẤY MẪU:</div>
+  <table class="no-border">
+    <tr>
+      <td width="30%"><strong>Ngày lấy mẫu:</strong></td>
+      <td id="ngayLayMau"></td>
+      <td width="20%"><strong>Giờ lấy mẫu:</strong></td>
+      <td id="gioLayMau"></td>
+    </tr>
+    <tr>
+      <td><strong>Địa điểm lấy mẫu:</strong></td>
+      <td colspan="3" id="diaDiemLayMau"></td>
+    </tr>
+    <tr>
+      <td><strong>Mục đích lấy mẫu:</strong></td>
+      <td id="mucDichLayMau"></td>
+      <td><strong>Quy định tham chiếu:</strong></td>
+      <td id="quyDinhThamChieu"></td>
+    </tr>
+    <tr>
+      <td><strong>Người lấy mẫu:</strong></td>
+      <td id="nguoiLayMau"></td>
+      <td><strong>Người chứng kiến:</strong></td>
+      <td id="nguoiChungKien"></td>
+    </tr>
+    <tr>
+      <td><strong>Phương pháp lấy mẫu:</strong></td>
+      <td colspan="3" id="phuongPhapLayMau"></td>
+    </tr>
+    <tr>
+      <td><strong>Điều kiện bảo quản:</strong></td>
+      <td colspan="3" id="dieuKienBaoQuan"></td>
+    </tr>
+    <tr>
+      <td><strong>Ghi chú:</strong></td>
+      <td colspan="3" id="ghiChu"></td>
+    </tr>
+  </table>
+  
+  <div class="section-title">III. THÔNG TIN MẪU:</div>
+  <table id="bangThongTinMau">
+    <thead>
+      <tr>
+        <th width="5%">STT</th>
+        <th width="25%">Tên sản phẩm</th>
+        <th width="15%">Mã lô</th>
+        <th width="10%">NSX</th>
+        <th width="10%">HSD</th>
+        <th width="10%">Số lượng</th>
+        <th width="25%">Tình trạng mẫu</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Dữ liệu sẽ được thêm tự động bằng JavaScript -->
+      <tr>
+        <td colspan="7" class="text-center">Không có dữ liệu mẫu</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div class="section-title">IV. CHỈ TIÊU KIỂM NGHIỆM:</div>
+  <table id="bangChiTieu">
+    <thead>
+      <tr>
+        <th width="5%">STT</th>
+        <th width="35%">Chỉ tiêu</th>
+        <th width="20%">Phương pháp</th>
+        <th width="15%">Giới hạn</th>
+        <th width="25%">Ghi chú</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Dữ liệu sẽ được thêm tự động bằng JavaScript -->
+      <tr>
+        <td colspan="5" class="text-center">Không có chỉ tiêu kiểm nghiệm</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div class="section-title">V. CAM KẾT VÀ XÁC NHẬN:</div>
+  <p style="text-align: justify;">
+    Tôi đã đọc và hiểu rõ các quy định về lấy mẫu, kiểm nghiệm của Trung tâm Chất lượng Vùng 3. 
+    Tôi cam kết rằng các thông tin cung cấp trên biên bản là chính xác và chịu trách nhiệm hoàn toàn 
+    về tính xác thực của mẫu đã gửi kiểm nghiệm.
+  </p>
+  
+  <table style="margin-top: 30px;">
+    <tr>
+      <td class="sign-box">
+        <div class="sign-line">
+          <strong>ĐẠI DIỆN KHÁCH HÀNG</strong><br>
+          <span class="italic">(Ký, ghi rõ họ tên và đóng dấu)</span>
+        </div>
+      </td>
+      <td class="sign-box">
+        <div class="sign-line">
+          <strong>CÁN BỘ LẤY MẪU</strong><br>
+          <span class="italic">(Ký, ghi rõ họ tên)</span>
+        </div>
+      </td>
+    </tr>
+  </table>
+  
+  <div class="qr-box">
+    <img id="qrCodeImage" src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=BIEN-BAN-MAU" alt="QR code">
+    <div class="note">
+      Quét mã QR để tra cứu thông tin biên bản
+    </div>
+  </div>
+
+</body>
+</html>
