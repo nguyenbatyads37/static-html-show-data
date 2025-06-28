@@ -40,6 +40,7 @@
     .logo {
       max-height: 50px;
       max-width: 100px;
+      height: auto;
     }
 
     .company-name {
@@ -54,6 +55,7 @@
     .header-image {
       max-height: 50px;
       max-width: 100px;
+      height: auto;
       object-fit: contain;
     }
 
@@ -106,6 +108,7 @@
     .info-row {
       display: flex;
       margin-bottom: 10px;
+      flex-wrap: wrap;
     }
 
     .info-label {
@@ -116,6 +119,7 @@
 
     .info-content {
       flex: 1;
+      min-width: 200px;
     }
 
     .feedback-section {
@@ -225,6 +229,15 @@
         font-size: 16px;
         margin: 8px 0;
       }
+      
+      .info-label {
+        width: 100%;
+        margin-bottom: 5px;
+      }
+      
+      .info-content {
+        width: 100%;
+      }
     }
   </style>
 </head>
@@ -239,12 +252,12 @@
         <div class="logo-container">
           <img
             src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2Fdfb4194c.%E1%BA%A2nh.010114.png"
-            class="logo" crossorigin="anonymous">
+            class="logo" crossorigin="anonymous" alt="Logo Nhất Đạo Gia Sư">
         </div>
         <div class="company-name">NHẤT ĐẠO GIA SƯ</div>
         <img
           src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F3a2368ed.%E1%BA%A2nh.011317.png"
-          class="header-image" crossorigin="anonymous">
+          class="header-image" crossorigin="anonymous" alt="Hình ảnh minh họa">
         <div class="announcement-title">Trân trọng thông báo kết quả học tập ngày: <span id="report-date">Đang
             tải...</span></div>
       </div>
@@ -368,16 +381,28 @@
     function preloadImages() {
       const images = document.querySelectorAll('img');
       const promises = Array.from(images).map(img => {
-        if (img.complete) return Promise.resolve();
+        if (img.complete && img.naturalHeight !== 0) {
+          return Promise.resolve();
+        }
         
         return new Promise((resolve, reject) => {
-          img.onload = resolve;
+          img.onload = () => resolve();
           img.onerror = () => {
             console.warn('Không tải được ảnh:', img.src);
-            // Thay thế bằng ảnh placeholder nếu cần
+            // Thay thế bằng ảnh placeholder
             img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNlZWVlZWUiLz48dGV4dCB4PSI1MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiI+TG9hZCBmYWlsZWQ8L3RleHQ+PC9zdmc+';
             resolve();
           };
+          
+          // Timeout sau 5s nếu ảnh không tải được
+          setTimeout(() => {
+            if (!img.complete) {
+              img.onload = img.onerror = null;
+              console.warn('Timeout tải ảnh:', img.src);
+              img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNlZWVlZWUiLz48dGV4dCB4PSI1MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiI+VGltZW91dDwvdGV4dD48L3N2Zz4=';
+              resolve();
+            }
+          }, 5000);
         });
       });
       
@@ -387,6 +412,7 @@
     // Hàm chụp màn hình nâng cao
     async function captureScreenshot() {
       const btn = document.getElementById('screenshot-btn');
+      const originalText = btn.textContent;
       btn.disabled = true;
       btn.textContent = 'Đang xử lý...';
 
@@ -400,25 +426,29 @@
           allowTaint: true,    // Cho phép hiển thị ảnh bị chặn CORS
           scale: 2,            // Chất lượng cao
           logging: true,       // Hiển thị log để debug
-          backgroundColor: '#ffffff' // Nền trắng
+          backgroundColor: '#ffffff', // Nền trắng
+          ignoreElements: (element) => {
+            // Bỏ qua nút chụp màn hình
+            return element.id === 'screenshot-btn';
+          }
         });
 
         // Thử copy vào clipboard trước
         try {
           await copyToClipboard(canvas);
-          alert('✅ Đã lưu ảnh vào bộ nhớ tạm!');
+          alert('✅ Đã lưu ảnh vào bộ nhớ tạm!\nBạn có thể dán (Ctrl+V) vào Zalo/Word/Facebook.');
         } catch (copyError) {
           console.error('Lỗi clipboard:', copyError);
           // Nếu không copy được thì tải xuống
           downloadImage(canvas);
-          alert('⚠ Đã lưu ảnh xuống máy do trình duyệt hạn chế');
+          alert('⚠ Đã lưu ảnh xuống máy do trình duyệt hạn chế copy vào clipboard');
         }
       } catch (err) {
         console.error('Lỗi khi chụp:', err);
         alert('❌ Lỗi khi chụp màn hình: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Chụp màn hình báo cáo';
+        btn.textContent = originalText;
       }
     }
 
@@ -447,12 +477,16 @@
       const link = document.createElement('a');
       link.download = 'Bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
       link.href = canvas.toDataURL('image/png');
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
     }
 
-    // Gán sự kiện
-    document.getElementById('screenshot-btn').addEventListener('click', captureScreenshot);
-    document.addEventListener('DOMContentLoaded', loadData);
+    // Gán sự kiện khi DOM tải xong
+    document.addEventListener('DOMContentLoaded', () => {
+      loadData();
+      document.getElementById('screenshot-btn').addEventListener('click', captureScreenshot);
+    });
   </script>
 </body>
 </html>
