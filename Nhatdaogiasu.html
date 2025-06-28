@@ -239,12 +239,12 @@
         <div class="logo-container">
           <img
             src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2Fdfb4194c.%E1%BA%A2nh.010114.png"
-            class="logo">
+            class="logo" crossorigin="anonymous">
         </div>
         <div class="company-name">NHẤT ĐẠO GIA SƯ</div>
         <img
           src="https://www.appsheet.com/template/gettablefileurl?appName=B%C3%A1ogi%C3%A1s%E1%BA%A3nph%E1%BA%A9m-325045268&tableName=c%C3%A0i%20%C4%91%E1%BA%B7t%20APP&fileName=C%C3%A0i%20%C4%91%E1%BA%B7t%20APP_Images%2F3a2368ed.%E1%BA%A2nh.011317.png"
-          class="header-image">
+          class="header-image" crossorigin="anonymous">
         <div class="announcement-title">Trân trọng thông báo kết quả học tập ngày: <span id="report-date">Đang
             tải...</span></div>
       </div>
@@ -311,9 +311,11 @@
     </div>
   </div>
 
-  <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình và lưu vào bộ nhớ tạm</button>
+  <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình báo cáo</button>
+  
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script>
+    // Hàm tải dữ liệu từ API
     async function loadData() {
       const loading = document.getElementById('loading');
       const error = document.getElementById('error');
@@ -355,69 +357,92 @@
       }
     }
 
+    // Hàm hiển thị lỗi
     function showError(msg) {
       const error = document.getElementById('error');
       error.innerText = msg;
       error.style.display = 'block';
     }
 
-    // Xử lý chụp màn hình và copy vào clipboard
-    document.getElementById('screenshot-btn').addEventListener('click', async function() {
-      const btn = this;
+    // Hàm đảm bảo tất cả ảnh đã tải xong
+    function preloadImages() {
+      const images = document.querySelectorAll('img');
+      const promises = Array.from(images).map(img => {
+        if (img.complete) return Promise.resolve();
+        
+        return new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => {
+            console.warn('Không tải được ảnh:', img.src);
+            // Thay thế bằng ảnh placeholder nếu cần
+            img.src = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiB2aWV3Qm94PSIwIDAgMTAwIDEwMCI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNlZWVlZWUiLz48dGV4dCB4PSI1MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0iIzY2NiI+TG9hZCBmYWlsZWQ8L3RleHQ+PC9zdmc+';
+            resolve();
+          };
+        });
+      });
+      
+      return Promise.all(promises);
+    }
+
+    // Hàm chụp màn hình nâng cao
+    async function captureScreenshot() {
+      const btn = document.getElementById('screenshot-btn');
       btn.disabled = true;
       btn.textContent = 'Đang xử lý...';
 
       try {
-        const canvas = await html2canvas(document.getElementById('report-content'));
+        // Đợi tất cả ảnh tải xong
+        await preloadImages();
         
-        // Phương pháp hiện đại (Chrome/Firefox/Edge)
-        if (navigator.clipboard && navigator.clipboard.write) {
-          canvas.toBlob(async (blob) => {
-            try {
-              await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': blob })
-              ]);
-              alert('✅ Đã lưu ảnh vào bộ nhớ tạm!');
-            } catch (err) {
-              console.error('Lỗi clipboard hiện đại:', err);
-              fallbackCopy(canvas);
-            }
-          }, 'image/png');
-        } 
-        // Fallback cho trình duyệt cũ
-        else {
-          fallbackCopy(canvas);
+        // Chụp màn hình với cấu hình tối ưu
+        const canvas = await html2canvas(document.getElementById('report-content'), {
+          useCORS: true,       // Cho phép tải ảnh cross-origin
+          allowTaint: true,    // Cho phép hiển thị ảnh bị chặn CORS
+          scale: 2,            // Chất lượng cao
+          logging: true,       // Hiển thị log để debug
+          backgroundColor: '#ffffff' // Nền trắng
+        });
+
+        // Thử copy vào clipboard trước
+        try {
+          await copyToClipboard(canvas);
+          alert('✅ Đã lưu ảnh vào bộ nhớ tạm!');
+        } catch (copyError) {
+          console.error('Lỗi clipboard:', copyError);
+          // Nếu không copy được thì tải xuống
+          downloadImage(canvas);
+          alert('⚠ Đã lưu ảnh xuống máy do trình duyệt hạn chế');
         }
       } catch (err) {
-        console.error('Lỗi khi chụp màn hình:', err);
-        alert('❌ Có lỗi khi chụp màn hình. Vui lòng thử lại.');
+        console.error('Lỗi khi chụp:', err);
+        alert('❌ Lỗi khi chụp màn hình: ' + err.message);
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Chụp màn hình và lưu vào bộ nhớ tạm';
-      }
-    });
-
-    // Phương pháp dự phòng (copy dataURL)
-    function fallbackCopy(canvas) {
-      const dataURL = canvas.toDataURL('image/png');
-      const input = document.createElement('input');
-      input.value = dataURL;
-      document.body.appendChild(input);
-      input.select();
-      
-      try {
-        document.execCommand('copy');
-        alert('✅ Đã copy ảnh vào clipboard! Dán vào ứng dụng hỗ trợ (như Word, Zalo)');
-      } catch (err) {
-        console.error('Lỗi fallback copy:', err);
-        alert('❌ Trình duyệt không hỗ trợ. Vui lòng tải ảnh xuống thủ công.');
-        downloadImage(canvas);
-      } finally {
-        document.body.removeChild(input);
+        btn.textContent = 'Chụp màn hình báo cáo';
       }
     }
 
-    // Tải ảnh xuống nếu copy thất bại
+    // Hàm copy vào clipboard
+    async function copyToClipboard(canvas) {
+      return new Promise((resolve, reject) => {
+        canvas.toBlob(async (blob) => {
+          try {
+            if (navigator.clipboard && navigator.clipboard.write) {
+              await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+              ]);
+              resolve();
+            } else {
+              reject(new Error('Clipboard API không được hỗ trợ'));
+            }
+          } catch (err) {
+            reject(err);
+          }
+        }, 'image/png');
+      });
+    }
+
+    // Hàm tải ảnh xuống
     function downloadImage(canvas) {
       const link = document.createElement('a');
       link.download = 'Bao-cao-hoc-tap-' + new Date().toISOString().slice(0, 10) + '.png';
@@ -425,10 +450,11 @@
       link.click();
     }
 
+    // Gán sự kiện
+    document.getElementById('screenshot-btn').addEventListener('click', captureScreenshot);
     document.addEventListener('DOMContentLoaded', loadData);
   </script>
 </body>
-
 </html>
 
 
