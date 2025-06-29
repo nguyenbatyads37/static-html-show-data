@@ -1,123 +1,383 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Danh sách lương</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      line-height: 1.6;
-    }
-    .container {
-      max-width: 1000px;
-      margin: 0 auto;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    .info-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-    }
-    .info-table th,
-    .info-table td {
-      border: 1px solid #ddd;
-      padding: 8px;
-      text-align: left;
-      font-size: 14px;
-    }
-    .info-table th {
-      background-color: #f2f2f2;
-    }
-    .loading,
-    .not-found {
-      text-align: center;
-      font-size: 16px;
-      padding: 20px;
-    }
-    .error-details {
-      color: #d9534f;
-      background-color: #f8d7da;
-      border: 1px solid #f5c6cb;
-      padding: 10px;
-      margin: 10px 0;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Phiếu báo lương</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            color: #2c3e50;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .info-table th, .info-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .info-table th {
+            background-color: #f2f2f2;
+            width: 30%;
+        }
+        .signature {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 50px;
+        }
+        .signature div {
+            text-align: center;
+            width: 40%;
+        }
+        .not-found {
+            color: red;
+            text-align: center;
+            font-size: 18px;
+            padding: 20px;
+        }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            padding: 20px;
+        }
+        .error-details {
+            color: #d9534f;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .debug-info {
+            background-color: #f0f8ff;
+            border: 1px solid #007bff;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Danh sách bảng lương</h1>
-    <div id="salary-info">
-      <p class="loading">Đang tải dữ liệu...</p>
+    <div class="container">
+        <div class="header">
+            <h1>PHIẾU BÁO LƯƠNG</h1>
+            <p>Tháng <span id="thang-display"></span> năm <span id="nam-display"></span></p>
+        </div>
+
+        <div id="salary-info">
+            <p class="loading">Đang tải dữ liệu...</p>
+        </div>
     </div>
-  </div>
 
-  <script>
-    // TODO: Thay bằng URL Web App của bạn (kết thúc bằng /exec)
-    const apiUrl = 'https://script.google.com/macros/s/AKfycbx…YourID…/exec';
-
-    // Tải dữ liệu từ server
-    async function fetchSalaryData() {
-      const container = document.getElementById('salary-info');
-      try {
-        // Thêm timestamp để tránh cache
-        const response = await fetch(`${apiUrl}?t=${Date.now()}`);
-        if (!response.ok) {
-          throw new Error('HTTP status ' + response.status);
+    <script>
+        // Lấy tham số từ URL
+        function getQueryParam(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
         }
-        const data = await response.json();
-        displaySalaryList(data);
-      } catch (err) {
-        container.innerHTML = `
-          <div class="not-found">
-            <p>Có lỗi xảy ra khi tải dữ liệu</p>
-            <div class="error-details">${err.message}</div>
-          </div>
-        `;
-      }
-    }
 
-    // Hiển thị mảng JSON thành bảng HTML
-    function displaySalaryList(data) {
-      const container = document.getElementById('salary-info');
+        // Định dạng số tiền
+        function formatCurrency(amount) {
+            if (amount == null || amount === '' || isNaN(amount)) return '0 ₫';
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        }
 
-      if (!Array.isArray(data) || data.length === 0) {
-        container.innerHTML = '<p class="not-found">Không có dữ liệu</p>';
-        return;
-      }
+        // Lấy tham số URL
+        const urlMaNV  = getQueryParam('maNV');
+        const urlNam   = getQueryParam('nam');
+        const urlThang = getQueryParam('thang');
 
-      // Lấy headers từ keys của object đầu tiên
-      const headers = Object.keys(data[0]);
+        console.log('URL Parameters:', { maNV: urlMaNV, nam: urlNam, thang: urlThang });
 
-      // Xây markup cho header
-      let html = '<table class="info-table"><thead><tr>';
-      headers.forEach(h => {
-        html += `<th>${h}</th>`;
-      });
-      html += '</tr></thead><tbody>';
+        // Hiển thị tháng và năm
+        document.getElementById('thang-display').textContent = urlThang || '';
+        document.getElementById('nam-display').textContent   = urlNam   || '';
 
-      // Xây rows
-      data.forEach(row => {
-        html += '<tr>';
-        headers.forEach(h => {
-          let cell = row[h] != null ? row[h] : '';
-          html += `<td>${cell}</td>`;
-        });
-        html += '</tr>';
-      });
+        // API endpoint
+        const apiUrl = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjt3SO7l1RmfkhLrCDxzl6jhpSapVmL8EI3xAjg1L6U81DwsyGcbhXzn6BMWrzRu1f4Zlt8otkuVxeEA7mBvMWwJsLpvrlkllX0FMvwMz62MHKnTo6IdkLNkSiDldlgI6QIJQWaT3VWU2PYauYy1aHVNC-dJhEcrXvQoCR6JuLuyzOuC_6ewMIBzircHcZdPTVi3kFAFI5_CON5pO7q4hda9fbbNjVEFvzisEMLe3sb0lHOGZv1-Hr0ftrENydoi5xWPzWEW7KCOiZYjnRT-dMo9hH27Q&lib=MROMISK0WUrf959LmoPO6Q_yFg_78DJ08';
 
-      html += '</tbody></table>';
-      container.innerHTML = html;
-    }
+        // Fetch dữ liệu
+        async function fetchSalaryData() {
+            const container = document.getElementById('salary-info');
+            try {
+                // Thêm debug info
+                container.innerHTML = `
+                    <div class="loading">Đang tải dữ liệu...</div>
+                    <div class="debug-info">
+                        <strong>Debug Info:</strong><br>
+                        - Mã NV: ${urlMaNV}<br>
+                        - Năm: ${urlNam}<br>
+                        - Tháng: ${urlThang}<br>
+                        - API URL: ${apiUrl}
+                    </div>
+                `;
 
-    document.addEventListener('DOMContentLoaded', fetchSalaryData);
-  </script>
+                // Thử 2 cách gọi API
+                let response;
+                let finalUrl;
+                
+                // Cách 1: Với parameters (cho trường hợp API có filter)
+                if (urlMaNV && urlNam && urlThang) {
+                    const params = new URLSearchParams({
+                        maNV:  urlMaNV,
+                        nam:   urlNam,
+                        thang: urlThang,
+                        t:     Date.now().toString()
+                    });
+                    finalUrl = `${apiUrl}&${params}`;
+                } else {
+                    // Cách 2: Không có parameters (lấy tất cả data)
+                    finalUrl = `${apiUrl}&t=${Date.now()}`;
+                }
+
+                console.log('Request URL:', finalUrl);
+                
+                response = await fetch(finalUrl, { 
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'application/json'
+                    },
+                    mode: 'cors'
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const text = await response.text();
+                console.log('Raw response text:', text);
+
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (parseError) {
+                    console.error('JSON parse error:', parseError);
+                    throw new Error(`Dữ liệu trả về không phải JSON hợp lệ: ${text.substring(0, 100)}...`);
+                }
+
+                console.log('Parsed data:', data);
+                console.log('Data type:', Array.isArray(data) ? 'Array' : typeof data);
+                
+                if (Array.isArray(data)) {
+                    console.log('Array length:', data.length);
+                    data.forEach((item, index) => {
+                        console.log(`Item ${index}:`, item);
+                    });
+                }
+
+                // Tìm bản ghi phù hợp với nhiều cách khác nhau
+                let record = findMatchingRecord(data);
+                
+                displaySalaryInfo(record, data);
+            } catch (err) {
+                console.error('Fetch error:', err);
+                container.innerHTML = `
+                    <div class="not-found">
+                        <p>Có lỗi xảy ra khi tải dữ liệu</p>
+                        <div class="error-details">
+                            <strong>Chi tiết lỗi:</strong><br>${err.message}
+                        </div>
+                        <p>Kiểm tra lại:</p>
+                        <ul>
+                            <li>Kết nối mạng</li>
+                            <li>URL API và quyền truy cập</li>
+                            <li>Tham số <em>maNV, nam, thang</em></li>
+                        </ul>
+                        <div class="debug-info">
+                            <strong>Thông tin debug:</strong><br>
+                            - Mã NV: ${urlMaNV}<br>
+                            - Năm: ${urlNam}<br>
+                            - Tháng: ${urlThang}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Tìm bản ghi khớp với nhiều cách khác nhau
+        function findMatchingRecord(data) {
+            if (!urlMaNV || !urlNam || !urlThang) {
+                console.log('Missing required parameters');
+                return null;
+            }
+
+            let record = null;
+
+            if (Array.isArray(data)) {
+                console.log('Searching in array of', data.length, 'records');
+                
+                // Log tất cả các keys có sẵn để debug
+                if (data.length > 0) {
+                    console.log('Available keys in first record:', Object.keys(data[0]));
+                }
+
+                // Thử các cách khớp khác nhau
+                const searchVariations = [
+                    // Cách 1: Khớp chính xác với các tên field phổ biến
+                    (r) => {
+                        const maNV = r.maNV || r.MaNV || r.manv || r.MANV || r.mnv || r.MNV || r.id || r.ID || r.employeeId;
+                        const nam = r.nam || r.Nam || r.NAM || r.year || r.Year || r.YEAR;
+                        const thang = r.thang || r.Thang || r.THANG || r.month || r.Month || r.MONTH;
+                        
+                        console.log('Trying exact match:', { maNV, nam, thang });
+                        return String(maNV) === urlMaNV &&
+                               String(nam) === urlNam &&
+                               String(thang) === urlThang;
+                    },
+                    
+                    // Cách 2: Khớp không phân biệt chữ hoa/thường
+                    (r) => {
+                        const maNV = r.maNV || r.MaNV || r.manv || r.MANV || r.mnv || r.MNV || r.id || r.ID || r.employeeId;
+                        const nam = r.nam || r.Nam || r.NAM || r.year || r.Year || r.YEAR;
+                        const thang = r.thang || r.Thang || r.THANG || r.month || r.Month || r.MONTH;
+                        
+                        return String(maNV).toLowerCase() === urlMaNV.toLowerCase() &&
+                               String(nam) === urlNam &&
+                               String(thang) === urlThang;
+                    },
+                    
+                    // Cách 3: Convert to numbers
+                    (r) => {
+                        const maNV = r.maNV || r.MaNV || r.manv || r.MANV || r.mnv || r.MNV || r.id || r.ID || r.employeeId;
+                        const nam = r.nam || r.Nam || r.NAM || r.year || r.Year || r.YEAR;
+                        const thang = r.thang || r.Thang || r.THANG || r.month || r.Month || r.MONTH;
+                        
+                        return String(maNV) === urlMaNV &&
+                               Number(nam) === Number(urlNam) &&
+                               Number(thang) === Number(urlThang);
+                    },
+                    
+                    // Cách 4: Chỉ dựa vào maNV (nếu data đã được filter)
+                    (r) => {
+                        const maNV = r.maNV || r.MaNV || r.manv || r.MANV || r.mnv || r.MNV || r.id || r.ID || r.employeeId;
+                        return String(maNV) === urlMaNV;
+                    }
+                ];
+
+                for (let i = 0; i < searchVariations.length; i++) {
+                    record = data.find(searchVariations[i]);
+                    if (record) {
+                        console.log(`Found record using method ${i + 1}:`, record);
+                        break;
+                    }
+                }
+                
+                // Nếu vẫn không tìm thấy, thử lấy record đầu tiên (có thể API đã filter)
+                if (!record && data.length === 1) {
+                    console.log('Using first record as fallback:', data[0]);
+                    record = data[0];
+                }
+                
+            } else if (data && typeof data === 'object') {
+                console.log('Data is single object:', data);
+                record = data;
+            }
+
+            return record;
+        }
+
+        // Hiển thị thông tin lương
+        function displaySalaryInfo(r, allData) {
+            const container = document.getElementById('salary-info');
+            
+            if (r) {
+                // Xử lý các tên field có thể khác nhau
+                const getValue = (possibleFields) => {
+                    if (typeof possibleFields === 'string') {
+                        possibleFields = [possibleFields];
+                    }
+                    for (let field of possibleFields) {
+                        if (r[field] !== undefined && r[field] !== null && r[field] !== '') {
+                            return r[field];
+                        }
+                    }
+                    return 'N/A';
+                };
+
+                const getCurrency = (possibleFields) => {
+                    if (typeof possibleFields === 'string') {
+                        possibleFields = [possibleFields];
+                    }
+                    for (let field of possibleFields) {
+                        const value = r[field];
+                        if (value !== undefined && value !== null && value !== '' && !isNaN(value)) {
+                            return formatCurrency(value);
+                        }
+                    }
+                    return formatCurrency(0);
+                };
+
+                container.innerHTML = `
+                    <table class="info-table">
+                        <tr><th>Họ và tên:</th><td>${getValue(['hoTen', 'hoVaTen', 'ten', 'name', 'fullName'])}</td></tr>
+                        <tr><th>Phòng ban:</th><td>${getValue(['phongBan', 'department', 'dept'])}</td></tr>
+                        <tr><th>Chức vụ:</th><td>${getValue(['chucVu', 'position', 'role'])}</td></tr>
+                        <tr><th>Lương cơ bản:</th><td>${getCurrency(['luongCoBan', 'basicSalary', 'luongcoban'])}</td></tr>
+                        <tr><th>Phụ cấp:</th><td>${getCurrency(['phuCap', 'allowance', 'phucap'])}</td></tr>
+                        <tr><th>Thưởng:</th><td>${getCurrency(['thuong', 'bonus'])}</td></tr>
+                        <tr><th>Phạt:</th><td>${getCurrency(['phat', 'penalty', 'fine'])}</td></tr>
+                        <tr><th>Lương thực lãnh:</th><td><strong>${getCurrency(['luongThucLanh', 'netSalary', 'luongthuclanh', 'totalSalary'])}</strong></td></tr>
+                        <tr><th>Ngày công:</th><td>${getValue(['ngayCong', 'workDays', 'ngaycong'])}</td></tr>
+                        <tr><th>Ghi chú:</th><td>${getValue(['ghiChu', 'note', 'ghichu', 'notes']) || 'Không có'}</td></tr>
+                    </table>
+                    <div class="signature">
+                        <div><p>Người lập</p><p>(Ký, ghi rõ họ tên)</p></div>
+                        <div><p>Người nhận</p><p>(Ký, ghi rõ họ tên)</p></div>
+                    </div>
+                `;
+            } else {
+                let debugInfo = '';
+                if (Array.isArray(allData) && allData.length > 0) {
+                    debugInfo = `
+                        <div class="debug-info">
+                            <strong>Dữ liệu có sẵn:</strong><br>
+                            Tổng số ${allData.length} bản ghi<br>
+                            <strong>Mẫu bản ghi đầu tiên:</strong><br>
+                            ${JSON.stringify(allData[0], null, 2)}
+                        </div>
+                    `;
+                }
+
+                container.innerHTML = `
+                    <div class="not-found">
+                        <p>Không tìm thấy thông tin lương</p>
+                        <p>Tham số tìm kiếm:</p>
+                        <ul>
+                            <li>Mã NV: ${urlMaNV || '—'}</li>
+                            <li>Năm: ${urlNam   || '—'}</li>
+                            <li>Tháng: ${urlThang|| '—'}</li>
+                        </ul>
+                        ${debugInfo}
+                    </div>
+                `;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchSalaryData);
+    </script>
 </body>
 </html>
 
