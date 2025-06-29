@@ -234,7 +234,6 @@
     </div>
 
     <div class="container">
-      <!-- Nội dung báo cáo giữ nguyên như trước -->
       <div class="info-section">
         <div class="info-row">
           <div class="info-label">Học sinh:</div>
@@ -304,7 +303,15 @@
       const loading = document.getElementById('loading');
       const error = document.getElementById('error');
       const url = 'https://api.appsheet.com/api/v2/apps/c84cee94-f0f0-49c5-84e7-06863a4472ad/tables/Nhật ký giảng dạy/Action';
-      const id = new URLSearchParams(window.location.search).get('id');
+      
+      // Lấy ID từ URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const id = urlParams.get('id');
+      
+      if (!id) {
+        showError("Không tìm thấy ID trong URL. Vui lòng truy cập với URL có chứa ID (ví dụ: ?id=73bc93a7)");
+        return;
+      }
 
       try {
         const res = await fetch(url, {
@@ -316,26 +323,56 @@
           body: JSON.stringify({
             "Action": "Find",
             "Properties": {
-              "Selector": "Filter(Nhật ký giảng dạy, [id] = '" + id + "')",
+              "Selector": `Filter([Nhật ký giảng dạy], [id] = "${id}")`
             }
           })
         });
+        
+        if (!res.ok) {
+          throw new Error(`Lỗi HTTP: ${res.status}`);
+        }
+        
         const json = await res.json();
+
+        if (!json || json.length === 0) {
+          showError("Không tìm thấy dữ liệu với ID này. Vui lòng kiểm tra lại ID.");
+          return;
+        }
 
         const data = json[0];
         
-        document.getElementById('report-date').textContent = data["Ngày"] || '';
-        document.getElementById('student-name').textContent = data["Học sinh"] || '';
-        document.getElementById('class-subject').textContent = data["Lớp"] || '';
-        document.getElementById('lesson-content').innerHTML = `<ul><li>${(data["Nội Dung bài"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
-        document.getElementById('strengths').innerHTML = `<ul><li>${(data["Điểm mạnh"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
-        document.getElementById('weaknesses').innerHTML = `<ul><li>${(data["Điểm yếu"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
-        document.getElementById('praise').textContent = data["Code điểm mạnh"] || '';
-        document.getElementById('reminder').textContent = data["Code điểm yếu"] || '';
-        document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${data["BTVN"] || ''}`;
+        // Điền dữ liệu vào các trường
+        document.getElementById('report-date').textContent = data["Ngày"] || 'Chưa cập nhật';
+        document.getElementById('student-name').textContent = data["Học sinh"] || 'Chưa cập nhật';
+        document.getElementById('class-subject').textContent = data["Lớp"] || 'Chưa cập nhật';
+        
+        // Xử lý nội dung bài học (thay \n bằng </li><li>)
+        const lessonContent = data["Nội Dung bài"] || '';
+        document.getElementById('lesson-content').innerHTML = lessonContent 
+          ? `<ul><li>${lessonContent.replace(/\n/g, '</li><li>')}</li></ul>` 
+          : '<ul><li>Chưa cập nhật</li></ul>';
+        
+        // Xử lý điểm mạnh
+        const strengths = data["Điểm mạnh"] || '';
+        document.getElementById('strengths').innerHTML = strengths 
+          ? `<ul><li>${strengths.replace(/\n/g, '</li><li>')}</li></ul>` 
+          : '<ul><li>Chưa cập nhật</li></ul>';
+        
+        // Xử lý điểm yếu
+        const weaknesses = data["Điểm yếu"] || '';
+        document.getElementById('weaknesses').innerHTML = weaknesses 
+          ? `<ul><li>${weaknesses.replace(/\n/g, '</li><li>')}</li></ul>` 
+          : '<ul><li>Chưa cập nhật</li></ul>';
+        
+        document.getElementById('praise').textContent = data["Code điểm mạnh"] || 'Chưa cập nhật';
+        document.getElementById('reminder').textContent = data["Code điểm yếu"] || 'Chưa cập nhật';
+        
+        const homework = data["BTVN"] || 'Không có bài tập';
+        document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${homework}`;
 
       } catch (err) {
         showError("Lỗi khi tải dữ liệu: " + err.message);
+        console.error(err);
       } finally {
         loading.style.display = 'none';
       }
@@ -346,6 +383,7 @@
       const error = document.getElementById('error');
       error.textContent = msg;
       error.style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
     }
 
     // Hàm chụp màn hình
@@ -360,7 +398,7 @@
           if (img.complete) return Promise.resolve();
           return new Promise((resolve) => {
             img.onload = resolve;
-            img.onerror = resolve; // Bỏ qua nếu ảnh lỗi
+            img.onerror = resolve;
           });
         });
 
@@ -385,7 +423,7 @@
               throw new Error('Clipboard API not supported');
             }
           } catch {
-            // Fallback tải xuống nếu không copy được
+            // Fallback tải xuống
             const link = document.createElement('a');
             link.download = `Bao-cao-hoc-tap-${new Date().toISOString().slice(0, 10)}.png`;
             link.href = URL.createObjectURL(blob);
@@ -403,7 +441,7 @@
       }
     }
 
-    // Khởi chạy
+    // Khởi chạy khi trang tải xong
     document.addEventListener('DOMContentLoaded', () => {
       loadData();
       document.getElementById('screenshot-btn').addEventListener('click', captureScreenshot);
