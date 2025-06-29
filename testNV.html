@@ -53,6 +53,11 @@
             font-size: 18px;
             padding: 20px;
         }
+        .loading {
+            text-align: center;
+            font-size: 18px;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -63,7 +68,7 @@
         </div>
 
         <div id="salary-info">
-            <!-- Thông tin lương sẽ được hiển thị ở đây -->
+            <p class="loading">Đang tải dữ liệu...</p>
         </div>
     </div>
 
@@ -74,104 +79,112 @@
             return urlParams.get(name);
         }
 
-        // Dữ liệu mẫu (thay thế bằng dữ liệu thực tế của bạn)
-        const maNV = 'NV001'; // Mã nhân viên mẫu
-        const nam = 2023;     // Năm mẫu
-        const thang = 10;     // Tháng mẫu
-
-        // Dữ liệu lương mẫu
-        const salaryData = {
-            "hoTen": "Nguyễn Văn A",
-            "phongBan": "Phòng Kế toán",
-            "chucVu": "Nhân viên",
-            "luongCoBan": 10000000,
-            "phuCap": 500000,
-            "thuong": 1000000,
-            "phat": 200000,
-            "luongThucLanh": 11300000,
-            "ngayCong": 22,
-            "ghiChu": "Hoàn thành tốt công việc"
-        };
+        // Định dạng số tiền
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+        }
 
         // Lấy giá trị từ URL
         const urlMaNV = getQueryParam('mnv');
-        const urlNam = parseInt(getQueryParam('nam'));
-        const urlThang = parseInt(getQueryParam('thang'));
+        const urlNam = getQueryParam('nam');
+        const urlThang = getQueryParam('thang');
 
         // Hiển thị tháng và năm từ URL
         document.getElementById('thang-display').textContent = urlThang || '';
         document.getElementById('nam-display').textContent = urlNam || '';
 
-        // So sánh và hiển thị thông tin nếu khớp
-        const salaryInfoDiv = document.getElementById('salary-info');
-        
-        if (urlMaNV === maNV && urlNam === nam && urlThang === thang) {
-            // Định dạng số tiền
-            const formatCurrency = (amount) => {
-                return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
-            };
+        // URL API Google Apps Script
+        const apiUrl = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLjt3SO7l1RmfkhLrCDxzl6jhpSapVmL8EI3xAjg1L6U81DwsyGcbhXzn6BMWrzRu1f4Zlt8otkuVxeEA7mBvMWwJsLpvrlkllX0FMvwMz62MHKnTo6IdkLNkSiDldlgI6QIJQWaT3VWU2PYauYy1aHVNC-dJhEcrXvQoCR6JuLuyzOuC_6ewMIBzircHcZdPTVi3kFAFI5_CON5pO7q4hda9fbbNjVEFvzisEMLe3sb0lHOGZv1-Hr0ftrENydoi5xWPzWEW7KCOiZYjnRT-dMo9hH27Q&lib=MROMISK0WUrf959LmoPO6Q_yFg_78DJ08';
 
-            // Tạo bảng thông tin lương
-            let html = `
-                <table class="info-table">
-                    <tr>
-                        <th>Họ và tên:</th>
-                        <td>${salaryData.hoTen}</td>
-                    </tr>
-                    <tr>
-                        <th>Phòng ban:</th>
-                        <td>${salaryData.phongBan}</td>
-                    </tr>
-                    <tr>
-                        <th>Chức vụ:</th>
-                        <td>${salaryData.chucVu}</td>
-                    </tr>
-                    <tr>
-                        <th>Lương cơ bản:</th>
-                        <td>${formatCurrency(salaryData.luongCoBan)}</td>
-                    </tr>
-                    <tr>
-                        <th>Phụ cấp:</th>
-                        <td>${formatCurrency(salaryData.phuCap)}</td>
-                    </tr>
-                    <tr>
-                        <th>Thưởng:</th>
-                        <td>${formatCurrency(salaryData.thuong)}</td>
-                    </tr>
-                    <tr>
-                        <th>Phạt:</th>
-                        <td>${formatCurrency(salaryData.phat)}</td>
-                    </tr>
-                    <tr>
-                        <th>Lương thực lãnh:</th>
-                        <td><strong>${formatCurrency(salaryData.luongThucLanh)}</strong></td>
-                    </tr>
-                    <tr>
-                        <th>Ngày công:</th>
-                        <td>${salaryData.ngayCong}</td>
-                    </tr>
-                    <tr>
-                        <th>Ghi chú:</th>
-                        <td>${salaryData.ghiChu}</td>
-                    </tr>
-                </table>
-
-                <div class="signature">
-                    <div>
-                        <p>Người lập</p>
-                        <p>(Ký, ghi rõ họ tên)</p>
-                    </div>
-                    <div>
-                        <p>Người nhận</p>
-                        <p>(Ký, ghi rõ họ tên)</p>
-                    </div>
-                </div>
-            `;
-
-            salaryInfoDiv.innerHTML = html;
-        } else {
-            salaryInfoDiv.innerHTML = '<p class="not-found">Không tìm thấy thông tin lương phù hợp</p>';
+        // Lấy dữ liệu từ API
+        async function fetchSalaryData() {
+            try {
+                const response = await fetch(apiUrl);
+                const data = await response.json();
+                
+                // Tìm bản ghi phù hợp
+                const matchedRecord = data.find(record => 
+                    record.maNV === urlMaNV && 
+                    record.nam.toString() === urlNam && 
+                    record.thang.toString() === urlThang
+                );
+                
+                displaySalaryInfo(matchedRecord);
+            } catch (error) {
+                console.error('Lỗi khi lấy dữ liệu:', error);
+                document.getElementById('salary-info').innerHTML = '<p class="not-found">Có lỗi xảy ra khi tải dữ liệu</p>';
+            }
         }
+
+        // Hiển thị thông tin lương
+        function displaySalaryInfo(record) {
+            const salaryInfoDiv = document.getElementById('salary-info');
+            
+            if (record) {
+                let html = `
+                    <table class="info-table">
+                        <tr>
+                            <th>Họ và tên:</th>
+                            <td>${record.hoTen}</td>
+                        </tr>
+                        <tr>
+                            <th>Phòng ban:</th>
+                            <td>${record.phongBan}</td>
+                        </tr>
+                        <tr>
+                            <th>Chức vụ:</th>
+                            <td>${record.chucVu}</td>
+                        </tr>
+                        <tr>
+                            <th>Lương cơ bản:</th>
+                            <td>${formatCurrency(record.luongCoBan)}</td>
+                        </tr>
+                        <tr>
+                            <th>Phụ cấp:</th>
+                            <td>${formatCurrency(record.phuCap)}</td>
+                        </tr>
+                        <tr>
+                            <th>Thưởng:</th>
+                            <td>${formatCurrency(record.thuong)}</td>
+                        </tr>
+                        <tr>
+                            <th>Phạt:</th>
+                            <td>${formatCurrency(record.phat)}</td>
+                        </tr>
+                        <tr>
+                            <th>Lương thực lãnh:</th>
+                            <td><strong>${formatCurrency(record.luongThucLanh)}</strong></td>
+                        </tr>
+                        <tr>
+                            <th>Ngày công:</th>
+                            <td>${record.ngayCong}</td>
+                        </tr>
+                        <tr>
+                            <th>Ghi chú:</th>
+                            <td>${record.ghiChu || 'Không có'}</td>
+                        </tr>
+                    </table>
+
+                    <div class="signature">
+                        <div>
+                            <p>Người lập</p>
+                            <p>(Ký, ghi rõ họ tên)</p>
+                        </div>
+                        <div>
+                            <p>Người nhận</p>
+                            <p>(Ký, ghi rõ họ tên)</p>
+                        </div>
+                    </div>
+                `;
+
+                salaryInfoDiv.innerHTML = html;
+            } else {
+                salaryInfoDiv.innerHTML = '<p class="not-found">Không tìm thấy thông tin lương phù hợp</p>';
+            }
+        }
+
+        // Gọi hàm lấy dữ liệu khi trang tải xong
+        document.addEventListener('DOMContentLoaded', fetchSalaryData);
     </script>
 </body>
 </html>
