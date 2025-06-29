@@ -315,68 +315,87 @@
   <button id="screenshot-btn" class="screenshot-btn">Chụp màn hình báo cáo</button>
   <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <script>
-    async function loadData() {
-      const loading = document.getElementById('loading');
-      const error = document.getElementById('error');
-      const url = 'https://api.appsheet.com/api/v2/apps/c84cee94-f0f0-49c5-84e7-06863a4472ad/tables/Nhật ký giảng dạy/Action';
-      const id = new URLSearchParams(window.location.search).get('id');
+   <script>
+  async function loadData() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const url = 'https://api.appsheet.com/api/v2/apps/c84cee94-f0f0-49c5-84e7-06863a4472ad/tables/Nhật ký giảng dạy/Action';
+    const id = new URLSearchParams(window.location.search).get('id');
 
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'ApplicationAccessKey': 'V2-RlmG3-ZQ5kn-YcIRd-TeGlo-YWFbm-IBR0k-5l7bU-ErbGc'
-          },
-          body: JSON.stringify({
-            "Action": "Find",
-            "Properties": {
-              "Selector": "Filter(Nhật ký giảng dạy, [id] = '" + id + "')",
-            }
-          })
-        });
-        const json = await res.json();
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'ApplicationAccessKey': 'V2-RlmG3-ZQ5kn-YcIRd-TeGlo-YWFbm-IBR0k-5l7bU-ErbGc'
+        },
+        body: JSON.stringify({
+          "Action": "Find",
+          "Properties": {
+            "Selector": "Filter(Nhật ký giảng dạy, [id] = '" + id + "')",
+          }
+        })
+      });
+      const json = await res.json();
+      const data = json[0];
+      
+      document.getElementById('report-date').innerText = data["Ngày"] || '';
+      document.getElementById('student-name').innerText = data["Học sinh"] || '';
+      document.getElementById('class-subject').innerText = data["Lớp"] || '';
+      document.getElementById('lesson-content').innerHTML = `<ul><li>${(data["Nội Dung bài"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
+      document.getElementById('strengths').innerHTML = `<ul><li>${(data["Điểm mạnh"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
+      document.getElementById('weaknesses').innerHTML = `<ul><li>${(data["Điểm yếu"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
+      document.getElementById('praise').innerText = data["Code điểm mạnh"] || '';
+      document.getElementById('reminder').innerText = data["Code điểm yếu"] || '';
+      document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${data["BTVN"] || ''}`;
 
-        const data = json[0];
-        // console.log(data);
-        
-        document.getElementById('report-date').innerText = data["Ngày"] || '';
-        document.getElementById('student-name').innerText = data["Học sinh"] || '';
-        document.getElementById('class-subject').innerText = data["Lớp"] || '';
-        document.getElementById('lesson-content').innerHTML = `<ul><li>${(data["Nội Dung bài"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
-        document.getElementById('strengths').innerHTML = `<ul><li>${(data["Điểm mạnh"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
-        document.getElementById('weaknesses').innerHTML = `<ul><li>${(data["Điểm yếu"] || '').replace(/\n/g, '</li><li>')}</li></ul>`;
-        document.getElementById('praise').innerText = data["Code điểm mạnh"] || '';
-        document.getElementById('reminder').innerText = data["Code điểm yếu"] || '';
-        document.getElementById('homework').innerHTML = `<strong>Bài tập về nhà:</strong> ${data["BTVN"] || ''}`;
-
-      } catch (err) {
-        showError("Lỗi khi tải dữ liệu: " + err.message);
-      } finally {
-        loading.style.display = 'none';
-      }
+    } catch (err) {
+      showError("Lỗi khi tải dữ liệu: " + err.message);
+    } finally {
+      loading.style.display = 'none';
     }
+  }
 
-    function showError(msg) {
-      const error = document.getElementById('error');
-      error.innerText = msg;
-      error.style.display = 'block';
-    }
+  function showError(msg) {
+    const error = document.getElementById('error');
+    error.innerText = msg;
+    error.style.display = 'block';
+  }
 
-    document.addEventListener('DOMContentLoaded', loadData);
+  document.addEventListener('DOMContentLoaded', loadData);
 
-    // Thêm chức năng chụp màn hình báo cáo
-    document.getElementById('screenshot-btn').addEventListener('click', function () {
-      const report = document.getElementById('report-content');
-      html2canvas(report).then(function (canvas) {
-        // Tạo link tải ảnh
+  // ----- Bổ sung chức năng chụp và sao chép ảnh -----
+  document.getElementById('screenshot-btn').addEventListener('click', async () => {
+    const report = document.getElementById('report-content');
+    try {
+      // Chụp cả ảnh (với useCORS để lấy resource cross-origin)
+      const canvas = await html2canvas(report, { useCORS: true });
+
+      // Chuyển thành Blob và ghi vào Clipboard
+      canvas.toBlob(async (blob) => {
+        if (navigator.clipboard && window.ClipboardItem) {
+          try {
+            await navigator.clipboard.write([
+              new ClipboardItem({ 'image/png': blob })
+            ]);
+            console.log('📋 Đã sao chép hình ảnh vào bộ nhớ tạm.');
+          } catch (cErr) {
+            console.warn('Không thể sao chép vào clipboard:', cErr);
+          }
+        } else {
+          console.warn('Clipboard API không được hỗ trợ trên trình duyệt này.');
+        }
+        // Đồng thời tự động tải file về
         const link = document.createElement('a');
         link.download = 'baocao-giasu.png';
         link.href = canvas.toDataURL('image/png');
         link.click();
       });
-    });
-  </script>
+    } catch (err) {
+      showError('Lỗi khi chụp ảnh: ' + err.message);
+    }
+  });
+</script>
 </body>
 
 </html>
