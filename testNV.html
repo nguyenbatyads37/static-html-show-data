@@ -337,37 +337,80 @@
         document.getElementById('thang-display').textContent = thang || '—';
         document.getElementById('nam-display').textContent = nam || '—';
 
-        // Tìm record phù hợp
+        // Tìm record khớp chính xác với URL parameters
         function findRecord(data, maNV, nam, thang) {
+            console.log('=== DEBUG FIND RECORD ===');
+            console.log('Raw data received:', data);
+            console.log('Data type:', typeof data);
+            console.log('Is array:', Array.isArray(data));
+            console.log('Searching for:', { maNV, nam, thang });
+
             if (!Array.isArray(data)) {
-                console.log('Data is not array:', data);
-                return data; // Có thể là single object
+                console.log('Data is not array, checking if single object...');
+                
+                // Nếu là single object, kiểm tra xem có khớp không
+                if (data && typeof data === 'object') {
+                    const matchMaNV = String(data.MaNV || '') === String(maNV || '');
+                    const matchNam = String(data.Nam || '') === String(nam || '');
+                    const matchThang = String(data.Thang || '') === String(thang || '');
+                    
+                    console.log('Single object check:', {
+                        API_data: { MaNV: data.MaNV, Nam: data.Nam, Thang: data.Thang },
+                        URL_params: { maNV, nam, thang },
+                        matches: { matchMaNV, matchNam, matchThang },
+                        allMatch: matchMaNV && matchNam && matchThang
+                    });
+                    
+                    if (matchMaNV && matchNam && matchThang) {
+                        return data;
+                    }
+                }
+                
+                console.log('Single object does not match or invalid');
+                return null;
             }
 
-            // Tìm record khớp với parameters
-            const record = data.find(item => {
-                // Thử tất cả các variations của field names
-                const itemMaNV = item.MaNV || item.maNV || item.manv || item.MANV || '';
-                const itemNam = item.Nam || item.nam || item.year || item.YEAR || '';
-                const itemThang = item.Thang || item.thang || item.month || item.MONTH || '';
+            console.log('Array length:', data.length);
+            
+            // Nếu không có đủ parameters, không tìm được
+            if (!maNV || !nam || !thang) {
+                console.log('Missing parameters - need all 3: maNV, nam, thang');
+                return null;
+            }
+
+            // Log tất cả records để debug
+            data.forEach((item, index) => {
+                console.log(`Record ${index}:`, {
+                    MaNV: item.MaNV,
+                    Nam: item.Nam,
+                    Thang: item.Thang,
+                    fullRecord: item
+                });
+            });
+
+            // Tìm record khớp CHÍNH XÁC với URL parameters
+            const record = data.find((item, index) => {
+                // So sánh chính xác: maNV với MaNV, nam với Nam, thang với Thang
+                const matchMaNV = String(item.MaNV || '') === String(maNV || '');
+                const matchNam = String(item.Nam || '') === String(nam || '');
+                const matchThang = String(item.Thang || '') === String(thang || '');
                 
-                const matchMaNV = String(itemMaNV).trim() === String(maNV || '').trim();
-                const matchNam = String(itemNam) === String(nam || '');
-                const matchThang = String(itemThang) === String(thang || '');
-                
-                console.log('Checking record:', {
-                    item: {
-                        MaNV: itemMaNV,
-                        Nam: itemNam,
-                        Thang: itemThang
+                console.log(`Record ${index} EXACT comparison:`, {
+                    API_values: { MaNV: item.MaNV, Nam: item.Nam, Thang: item.Thang },
+                    URL_values: { maNV, nam, thang },
+                    exact_matches: { 
+                        'maNV==MaNV': matchMaNV, 
+                        'nam==Nam': matchNam, 
+                        'thang==Thang': matchThang 
                     },
-                    searching: { maNV, nam, thang },
-                    matches: { matchMaNV, matchNam, matchThang }
+                    ALL_MATCH: matchMaNV && matchNam && matchThang
                 });
                 
                 return matchMaNV && matchNam && matchThang;
             });
 
+            console.log('Final found record:', record);
+            console.log('=== END DEBUG ===');
             return record;
         }
 
@@ -387,11 +430,14 @@
                                 <li><strong>Tháng:</strong> ${thang || 'Không có'}</li>
                             </ul>
                         </div>
+                        <p>⚠️ Mở Console (F12) để xem chi tiết debug</p>
                         <p>Vui lòng kiểm tra lại thông tin và thử lại.</p>
                     </div>
                 `;
                 return;
             }
+
+            console.log('Displaying record:', record);
 
             // Hiển thị thông tin nhân viên
             const employeeHTML = `
@@ -400,38 +446,38 @@
                     <div class="info-grid">
                         <div class="info-item">
                             <span class="label">Mã nhân viên:</span>
-                            <span class="value">${safeValue(record.maNV || record.MaNV || record.manv)}</span>
+                            <span class="value">${safeValue(record.MaNV || record.maNV || record.manv)}</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Họ và tên:</span>
-                            <span class="value">${safeValue(record.hoTen || record.hoVaTen || record.ten || record.name)}</span>
+                            <span class="value">${safeValue(record.HoTen || record.hoTen || record.hoVaTen || record.ten || record.name)}</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Phòng ban:</span>
-                            <span class="value">${safeValue(record.phongBan || record.department)}</span>
+                            <span class="value">${safeValue(record.PhongBan || record.phongBan || record.department)}</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Chức vụ:</span>
-                            <span class="value">${safeValue(record.chucVu || record.position)}</span>
+                            <span class="value">${safeValue(record.ChucVu || record.chucVu || record.position)}</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Ngày công:</span>
-                            <span class="value">${safeValue(record.ngayCong || record.workDays)}</span>
+                            <span class="value">${safeValue(record.NgayCong || record.ngayCong || record.workDays)}</span>
                         </div>
                         <div class="info-item">
                             <span class="label">Ghi chú:</span>
-                            <span class="value">${safeValue(record.ghiChu || record.note, 'Không có')}</span>
+                            <span class="value">${safeValue(record.GhiChu || record.ghiChu || record.note, 'Không có')}</span>
                         </div>
                     </div>
                 </div>
             `;
 
             // Hiển thị chi tiết lương
-            const luongCoBan = Number(record.luongCoBan || record.basicSalary || 0);
-            const phuCap = Number(record.phuCap || record.allowance || 0);
-            const thuong = Number(record.thuong || record.bonus || 0);
-            const phat = Number(record.phat || record.penalty || 0);
-            const luongThucLanh = Number(record.luongThucLanh || record.netSalary || 0);
+            const luongCoBan = Number(record.LuongCoBan || record.luongCoBan || record.basicSalary || 0);
+            const phuCap = Number(record.PhuCap || record.phuCap || record.allowance || 0);
+            const thuong = Number(record.Thuong || record.thuong || record.bonus || 0);
+            const phat = Number(record.Phat || record.phat || record.penalty || 0);
+            const luongThucLanh = Number(record.LuongThucLanh || record.luongThucLanh || record.netSalary || 0);
 
             const salaryHTML = `
                 <div class="salary-table">
@@ -507,17 +553,30 @@
                 }
 
                 const text = await response.text();
-                console.log('Raw response:', text);
+                console.log('Raw response:', text.substring(0, 500), '...');
 
                 let data;
                 try {
                     data = JSON.parse(text);
                 } catch (parseError) {
                     console.error('JSON parse error:', parseError);
+                    console.error('Response text:', text);
                     throw new Error(`Dữ liệu không phải JSON hợp lệ: ${text.substring(0, 100)}...`);
                 }
 
                 console.log('Parsed data:', data);
+                console.log('Data structure analysis:');
+                console.log('- Type:', typeof data);
+                console.log('- Is Array:', Array.isArray(data));
+                console.log('- Keys:', data && typeof data === 'object' ? Object.keys(data) : 'N/A');
+                
+                if (Array.isArray(data)) {
+                    console.log('- Array length:', data.length);
+                    if (data.length > 0) {
+                        console.log('- First item keys:', Object.keys(data[0]));
+                        console.log('- First item:', data[0]);
+                    }
+                }
 
                 // Tìm record phù hợp
                 const record = findRecord(data, maNV, nam, thang);
