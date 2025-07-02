@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hiển thị dữ liệu từ Web App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f4f4f4;
+    }
+    #loading {
+      font-style: italic;
+      color: #666;
+    }
+    /* Hiển thị rõ ô date */
+    input[type="date"] {
+      border: 1px solid #ccc;
+      background-color: #fff;
+      padding: 4px;
+      width: 100%;
+      box-sizing: border-box;
+      font-family: inherit;
+      font-size: inherit;
+    }
+  </style>
+</head>
+<body>
+  <h1>Dữ liệu từ Web App</h1>
+  <div id="loading">Đang tải dữ liệu…</div>
+  <table id="data-table" hidden>
+    <thead id="table-head"></thead>
+    <tbody id="table-body"></tbody>
+  </table>
+
+  <script>
+    const endpoint = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
+
+    async function loadData() {
+      try {
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        renderTable(data);
+      } catch (err) {
+        document.getElementById('loading').textContent = 'Lỗi khi tải dữ liệu: ' + err;
+      }
+    }
+
+    function renderTable(data) {
+      const loadingEl = document.getElementById('loading');
+      const table = document.getElementById('data-table');
+      const thead = document.getElementById('table-head');
+      const tbody = document.getElementById('table-body');
+
+      // Xóa nội dung cũ (nếu có)
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      if (!Array.isArray(data) || data.length === 0) {
+        loadingEl.textContent = 'Không có dữ liệu.';
+        return;
+      }
+
+      const keys = Object.keys(data[0]);
+      const trHead = document.createElement('tr');
+      keys.forEach(key => {
+        const th = document.createElement('th');
+        th.textContent = key;
+        trHead.appendChild(th);
+      });
+      thead.appendChild(trHead);
+
+      data.forEach(item => {
+        const tr = document.createElement('tr');
+        keys.forEach(key => {
+          const td = document.createElement('td');
+          const lowerKey = key.toLowerCase();
+          if (lowerKey.includes('ngày') || lowerKey === 'ngay') {
+            const date = new Date(item[key]);
+            const input = document.createElement('input');
+            input.type = 'date';
+            input.value = isNaN(date.getTime()) ? '' : date.toISOString().split('T')[0];
+            td.appendChild(input);
+          } else {
+            td.textContent = item[key] != null ? item[key] : '';
+          }
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      loadingEl.hidden = true;
+      table.hidden = false;
+    }
+
+    window.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>
