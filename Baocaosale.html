@@ -221,17 +221,22 @@
         fetch('https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec')
         .then(res => res.json())
         .then(data => {
-          const filteredByStatus = data.filter(r => r.trangThai && String(r.trangThai).trim() !== '');
-
-          rawData = filteredByStatus.map(r => ({
-              ...r, 
-              soMessCmt: +r.soMess || 0,
-              soDon: +r.donMess || 0,
-              dsChot: +r.doanhSoMess || 0,
-              phanHoi: +r.phanHoi || 0,
-              // Cập nhật: Lấy dữ liệu team từ các biến có thể có: team, Team, hoặc nhom
-              team: r.team || r.Team || r.nhom || '',
-              ten: r.ten || 'N/A'
+          
+          // Xử lý và lọc dữ liệu thô
+          rawData = data
+            // 1. Lọc bỏ dòng có trạng thái rỗng
+            .filter(r => r.trangThai && String(r.trangThai).trim() !== '')
+            // 2. Lọc bỏ "MKT - Cường"
+            .filter(r => r.ten !== 'MKT - Cường')
+            // 3. Ánh xạ và chuẩn hóa dữ liệu
+            .map(r => ({
+                ...r, 
+                soMessCmt: +r.soMess || 0,
+                soDon: +r.donMess || 0,
+                dsChot: +r.doanhSoMess || 0,
+                phanHoi: +r.phanHoi || 0,
+                team: r.team || r.Team || r.nhom || '',
+                ten: r.ten || 'N/A'
             }));
 
           populateAllFilters(rawData);
@@ -270,14 +275,19 @@
         data.forEach(r=>{ 
             if(r.sanPham) prodSet.add(r.sanPham); 
             if(r.ca) caSet.add(r.ca); 
-            if(r.team) teamSet.add(r.team); 
+            if (r.team != null) teamSet.add(r.team); 
             if(r.thiTruong) mktSet.add(r.thiTruong); 
         });
         
         document.getElementById('product-options').innerHTML = Array.from(prodSet).sort().map(p => `<label class='indent'><input type='checkbox' class='filter-product' value='${p}' checked> ${p}</label>`).join('');
         document.getElementById('market-options').innerHTML = Array.from(mktSet).sort().map(m => `<label class='indent'><input type='checkbox' class='filter-market' value='${m}' checked> ${m}</label>`).join('');
         document.getElementById('ca-options').innerHTML = Array.from(caSet).sort().map(c => `<label class='indent'><input type='checkbox' class='filter-ca' value='${c}' checked> ${c}</label>`).join('');
-        document.getElementById('team-options').innerHTML = Array.from(teamSet).sort().map(t => `<label class='indent'><input type='checkbox' class='filter-team' value='${t}' checked> ${t}</label>`).join('');
+        
+        document.getElementById('team-options').innerHTML = Array.from(teamSet).sort().map(t => {
+            const label = t || '(Chưa phân loại)';
+            const value = t;
+            return `<label class='indent'><input type='checkbox' class='filter-team' value='${value}' checked> ${label}</label>`;
+        }).join('');
     }
     
     // --- Các hàm tiện ích ---
@@ -309,7 +319,6 @@
         const summaryData = {};
         let total = { mess: 0, don: 0, chot: 0, phanHoi: 0 };
         data.forEach(r => {
-            // Thay đổi: sử dụng `r.ten` (đã được chuẩn hóa là 'Sale')
             const name = r.ten;
             if (!summaryData[name]) {
                 summaryData[name] = { team: r.team, mess: 0, don: 0, chot: 0, phanHoi: 0 };
@@ -328,9 +337,10 @@
             Object.keys(total).forEach(key => total[key] += s[key]);
             const rate = s.mess ? s.don / s.mess : 0;
             const rateClass = rate > 0.1 ? 'bg-green' : (rate > 0 ? 'bg-yellow' : '');
+            const teamDisplay = item.team || '(Chưa phân loại)';
 
             return `<tr><td class="text-center">${index + 1}</td>
-                <td class="text-left">${item.team}</td>
+                <td class="text-left">${teamDisplay}</td>
                 <td class="text-left">${item.name}</td>
                 <td>${formatNumber(s.mess)}</td>
                 <td>${formatNumber(s.don)}</td>
@@ -366,29 +376,33 @@
             let total = { mess: 0, don: 0, chot: 0, phanHoi: 0 };
             const sortedDailyData = groupedByDate[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
             
+            // ĐÃ BỎ CỘT ID Ở ĐÂY
             const rowsHtml = sortedDailyData.map(r=>{
                 total.mess += r.soMessCmt;
                 total.don += r.soDon;
                 total.chot += r.dsChot;
                 total.phanHoi += r.phanHoi;
+                const teamDisplay = r.team || '(Chưa phân loại)';
                 return`<tr>
-                        <td class="text-center">${r.id}</td><td class="text-left">${r.ten}</td>
+                        <td class="text-left">${r.ten}</td>
                         <td class="text-left">${r.ca}</td>
                         <td class="text-left">${r.sanPham}</td><td class="text-left">${r.thiTruong}</td>
                         <td>${formatNumber(r.soMessCmt)}</td><td>${formatNumber(r.soDon)}</td>
                         <td>${formatNumber(r.phanHoi)}</td><td>${formatCurrency(r.dsChot)}</td>
-                        <td class="text-left">${r.team}</td></tr>`
+                        <td class="text-left">${teamDisplay}</td></tr>`
             }).join('');
 
+            // ĐÃ CẬP NHẬT COLSPAN TỪ 5 XUỐNG 4
             const footHtml=`<tr class='total-row'>
-                            <td colspan='5' class='total-label'>Tổng</td>
+                            <td colspan='4' class='total-label'>Tổng</td>
                             <td class='total-value'>${formatNumber(total.mess)}</td>
                             <td class='total-value'>${formatNumber(total.don)}</td>
                             <td class='total-value'>${formatNumber(total.phanHoi)}</td>
                             <td class='total-value'>${formatCurrency(total.chot)}</td>
                             <td></td></tr>`;
             
-            const tableHtml = `<div class="table-responsive-container"><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Team</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table></div>`;
+            // ĐÃ BỎ HEADER "ID" Ở ĐÂY
+            const tableHtml = `<div class="table-responsive-container"><table><thead><tr><th>Tên</th><th>Ca</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Team</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table></div>`;
             container.innerHTML += `<h3>${date}</h3>${tableHtml}`;
         }); 
     }
