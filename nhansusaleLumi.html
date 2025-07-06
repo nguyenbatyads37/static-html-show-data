@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Báo cáo tổng hợp chi tiết</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { 
+      font-family: 'Roboto', Arial, sans-serif; 
+      padding: 20px; 
+      background-color: #f4f4f4; 
+    }
+
+    /* --- STYLES CHUNG CHO BẢNG & CĂN LỀ --- */
+    .table-responsive-container { overflow-x: auto; }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      table-layout: auto; 
+      margin-top: 20px; 
+      background: #fff; 
+      border-radius: 8px; 
+      overflow: hidden; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05); 
+    }
+    th, td { 
+      border: 1px solid #e0e0e0; 
+      padding: 11px 12px; 
+      white-space: nowrap; 
+      vertical-align: middle; 
+      transition: background-color 0.2s; 
+    }
+    
+    /* QUY TẮC CĂN LỀ: CHỮ TRÁI, SỐ PHẢI */
+    th { 
+      text-align: center !important; 
+      background: #4CAF50; 
+      color: white; 
+      font-weight: 500;
+    }
+    td { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .text-center { text-align: center !important; }
+
+    /* CẢI THIỆN KHẢ NĂNG ĐỌC BẢNG */
+    tbody tr:nth-child(even) { background-color: #f9f9f9; }
+    tbody tr:hover { background-color: #eff5fb; }
+        
+    /* --- STYLE CHO DÒNG TỔNG CỘNG --- */
+    tr.total-row, tr.total-row:hover { 
+      background: #fffde7; 
+      font-weight: 700; 
+      font-size: 1.05em;
+      color: #333;
+      border-top: 2px solid #4CAF50;
+    }
+    .total-label { text-align: left !important; }
+    .total-value { text-align: right !important; }
+    
+    /* --- ĐỊNH DẠNG CÓ ĐIỀU KIỆN (MÀU ĐẬM) --- */
+    .bg-green { background-color: #4CAF50 !important; color: white; }
+    .bg-yellow { background-color: #FFEB3B !important; color: #424242; }
+    
+    /* --- STYLES BỐ CỤC SIDEBAR TRÁI --- */
+    .report-container { 
+      display: flex; 
+      flex-wrap: nowrap;
+      gap: 20px; 
+      align-items: flex-start;
+    }
+    .sidebar { 
+      width: 260px; 
+      flex-shrink: 0; 
+      background: #fff; 
+      padding: 15px; 
+      border-radius: 8px; 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      position: sticky;
+      top: 20px;
+      height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+    .main-detailed { 
+      flex-grow: 1; 
+      min-width: 0;
+      width: calc(100% - 280px);
+    }
+    
+    /* --- Các style khác cho sidebar --- */
+    .sidebar h3 { 
+      background: #2d7c2d; 
+      color: #fff; 
+      padding: 8px; 
+      margin-top: 10px; 
+      font-size: 16px; 
+      border-radius: 4px; 
+    }
+    .sidebar label { 
+      display: block; 
+      margin: 8px 0; 
+      font-size: 14px; 
+    }
+    .sidebar .indent { margin-left: 16px; }
+    .sidebar input[type="date"] { 
+      width: 100%; 
+      box-sizing: border-box; 
+      padding: 6px; 
+      margin: 4px 0 10px; 
+      border: 1px solid #ccc; 
+      border-radius: 4px;
+    }
+    
+    /* --- STYLES CHO BÁO CÁO CHI TIẾT --- */
+    .header { 
+      display: flex; 
+      align-items: center; 
+      margin-bottom: 10px; 
+    }
+    .header img { 
+      height: 60px; 
+      margin-right: 15px; 
+      border-radius: 50%; 
+    }
+    .header h2 { 
+      margin: 0; 
+      color: #2d7c2d; 
+      font-weight: 700; 
+    }
+    .daily-breakdown h3 { 
+      margin-top: 30px; 
+      background: #f0f0f0; 
+      padding: 10px; 
+      border: 1px solid #ccc; 
+      border-radius: 4px; 
+    }
+
+    /* --- CHỈ BÁO ĐANG TẢI --- */
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.7);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 9999;
+      font-size: 1.5em; font-weight: bold; color: #2d7c2d;
+      transition: opacity 0.3s;
+      visibility: hidden; opacity: 0;
+    }
+    #loading-overlay.visible { visibility: visible; opacity: 1; }
+  </style>
+</head>
+<body>
+  
+  <div id="loading-overlay">Đang tải dữ liệu...</div>
+
+  <div class="report-container">
+      <!-- Sidebar lọc bên trái -->
+      <div class="sidebar">
+        <h3>Ngày</h3> <label>Từ ngày:<input type="date" id="start-date"></label> <label>Đến ngày:<input type="date" id="end-date"></label>
+        <h3>Sản phẩm</h3> <label><input type="checkbox" id="product-all" checked> Tất cả</label> <div id="product-options"></div>
+        <h3>Ca</h3> <label><input type="checkbox" id="ca-all" checked> Tất cả</label> <div id="ca-options"></div>
+        <h3>Team</h3> <label><input type="checkbox" id="team-all" checked> Tất cả</label> <div id="team-options"></div>
+        <h3>Thị trường</h3> <label><input type="checkbox" id="market-all" checked> Tất cả</label> <div id="market-options"></div>
+      </div>
+      <!-- Nội dung chính bên phải -->
+      <div class="main-detailed">
+        <div class="header"> <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo"> <h2 id="report-title">DỮ LIỆU TỔNG HỢP</h2> </div>
+        <div class="table-responsive-container">
+          <table id="summary-table">
+            <thead>
+              <tr>
+                <th>STT</th>
+                <th>Team</th>
+                <th>Sale</th>
+                <th>Số Mess</th>
+                <th>Số Đơn</th>
+                <th>Phản hồi</th>
+                <th>DS Chốt</th>
+                <th>Tỉ lệ chốt</th>
+              </tr>
+            </thead>
+            <tbody id="summary-body"></tbody>
+            <tfoot id="summary-foot"></tfoot>
+          </table>
+        </div>
+        <div id="daily-breakdown"></div>
+      </div>
+  </div>
+
+<script>
+    // --- KHAI BÁO BIẾN TOÀN CỤC ---
+    let rawData = [];
+    let employeeData = [];
+    let isRestrictedView = false; // Cờ để xác định chế độ xem bị giới hạn
+    let allowedNames = [];      // Mảng chứa các tên được phép xem
+
+    const loader = document.getElementById('loading-overlay');
+    const showLoader = () => loader.classList.add('visible');
+    const hideLoader = () => loader.classList.remove('visible');
+    
+    // --- PHẦN MỚI: HÀM LẤY THAM SỐ TỪ URL ---
+    function getUrlParameter(name) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      addEventListeners();
+      setDefaultDates();
+      fetchAndProcessData(); // Gọi hàm mới để xử lý logic
+    });
+
+    function setDefaultDates() {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        const formatDateForInput = (date) => date.toISOString().split('T')[0];
+        document.getElementById('start-date').value = formatDateForInput(firstDay);
+        document.getElementById('end-date').value = formatDateForInput(lastDay);
+    }
+
+    function addEventListeners() {
+      document.body.addEventListener('change', (e) => {
+        if (e.target.matches('input[type="checkbox"], input[type="date"]')) {
+          handleFilters(e.target);
+        }
+      });
+    }
+    
+    // --- PHẦN MỚI: HÀM TẢI VÀ XỬ LÝ DỮ LIỆU (CẢ BÁO CÁO VÀ NHÂN SỰ) ---
+    function fetchAndProcessData() {
+        showLoader();
+
+        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
+        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbxO9F94a64-vPzOEyV9l_yvL3j2i212LwTq-7T8A1O56Ea_uQOK57sHlP2E9F64P664/exec'; // Link data mới
+
+        // Tải 2 nguồn dữ liệu song song
+        Promise.all([
+            fetch(salesDataUrl).then(res => res.json()),
+            fetch(employeeDataUrl).then(res => res.json())
+        ])
+        .then(([salesResult, employeeResult]) => {
+            // 1. Xử lý dữ liệu bán hàng (như cũ)
+            rawData = salesResult
+                .filter(r => r.trangThai && String(r.trangThai).trim() !== '')
+                .map(r => ({
+                    ...r, 
+                    soMessCmt: +r.soMess || 0,
+                    soDon: +r.donMess || 0,
+                    dsChot: +r.doanhSoMess || 0,
+                    phanHoi: +r.phanHoi || 0,
+                    team: r.team || '', 
+                    ten: r.ten || 'N/A'
+                }));
+
+            // 2. Lưu trữ dữ liệu nhân sự
+            employeeData = employeeResult;
+
+            // 3. Logic phân quyền dựa trên ID từ URL
+            const currentUserID = getUrlParameter('id');
+
+            if (currentUserID) {
+                const currentUser = employeeData.find(emp => emp.id === currentUserID);
+
+                if (currentUser) {
+                    isRestrictedView = true;
+                    if (currentUser.vi_tri === "Leader") {
+                        // Nếu là Leader, lấy tên tất cả nhân sự cùng team
+                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
+                        allowedNames = employeeData
+                            .filter(emp => emp.team === currentUser.team)
+                            .map(emp => emp.ho_ten);
+                    } else {
+                        // Nếu là nhân viên, chỉ lấy tên của chính họ
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ho_ten}`;
+                        allowedNames = [currentUser.ho_ten];
+                    }
+                } else {
+                    // Nếu ID không hợp lệ, không cho xem gì cả
+                    alert(`ID "${currentUserID}" không hợp lệ hoặc không tồn tại.`);
+                    isRestrictedView = true;
+                    allowedNames = []; // Mảng rỗng để không có data nào khớp
+                }
+            } else {
+                // Không có ID, xem toàn bộ (chế độ admin)
+                isRestrictedView = false;
+                allowedNames = [];
+                document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
+            }
+            
+            // 4. Khởi tạo bộ lọc và hiển thị báo cáo lần đầu
+            populateAllFilters(rawData);
+            applyFilters();
+
+        }).catch(err => { 
+            console.error("Lỗi khi tải dữ liệu:", err); 
+            alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
+        }).finally(() => {
+            hideLoader();
+        });
+    }
+    
+    function getFilteredData() {
+        const sdVal = document.getElementById('start-date').value, edVal = document.getElementById('end-date').value;
+        const sd = sdVal ? new Date(sdVal) : null, ed = edVal ? new Date(edVal) : null;
+        if (ed) ed.setHours(23, 59, 59, 999);
+        
+        const getSelectedOptions = (masterId, childClass) => {
+          if (document.getElementById(masterId).checked) return null;
+          return [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
+        };
+
+        const selP = getSelectedOptions('product-all', 'filter-product');
+        const selM = getSelectedOptions('market-all', 'filter-market');
+        const selCa = getSelectedOptions('ca-all', 'filter-ca');
+        const selT = getSelectedOptions('team-all', 'filter-team');
+
+        return rawData.filter(r => {
+            // --- PHẦN MỚI: THÊM BỘ LỌC DỰA TRÊN QUYỀN HẠN ---
+            // Nếu là chế độ xem bị giới hạn, kiểm tra xem tên của dòng dữ liệu có trong danh sách được phép không
+            const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
+            if (!isUserAllowed) return false; // Nếu không được phép, bỏ qua ngay
+            
+            // Các bộ lọc cũ vẫn giữ nguyên
+            const d = new Date(r.ngay);
+            const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
+            const isProductOk = !selP || selP.includes(r.sanPham);
+            const isMarketOk = !selM || selM.includes(r.thiTruong);
+            const isCaOk = !selCa || selCa.includes(String(r.ca));
+            const isTeamOk = !selT || selT.includes(String(r.team));
+            
+            return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
+        });
+    }
+
+    function populateAllFilters(data) {
+        const populate = (key, containerId, className) => {
+            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
+            const container = document.getElementById(containerId);
+            container.innerHTML = uniqueValues.map(val => {
+                const label = val || '(Chưa phân loại)';
+                return `<label class='indent'><input type='checkbox' class='${className}' value='${val}' checked> ${label}</label>`;
+            }).join('');
+        };
+        
+        populate('sanPham', 'product-options', 'filter-product');
+        populate('thiTruong', 'market-options', 'filter-market');
+        populate('ca', 'ca-options', 'filter-ca');
+        populate('team', 'team-options', 'filter-team');
+    }
+    
+    // --- Utility Functions ---
+    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
+    function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
+    function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
+    function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
+
+    function handleFilters(target) { 
+        showLoader(); 
+        setTimeout(() => { 
+            handleCheckbox('product-all', 'filter-product', target); 
+            handleCheckbox('ca-all', 'filter-ca', target); 
+            handleCheckbox('team-all', 'filter-team', target); 
+            handleCheckbox('market-all', 'filter-market', target); 
+            applyFilters(); 
+            hideLoader(); 
+        }, 10); 
+    }
+    
+    function applyFilters() {
+        const filtered = getFilteredData();
+        renderSummary(filtered); 
+        renderDailyBreakdown(filtered);
+    }
+
+    function renderSummary(data) {
+        const summaryData = {};
+        data.forEach(r => {
+            const name = r.ten;
+            if (!summaryData[name]) {
+                summaryData[name] = { team: r.team, mess: 0, don: 0, chot: 0, phanHoi: 0 };
+            }
+            summaryData[name].mess += r.soMessCmt;
+            summaryData[name].don += r.soDon;
+            summaryData[name].chot += r.dsChot;
+            summaryData[name].phanHoi += r.phanHoi;
+        });
+
+        const flatList = Object.keys(summaryData).map(name => ({ name, team: summaryData[name].team, data: summaryData[name] }))
+            .sort((a,b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.name.localeCompare(b.name));
+        
+        let bodyHtml = flatList.map((item, index) => {
+            const s = item.data;
+            const rate = s.mess ? s.don / s.mess : 0;
+            const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0 ? 'bg-yellow' : '');
+            const teamDisplay = item.team || '(Chưa phân loại)';
+
+            return `<tr><td class="text-center">${index + 1}</td>
+                <td class="text-left">${teamDisplay}</td>
+                <td class="text-left">${item.name}</td>
+                <td>${formatNumber(s.mess)}</td>
+                <td>${formatNumber(s.don)}</td>
+                <td>${formatNumber(s.phanHoi)}</td>
+                <td>${formatCurrency(s.chot)}</td>
+                <td class="${rateClass}">${formatPercent(rate)}</td></tr>`;
+        }).join('');
+        
+        const totalSummary = flatList.reduce((acc, item) => {
+            acc.mess += item.data.mess;
+            acc.don += item.data.don;
+            acc.chot += item.data.chot;
+            acc.phanHoi += item.data.phanHoi;
+            return acc;
+        }, { mess: 0, don: 0, chot: 0, phanHoi: 0 });
+
+        const totalRate = totalSummary.mess ? totalSummary.don / totalSummary.mess : 0;
+        
+        const footerHtml = `<tr class="total-row">
+                <td class="total-label" colspan="3">TỔNG CỘNG</td>
+                <td class="total-value">${formatNumber(totalSummary.mess)}</td>
+                <td class="total-value">${formatNumber(totalSummary.don)}</td>
+                <td class="total-value">${formatNumber(totalSummary.phanHoi)}</td>
+                <td class="total-value">${formatCurrency(totalSummary.chot)}</td>
+                <td class="total-value">${formatPercent(totalRate)}</td></tr>`;
+        
+        document.getElementById('summary-body').innerHTML = bodyHtml;
+        document.getElementById('summary-foot').innerHTML = footerHtml;
+    }
+    
+    function renderDailyBreakdown(data) { 
+        const container = document.getElementById('daily-breakdown'); 
+        container.innerHTML = '';
+        if (data.length === 0) {
+            container.innerHTML = '<h3>Không có dữ liệu chi tiết để hiển thị.</h3>';
+            return;
+        }
+        const groupedByDate = {};
+        data.forEach(r => {
+            const dateKey = formatDate(r.ngay);
+            if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
+            groupedByDate[dateKey].push(r);
+        });
+        
+        const sortedDates = Object.keys(groupedByDate).sort((a,b)=>new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
+
+        sortedDates.forEach(date => {
+            let total = { mess: 0, don: 0, chot: 0, phanHoi: 0 };
+            const sortedDailyData = groupedByDate[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.ten.localeCompare(b.ten));
+            
+            const rowsHtml = sortedDailyData.map(r=>{
+                total.mess += r.soMessCmt;
+                total.don += r.soDon;
+                total.chot += r.dsChot;
+                total.phanHoi += r.phanHoi;
+                const teamDisplay = r.team || '(Chưa phân loại)';
+                return`<tr>
+                        <td class="text-left">${r.ten}</td>
+                        <td class="text-left">${r.ca}</td>
+                        <td class="text-left">${r.sanPham}</td>
+                        <td class="text-left">${r.thiTruong}</td>
+                        <td>${formatNumber(r.soMessCmt)}</td>
+                        <td>${formatNumber(r.soDon)}</td>
+                        <td>${formatNumber(r.phanHoi)}</td>
+                        <td>${formatCurrency(r.dsChot)}</td>
+                        <td class="text-left">${teamDisplay}</td></tr>`
+            }).join('');
+
+            const footHtml=`<tr class='total-row'>
+                            <td colspan='4' class='total-label'>Tổng</td>
+                            <td class='total-value'>${formatNumber(total.mess)}</td>
+                            <td class='total-value'>${formatNumber(total.don)}</td>
+                            <td class='total-value'>${formatNumber(total.phanHoi)}</td>
+                            <td class='total-value'>${formatCurrency(total.chot)}</td>
+                            <td></td></tr>`;
+            
+            const tableHtml = `<div class="table-responsive-container">
+                                 <table>
+                                   <thead>
+                                     <tr>
+                                       <th>Tên</th><th>Ca</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Team</th>
+                                     </tr>
+                                   </thead>
+                                   <tbody>${rowsHtml}</tbody>
+                                   <tfoot>${footHtml}</tfoot>
+                                 </table>
+                               </div>`;
+            container.innerHTML += `<h3>${date}</h3>${tableHtml}`;
+        }); 
+    }
+</script>
+</body>
+</html>
