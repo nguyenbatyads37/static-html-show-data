@@ -191,8 +191,8 @@
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let rawData = [];
     let employeeData = [];
-    let isRestrictedView = false; // Cờ để xác định chế độ xem bị giới hạn
-    let allowedNames = [];      // Mảng chứa các tên được phép xem
+    let isRestrictedView = false;
+    let allowedNames = [];
 
     const loader = document.getElementById('loading-overlay');
     const showLoader = () => loader.classList.add('visible');
@@ -241,49 +241,44 @@
                 .filter(r => r.trangThai && String(r.trangThai).trim() !== '')
                 .map(r => ({
                     ...r, 
+                    // THAY ĐỔI QUAN TRỌNG 1: Dọn dẹp tên sale ngay từ đầu
+                    ten: (r.ten || '').trim(), 
                     soMessCmt: +r.soMess || 0,
                     soDon: +r.donMess || 0,
                     dsChot: +r.doanhSoMess || 0,
                     phanHoi: +r.phanHoi || 0,
-                    team: r.team || '', 
-                    ten: r.ten || 'N/A'
+                    team: r.team || '',
                 }));
 
             employeeData = employeeResult;
-
             const idFromUrl = getUrlParameter('id');
 
-            // Logic phân quyền được đặt ở đây
             if (idFromUrl) {
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
-
                 if (currentUser) {
-                    // Đảm bảo cờ này được đặt là TRUE
                     isRestrictedView = true; 
-                    
                     if (currentUser.vi_tri === "Leader") {
                         document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
                         allowedNames = employeeData
                             .filter(emp => emp.team === currentUser.team)
-                            .map(emp => emp.ho_va_ten);
+                            // THAY ĐỔI QUAN TRỌNG 2: Dọn dẹp tên nhân viên khi đưa vào danh sách cho phép
+                            .map(emp => (emp.ho_va_ten || '').trim());
                     } else {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ho_va_ten}`;
-                        allowedNames = [currentUser.ho_va_ten];
+                        const cleanName = (currentUser.ho_va_ten || '').trim();
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
+                        allowedNames = [cleanName];
                     }
                 } else {
-                    // Cờ này cũng phải là TRUE để chặn hiển thị
                     isRestrictedView = true; 
                     allowedNames = [];
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                 }
             } else {
-                // Chỉ khi KHÔNG CÓ ID trên URL, cờ mới là FALSE
                 isRestrictedView = false;
                 allowedNames = [];
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            // Sau khi đã thiết lập quyền, bắt đầu lọc và hiển thị
             populateAllFilters(rawData);
             applyFilters();
 
@@ -311,11 +306,10 @@
         const selT = getSelectedOptions('team-all', 'filter-team');
 
         return rawData.filter(r => {
-            // Bộ lọc quyền hạn người dùng
+            // Bộ lọc tên đã được dọn dẹp ở cả hai phía nên so sánh sẽ chính xác
             const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
             if (!isUserAllowed) return false; 
             
-            // Các bộ lọc khác
             const d = new Date(r.ngay);
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
