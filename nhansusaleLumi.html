@@ -198,7 +198,6 @@
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
     
-    // --- PHẦN MỚI: HÀM LẤY THAM SỐ TỪ URL ---
     function getUrlParameter(name) {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get(name);
@@ -207,7 +206,7 @@
     document.addEventListener('DOMContentLoaded', () => {
       addEventListeners();
       setDefaultDates();
-      fetchAndProcessData(); // Gọi hàm mới để xử lý logic
+      fetchAndProcessData(); 
     });
 
     function setDefaultDates() {
@@ -227,20 +226,19 @@
       });
     }
     
-    // --- PHẦN MỚI: HÀM TẢI VÀ XỬ LÝ DỮ LIỆU (CẢ BÁO CÁO VÀ NHÂN SỰ) ---
     function fetchAndProcessData() {
         showLoader();
 
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
-        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; // Link data mới
+        
+        // THAY ĐỔI 1: LINK DỮ LIỆU NHÂN SỰ (Bạn có thể thay thế link này nếu cần)
+        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; 
 
-        // Tải 2 nguồn dữ liệu song song
         Promise.all([
             fetch(salesDataUrl).then(res => res.json()),
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
-            // 1. Xử lý dữ liệu bán hàng (như cũ)
             rawData = salesResult
                 .filter(r => r.trangThai && String(r.trangThai).trim() !== '')
                 .map(r => ({
@@ -253,42 +251,37 @@
                     ten: r.ten || 'N/A'
                 }));
 
-            // 2. Lưu trữ dữ liệu nhân sự
             employeeData = employeeResult;
 
-            // 3. Logic phân quyền dựa trên ID từ URL
-            const currentUserID = getUrlParameter('id');
+            const idFromUrl = getUrlParameter('id');
 
-            if (currentUserID) {
-                const currentUser = employeeData.find(emp => emp.id === currentUserID);
+            if (idFromUrl) {
+                // THAY ĐỔI 2: SO SÁNH VỚI 'idnv' THAY VÌ 'id'
+                // Điều này yêu cầu file Google Sheet của bạn phải có một cột tên là 'idnv'
+                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
 
                 if (currentUser) {
                     isRestrictedView = true;
                     if (currentUser.vi_tri === "Leader") {
-                        // Nếu là Leader, lấy tên tất cả nhân sự cùng team
                         document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
                         allowedNames = employeeData
                             .filter(emp => emp.team === currentUser.team)
                             .map(emp => emp.ho_ten);
                     } else {
-                        // Nếu là nhân viên, chỉ lấy tên của chính họ
                         document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ho_ten}`;
                         allowedNames = [currentUser.ho_ten];
                     }
                 } else {
-                    // Nếu ID không hợp lệ, không cho xem gì cả
-                    alert(`ID "${currentUserID}" không hợp lệ hoặc không tồn tại.`);
+                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                     isRestrictedView = true;
-                    allowedNames = []; // Mảng rỗng để không có data nào khớp
+                    allowedNames = [];
                 }
             } else {
-                // Không có ID, xem toàn bộ (chế độ admin)
                 isRestrictedView = false;
                 allowedNames = [];
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            // 4. Khởi tạo bộ lọc và hiển thị báo cáo lần đầu
             populateAllFilters(rawData);
             applyFilters();
 
@@ -316,12 +309,9 @@
         const selT = getSelectedOptions('team-all', 'filter-team');
 
         return rawData.filter(r => {
-            // --- PHẦN MỚI: THÊM BỘ LỌC DỰA TRÊN QUYỀN HẠN ---
-            // Nếu là chế độ xem bị giới hạn, kiểm tra xem tên của dòng dữ liệu có trong danh sách được phép không
             const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
-            if (!isUserAllowed) return false; // Nếu không được phép, bỏ qua ngay
+            if (!isUserAllowed) return false; 
             
-            // Các bộ lọc cũ vẫn giữ nguyên
             const d = new Date(r.ngay);
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
@@ -349,7 +339,6 @@
         populate('team', 'team-options', 'filter-team');
     }
     
-    // --- Utility Functions ---
     function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
