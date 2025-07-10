@@ -192,7 +192,7 @@
     let rawData = [];
     let employeeData = [];
     let isRestrictedView = false; // Cờ để xác định chế độ xem bị giới hạn
-    let allowedNames = [];      // Mảng chứa các tên được phép xem (danh sách khách mời)
+    let allowedNames = [];      // Mảng chứa các tên được phép xem
 
     const loader = document.getElementById('loading-overlay');
     const showLoader = () => loader.classList.add('visible');
@@ -229,10 +229,7 @@
     function fetchAndProcessData() {
         showLoader();
 
-        // LINK DỮ LIỆU BÁN HÀNG
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
-        
-        // LINK DỮ LIỆU NHÂN SỰ (dùng để phân quyền)
         const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; 
 
         Promise.all([
@@ -240,7 +237,6 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
-            // Xử lý và làm sạch dữ liệu bán hàng thô
             rawData = salesResult
                 .filter(r => r.trangThai && String(r.trangThai).trim() !== '')
                 .map(r => ({
@@ -253,43 +249,38 @@
                     ten: r.ten || 'N/A'
                 }));
 
-            // Lưu dữ liệu nhân sự để phân quyền
             employeeData = employeeResult;
 
-            // --- BƯỚC 1: XÂY DỰNG "DANH SÁCH KHÁCH MỜI" (allowedNames) ---
             const idFromUrl = getUrlParameter('id');
 
             if (idFromUrl) {
-                // Tìm người dùng hiện tại trong danh sách nhân sự bằng 'idnv'
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
 
                 if (currentUser) {
                     isRestrictedView = true;
-                    // Nếu là Leader, lấy tên tất cả nhân viên trong team
                     if (currentUser.vi_tri === "Leader") {
                         document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
                         allowedNames = employeeData
                             .filter(emp => emp.team === currentUser.team)
-                            .map(emp => emp.ho_ten);
-                    // Nếu là nhân viên, chỉ lấy tên của chính họ
+                            // THAY ĐỔI 1: Thay ho_ten -> ho_va_ten
+                            .map(emp => emp.ho_va_ten); 
                     } else {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ho_ten}`;
-                        allowedNames = [currentUser.ho_ten];
+                        // THAY ĐỔI 2: Thay ho_ten -> ho_va_ten
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ho_va_ten}`;
+                        // THAY ĐỔI 3: Thay ho_ten -> ho_va_ten
+                        allowedNames = [currentUser.ho_va_ten];
                     }
                 } else {
-                    // Nếu không tìm thấy ID, hiển thị cảnh báo và khóa dữ liệu
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                     isRestrictedView = true;
-                    allowedNames = []; // Danh sách rỗng -> không ai được xem
+                    allowedNames = [];
                 }
             } else {
-                // Không có ID trên URL -> Chế độ xem toàn bộ (Admin)
                 isRestrictedView = false;
                 allowedNames = [];
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            // Khởi tạo bộ lọc và hiển thị báo cáo lần đầu
             populateAllFilters(rawData);
             applyFilters();
 
@@ -316,15 +307,10 @@
         const selCa = getSelectedOptions('ca-all', 'filter-ca');
         const selT = getSelectedOptions('team-all', 'filter-team');
 
-        // --- BƯỚC 2: LỌC DỮ LIỆU BÁN HÀNG DỰA TRÊN CÁC BỘ LỌC VÀ "DANH SÁCH KHÁCH MỜI" ---
         return rawData.filter(r => {
-            // Điều kiện phân quyền: Tên của nhân viên trong dòng dữ liệu này (r.ten)
-            // có nằm trong danh sách được phép (allowedNames) không?
-            // (Nếu không phải chế độ xem bị giới hạn, điều kiện này luôn đúng)
             const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
-            if (!isUserAllowed) return false; // Nếu không được phép, loại bỏ ngay
+            if (!isUserAllowed) return false; 
             
-            // Các điều kiện lọc khác từ sidebar
             const d = new Date(r.ngay);
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
@@ -332,7 +318,6 @@
             const isCaOk = !selCa || selCa.includes(String(r.ca));
             const isTeamOk = !selT || selT.includes(String(r.team));
             
-            // Trả về true chỉ khi tất cả các điều kiện đều đúng
             return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
         });
     }
@@ -353,7 +338,6 @@
         populate('team', 'team-options', 'filter-team');
     }
     
-    // --- Các hàm tiện ích ---
     function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
