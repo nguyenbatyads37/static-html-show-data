@@ -230,29 +230,36 @@
         showLoader();
 
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
-        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; 
+        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
         Promise.all([
             fetch(salesDataUrl).then(res => res.json()),
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
+            // BƯỚC 1: Lọc và làm sạch dữ liệu thô ngay từ đầu
+            // - Chỉ lấy các dòng có trạng thái, có tên và có team.
+            // - Dùng trim() để loại bỏ khoảng trắng thừa.
             rawData = salesResult
-                .filter(r => r.trangThai && String(r.trangThai).trim() !== '')
+                .filter(r => 
+                    r.trangThai && String(r.trangThai).trim() !== '' &&
+                    r.ten && String(r.ten).trim() !== '' &&       
+                    r.team && String(r.team).trim() !== ''      
+                )
                 .map(r => ({
                     ...r, 
-                    // THAY ĐỔI QUAN TRỌNG 1: Dọn dẹp tên sale ngay từ đầu
                     ten: (r.ten || '').trim(), 
                     soMessCmt: +r.soMess || 0,
                     soDon: +r.donMess || 0,
                     dsChot: +r.doanhSoMess || 0,
                     phanHoi: +r.phanHoi || 0,
-                    team: r.team || '',
+                    team: (r.team || '').trim(),
                 }));
 
             employeeData = employeeResult;
             const idFromUrl = getUrlParameter('id');
 
+            // BƯỚC 2: Xác định quyền hạn xem dữ liệu dựa trên 'id' từ URL
             if (idFromUrl) {
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
                 if (currentUser) {
@@ -261,7 +268,6 @@
                         document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
                         allowedNames = employeeData
                             .filter(emp => emp.team === currentUser.team)
-                            // THAY ĐỔI QUAN TRỌNG 2: Dọn dẹp tên nhân viên khi đưa vào danh sách cho phép
                             .map(emp => (emp.ho_va_ten || '').trim());
                     } else {
                         const cleanName = (currentUser.ho_va_ten || '').trim();
@@ -279,7 +285,18 @@
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            populateAllFilters(rawData);
+            // BƯỚC 3: Tạo bộ dữ liệu riêng để sinh ra các bộ lọc
+            let dataForFilters;
+            if (isRestrictedView) {
+                // Nếu bị giới hạn, bộ lọc sẽ chỉ hiển thị các tùy chọn (team, sp...) có trong dữ liệu của người dùng này
+                dataForFilters = rawData.filter(r => allowedNames.includes(r.ten));
+            } else {
+                // Nếu là admin, bộ lọc hiển thị tùy chọn từ tất cả dữ liệu
+                dataForFilters = rawData;
+            }
+
+            populateAllFilters(dataForFilters); 
+            
             applyFilters();
 
         }).catch(err => { 
@@ -288,6 +305,23 @@
         }).finally(() => {
             hideLoader();
         });
+    }
+
+    function populateAllFilters(data) {
+        const populate = (key, containerId, className) => {
+            // Hàm này giờ chỉ tạo checkbox từ dữ liệu được cung cấp (đã được lọc quyền hạn)
+            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
+            const container = document.getElementById(containerId);
+            container.innerHTML = uniqueValues.map(val => {
+                const label = val; 
+                return `<label class='indent'><input type='checkbox' class='${className}' value='${val}' checked> ${label}</label>`;
+            }).join('');
+        };
+        
+        populate('sanPham', 'product-options', 'filter-product');
+        populate('thiTruong', 'market-options', 'filter-market');
+        populate('ca', 'ca-options', 'filter-ca');
+        populate('team', 'team-options', 'filter-team');
     }
     
     function getFilteredData() {
@@ -305,11 +339,13 @@
         const selCa = getSelectedOptions('ca-all', 'filter-ca');
         const selT = getSelectedOptions('team-all', 'filter-team');
 
+        // Lọc trên toàn bộ rawData, kết hợp bộ lọc giao diện và bộ lọc quyền hạn
         return rawData.filter(r => {
-            // Bộ lọc tên đã được dọn dẹp ở cả hai phía nên so sánh sẽ chính xác
+            // Lọc theo quyền hạn (quan trọng nhất)
             const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
             if (!isUserAllowed) return false; 
             
+            // Lọc theo các lựa chọn trên giao diện
             const d = new Date(r.ngay);
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
@@ -321,22 +357,6 @@
         });
     }
 
-    function populateAllFilters(data) {
-        const populate = (key, containerId, className) => {
-            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
-            const container = document.getElementById(containerId);
-            container.innerHTML = uniqueValues.map(val => {
-                const label = val || '(Chưa phân loại)';
-                return `<label class='indent'><input type='checkbox' class='${className}' value='${val}' checked> ${label}</label>`;
-            }).join('');
-        };
-        
-        populate('sanPham', 'product-options', 'filter-product');
-        populate('thiTruong', 'market-options', 'filter-market');
-        populate('ca', 'ca-options', 'filter-ca');
-        populate('team', 'team-options', 'filter-team');
-    }
-    
     function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
@@ -381,10 +401,9 @@
             const s = item.data;
             const rate = s.mess ? s.don / s.mess : 0;
             const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0 ? 'bg-yellow' : '');
-            const teamDisplay = item.team || '(Chưa phân loại)';
 
             return `<tr><td class="text-center">${index + 1}</td>
-                <td class="text-left">${teamDisplay}</td>
+                <td class="text-left">${item.team}</td>
                 <td class="text-left">${item.name}</td>
                 <td>${formatNumber(s.mess)}</td>
                 <td>${formatNumber(s.don)}</td>
@@ -419,7 +438,7 @@
         const container = document.getElementById('daily-breakdown'); 
         container.innerHTML = '';
         if (data.length === 0) {
-            container.innerHTML = '<h3>Không có dữ liệu chi tiết để hiển thị.</h3>';
+            container.innerHTML = '<h3 style="text-align: center; color: #777; margin-top: 40px;">Không có dữ liệu chi tiết để hiển thị.</h3>';
             return;
         }
         const groupedByDate = {};
@@ -440,7 +459,6 @@
                 total.don += r.soDon;
                 total.chot += r.dsChot;
                 total.phanHoi += r.phanHoi;
-                const teamDisplay = r.team || '(Chưa phân loại)';
                 return`<tr>
                         <td class="text-left">${r.ten}</td>
                         <td class="text-left">${r.ca}</td>
@@ -450,7 +468,7 @@
                         <td>${formatNumber(r.soDon)}</td>
                         <td>${formatNumber(r.phanHoi)}</td>
                         <td>${formatCurrency(r.dsChot)}</td>
-                        <td class="text-left">${teamDisplay}</td></tr>`
+                        <td class="text-left">${r.team}</td></tr>`
             }).join('');
 
             const footHtml=`<tr class='total-row'>
