@@ -237,9 +237,6 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
-            // BƯỚC 1: Lọc và làm sạch dữ liệu thô ngay từ đầu
-            // - Chỉ lấy các dòng có trạng thái, có tên và có team.
-            // - Dùng trim() để loại bỏ khoảng trắng thừa.
             rawData = salesResult
                 .filter(r => 
                     r.trangThai && String(r.trangThai).trim() !== '' &&
@@ -258,16 +255,17 @@
 
             employeeData = employeeResult;
             const idFromUrl = getUrlParameter('id');
+            let restrictedTeamName = null; // Biến lưu tên team nếu bị giới hạn
 
-            // BƯỚC 2: Xác định quyền hạn xem dữ liệu dựa trên 'id' từ URL
             if (idFromUrl) {
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
                 if (currentUser) {
                     isRestrictedView = true; 
                     if (currentUser.vi_tri === "Leader") {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
+                        restrictedTeamName = currentUser.team; // Lấy tên team chính thức
+                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${restrictedTeamName}`;
                         allowedNames = employeeData
-                            .filter(emp => emp.team === currentUser.team)
+                            .filter(emp => emp.team === restrictedTeamName)
                             .map(emp => (emp.ho_va_ten || '').trim());
                     } else {
                         const cleanName = (currentUser.ho_va_ten || '').trim();
@@ -285,17 +283,15 @@
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            // BƯỚC 3: Tạo bộ dữ liệu riêng để sinh ra các bộ lọc
             let dataForFilters;
             if (isRestrictedView) {
-                // Nếu bị giới hạn, bộ lọc sẽ chỉ hiển thị các tùy chọn (team, sp...) có trong dữ liệu của người dùng này
                 dataForFilters = rawData.filter(r => allowedNames.includes(r.ten));
             } else {
-                // Nếu là admin, bộ lọc hiển thị tùy chọn từ tất cả dữ liệu
                 dataForFilters = rawData;
             }
-
-            populateAllFilters(dataForFilters); 
+            
+            // SỬA LỖI: Truyền tên team bị giới hạn vào hàm populate
+            populateAllFilters(dataForFilters, restrictedTeamName); 
             
             applyFilters();
 
@@ -307,14 +303,21 @@
         });
     }
 
-    function populateAllFilters(data) {
+    // SỬA LỖI: Hàm này giờ nhận thêm tham số restrictedTeamName
+    function populateAllFilters(data, restrictedTeamName = null) {
         const populate = (key, containerId, className) => {
-            // Hàm này giờ chỉ tạo checkbox từ dữ liệu được cung cấp (đã được lọc quyền hạn)
-            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
             const container = document.getElementById(containerId);
+            let uniqueValues = [];
+
+            // SỬA LỖI: Logic đặc biệt cho bộ lọc TEAM
+            if (key === 'team' && restrictedTeamName) {
+                uniqueValues = [restrictedTeamName]; // Chỉ dùng tên team chính thức, không suy từ data
+            } else {
+                uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
+            }
+            
             container.innerHTML = uniqueValues.map(val => {
-                const label = val; 
-                return `<label class='indent'><input type='checkbox' class='${className}' value='${val}' checked> ${label}</label>`;
+                return `<label class='indent'><input type='checkbox' class='${className}' value='${val}' checked> ${val}</label>`;
             }).join('');
         };
         
@@ -325,10 +328,14 @@
     }
     
     function getFilteredData() {
-        const sdVal = document.getElementById('start-date').value, edVal = document.getElementById('end-date').value;
-        const sd = sdVal ? new Date(sdVal) : null, ed = edVal ? new Date(edVal) : null;
-        if (ed) ed.setHours(23, 59, 59, 999);
-        
+        const sdVal = document.getElementById('start-date').value;
+        const edVal = document.getElementById('end-date').value;
+
+        // SỬA LỖI: Chuẩn hóa ngày tháng về UTC để tránh lỗi timezone
+        // Biến ngày "YYYY-MM-DD" thành đối tượng date tại thời điểm bắt đầu/kết thúc ngày theo giờ UTC
+        const sd = sdVal ? new Date(sdVal + 'T00:00:00.000Z') : null;
+        const ed = edVal ? new Date(edVal + 'T23:59:59.999Z') : null;
+
         const getSelectedOptions = (masterId, childClass) => {
           if (document.getElementById(masterId).checked) return null;
           return [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
@@ -339,14 +346,13 @@
         const selCa = getSelectedOptions('ca-all', 'filter-ca');
         const selT = getSelectedOptions('team-all', 'filter-team');
 
-        // Lọc trên toàn bộ rawData, kết hợp bộ lọc giao diện và bộ lọc quyền hạn
         return rawData.filter(r => {
-            // Lọc theo quyền hạn (quan trọng nhất)
             const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
             if (!isUserAllowed) return false; 
             
-            // Lọc theo các lựa chọn trên giao diện
-            const d = new Date(r.ngay);
+            const d = new Date(r.ngay); // Dữ liệu ngày từ Google Sheet thường đã là ISO/UTC
+            
+            // So sánh ngày tháng đã được chuẩn hóa
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
             const isMarketOk = !selM || selM.includes(r.thiTruong);
@@ -357,7 +363,7 @@
         });
     }
 
-    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`; }
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
     function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
