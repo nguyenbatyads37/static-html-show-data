@@ -135,24 +135,29 @@
     function createOptions(list, selected = '') { return list.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? 'selected' : ''}>${escapeHtml(item)}</option>`).join(''); }
     function createDatalistOptions(list) { return list.map(item => `<option value="${escapeHtml(item)}"></option>`).join(''); }
 
+    // ✅ Cập nhật lại hàm updateEmployeeData
     function updateEmployeeData(employeeName, row) {
       const rowId = row.dataset.rowId;
       const pageDatalist = document.getElementById(`page-list-${rowId}`);
       const tkqcDatalist = document.getElementById(`tkqc-list-${rowId}`);
-
+      const productDatalist = document.getElementById(`product-list-${rowId}`);
+      const marketDatalist = document.getElementById(`market-list-${rowId}`);
+    
       const pageList = dynamicPageData[employeeName] || [];
       const tkqcList = tkqcData[employeeName] || [];
-
-      if(pageDatalist) pageDatalist.innerHTML = createDatalistOptions(pageList);
-      if(tkqcDatalist) tkqcDatalist.innerHTML = createDatalistOptions(tkqcList);
-      
-      // Clear the input values
+    
+      if (pageDatalist) pageDatalist.innerHTML = createDatalistOptions(pageList);
+      if (tkqcDatalist) tkqcDatalist.innerHTML = createDatalistOptions(tkqcList);
+      if (productDatalist) productDatalist.innerHTML = createDatalistOptions(dynamicProductList);
+      if (marketDatalist) marketDatalist.innerHTML = createDatalistOptions(dynamicMarketList);
+    
+      // Clear input values
       const pageInput = row.querySelector('input[name="page"]');
       const tkqcInput = row.querySelector('input[name="TKQC"]');
-      if(pageInput) pageInput.value = '';
-      if(tkqcInput) tkqcInput.value = '';
-
-      updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page`);
+      if (pageInput) pageInput.value = '';
+      if (tkqcInput) tkqcInput.value = '';
+    
+      updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page, ${dynamicProductList.length} SP, ${dynamicMarketList.length} thị trường`);
     }
 
     function addNewRow(data = {}, insertAfter = null) {
@@ -215,7 +220,6 @@
       addNewRow(data, currentRow);
     }
     
-    // PHỤC HỒI HÀM NÀY
     function parseUrlData(dataString) {
       try {
         const result = [];
@@ -241,7 +245,6 @@
       }
     }
 
-    // PHỤC HỒI HÀM NÀY
     function loadDataFromUrl() {
       const urlParams = new URLSearchParams(window.location.search);
       const dataString = urlParams.get('data');
@@ -291,27 +294,43 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       updateStatus('Ứng dụng đã sẵn sàng. Đang tải dữ liệu động...');
-      fetch('https://script.google.com/macros/s/AKfycbzczWYjQLBZocRMKfI-Ok3OBIO2oOcjrDrUqHzD7xl3_5BcRnFwA_hQgDOEJvvHc4em/exec')
-      .then(res => { if (!res.ok) throw new Error(`Lỗi mạng: ${res.statusText}`); return res.json(); })
-      .then(data => {
-        if (data.error) throw new Error(`Lỗi từ Apps Script: ${data.error}`);
-        dynamicProductList = data.sanPham || []; dynamicMarketList = data.thiTruong || [];
-        const pageMap = {};
-        if (data.tenPage && Array.isArray(data.tenPage)) {
-          data.tenPage.forEach(item => { const { tenMKT, page } = item; if (tenMKT && page) { if (!pageMap[tenMKT]) pageMap[tenMKT] = []; pageMap[tenMKT].push(page); } });
-        }
-        dynamicPageData = pageMap;
-        updateStatus('Tải dữ liệu động thành công. Sẵn sàng sử dụng.');
-      }).catch(err => {
-        console.error('Lỗi khi tải dữ liệu động:', err);
-        updateStatus(`LỖI: Không thể tải dữ liệu gợi ý. ${err.message}`);
-        respMsg.className = 'error'; respMsg.textContent = `Không thể tải dữ liệu gợi ý. Bạn vẫn có thể nhập tay.`;
-      }).finally(() => {
-        // LUỒNG XỬ LÝ ĐÚNG: CHỈ XỬ LÝ DỮ LIỆU URL SAU KHI FETCH XONG
-        if (!loadDataFromUrl()) {
-          addNewRow(); // Nếu không có dữ liệu từ URL, thêm một dòng trống
-        }
-      });
+      
+      // ✅ Cập nhật đoạn fetch trong DOMContentLoaded
+      fetch('https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLg0RUsrwDkVRLvNkj4S8nuCSUT4wfy2FKGkllPkgDQToQsHzTpaqErsRHdQCGaHK5NskI8QNF5LlZtIN-KzVzxOPvfqFlv079VVw4TlFxeex8hfVLY-5swC5QT4SKc5wR4KNAvBjeNURCkFdIczpRM_GFakS8pav5MIiSULs8iLyQXxjRnQVFkOrHqQ1PJ9lKrgVN-0E-Iu8wxc4paYjOhXz0SoXa_K8L6vgnH8BbEZ3YKWKgxGVEcpVVfP9BFkpZ9Kl8zu64vzKZVf3DFRiqf3bCbsqw&lib=MkDx9m9xUI9Qo01lZv5CfFdzeJKPwgl-5')
+        .then(res => {
+          if (!res.ok) throw new Error(`Lỗi mạng: ${res.statusText}`);
+          return res.json();
+        })
+        .then(data => {
+          if (data.error) throw new Error(`Lỗi từ Apps Script: ${data.error}`);
+
+          const pageMap = {}, sanPhamSet = new Set(), thiTruongSet = new Set();
+          data.tenPage.forEach(item => {
+            const { tenMKT, page, sanPham, thiTruong } = item;
+            if (!tenMKT) return;
+            if (!pageMap[tenMKT]) pageMap[tenMKT] = [];
+            if (page) pageMap[tenMKT].push(page);
+            if (sanPham) sanPhamSet.add(sanPham);
+            if (thiTruong) thiTruongSet.add(thiTruong);
+          });
+
+          dynamicPageData = pageMap;
+          dynamicProductList = Array.from(sanPhamSet);
+          dynamicMarketList = Array.from(thiTruongSet);
+
+          updateStatus('Tải dữ liệu động thành công. Sẵn sàng sử dụng.');
+        })
+        .catch(err => {
+          console.error('Lỗi khi tải dữ liệu động:', err);
+          updateStatus(`LỖI: Không thể tải dữ liệu gợi ý. ${err.message}`);
+          respMsg.className = 'error';
+          respMsg.textContent = `Không thể tải dữ liệu gợi ý. Bạn vẫn có thể nhập tay.`;
+        })
+        .finally(() => {
+          if (!loadDataFromUrl()) {
+            addNewRow();
+          }
+        });
     });
 
     window.updateEmployeeData = updateEmployeeData; window.removeRow = removeRow; window.addSimilarRow = addSimilarRow; window.formatCurrency = formatCurrency;
