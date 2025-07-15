@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Báo Cáo MKT LumiGlobal (v4 - Cỡ chữ lớn)</title>
+  <title>Báo Cáo MKT LumiGlobal (v5 - Autocomplete Nâng cao)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -93,10 +93,7 @@
     .action-buttons { display: flex; gap: 0.5rem; justify-content: center; }
     .action-buttons button { padding: 0.4rem 0.6rem; }
     
-    .add-row-btn, .submit-btn {
-      padding: 0.8rem 1.8rem;
-      font-size: 1.2rem;
-    }
+    .add-row-btn, .submit-btn { padding: 0.8rem 1.8rem; font-size: 1.2rem; }
     .add-row-btn { background-color: var(--success-color); margin-bottom: 1.5rem; }
     .add-row-btn:hover { background-color: #218838; }
     .submit-btn { background-color: var(--danger-color); margin-top: 1.5rem; }
@@ -113,18 +110,34 @@
     .removeRow { background-color: #6c757d; }
     .removeRow:hover { background-color: #5a6268; }
     
-    .input-container { display: flex; align-items: center; gap: 0.5rem; }
-    .input-container input { flex-grow: 1; }
-    .input-container .addSimilar {
-        flex-shrink: 0;
-        width: 44px; height: 44px;
-        padding: 0;
-        font-size: 1.3rem;
-    }
+    .input-container { display: flex; align-items: center; gap: 0.5rem; width: 100%; }
+    .input-container .autocomplete-container { flex-grow: 1; }
+    .input-container .addSimilar { flex-shrink: 0; width: 44px; height: 44px; padding: 0; font-size: 1.3rem; }
+    
     .status { background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 14px; color: #495057; }
     #dataTable th:nth-child(1), #dataTable td:nth-child(1) { width: 80px; text-align: center; }
     #dataTable th:nth-child(6), #dataTable td:nth-child(6), #dataTable th:nth-child(8), #dataTable td:nth-child(8), #dataTable th:nth-child(9), #dataTable td:nth-child(9), #dataTable th:nth-child(10), #dataTable td:nth-child(10), #dataTable th:nth-child(11), #dataTable td:nth-child(11) { width: 150px; }
     #dataTable th:nth-child(7), #dataTable td:nth-child(7) { width: 30%; min-width: 320px; }
+
+    /* === START: Styles for Enhanced Autocomplete === */
+    .autocomplete-container { position: relative; width: 100%; }
+    .autocomplete-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid var(--medium-gray);
+      border-radius: var(--border-radius);
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    .autocomplete-suggestion { padding: 0.7rem; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
+    .autocomplete-suggestion:hover, .autocomplete-suggestion.highlighted { background-color: var(--primary-color); color: white; }
+    .autocomplete-suggestion:last-child { border-bottom: none; }
+    /* === END: Styles for Enhanced Autocomplete === */
   </style>
 </head>
 <body>
@@ -152,6 +165,7 @@
   </div>
 
   <script>
+    // --- START: DATA CONFIGURATION ---
     const employeeList = ["Nguyễn Đức Anh","Nguyễn Văn VIệt","Lâm Thị Thu Thảo","Nguyễn Nam Khánh","Nguyễn Quang Minh","Nguyễn Đức Anh","Nguyễn Danh Nam","Nguyễn Văn Việt","Lâm Thị Thu Thảo","Nguyễn Quang Minh","Nguyễn Duy Hiếu","Phạm Tiến Thành","Lê Đình Toản","Trần Quốc Khải","Mạnh Cường","Nguyễn Thị Hiếu","Vũ Viết Anh","Lục Trần Minh Trí","Đoàn Ngọc Huân","Nguyễn Hiền Lương","Trần Huy Hùng","Nguyễn Anh Tuấn","Trần Tiến","Nguyễn Thị Như Quỳnh","Nguyễn Quang Trường"];
     const shiftList = ["Hết ca","Giữa ca","Ca Chiều"];
     const tkqcData = { "Lê Đình Toản": ["lumi hn 07(1)","tcm 365(1)","tcm 386(1)","tcm 389-b(1)","tcm 427-b"], "Lục Trần Minh Trí": ["tcm 399-b","tcm 456"], "Mạnh Cường": ["lumi hn 04","lumi hn 06","tcm 372-b","tcm 376-b","tcm 378(1)","tcm 394(1)","tcm 407(1)","tcm 418(1)","tcm 442(1)"], "Nguyễn Anh Tuấn": ["lumi hn 11","tcm  395"], "Nguyễn Hiền Lương": ["lumi hn 13(1)","tcm 410-b(1)","tcm 430-b","tcm 434-b(1)"], "Nguyễn Quang Trường": ["lumi hn 09"], "Nguyễn Thị Hiếu": ["lumi hn 10","tcm 381(1)","tcm 406(1)","tcm 413-b","tcm 440(1)","tcm 443(1)"], "Nguyễn Thị Như Quỳnh": ["lumi hn 08 hold"], "Phạm Tiến Thành": ["lumi hn 05(1)","lumi hn 14(1)","tcm 300","tcm 393(1)","tcm 431(1)","tcm 449(1)"], "Trần Huy Hùng": ["lumi hn 01","tcm 429-b(1)","tcm 438(1)"], "Trần Quốc Khải": ["lumi hn 02(1)","lumi hn 12","tcm 369-b(1)","tcm 380(1)","tcm 387(1)","tcm 455"], "Trần Tiến": ["tcm 426-b"], "Vũ Viết Anh": ["tcm 390","tcm 450(1)"], "Đoàn Ngọc Huân": ["lumi hn 03(1)","tcm 400-b(1)"] };
@@ -159,33 +173,151 @@
     let dynamicProductList = [], dynamicMarketList = [], dynamicPageData = {};
     const tableBody = document.getElementById('tableBody'), addRowBtn = document.getElementById('addRowBtn'), form = document.getElementById('dataForm'), statusDiv = document.getElementById('status'), respMsg = document.getElementById('responseMessage');
     let rowCounter = 0;
+    let highlightedIndex = -1;
 
+    // --- UTILITY FUNCTIONS ---
     function updateStatus(message) { statusDiv.textContent = new Date().toLocaleTimeString() + ': ' + message; }
     function formatCurrency(input) { let val = input.value.replace(/[^0-9]/g, ''); input.value = val ? parseInt(val, 10).toLocaleString('vi-VN') : ''; }
     function getToday() { return new Date().toISOString().split('T')[0]; }
     function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str || ''; return div.innerHTML; }
     function createOptions(list, selected = '') { return list.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? 'selected' : ''}>${escapeHtml(item)}</option>`).join(''); }
-    function createDatalistOptions(list) { return list.map(item => `<option value="${escapeHtml(item)}"></option>`).join(''); }
 
-    function updateEmployeeData(name, row) {
-      const tkqcInput = row.querySelector('.tkqc-input'), pageInput = row.querySelector('.page-input'), rowId = row.dataset.rowId;
-      tkqcInput.value = ''; pageInput.value = '';
-      const tkqcList = tkqcData[name] || [], pageList = dynamicPageData[name] || [];
-      document.getElementById(`tkqc-${rowId}`).innerHTML = createDatalistOptions(tkqcList);
-      document.getElementById(`page-${rowId}`).innerHTML = createDatalistOptions(pageList);
-      updateStatus(`Cập nhật cho ${name}: ${tkqcList.length} TKQC, ${pageList.length} Page`);
+    // --- START: NEW ENHANCED AUTOCOMPLETE LOGIC ---
+    function createAutocompleteInput(name, value = '', suggestions = [], placeholder = '', additionalClass = '') {
+      const containerId = `autocomplete-${name}-${rowCounter}`;
+      const inputId = `input-${name}-${rowCounter}`;
+      
+      return `
+        <div class="autocomplete-container ${additionalClass}" id="${containerId}">
+          <input 
+            name="${name}" 
+            id="${inputId}"
+            class="${additionalClass}"
+            value="${escapeHtml(value)}" 
+            placeholder="${placeholder}"
+            autocomplete="off"
+            data-suggestions='${JSON.stringify(suggestions).replace(/'/g, "'")}'
+            onkeydown="handleAutocompleteKeydown(event, '${containerId}')"
+            oninput="handleAutocompleteInput(event, '${containerId}')"
+            onfocus="handleAutocompleteFocus(event, '${containerId}')"
+            onblur="handleAutocompleteBlur('${containerId}')"
+          >
+          <div class="autocomplete-suggestions" style="display: none;"></div>
+        </div>
+      `;
     }
 
+    function filterSuggestions(query, suggestions) {
+      if (!query.trim()) return suggestions;
+      const lowerQuery = query.toLowerCase();
+      return suggestions.filter(item => item.toLowerCase().includes(lowerQuery)).sort((a, b) => a.toLowerCase().indexOf(lowerQuery) - b.toLowerCase().indexOf(lowerQuery));
+    }
+
+    function showSuggestions(containerId, suggestions) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      const suggestionsDiv = container.querySelector('.autocomplete-suggestions');
+      if (suggestions.length === 0) { suggestionsDiv.style.display = 'none'; return; }
+      suggestionsDiv.innerHTML = suggestions.map((item, index) => `<div class="autocomplete-suggestion" data-index="${index}" onmousedown="selectSuggestion('${containerId}', this.textContent)">${escapeHtml(item)}</div>`).join('');
+      suggestionsDiv.style.display = 'block';
+    }
+
+    function selectSuggestion(containerId, value) {
+      const input = document.querySelector(`#${containerId} input`);
+      const suggestionsDiv = document.querySelector(`#${containerId} .autocomplete-suggestions`);
+      if (input) { input.value = value; input.focus(); }
+      if (suggestionsDiv) { suggestionsDiv.style.display = 'none'; }
+    }
+
+    function updateHighlight(suggestions) {
+      suggestions.forEach((suggestion, index) => suggestion.classList.toggle('highlighted', index === highlightedIndex));
+    }
+
+    function handleAutocompleteKeydown(event, containerId) {
+      const suggestionsDiv = document.querySelector(`#${containerId} .autocomplete-suggestions`);
+      const suggestions = suggestionsDiv.querySelectorAll('.autocomplete-suggestion');
+      if (suggestions.length === 0) return;
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault(); highlightedIndex = Math.min(highlightedIndex + 1, suggestions.length - 1); updateHighlight(suggestions);
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault(); highlightedIndex = Math.max(highlightedIndex - 1, 0); updateHighlight(suggestions);
+      } else if (event.key === 'Enter') {
+        event.preventDefault(); if (highlightedIndex >= 0 && suggestions[highlightedIndex]) { selectSuggestion(containerId, suggestions[highlightedIndex].textContent); }
+      } else if (event.key === 'Escape') {
+        suggestionsDiv.style.display = 'none'; highlightedIndex = -1;
+      }
+    }
+
+    function handleAutocompleteInput(event, containerId) {
+      const allSuggestions = JSON.parse(event.target.dataset.suggestions || '[]');
+      const filtered = filterSuggestions(event.target.value, allSuggestions);
+      showSuggestions(containerId, filtered);
+      highlightedIndex = -1;
+    }
+
+    function handleAutocompleteFocus(event, containerId) {
+      handleAutocompleteInput(event, containerId);
+    }
+
+    function handleAutocompleteBlur(containerId) {
+      setTimeout(() => {
+        const suggestionsDiv = document.querySelector(`#${containerId} .autocomplete-suggestions`);
+        if (suggestionsDiv) { suggestionsDiv.style.display = 'none'; }
+        highlightedIndex = -1;
+      }, 150);
+    }
+    // --- END: NEW ENHANCED AUTOCOMPLETE LOGIC ---
+
+    function updateEmployeeData(employeeName, row) {
+      const tkqcInput = row.querySelector('.tkqc-input');
+      const pageInput = row.querySelector('.page-input');
+      
+      if (tkqcInput) tkqcInput.value = '';
+      if (pageInput) pageInput.value = '';
+      
+      const tkqcList = tkqcData[employeeName] || [];
+      const pageList = dynamicPageData[employeeName] || [];
+
+      // Update TKQC and Page suggestions by updating the data-suggestions attribute
+      if (tkqcInput) tkqcInput.dataset.suggestions = JSON.stringify(tkqcList);
+      if (pageInput) pageInput.dataset.suggestions = JSON.stringify(pageList);
+
+      updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page`);
+    }
+    
     function addNewRow(data = {}, insertAfter = null) {
-      rowCounter++; const rowId = `row${rowCounter}`, row = document.createElement('tr');
-      row.dataset.rowId = rowId;
-      row.innerHTML = `<td class="action-buttons"><button type="button" class="removeRow" onclick="removeRow(this)">❌</button></td><td><select name="Tên" onchange="updateEmployeeData(this.value, this.closest('tr'))"><option value="">-- Chọn tên --</option>${createOptions(employeeList, data.Tên)}</select></td><td><input name="Ngày" type="date" value="${data.Ngày || getToday()}"></td><td><select name="ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList, data.ca)}</select></td><td><input name="Sản_phẩm" list="product-${rowId}" value="${escapeHtml(data.Sản_phẩm)}"><datalist id="product-${rowId}">${createDatalistOptions(dynamicProductList)}</datalist></td><td><div class="input-container"><input name="Thị_trường" list="market-${rowId}" value="${escapeHtml(data.Thị_trường)}"><button type="button" class="addSimilar" onclick="addSimilarRow(this, false)">➕</button><datalist id="market-${rowId}">${createDatalistOptions(dynamicMarketList)}</datalist></div></td><td><div class="input-container"><input name="page" class="page-input" list="page-${rowId}" value="${escapeHtml(data.page)}"><button type="button" class="addSimilar" onclick="addSimilarRow(this, true)">➕</button><datalist id="page-${rowId}">${createDatalistOptions(dynamicPageData[data.Tên] || [])}</datalist></div></td><td><input name="TKQC" class="tkqc-input" list="tkqc-${rowId}" value="${escapeHtml(data.TKQC)}"><datalist id="tkqc-${rowId}">${createDatalistOptions(tkqcData[data.Tên] || [])}</datalist></td><td><input name="CPQC" type="text" value="${data.CPQC || ''}" oninput="formatCurrency(this)"></td><td><input name="Via_log" value="${escapeHtml(data.Via_log)}"></td><td><input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ''}"></td><td class="hidden"><input name="id" value="${data.id || 'NEW_' + Date.now() + rowCounter}" readonly></td><td class="hidden"><input name="Team" value="${data.Team || ''}"></td><td class="hidden"><input name="id_NS" value="${data.id_NS || ''}"></td>`;
+      rowCounter++;
+      const row = document.createElement('tr');
+      row.dataset.rowId = `row${rowCounter}`;
+      
+      const tkqcList = tkqcData[data.Tên] || [];
+      const pageList = dynamicPageData[data.Tên] || [];
+      
+      row.innerHTML = `
+        <td class="action-buttons"><button type="button" class="removeRow" onclick="removeRow(this)">❌</button></td>
+        <td><select name="Tên" onchange="updateEmployeeData(this.value, this.closest('tr'))"><option value="">-- Chọn tên --</option>${createOptions(employeeList, data.Tên)}</select></td>
+        <td><input name="Ngày" type="date" value="${data.Ngày || getToday()}"></td>
+        <td><select name="ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList, data.ca)}</select></td>
+        <td>${createAutocompleteInput('Sản_phẩm', data.Sản_phẩm, dynamicProductList, 'Nhập sản phẩm...')}</td>
+        <td><div class="input-container">${createAutocompleteInput('Thị_trường', data.Thị_trường, dynamicMarketList, 'Nhập thị trường...')}<button type="button" class="addSimilar" onclick="addSimilarRow(this, false)">➕</button></div></td>
+        <td><div class="input-container">${createAutocompleteInput('page', data.page, pageList, 'Nhập tên page...', 'page-input')}<button type="button" class="addSimilar" onclick="addSimilarRow(this, true)">➕</button></div></td>
+        <td>${createAutocompleteInput('TKQC', data.TKQC, tkqcList, 'Nhập TKQC...', 'tkqc-input')}</td>
+        <td><input name="CPQC" type="text" value="${data.CPQC || ''}" oninput="formatCurrency(this)" placeholder="Nhập CPQC..."></td>
+        <td><input name="Via_log" value="${escapeHtml(data.Via_log)}" placeholder="Nhập Via log..."></td>
+        <td><input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ''}" placeholder="Nhập số mess+cmt..."></td>
+        <td class="hidden"><input name="id" value="${data.id || 'NEW_' + Date.now() + rowCounter}" readonly></td>
+        <td class="hidden"><input name="Team" value="${data.Team || ''}"></td>
+        <td class="hidden"><input name="id_NS" value="${data.id_NS || ''}"></td>
+      `;
+
       insertAfter ? insertAfter.after(row) : tableBody.appendChild(row);
       const cpqcInput = row.querySelector('[name="CPQC"]'); if (cpqcInput.value) formatCurrency(cpqcInput);
       updateStatus(`Đã thêm dòng ${rowCounter}`);
     }
 
     function removeRow(button) { button.closest('tr').remove(); updateStatus('Đã xóa dòng'); }
+    
     function addSimilarRow(button, keepPage) {
       const currentRow = button.closest('tr'), data = {};
       currentRow.querySelectorAll('input, select').forEach(input => { if (input.name && input.value) data[input.name] = (input.name === 'CPQC') ? input.value.replace(/\./g, '') : input.value; });
@@ -220,7 +352,7 @@
 
     document.addEventListener('DOMContentLoaded', () => {
       updateStatus('Ứng dụng đã sẵn sàng. Đang tải dữ liệu động...');
-      fetch('https://script.google.com/macros/s/AKfycbzczWYjQLBZocRMKfI-Ok3OBIO2oOcjrDrUqHzD7xl3_5BcRnFwA_hQgDOEJvvHc4em/exec') // THAY URL MỚI CỦA BẠN VÀO ĐÂY NẾU CẦN
+      fetch('https://script.google.com/macros/s/AKfycbzczWYjQLBZocRMKfI-Ok3OBIO2oOcjrDrUqHzD7xl3_5BcRnFwA_hQgDOEJvvHc4em/exec')
       .then(res => { if (!res.ok) throw new Error(`Lỗi mạng: ${res.statusText}`); return res.json(); })
       .then(data => {
         if (data.error) throw new Error(`Lỗi từ Apps Script: ${data.error}`);
@@ -236,17 +368,12 @@
         updateStatus(`LỖI: Không thể tải dữ liệu gợi ý. ${err.message}`);
         respMsg.className = 'error'; respMsg.textContent = `Không thể tải dữ liệu gợi ý. Bạn vẫn có thể nhập tay.`;
       }).finally(() => {
-        const urlParams = new URLSearchParams(window.location.search), dataString = urlParams.get('data');
-        if (dataString) {
-          try {
-            const data = JSON.parse(decodeURIComponent(dataString)); if(!Array.isArray(data)) throw new Error();
-            data.forEach(rowData => addNewRow(rowData));
-            respMsg.className = 'success'; respMsg.textContent = `Đã tải ${data.length} dòng từ URL.`;
-          } catch { addNewRow(); }
-        } else { addNewRow(); }
+        addNewRow(); // Start with one fresh row
       });
     });
+
     window.updateEmployeeData = updateEmployeeData; window.removeRow = removeRow; window.addSimilarRow = addSimilarRow; window.formatCurrency = formatCurrency;
+    window.handleAutocompleteKeydown = handleAutocompleteKeydown; window.handleAutocompleteInput = handleAutocompleteInput; window.handleAutocompleteFocus = handleAutocompleteFocus; window.handleAutocompleteBlur = handleAutocompleteBlur; window.selectSuggestion = selectSuggestion;
     form.addEventListener('submit', handleSubmit); addRowBtn.addEventListener('click', () => addNewRow());
   </script>
 </body>
