@@ -123,6 +123,7 @@
     const shiftList = ["Hết ca","Giữa ca","Ca Chiều"];
     const tkqcData = { "Lê Đình Toản": ["lumi hn 07(1)","tcm 365(1)","tcm 386(1)","tcm 389-b(1)","tcm 427-b"], "Lục Trần Minh Trí": ["tcm 399-b","tcm 456"], "Mạnh Cường": ["lumi hn 04","lumi hn 06","tcm 372-b","tcm 376-b","tcm 378(1)","tcm 394(1)","tcm 407(1)","tcm 418(1)","tcm 442(1)"], "Nguyễn Anh Tuấn": ["lumi hn 11","tcm  395"], "Nguyễn Hiền Lương": ["lumi hn 13(1)","tcm 410-b(1)","tcm 430-b","tcm 434-b(1)"], "Nguyễn Quang Trường": ["lumi hn 09"], "Nguyễn Thị Hiếu": ["lumi hn 10","tcm 381(1)","tcm 406(1)","tcm 413-b","tcm 440(1)","tcm 443(1)"], "Nguyễn Thị Như Quỳnh": ["lumi hn 08 hold"], "Phạm Tiến Thành": ["lumi hn 05(1)","lumi hn 14(1)","tcm 300","tcm 393(1)","tcm 431(1)","tcm 449(1)"], "Trần Huy Hùng": ["lumi hn 01","tcm 429-b(1)","tcm 438(1)"], "Trần Quốc Khải": ["lumi hn 02(1)","lumi hn 12","tcm 369-b(1)","tcm 380(1)","tcm 387(1)","tcm 455"], "Trần Tiến": ["tcm 426-b"], "Vũ Viết Anh": ["tcm 390","tcm 450(1)"], "Đoàn Ngọc Huân": ["lumi hn 03(1)","tcm 400-b(1)"] };
 
+    // ✅ Khai báo biến toàn cục để lưu dữ liệu động
     let dynamicProductList = [], dynamicMarketList = [], dynamicPageData = {};
     const tableBody = document.getElementById('tableBody'), addRowBtn = document.getElementById('addRowBtn'), form = document.getElementById('dataForm'), statusDiv = document.getElementById('status'), respMsg = document.getElementById('responseMessage');
     let rowCounter = 0;
@@ -135,29 +136,25 @@
     function createOptions(list, selected = '') { return list.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? 'selected' : ''}>${escapeHtml(item)}</option>`).join(''); }
     function createDatalistOptions(list) { return list.map(item => `<option value="${escapeHtml(item)}"></option>`).join(''); }
 
-    // ✅ Cập nhật lại hàm updateEmployeeData
+    // ✅ Cập nhật lại hàm updateEmployeeData để xử lý cả Page, TKQC và xóa giá trị cũ
     function updateEmployeeData(employeeName, row) {
       const rowId = row.dataset.rowId;
       const pageDatalist = document.getElementById(`page-list-${rowId}`);
       const tkqcDatalist = document.getElementById(`tkqc-list-${rowId}`);
-      const productDatalist = document.getElementById(`product-list-${rowId}`);
-      const marketDatalist = document.getElementById(`market-list-${rowId}`);
     
       const pageList = dynamicPageData[employeeName] || [];
       const tkqcList = tkqcData[employeeName] || [];
     
       if (pageDatalist) pageDatalist.innerHTML = createDatalistOptions(pageList);
       if (tkqcDatalist) tkqcDatalist.innerHTML = createDatalistOptions(tkqcList);
-      if (productDatalist) productDatalist.innerHTML = createDatalistOptions(dynamicProductList);
-      if (marketDatalist) marketDatalist.innerHTML = createDatalistOptions(dynamicMarketList);
     
-      // Clear input values
+      // Xóa các giá trị cũ trong các ô input liên quan để người dùng nhập lại
       const pageInput = row.querySelector('input[name="page"]');
       const tkqcInput = row.querySelector('input[name="TKQC"]');
       if (pageInput) pageInput.value = '';
       if (tkqcInput) tkqcInput.value = '';
     
-      updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page, ${dynamicProductList.length} SP, ${dynamicMarketList.length} thị trường`);
+      updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page.`);
     }
 
     function addNewRow(data = {}, insertAfter = null) {
@@ -166,6 +163,7 @@
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
 
+      // Lấy danh sách page và tkqc tương ứng với tên (nếu có)
       const tkqcList = tkqcData[data.Tên] || [];
       const pageList = dynamicPageData[data.Tên] || [];
       
@@ -249,7 +247,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const dataString = urlParams.get('data');
       if (!dataString) {
-        return false; // Không có data, trả về false
+        return false;
       }
       try {
         const data = parseUrlData(dataString);
@@ -260,12 +258,12 @@
         respMsg.className = 'success';
         respMsg.textContent = `Đã tải thành công ${data.length} dòng từ URL.`;
         updateStatus(`Đã tải ${data.length} dòng từ URL.`);
-        return true; // Tải thành công, trả về true
+        return true;
       } catch (error) {
         respMsg.className = 'error';
         respMsg.textContent = 'Lỗi khi đọc dữ liệu từ URL: ' + error.message;
         updateStatus('Lỗi tải URL: ' + error.message);
-        return false; // Lỗi, trả về false
+        return false;
       }
     }
 
@@ -295,25 +293,36 @@
     document.addEventListener('DOMContentLoaded', () => {
       updateStatus('Ứng dụng đã sẵn sàng. Đang tải dữ liệu động...');
       
-      // ✅ Cập nhật đoạn fetch trong DOMContentLoaded
-      fetch('https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLg0RUsrwDkVRLvNkj4S8nuCSUT4wfy2FKGkllPkgDQToQsHzTpaqErsRHdQCGaHK5NskI8QNF5LlZtIN-KzVzxOPvfqFlv079VVw4TlFxeex8hfVLY-5swC5QT4SKc5wR4KNAvBjeNURCkFdIczpRM_GFakS8pav5MIiSULs8iLyQXxjRnQVFkOrHqQ1PJ9lKrgVN-0E-Iu8wxc4paYjOhXz0SoXa_K8L6vgnH8BbEZ3YKWKgxGVEcpVVfP9BFkpZ9Kl8zu64vzKZVf3DFRiqf3bCbsqw&lib=MkDx9m9xUI9Qo01lZv5CfFdzeJKPwgl-5')
+      // ✅ Cập nhật đoạn fetch để lấy và xử lý dữ liệu động
+      // Sử dụng URL bạn cung cấp để lấy dữ liệu page, sản phẩm và thị trường
+      fetch('https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhmLcSLlcJeZ68uUC_yvnIG-f8LE58EN5G-cTFCq3OLqnqtf3-WIyJaPa4-vJZM4pNr7le_scLJ2KECP5t4qRY-OU_V0Ipb2X48HTmSCA3pesyAfJkRl3_tqKJrusLldIIp-Ly7aYacNi7q-uEyNQrcVbHpEHurlT4GvtzX9qGraIeUM-qMmdXlksUgXh0SbUgpaad1b2Bomyy0xF2rlpSQFDEtPtthcc46H92UF_zXOmCsrB7OqmVn7lzvlS8nV8rXjnpBN7qzs39LkxA7XULnjPMbHVxG46jSbqbOyBxwi7SKj5wwcMFWg5uzWA&lib=MkDx9m9xUI9Qo01lZv5CfFdzeJKPwgl-5')
         .then(res => {
           if (!res.ok) throw new Error(`Lỗi mạng: ${res.statusText}`);
           return res.json();
         })
         .then(data => {
-          if (data.error) throw new Error(`Lỗi từ Apps Script: ${data.error}`);
+          if (data.error || !data.tenPage) throw new Error(`Lỗi từ Apps Script hoặc định dạng dữ liệu sai.`);
 
-          const pageMap = {}, sanPhamSet = new Set(), thiTruongSet = new Set();
+          const pageMap = {};
+          const sanPhamSet = new Set();
+          const thiTruongSet = new Set();
+
           data.tenPage.forEach(item => {
             const { tenMKT, page, sanPham, thiTruong } = item;
-            if (!tenMKT) return;
-            if (!pageMap[tenMKT]) pageMap[tenMKT] = [];
+            if (!tenMKT) return; // Bỏ qua nếu không có tên MKT
+
+            // Nhóm page theo tên MKT
+            if (!pageMap[tenMKT]) {
+              pageMap[tenMKT] = [];
+            }
             if (page) pageMap[tenMKT].push(page);
+            
+            // Thu thập sản phẩm và thị trường duy nhất
             if (sanPham) sanPhamSet.add(sanPham);
             if (thiTruong) thiTruongSet.add(thiTruong);
           });
-
+          
+          // Gán dữ liệu đã xử lý vào biến toàn cục
           dynamicPageData = pageMap;
           dynamicProductList = Array.from(sanPhamSet);
           dynamicMarketList = Array.from(thiTruongSet);
@@ -327,6 +336,7 @@
           respMsg.textContent = `Không thể tải dữ liệu gợi ý. Bạn vẫn có thể nhập tay.`;
         })
         .finally(() => {
+          // Luôn khởi tạo form sau khi fetch xong (kể cả khi thất bại)
           if (!loadDataFromUrl()) {
             addNewRow();
           }
