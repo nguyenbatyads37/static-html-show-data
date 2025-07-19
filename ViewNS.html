@@ -200,8 +200,6 @@
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let masterData = []; 
     let employeeData = [];
-    let isRestrictedView = false;
-    let allowedNames = [];
     let charts = {};
     const groupChildren = { 'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US', 'Canada'] };
 
@@ -264,34 +262,39 @@
 
             employeeData = employeeResult;
             
+            // --- BẮT ĐẦU KHỐI LOGIC LỌC DỮ LIỆU ĐÃ SỬA ---
+            // Lọc trực tiếp dựa trên vai trò, đáng tin cậy hơn là dùng danh sách tên.
+            let dataForFilters = masterData; // Mặc định là toàn bộ dữ liệu
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
+
             if (idFromUrl) {
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
                 if (currentUser) {
-                    isRestrictedView = true;
-                    if (currentUser.vi_tri === "Leader") {
-                        const teamName = currentUser.team;
+                    const memberName = (currentUser.ho_va_ten || '').trim();
+                    const teamName = (currentUser.team || '').trim();
+                    
+                    if ((currentUser.vi_tri || '').trim().toLowerCase() === 'leader') {
                         document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${teamName}`;
-                        allowedNames = employeeData.filter(emp => emp.team === teamName).map(emp => (emp.ho_va_ten || '').trim());
-                    } else { 
-                        const memberName = (currentUser.ho_va_ten || '').trim();
+                        // Lọc masterData, lấy tất cả các dòng có team trùng với team của Leader
+                        dataForFilters = masterData.filter(r => (r.team || '').trim() === teamName);
+                    } else { // Nếu là nhân viên
                         document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${memberName}`;
-                        allowedNames = [memberName];
+                        // Lọc masterData, lấy các dòng có tên trùng với tên của nhân viên
+                        dataForFilters = masterData.filter(r => (r.ten || '').trim() === memberName);
                     }
                 } else {
-                    isRestrictedView = true; allowedNames = [];
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                     document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
+                    dataForFilters = []; // Không có dữ liệu để hiển thị
                 }
             } else {
-                isRestrictedView = false; allowedNames = [];
                 document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS';
+                // dataForFilters đã là masterData, không cần làm gì thêm
             }
-            
-            const dataForFilters = isRestrictedView ? masterData.filter(r => allowedNames.includes(r.ten)) : masterData;
+            // --- KẾT THÚC KHỐI LOGIC LỌC DỮ LIỆU ĐÃ SỬA ---
             
             populateAllFilters(dataForFilters);
-            applyTab1Filters();
+            applyTab1Filters(dataForFilters); // Truyền dữ liệu đã được lọc sẵn
         }).catch(err => { 
             console.error("Lỗi khi tải dữ liệu:", err); 
             alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
@@ -301,13 +304,21 @@
     }
 
     // --- LOGIC LỌC & XỬ LÝ DỮ LIỆU ---
-    function getFilteredData(filterIds) {
-        let dataToFilter = isRestrictedView ? masterData.filter(r => allowedNames.includes(r.ten)) : masterData;
+    function getFilteredData(initialData) {
+        // Hàm này giờ nhận dữ liệu đầu vào (đã được lọc theo vai trò nếu có)
+        // và áp dụng các bộ lọc khác (ngày, sản phẩm, etc.) lên nó.
+        let dataToFilter = initialData;
         
-        const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
+        const filterIds = {
+            startDateId: 'start-date-tab1', endDateId: 'end-date-tab1',
+            productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1',
+            marketCbId: 'market-all-tab1', marketOptionsClass: 'filter-market-tab1',
+            caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1',
+            teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1'
+        };
         
-        const sdVal = document.getElementById(startDateId).value;
-        const edVal = document.getElementById(endDateId).value;
+        const sdVal = document.getElementById(filterIds.startDateId).value;
+        const edVal = document.getElementById(filterIds.endDateId).value;
         const sd = sdVal ? new Date(sdVal + 'T00:00:00.000Z') : null;
         const ed = edVal ? new Date(edVal + 'T23:59:59.999Z') : null;
 
@@ -317,10 +328,10 @@
             return [...document.querySelectorAll(`.${cbClass}:checked`)].map(cb => cb.value);
         }
 
-        const selP = getSelected(productCbId, productOptionsClass);
-        const selM = marketCbId ? getSelected(marketCbId, marketOptionsClass) : null;
-        const selCa = caCbId ? getSelected(caCbId, caOptionsClass) : null;
-        const selT = teamCbId ? getSelected(teamCbId, teamOptionsClass) : null;
+        const selP = getSelected(filterIds.productCbId, filterIds.productOptionsClass);
+        const selM = filterIds.marketCbId ? getSelected(filterIds.marketCbId, filterIds.marketOptionsClass) : null;
+        const selCa = filterIds.caCbId ? getSelected(filterIds.caCbId, filterIds.caOptionsClass) : null;
+        const selT = filterIds.teamCbId ? getSelected(filterIds.teamCbId, filterIds.teamOptionsClass) : null;
         
         return dataToFilter.filter(r => {
             const d = new Date(r.ngay);
@@ -336,7 +347,7 @@
 
     function populateAllFilters(data) {
         const prodSet=new Set(), caSet=new Set(), teamSet=new Set(), mktSet=new Set();
-        data.forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
+        (data || masterData).forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
         
         const createSimpleCheckboxes = (set, className) => Array.from(set).sort().map(item => `<label class='indent'><input type='checkbox' class='${className}' value='${item}' checked> ${item}</label>`).join('');
         
@@ -368,9 +379,31 @@
 
     // --- LOGIC CHO TAB 1: BÁO CÁO CHI TIẾT ---
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
-    function applyTab1Filters() {
-        const filterIds = { startDateId: 'start-date-tab1', endDateId: 'end-date-tab1', productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1', marketCbId: 'market-all-tab1', marketOptionsClass: 'filter-market-tab1', caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1', teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1' };
-        const filtered = getFilteredData(filterIds);
+    
+    // Sửa lại hàm applyTab1Filters để nó linh hoạt hơn
+    function applyTab1Filters(baseData = null) {
+        // Nếu baseData không được truyền, ta lấy lại dữ liệu dựa trên id từ URL
+        if (baseData === null) {
+            const idFromUrl = new URLSearchParams(window.location.search).get('id');
+            if (idFromUrl) {
+                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
+                if (currentUser) {
+                    const memberName = (currentUser.ho_va_ten || '').trim();
+                    const teamName = (currentUser.team || '').trim();
+                    if ((currentUser.vi_tri || '').trim().toLowerCase() === 'leader') {
+                        baseData = masterData.filter(r => (r.team || '').trim() === teamName);
+                    } else {
+                        baseData = masterData.filter(r => (r.ten || '').trim() === memberName);
+                    }
+                } else {
+                    baseData = [];
+                }
+            } else {
+                baseData = masterData;
+            }
+        }
+        
+        const filtered = getFilteredData(baseData); // Lọc tiếp theo các checkbox
         renderSummary(filtered); 
         renderKpiSummary(filtered); 
         renderDailyBreakdown(filtered);
@@ -484,8 +517,36 @@
       if (tabName === 'DailyReport' && !charts.cpqcChart) { initAllCharts(); applyDailyFilters(); }
     }
     
+    function getFilteredDataTab2() {
+        let dataToFilter = masterData;
+        const filterIds = {
+            startDateId: 'start-date-tab2', endDateId: 'end-date-tab2',
+            productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2',
+            marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2'
+        };
+        const sdVal = document.getElementById(filterIds.startDateId).value;
+        const edVal = document.getElementById(filterIds.endDateId).value;
+        const sd = sdVal ? new Date(sdVal + 'T00:00:00.000Z') : null;
+        const ed = edVal ? new Date(edVal + 'T23:59:59.999Z') : null;
+        const getSelected = (allId, cbClass) => {
+            const allCheckbox = document.getElementById(allId);
+            if (!allCheckbox || allCheckbox.checked) return null;
+            return [...document.querySelectorAll(`.${cbClass}:checked`)].map(cb => cb.value);
+        };
+        const selP = getSelected(filterIds.productCbId, filterIds.productOptionsClass);
+        const selM = getSelected(filterIds.marketCbId, filterIds.marketOptionsClass);
+        return dataToFilter.filter(r => {
+            const d = new Date(r.ngay);
+            const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
+            const isProductOk = !selP || selP.includes(r.sanPham);
+            const marketGroup = getGroup(normalize(r.thiTruong));
+            const isMarketOk = !selM || selM.includes(marketGroup) || selM.includes(r.thiTruong);
+            return isDateOk && isProductOk && isMarketOk;
+        });
+    }
+    
     function handleTab2Filters(target) { showLoader(); setTimeout(() => { if (target.id === 'toggle-all-charts' || target.classList.contains('chart-toggle')) { if (target.id === 'toggle-all-charts') document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); else document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); toggleChartVisibility(); hideLoader(); return; } handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); applyDailyFilters(); hideLoader(); }, 10); }
-    function applyDailyFilters() { if (!masterData.length) return; const filterIds = { startDateId: 'start-date-tab2', endDateId: 'end-date-tab2', productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2', marketCbId: 'market-all-tab2', marketOptionsClass: 'filter-market-tab2', caCbId: null, teamCbId: null }; const filtered = getFilteredData(filterIds); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
+    function applyDailyFilters() { if (!masterData.length) return; const filtered = getFilteredDataTab2(); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
     function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td class="text-left"><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
     function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) { wrapper.style.display = checkbox.checked ? 'block' : 'none'; } }); }
     
