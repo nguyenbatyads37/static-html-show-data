@@ -219,7 +219,15 @@
         const today = new Date();
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
         const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        const formatDateForInput = (date) => date.toISOString().split('T')[0];
+
+        // *** FIX: Hàm định dạng ngày đáng tin cậy hơn, tránh lỗi timezone của toISOString() ***
+        const formatDateForInput = (date) => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        
         document.getElementById('start-date-tab1').value = formatDateForInput(firstDay);
         document.getElementById('end-date-tab1').value = formatDateForInput(lastDay);
         document.getElementById('start-date-tab2').value = formatDateForInput(firstDay);
@@ -235,9 +243,7 @@
 
     function fetchAndProcessData() {
         showLoader();
-        // LINK DỮ LIỆU BÁN HÀNG MỚI NHẤT
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwGwSBxeXplEzAM-jJDPaXPkiWjNyKmpR70o6nCY5_ynqoF-3WA1gvF91RIQQfDZ9fvAQ/exec';
-        // LINK DỮ LIỆU NHÂN SỰ (GIỮ NGUYÊN)
         const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
         Promise.all([
@@ -245,7 +251,6 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
-            // == BƯỚC 1: Xử lý dữ liệu bán hàng (sử dụng key từ API mới) ==
             masterData = salesResult
                 .filter(r => r.ten && String(r.ten).trim() !== '')
                 .map(r => ({
@@ -256,26 +261,21 @@
                     soMessCmt: +r.soMessCmt || 0,
                     soDon: +r.soDon || 0,
                     dsChot: +r.dsChot || 0,
-                    doanhSo: +r.doanhSoDi || 0, // <-- SỬA KEY Ở ĐÂY: từ r.doanhSo thành r.doanhSoDi
+                    doanhSo: +r.doanhSoDi || 0,
                     doanhSoSauShip: +r.doanhSoSauShip || 0,
                     doanhsoTC: +r.doanhsoTC || 0,
                     kpis: +r.kpis || 0
                 }));
             
-            // == BƯỚC 2: SỬA LỖI - Dữ liệu nhân sự đã có cấu trúc đúng, KHÔNG cần map lại. ==
-            // Dùng trực tiếp kết quả từ API mà không cần xử lý `map(e => ({...}))` nữa.
             employeeData = employeeResult;
             
-            // == BƯỚC 3: Lọc dữ liệu theo vai trò (giờ sẽ hoạt động đúng) ==
             let dataForFilters = masterData;
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
 
             if (idFromUrl) {
-                // `find` sẽ hoạt động vì employeeData giờ đã có cấu trúc đúng
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl); 
                 
                 if (currentUser) {
-                    // Các thuộc tính `ho_va_ten`, `team`, `vi_tri` sẽ có giá trị đúng
                     const memberName = (currentUser.ho_va_ten || '').trim();
                     const teamName = (currentUser.team || '').trim();
                     
@@ -318,8 +318,11 @@
         };
         const sdVal = document.getElementById(filterIds.startDateId).value;
         const edVal = document.getElementById(filterIds.endDateId).value;
-        const sd = sdVal ? new Date(sdVal + 'T00:00:00.000Z') : null;
-        const ed = edVal ? new Date(edVal + 'T23:59:59.999Z') : null;
+        // Chuyển chuỗi YYYY-MM-DD thành Date object. new Date('YYYY-MM-DD') sẽ hiểu là midnight giờ địa phương.
+        const sd = sdVal ? new Date(sdVal) : null; 
+        const ed = edVal ? new Date(edVal) : null;
+        if(ed) ed.setHours(23, 59, 59, 999); // Đặt thời gian của ngày kết thúc là cuối ngày
+
         const getSelected = (allId, cbClass) => {
             const allCheckbox = document.getElementById(allId);
             if (!allCheckbox || allCheckbox.checked) return null;
@@ -365,7 +368,18 @@
     function normalize(s) { return (s||'').trim().toLowerCase(); }
     function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
     function getGroup(norm) { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); }
-    function formatDate(v) { const d = new Date(v); if (isNaN(d)) return v; return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`; }
+    
+    // *** FIX: Đã sửa hàm formatDate để sử dụng giờ địa phương của trình duyệt ***
+    function formatDate(v) { 
+        const d = new Date(v); 
+        if (isNaN(d)) return v; 
+        // Sử dụng getDate(), getMonth(), getFullYear() để lấy ngày theo múi giờ địa phương
+        const day = String(d.getDate()).padStart(2,'0');
+        const month = String(d.getMonth() + 1).padStart(2,'0'); // Tháng trong JS bắt đầu từ 0
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+    }
+
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatPriceShort(v) { const num = Number(v || 0); if (v === null || v === undefined) return ''; if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr'; if (num >= 1000) return (num / 1000).toFixed(0) + 'k'; return num.toLocaleString('vi-VN'); }
     function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
@@ -480,7 +494,6 @@
             const sortedDailyData = grpObj[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
             const rowsHtml = sortedDailyData.map(r=>{
                 m+=r.soMessCmt;d+=r.soDon;ch+=r.dsChot;pc+=r.cpqc;
-                // SỬA KEY Ở ĐÂY: Dùng r.idNS thay vì r.id
                 return`<tr><td class="text-center">${r.idNS}</td><td class="text-left">${r.ten}</td><td class="text-left">${r.ca}</td><td class="text-left">${r.page}</td><td class="text-left">${r.sanPham}</td><td class="text-left">${r.thiTruong}</td><td>${r.soMessCmt.toLocaleString('vi-VN')}</td><td>${r.soDon.toLocaleString('vi-VN')}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td class="text-left">${r.team}</td></tr>`
             }).join('');
             const footHtml=`<tr class='total-row'><td colspan='6' class='total-label'>Tổng</td><td class='total-value'>${m.toLocaleString('vi-VN')}</td><td class='total-value'>${d.toLocaleString('vi-VN')}</td><td class='total-value'>${formatCurrency(ch)}</td><td class='total-value'>${formatCurrency(pc)}</td><td class="text-left"></td></tr>`;
@@ -505,8 +518,10 @@
         };
         const sdVal = document.getElementById(filterIds.startDateId).value;
         const edVal = document.getElementById(filterIds.endDateId).value;
-        const sd = sdVal ? new Date(sdVal + 'T00:00:00.000Z') : null;
-        const ed = edVal ? new Date(edVal + 'T23:59:59.999Z') : null;
+        const sd = sdVal ? new Date(sdVal) : null;
+        const ed = edVal ? new Date(edVal) : null;
+        if(ed) ed.setHours(23, 59, 59, 999);
+
         const getSelected = (allId, cbClass) => {
             const allCheckbox = document.getElementById(allId);
             if (!allCheckbox || allCheckbox.checked) return null;
