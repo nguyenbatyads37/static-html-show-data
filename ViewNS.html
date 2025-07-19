@@ -235,8 +235,9 @@
 
     function fetchAndProcessData() {
         showLoader();
-        // <-- SỬA LẠI ĐÂY: CẬP NHẬT LINK DỮ LIỆU BÁN HÀNG -->
-        const salesDataUrl = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLilBJzEdCE3cWNfNQIU75MOO7fwcWDZycRO2Qg32R8zL3d2WFpovhADeTb0pULjgBRKp9NmRjLo05w3j8lgKn0-VeHKU-eDy-1j_UIo81D0u9JER59ykDRWxVxBxpaUSR3AswlRvQYOsP2gRGi7Ogzcd9B1iZML0hGEpyfxrm4_u9EmplGdZytt6-saqJCtjqVIZ2Be_kvh6qzE5_JF8ikvMTeJ0kRW75PRKROtQfvrj_PIoF8BdsOBnhiFx8dT-utQW026b87dQx0BpvYOZtFCxcp8ZQ&lib=MkDx9m9xUI9Qo01lZv5CfFdzeJKPwgl-5';
+        // == CẬP NHẬT LINK API MỚI ==
+        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwGwSBxeXplEzAM-jJDPaXPkiWjNyKmpR70o6nCY5_ynqoF-3WA1gvF91RIQQfDZ9fvAQ/exec';
+        // Giữ nguyên link nhân sự vì bạn không cung cấp link mới
         const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
         Promise.all([
@@ -244,39 +245,42 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
-            // <-- SỬA LẠI ĐÂY: "DỊCH" DỮ LIỆU TỪ KEY TIẾNG VIỆT SANG KEY MÀ CODE SỬ DỤNG -->
+            // == BƯỚC 1: XỬ LÝ DỮ LIỆU BÁN HÀNG (SỬA LẠI KEY CHO KHỚP) ==
+            // API mới dùng key camelCase, chỉ cần sửa một vài key không khớp
             masterData = salesResult
-                // Lọc bằng key gốc từ API
-                .filter(r => r.Tên && String(r.Tên).trim() !== '')
-                // Ánh xạ (map) sang cấu trúc key mà code JS đang cần
+                .filter(r => r.ten && String(r.ten).trim() !== '')
                 .map(r => ({
-                    id: r.id,
-                    ten: (r.Tên || 'N/A').trim(),
-                    ngay: r.Ngày,
-                    ca: r.ca,
-                    sanPham: r['Sản_phẩm'], // Dùng dấu ngoặc vuông cho key có ký tự đặc biệt
-                    thiTruong: r['Thị_trường'],
-                    page: r['Báo cáo theo Page'],
-                    team: (r.Team || 'Khác').trim(),
-                    cpqc: +r.CPQC || 0,
-                    soMessCmt: +r['Số Mess Cmt'] || 0,
-                    soDon: +r['Số đơn'] || 0,
-                    dsChot: +r['DS chốt'] || 0,
-                    doanhSo: +r['Doanh số đi'] || 0,
-                    doanhSoSauShip: +r['Doanh số sau ship'] || 0,
-                    doanhsoTC: +r['Doanh số TC'] || 0,
-                    kpis: +r.KPIs || 0,
-                    tienShip: 0 // Giả sử không có trường này, đặt mặc định là 0
+                    ...r, // Giữ lại hầu hết các key đã đúng
+                    // Chuẩn hóa/sửa các key cần thiết
+                    ten: (r.ten || 'N/A').trim(),
+                    team: (r.team || 'Khác').trim(),
+                    // Sửa lại các key số để đảm bảo là number
+                    cpqc: +r.cpqc || 0,
+                    soMessCmt: +r.soMessCmt || 0,
+                    soDon: +r.soDon || 0,
+                    dsChot: +r.dsChot || 0,
+                    doanhSo: +r.doanhSoDi || 0, // << Sửa ở đây: API dùng 'doanhSoDi'
+                    doanhSoSauShip: +r.doanhSoSauShip || 0,
+                    doanhsoTC: +r.doanhsoTC || 0,
+                    kpis: +r.kpis || 0
                 }));
-
-            employeeData = employeeResult;
             
-            // Logic lọc theo vai trò (đã sửa ở lần trước) bây giờ sẽ hoạt động đúng
+            // == BƯỚC 2: XỬ LÝ DỮ LIỆU NHÂN SỰ (VẪN CẦN "DỊCH" KEY) ==
+            // Vì link này vẫn trả về key Tiếng Việt
+            employeeData = employeeResult.map(emp => ({
+                idnv: emp.idnv,
+                ho_va_ten: emp['Họ và tên'],
+                team: emp.team,
+                vi_tri: emp['Vị trí']
+            }));
+            
+            // == BƯỚC 3: LỌC DỮ LIỆU THEO VAI TRÒ (giữ nguyên logic đúng) ==
             let dataForFilters = masterData;
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
 
             if (idFromUrl) {
-                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
+                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl); 
+                
                 if (currentUser) {
                     const memberName = (currentUser.ho_va_ten || '').trim();
                     const teamName = (currentUser.team || '').trim();
@@ -289,7 +293,7 @@
                         dataForFilters = masterData.filter(r => (r.ten || '').trim() === memberName);
                     }
                 } else {
-                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
+                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại trong danh sách nhân sự.`);
                     document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
                     dataForFilters = [];
                 }
@@ -307,7 +311,8 @@
         });
     }
 
-    // --- LOGIC LỌC & XỬ LÝ DỮ LIỆU ---
+    // --- CÁC HÀM CÒN LẠI GIỮ NGUYÊN ---
+    
     function getFilteredData(initialData) {
         let dataToFilter = initialData;
         const filterIds = {
@@ -363,7 +368,6 @@
         document.getElementById('market-options-tab2').innerHTML = createMarketCheckboxes('filter-market-tab2');
     }
 
-    // --- CÁC HÀM TIỆN ÍCH ---
     function normalize(s) { return (s||'').trim().toLowerCase(); }
     function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
     function getGroup(norm) { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); }
@@ -374,7 +378,6 @@
     function handleCheckbox(masterId, childClass, target) { const allCheckbox = document.getElementById(masterId); if (!allCheckbox) return; if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { allCheckbox.checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
     function getCpsCellStyle(cps, selectedMarkets) { const hasChauA = selectedMarkets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m)); const hasNgoaiChauA = selectedMarkets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m)); const isChauAOnly = hasChauA && !hasNgoaiChauA && selectedMarkets.length > 0; if (isChauAOnly) { if (cps > 1000000) return 'bg-lightred'; if (cps > 700000) return 'bg-yellow'; } else { if (cps > 1500000) return 'bg-lightred'; if (cps > 1000000) return 'bg-yellow'; } return ''; }
 
-    // --- LOGIC CHO TAB 1: BÁO CÁO CHI TIẾT ---
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
     
     function applyTab1Filters(baseData = null) {
@@ -447,7 +450,7 @@
         data.forEach(r => { 
             const mkt = r.ten;
             if (!sum[mkt]) sum[mkt] = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpiValue: r.kpis, team: r.team }; 
-            sum[mkt].cpqc += r.cpqc; sum[mkt].dsChot += r.dsChot; sum[mkt].dsDi += r.doanhSo; 
+            sum[mkt].cpqc += r.cpqc; sum[mkt].dsChot += r.dsChot; sum[mkt].dsDi += r.doanhSo; // <-- đã sửa doanhSoDi -> doanhSo
             sum[mkt].dsSauShip += r.doanhSoSauShip; sum[mkt].dsThanhCong += r.doanhsoTC;
         });
         const sortedMktKeys = Object.keys(sum).sort((a, b) => (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b)));
@@ -483,14 +486,14 @@
             const sortedDailyData = grpObj[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
             const rowsHtml = sortedDailyData.map(r=>{
                 m+=r.soMessCmt;d+=r.soDon;ch+=r.dsChot;pc+=r.cpqc;
-                return`<tr><td class="text-center">${r.id}</td><td class="text-left">${r.ten}</td><td class="text-left">${r.ca}</td><td class="text-left">${r.page}</td><td class="text-left">${r.sanPham}</td><td class="text-left">${r.thiTruong}</td><td>${r.soMessCmt.toLocaleString('vi-VN')}</td><td>${r.soDon.toLocaleString('vi-VN')}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td class="text-left">${r.team}</td></tr>`
+                // << Sửa ở đây: dùng r.idNS thay vì r.id >>
+                return`<tr><td class="text-center">${r.idNS}</td><td class="text-left">${r.ten}</td><td class="text-left">${r.ca}</td><td class="text-left">${r.page}</td><td class="text-left">${r.sanPham}</td><td class="text-left">${r.thiTruong}</td><td>${r.soMessCmt.toLocaleString('vi-VN')}</td><td>${r.soDon.toLocaleString('vi-VN')}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td class="text-left">${r.team}</td></tr>`
             }).join('');
             const footHtml=`<tr class='total-row'><td colspan='6' class='total-label'>Tổng</td><td class='total-value'>${m.toLocaleString('vi-VN')}</td><td class='total-value'>${d.toLocaleString('vi-VN')}</td><td class='total-value'>${formatCurrency(ch)}</td><td class='total-value'>${formatCurrency(pc)}</td><td class="text-left"></td></tr>`;
             c.innerHTML+=`<h3>${date}</h3><div class="table-responsive-container"><table><thead><tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Team</th></tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table></div>`;
         }); 
     }
 
-    // --- LOGIC CHO TAB 2: BÁO CÁO THEO NGÀY ---
     function openTab(evt, tabName) {
       document.querySelectorAll(".tab-content").forEach(tc => tc.style.display = "none");
       document.querySelectorAll(".tablinks").forEach(tl => tl.classList.remove("active"));
