@@ -255,6 +255,8 @@
                 .filter(r => r.ten && String(r.ten).trim() !== '')
                 .map(r => ({
                     ...r,
+                    // *** FIX: Chuyển đổi ngày thành đối tượng Date ngay từ đầu, xử lý múi giờ địa phương ***
+                    ngay: new Date(r.ngay), 
                     ten: (r.ten || 'N/A').trim(),
                     team: (r.team || 'Khác').trim(),
                     cpqc: +r.cpqc || 0,
@@ -304,8 +306,6 @@
             hideLoader();
         });
     }
-
-    // --- CÁC HÀM CÒN LẠI GIỮ NGUYÊN ---
     
     function getFilteredData(initialData) {
         let dataToFilter = initialData;
@@ -318,9 +318,11 @@
         };
         const sdVal = document.getElementById(filterIds.startDateId).value;
         const edVal = document.getElementById(filterIds.endDateId).value;
-        // Chuyển chuỗi YYYY-MM-DD thành Date object. new Date('YYYY-MM-DD') sẽ hiểu là midnight giờ địa phương.
-        const sd = sdVal ? new Date(sdVal) : null; 
-        const ed = edVal ? new Date(edVal) : null;
+
+        // *** FIX: Tạo Date object một cách đáng tin cậy. new Date('YYYY-MM-DD') sẽ được hiểu là midnight giờ địa phương ***
+        // Bằng cách thêm T00:00:00, ta chỉ định rõ là giờ địa phương.
+        const sd = sdVal ? new Date(sdVal + 'T00:00:00') : null;
+        const ed = edVal ? new Date(edVal + 'T00:00:00') : null;
         if(ed) ed.setHours(23, 59, 59, 999); // Đặt thời gian của ngày kết thúc là cuối ngày
 
         const getSelected = (allId, cbClass) => {
@@ -332,8 +334,12 @@
         const selM = filterIds.marketCbId ? getSelected(filterIds.marketCbId, filterIds.marketOptionsClass) : null;
         const selCa = filterIds.caCbId ? getSelected(filterIds.caCbId, filterIds.caOptionsClass) : null;
         const selT = filterIds.teamCbId ? getSelected(filterIds.teamCbId, filterIds.teamOptionsClass) : null;
+        
         return dataToFilter.filter(r => {
-            const d = new Date(r.ngay);
+            // *** FIX: Dữ liệu ngày đã là đối tượng Date sẵn nên không cần new Date() nữa ***
+            const d = r.ngay;
+            if (!(d instanceof Date) || isNaN(d)) return false; // Bỏ qua nếu dữ liệu ngày không hợp lệ
+
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
             const marketGroup = getGroup(normalize(r.thiTruong));
@@ -371,12 +377,11 @@
     
     // *** FIX: Đã sửa hàm formatDate để sử dụng giờ địa phương của trình duyệt ***
     function formatDate(v) { 
-        const d = new Date(v); 
-        if (isNaN(d)) return v; 
+        if (!(v instanceof Date) || isNaN(v)) return String(v);
         // Sử dụng getDate(), getMonth(), getFullYear() để lấy ngày theo múi giờ địa phương
-        const day = String(d.getDate()).padStart(2,'0');
-        const month = String(d.getMonth() + 1).padStart(2,'0'); // Tháng trong JS bắt đầu từ 0
-        const year = d.getFullYear();
+        const day = String(v.getDate()).padStart(2,'0');
+        const month = String(v.getMonth() + 1).padStart(2,'0'); // Tháng trong JS bắt đầu từ 0
+        const year = v.getFullYear();
         return `${day}/${month}/${year}`;
     }
 
@@ -413,7 +418,10 @@
         renderKpiSummary(filtered); 
         renderDailyBreakdown(filtered);
     }
-
+    
+    // --- CÁC HÀM RENDER GIỮ NGUYÊN ---
+    // (Các hàm render không cần thay đổi vì chúng nhận dữ liệu đã được lọc đúng)
+    
     function renderSummary(data) {
         const summaryData = {};
         data.forEach(r => {
@@ -489,7 +497,14 @@
         if (data.length === 0) { c.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không có dữ liệu chi tiết.</p>'; return; }
         const grpObj={};
         data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});
-        Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{
+        
+        const sortedDates = Object.keys(grpObj).sort((a, b) => {
+            const dateA = new Date(a.split('/').reverse().join('-'));
+            const dateB = new Date(b.split('/').reverse().join('-'));
+            return dateB - dateA;
+        });
+
+        sortedDates.forEach(date=>{
             let m=0,d=0,ch=0,pc=0;
             const sortedDailyData = grpObj[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
             const rowsHtml = sortedDailyData.map(r=>{
@@ -509,6 +524,7 @@
       if (tabName === 'DailyReport' && !charts.cpqcChart) { initAllCharts(); applyDailyFilters(); }
     }
     
+    // *** FIX: Hàm lọc cho Tab 2 cũng được sửa tương tự Tab 1 ***
     function getFilteredDataTab2() {
         let dataToFilter = masterData;
         const filterIds = {
@@ -518,8 +534,8 @@
         };
         const sdVal = document.getElementById(filterIds.startDateId).value;
         const edVal = document.getElementById(filterIds.endDateId).value;
-        const sd = sdVal ? new Date(sdVal) : null;
-        const ed = edVal ? new Date(edVal) : null;
+        const sd = sdVal ? new Date(sdVal + 'T00:00:00') : null;
+        const ed = edVal ? new Date(edVal + 'T00:00:00') : null;
         if(ed) ed.setHours(23, 59, 59, 999);
 
         const getSelected = (allId, cbClass) => {
@@ -529,8 +545,11 @@
         };
         const selP = getSelected(filterIds.productCbId, filterIds.productOptionsClass);
         const selM = getSelected(filterIds.marketCbId, filterIds.marketOptionsClass);
+
         return dataToFilter.filter(r => {
-            const d = new Date(r.ngay);
+            const d = r.ngay;
+            if (!(d instanceof Date) || isNaN(d)) return false;
+
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
             const marketGroup = getGroup(normalize(r.thiTruong));
@@ -538,6 +557,8 @@
             return isDateOk && isProductOk && isMarketOk;
         });
     }
+    
+    // --- CÁC HÀM CÒN LẠI GIỮ NGUYÊN ---
     
     function handleTab2Filters(target) { showLoader(); setTimeout(() => { if (target.id === 'toggle-all-charts' || target.classList.contains('chart-toggle')) { if (target.id === 'toggle-all-charts') document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); else document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); toggleChartVisibility(); hideLoader(); return; } handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); applyDailyFilters(); hideLoader(); }, 10); }
     function applyDailyFilters() { if (!masterData.length) return; const filtered = getFilteredDataTab2(); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
