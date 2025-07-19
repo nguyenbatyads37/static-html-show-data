@@ -143,7 +143,22 @@
     // --- UTILITY FUNCTIONS ---
     function updateStatus(message) { statusDiv.textContent = new Date().toLocaleTimeString() + ': ' + message; }
     function formatCurrency(input) { let val = input.value.replace(/[^0-9]/g, ''); input.value = val ? parseInt(val, 10).toLocaleString('vi-VN') : ''; }
-    function formatDateToInput(dateString) { if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) return new Date().toISOString().split('T')[0]; const parts = dateString.split('/'); return new Date(parts[2], parts[0] - 1, parts[1]).toISOString().split('T')[0]; }
+    
+    // === START: HÀM ĐÃ SỬA LỖI NGÀY THÁNG ===
+    function formatDateToInput(dateString) {
+      // Kiểm tra định dạng MM/DD/YYYY hoặc M/D/YYYY
+      if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) {
+          return new Date().toISOString().split('T')[0]; // Trả về ngày hôm nay nếu định dạng sai
+      }
+      const parts = dateString.split('/'); // Tách chuỗi thành [MM, DD, YYYY]
+      const month = parts[0].padStart(2, '0'); // Đảm bảo tháng có 2 chữ số (07)
+      const day = parts[1].padStart(2, '0');   // Đảm bảo ngày có 2 chữ số (05, 25)
+      const year = parts[2];
+      // Trả về chuỗi YYYY-MM-DD mà không bị ảnh hưởng bởi múi giờ
+      return `${year}-${month}-${day}`;
+    }
+    // === END: HÀM ĐÃ SỬA LỖI NGÀY THÁNG ===
+
     function getToday() { return new Date().toISOString().split('T')[0]; }
     function escapeHtml(str) { const div = document.createElement('div'); div.textContent = str || ''; return div.innerHTML; }
     function createOptions(list, selected = '') { return list.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? 'selected' : ''}>${escapeHtml(item)}</option>`).join(''); }
@@ -186,7 +201,6 @@
         <td><input name="Via_log" value="${escapeHtml(data.Via_log || '')}" placeholder="Nhập Via log..."></td>
         <td><input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ''}" placeholder="Nhập số mess+cmt..."></td>
         
-        <!-- ID SẼ ƯU TIÊN LẤY TỪ URL (data.id). NẾU KHÔNG CÓ, SẼ TỰ TẠO -->
         <td class="hidden"><input name="id" value="${data.id || `${sessionTrackingId}_R${rowCounter}`}" readonly></td>
         <td class="hidden"><input name="SourceID" value="${escapeHtml(sessionTrackingId)}" readonly></td>
       `;
@@ -211,8 +225,6 @@
     function parseUrlData(dataString) {
       try {
         const result = [];
-        // ĐỐI TƯỢNG NÀY QUYẾT ĐỊNH CÁCH DỊCH DỮ LIỆU TỪ URL.
-        // NÓ ĐÃ BAO GỒM CÁC TRƯỜNG MỚI BẠN CẦN.
         const fieldMap = { 'id': 'id', 'Tên': 'Tên', 'Ngày': 'Ngày', 'Ca': 'ca', 'Sảnphẩm': 'Sản_phẩm', 'Thịtrường': 'Thị_trường', 'Page': 'page', 'TKQC': 'TKQC', 'CPQC': 'CPQC', 'Vialog': 'Via_log', 'SốMessCmt': 'Số_Mess_Cmt' };
         
         const rows = dataString.split('_b_');
