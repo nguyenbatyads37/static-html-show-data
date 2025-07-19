@@ -1,3 +1,201 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Báo cáo chi phí tổng hợp</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* --- CÀI ĐẶT CHUNG & TABS (CSS TỪ PHIÊN BẢN GỐC) --- */
+    body { font-family: 'Roboto', Arial, sans-serif; padding: 20px; background-color: #f4f4f4; color: #333; }
+    .tab-container { overflow: hidden; border-bottom: 2px solid #ccc; margin-bottom: 20px; }
+    .tab-container button {
+      background-color: #f1f1f1; float: left; border: none; outline: none; cursor: pointer;
+      padding: 14px 20px; transition: 0.3s; font-size: 17px; font-weight: 500;
+      border-radius: 8px 8px 0 0; margin-right: 5px;
+    }
+    .tab-container button:hover { background-color: #ddd; }
+    .tab-container button.active { background-color: #2d7c2d; color: white; }
+    .tab-content { display: none; padding: 6px 12px; border-top: none; animation: fadeIn 0.5s; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    /* --- STYLES CHUNG CHO BẢNG & CĂN LỀ --- */
+    .table-responsive-container { overflow-x: auto; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; table-layout: auto; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    th, td { border: 1px solid #e0e0e0; padding: 11px 12px; white-space: nowrap; vertical-align: middle; transition: background-color 0.2s; }
+    
+    /* QUY TẮC CĂN LỀ: CHỮ TRÁI, SỐ PHẢI */
+    th { text-align: center !important; }
+    td { text-align: right !important; }
+    .text-left { text-align: left !important; }
+    .text-center { text-align: center !important; }
+
+    /* CẢI THIỆN KHẢ NĂNG ĐỌC BẢNG */
+    tbody tr:nth-child(even) { background-color: #f9f9f9; }
+    tbody tr:not(.team-header-row):hover { background-color: #eff5fb; }
+    
+    th.green-header { background: #4CAF50; color: white; font-weight: 500; }
+    th.yellow-header { background: #FFC107; color: #424242; font-weight: 500; }
+    
+    /* --- STYLE CHO DÒNG TỔNG CỘNG --- */
+    tr.total-row, tr.total-row:hover { 
+      background: #fffde7; 
+      font-weight: 700; 
+      font-size: 1.05em;
+      color: #333;
+      border-top: 2px solid #4CAF50;
+    }
+    tfoot .total-label { text-align: left !important; }
+    tfoot .total-value { text-align: right !important; }
+    
+    /* --- ĐỊNH DẠNG CÓ ĐIỀU KIỆN (MÀU ĐẬM) --- */
+    .bg-green { background-color: #4CAF50 !important; color: white; }
+    .bg-yellow { background-color: #FFEB3B !important; color: #424242; }
+    .bg-lightred { background-color: #F44336 !important; color: white; }
+    .bg-lightblue { background-color: #2196F3 !important; color: white; }
+    
+    /* --- STYLES TAB 1: BÁO CÁO CHI TIẾT --- */
+    .report-container { display: flex; gap: 20px; }
+    .sidebar { width: 260px; flex-shrink: 0; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+    .sidebar h3 { background: #2d7c2d; color: #fff; padding: 8px; margin-top: 10px; font-size: 16px; border-radius: 4px; }
+    .sidebar label { display: block; margin: 8px 0; font-size: 14px; cursor: pointer; }
+    .sidebar .indent { margin-left: 16px; }
+    .sidebar input[type="date"] { width: 100%; box-sizing: border-box; padding: 6px; margin: 4px 0 10px; border: 1px solid #ccc; border-radius: 4px;}
+    .main-detailed { flex-grow: 1; }
+    .header { display: flex; align-items: center; margin-bottom: 10px; }
+    .header img { height: 60px; margin-right: 15px; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    .header h2 { margin: 0; color: #2d7c2d; font-weight: 700; }
+    #kpi-summary-table { margin-top: 30px; }
+    .daily-breakdown h3 { margin-top: 30px; background: #f0f0f0; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
+
+    /* --- STYLES TAB 2: BÁO CÁO THEO NGÀY (BIỂU ĐỒ) --- */
+    .daily-report-layout { display: flex; gap: 20px; }
+    .daily-report-layout .sidebar { width: 260px; }
+    .daily-report-layout .main-content { flex-grow: 1; }
+    .main-daily h2 { color: #2d7c2d; text-align: center; margin-bottom: 20px; font-weight: 700; }
+    .chart-toggle-controls { margin: 20px 0; padding: 10px; background: #eee; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 15px; align-items: center; }
+    .chart-toggle-controls label { font-size: 14px; cursor: pointer;}
+    .chart-toggle-controls .toggle-all { font-weight: bold; }
+    .charts-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .chart-wrapper {
+        background: #fff; padding: 15px; border-radius: 12px;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        transition: opacity 0.4s ease-in-out, display 0s 0.4s;
+    }
+    .chart-wrapper canvas { width: 100% !important; height: 400px !important; }
+
+    /* --- CHỈ BÁO ĐANG TẢI --- */
+    #loading-overlay {
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(255, 255, 255, 0.7);
+      display: flex; justify-content: center; align-items: center;
+      z-index: 9999;
+      font-size: 1.5em; font-weight: bold; color: #2d7c2d;
+      transition: opacity 0.3s, visibility 0.3s;
+      visibility: hidden; opacity: 0;
+    }
+    #loading-overlay.visible { visibility: visible; opacity: 1; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+</head>
+<body>
+  
+  <div id="loading-overlay">Đang tải dữ liệu...</div>
+
+  <div class="tab-container">
+    <button class="tablinks" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
+    <button class="tablinks" onclick="openTab(event, 'DailyReport')">Báo cáo theo ngày</button>
+  </div>
+
+  <div id="DetailedReport" class="tab-content">
+    <div class="report-container">
+        <div class="sidebar">
+          <h3>Ngày</h3> <label for="start-date-tab1">Từ ngày:</label><input type="date" id="start-date-tab1"> <label for="end-date-tab1">Đến ngày:</label><input type="date" id="end-date-tab1">
+          <h3>Sản phẩm</h3> <label><input type="checkbox" id="product-all-tab1" checked> Tất cả</label> <div id="product-options-tab1" class="indent"></div>
+          <h3>Ca</h3> <label><input type="checkbox" id="ca-all-tab1" checked> Tất cả</label> <div id="ca-options-tab1" class="indent"></div>
+          <h3>Team</h3> <label><input type="checkbox" id="team-all-tab1" checked> Tất cả</label> <div id="team-options-tab1" class="indent"></div>
+          <h3>Thị trường</h3> <label><input type="checkbox" id="market-all-tab1" checked> Tất cả</label> <div id="market-options-tab1"></div>
+        </div>
+        <div class="main-detailed">
+          <div class="header"> 
+              <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo"> 
+              <h2 id="report-title-tab1">DỮ LIỆU CHI PHÍ ADS</h2> 
+          </div>
+          <div class="table-responsive-container">
+            <table id="summary-table">
+              <thead>
+                <tr>
+                  <th class="green-header">STT</th> <th class="green-header">Team</th> <th class="green-header">Marketing</th>
+                  <th class="green-header">Số Mess</th> <th class="green-header">CPQC</th> <th class="green-header">Số Đơn</th> <th class="green-header">DS Chốt</th>
+                  <th class="yellow-header">Tỉ lệ chốt</th> <th class="yellow-header">Giá Mess</th> <th class="yellow-header">CPS</th>
+                  <th class="yellow-header">%CP/DS</th> <th class="yellow-header">Giá TB Đơn</th>
+                </tr>
+              </thead>
+              <tbody id="summary-body"></tbody> <tfoot id="summary-foot"></tfoot>
+            </table>
+          </div>
+          <div class="table-responsive-container">
+            <table id="kpi-summary-table">
+                <thead>
+                  <tr>
+                    <th class="green-header">STT</th> <th class="green-header">Team</th> <th class="green-header">Marketing</th>
+                    <th class="green-header">CPQC</th> <th class="green-header">DS Chốt</th> <th class="green-header">DS Đi</th>
+                    <th class="green-header">DS Sau Ship</th> <th class="green-header">DS Thành Công</th>
+                    <th class="yellow-header">%CP/DS</th> <th class="yellow-header">% KPI</th>
+                  </tr>
+                </thead>
+                <tbody id="kpi-summary-body"></tbody> <tfoot id="kpi-summary-foot"></tfoot>
+            </table>
+          </div>
+          <div id="daily-breakdown"></div>
+        </div>
+    </div>
+  </div>
+
+  <div id="DailyReport" class="tab-content">
+    <div class="main-daily">
+      <h2>Báo cáo hiệu suất theo ngày</h2>
+      <div class="daily-report-layout">
+        <div class="sidebar">
+          <h3>Ngày</h3> <label for="start-date-tab2">Từ ngày:</label><input type="date" id="start-date-tab2"> <label for="end-date-tab2">Đến ngày:</label><input type="date" id="end-date-tab2">
+          <h3>Sản phẩm</h3> <label><input type="checkbox" id="product-all-tab2" checked> Tất cả</label> <div id="product-options-tab2" class="indent"></div>
+          <h3>Thị trường</h3> <label><input type="checkbox" id="market-all-tab2" checked> Tất cả</label> <div id="market-options-tab2"></div>
+        </div>
+        <div class="main-content">
+          <div class="table-responsive-container">
+            <table id="date-summary-table">
+              <thead> <tr> <th>Ngày</th><th>Tổng CPQC</th><th>DS Chốt</th><th>Tỉ lệ chốt TB</th> <th>Giá Mess</th><th>CPS</th><th>%CP/DS</th> </tr> </thead>
+              <tbody id="date-summary-body"></tbody>
+            </table>
+          </div>
+          <div class="chart-toggle-controls">
+              <label class="toggle-all"><input type="checkbox" id="toggle-all-charts" checked> Chọn/Bỏ chọn tất cả</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="cpqcChart" checked> CPQC</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="dsChotChart" checked> DS Chốt</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="rateChart" checked> Tỉ lệ chốt</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="messChart" checked> Giá Mess</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="cpsChart" checked> CPS</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="cpDsRatioChart" checked> %CP/DS</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="productSalesChart" checked> DS theo Sản phẩm</label>
+              <label><input type="checkbox" class="chart-toggle" data-chart="marketSalesChart" checked> DS theo Thị trường</label>
+          </div>
+          <div class="charts-container">
+            <div class="chart-wrapper" data-chart="cpqcChart"><canvas id="cpqcChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="dsChotChart"><canvas id="dsChotChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="rateChart"><canvas id="rateChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="messChart"><canvas id="messChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="cpsChart"><canvas id="cpsChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="cpDsRatioChart"><canvas id="cpDsRatioChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="productSalesChart"><canvas id="productSalesChart"></canvas></div>
+            <div class="chart-wrapper" data-chart="marketSalesChart"><canvas id="marketSalesChart"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 <script>
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let masterData = []; 
@@ -359,3 +557,5 @@
     function updateChart(chart, label, labels, data, colors, type = 'line') { chart.data.labels = labels; chart.data.datasets = [createDataset(label, data, colors, type)]; chart.update('none'); }
     function createDataset(label, data, colors, type = 'line') { const isLine = type === 'line'; return { label, data, backgroundColor: isLine ? colors.fill : colors.border, borderColor: colors.border, type, fill: isLine, tension: 0.4, borderWidth: isLine ? 3 : 1, pointRadius: isLine ? 5 : undefined, pointBackgroundColor: '#fff', pointBorderWidth: 2, borderRadius: isLine ? 0 : 4, }; }
 </script>
+</body>
+</html>
