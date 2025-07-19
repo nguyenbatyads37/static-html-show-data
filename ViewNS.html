@@ -235,6 +235,7 @@
 
     function fetchAndProcessData() {
         showLoader();
+        // <-- SỬA LẠI ĐÂY: CẬP NHẬT LINK DỮ LIỆU BÁN HÀNG -->
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbw5X53u4Ei1i7hlde27WYX6ZsLg6WSFFAHwdSFKFeSAsH3rPBSDl6ffMqOtlX9Vg-Ri/exec';
         const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
@@ -243,28 +244,35 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
+            // <-- SỬA LẠI ĐÂY: "DỊCH" DỮ LIỆU TỪ KEY TIẾNG VIỆT SANG KEY MÀ CODE SỬ DỤNG -->
             masterData = salesResult
-                .filter(r => r.ten && String(r.ten).trim() !== '')
+                // Lọc bằng key gốc từ API
+                .filter(r => r.Tên && String(r.Tên).trim() !== '')
+                // Ánh xạ (map) sang cấu trúc key mà code JS đang cần
                 .map(r => ({
-                    ...r, 
-                    ten: (r.ten || 'N/A').trim(),
-                    team: (r.team || 'Khác').trim(),
-                    dsChot: +r.dsChot || 0, 
-                    cpqc: +r.cpqc || 0, 
-                    soDon: +r.soDon || 0, 
-                    soMessCmt: +r.soMessCmt || 0, 
-                    doanhsoTC: +r.doanhsoTC || 0,
-                    tienShip: +r.tienShip || 0,
-                    doanhSo: +r.doanhSo || 0, 
-                    doanhSoSauShip: +r.doanhSoSauShip || 0,
-                    kpis: +r.kpis || 0 
+                    id: r.id,
+                    ten: (r.Tên || 'N/A').trim(),
+                    ngay: r.Ngày,
+                    ca: r.ca,
+                    sanPham: r['Sản_phẩm'], // Dùng dấu ngoặc vuông cho key có ký tự đặc biệt
+                    thiTruong: r['Thị_trường'],
+                    page: r['Báo cáo theo Page'],
+                    team: (r.Team || 'Khác').trim(),
+                    cpqc: +r.CPQC || 0,
+                    soMessCmt: +r['Số Mess Cmt'] || 0,
+                    soDon: +r['Số đơn'] || 0,
+                    dsChot: +r['DS chốt'] || 0,
+                    doanhSo: +r['Doanh số đi'] || 0,
+                    doanhSoSauShip: +r['Doanh số sau ship'] || 0,
+                    doanhsoTC: +r['Doanh số TC'] || 0,
+                    kpis: +r.KPIs || 0,
+                    tienShip: 0 // Giả sử không có trường này, đặt mặc định là 0
                 }));
 
             employeeData = employeeResult;
             
-            // --- BẮT ĐẦU KHỐI LOGIC LỌC DỮ LIỆU ĐÃ SỬA ---
-            // Lọc trực tiếp dựa trên vai trò, đáng tin cậy hơn là dùng danh sách tên.
-            let dataForFilters = masterData; // Mặc định là toàn bộ dữ liệu
+            // Logic lọc theo vai trò (đã sửa ở lần trước) bây giờ sẽ hoạt động đúng
+            let dataForFilters = masterData;
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
 
             if (idFromUrl) {
@@ -275,26 +283,22 @@
                     
                     if ((currentUser.vi_tri || '').trim().toLowerCase() === 'leader') {
                         document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${teamName}`;
-                        // Lọc masterData, lấy tất cả các dòng có team trùng với team của Leader
                         dataForFilters = masterData.filter(r => (r.team || '').trim() === teamName);
-                    } else { // Nếu là nhân viên
+                    } else {
                         document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${memberName}`;
-                        // Lọc masterData, lấy các dòng có tên trùng với tên của nhân viên
                         dataForFilters = masterData.filter(r => (r.ten || '').trim() === memberName);
                     }
                 } else {
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                     document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
-                    dataForFilters = []; // Không có dữ liệu để hiển thị
+                    dataForFilters = [];
                 }
             } else {
                 document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS';
-                // dataForFilters đã là masterData, không cần làm gì thêm
             }
-            // --- KẾT THÚC KHỐI LOGIC LỌC DỮ LIỆU ĐÃ SỬA ---
             
             populateAllFilters(dataForFilters);
-            applyTab1Filters(dataForFilters); // Truyền dữ liệu đã được lọc sẵn
+            applyTab1Filters(dataForFilters);
         }).catch(err => { 
             console.error("Lỗi khi tải dữ liệu:", err); 
             alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
@@ -305,10 +309,7 @@
 
     // --- LOGIC LỌC & XỬ LÝ DỮ LIỆU ---
     function getFilteredData(initialData) {
-        // Hàm này giờ nhận dữ liệu đầu vào (đã được lọc theo vai trò nếu có)
-        // và áp dụng các bộ lọc khác (ngày, sản phẩm, etc.) lên nó.
         let dataToFilter = initialData;
-        
         const filterIds = {
             startDateId: 'start-date-tab1', endDateId: 'end-date-tab1',
             productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1',
@@ -316,23 +317,19 @@
             caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1',
             teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1'
         };
-        
         const sdVal = document.getElementById(filterIds.startDateId).value;
         const edVal = document.getElementById(filterIds.endDateId).value;
         const sd = sdVal ? new Date(sdVal + 'T00:00:00.000Z') : null;
         const ed = edVal ? new Date(edVal + 'T23:59:59.999Z') : null;
-
         const getSelected = (allId, cbClass) => {
             const allCheckbox = document.getElementById(allId);
             if (!allCheckbox || allCheckbox.checked) return null;
             return [...document.querySelectorAll(`.${cbClass}:checked`)].map(cb => cb.value);
         }
-
         const selP = getSelected(filterIds.productCbId, filterIds.productOptionsClass);
         const selM = filterIds.marketCbId ? getSelected(filterIds.marketCbId, filterIds.marketOptionsClass) : null;
         const selCa = filterIds.caCbId ? getSelected(filterIds.caCbId, filterIds.caOptionsClass) : null;
         const selT = filterIds.teamCbId ? getSelected(filterIds.teamCbId, filterIds.teamOptionsClass) : null;
-        
         return dataToFilter.filter(r => {
             const d = new Date(r.ngay);
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
@@ -380,9 +377,7 @@
     // --- LOGIC CHO TAB 1: BÁO CÁO CHI TIẾT ---
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
     
-    // Sửa lại hàm applyTab1Filters để nó linh hoạt hơn
     function applyTab1Filters(baseData = null) {
-        // Nếu baseData không được truyền, ta lấy lại dữ liệu dựa trên id từ URL
         if (baseData === null) {
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
             if (idFromUrl) {
@@ -402,8 +397,7 @@
                 baseData = masterData;
             }
         }
-        
-        const filtered = getFilteredData(baseData); // Lọc tiếp theo các checkbox
+        const filtered = getFilteredData(baseData);
         renderSummary(filtered); 
         renderKpiSummary(filtered); 
         renderDailyBreakdown(filtered);
@@ -417,13 +411,10 @@
             summaryData[name].mess += r.soMessCmt; summaryData[name].don += r.soDon;
             summaryData[name].chot += r.dsChot; summaryData[name].cpqc += r.cpqc;
         });
-
         const flatList = Object.keys(summaryData).map(name => ({ name, team: summaryData[name].team, data: summaryData[name] }))
             .sort((a,b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.name.localeCompare(b.name));
-        
         let total = { mess: 0, don: 0, chot: 0, cpqc: 0 };
         const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
-
         let bodyHtml = flatList.map((item, index) => {
             const s = item.data;
             total.mess += s.mess; total.don += s.don; total.chot += s.chot; total.cpqc += s.cpqc;
@@ -433,7 +424,6 @@
             const rateClass = rate > 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
             const cpsClass = getCpsCellStyle(pd, selectedMarkets);
             const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
-
             return `<tr><td class="text-center">${index + 1}</td><td class="text-left">${item.team}</td>
                 <td class="text-left">${item.name}</td><td>${s.mess.toLocaleString('vi-VN')}</td>
                 <td>${formatCurrency(s.cpqc)}</td><td>${s.don.toLocaleString('vi-VN')}</td><td>${formatCurrency(s.chot)}</td>
@@ -441,11 +431,9 @@
                 <td class="${cpsClass}">${formatCurrency(pd)}</td><td class="${cpdsClass}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
         }).join('');
         document.getElementById('summary-body').innerHTML = bodyHtml;
-
         const totalRate = total.mess ? total.don / total.mess : 0; const totalPm = total.mess ? total.cpqc / total.mess : 0;
         const totalPd = total.don ? total.cpqc / total.don : 0; const totalPc = total.chot ? total.cpqc / total.chot : 0;
         const totalPdt = total.don ? total.chot / total.don : 0;
-        
         document.getElementById('summary-foot').innerHTML = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td>
                 <td class="total-value">${total.mess.toLocaleString('vi-VN')}</td><td class="total-value">${formatCurrency(total.cpqc)}</td>
                 <td class="total-value">${total.don.toLocaleString('vi-VN')}</td><td class="total-value">${formatCurrency(total.chot)}</td>
@@ -462,27 +450,22 @@
             sum[mkt].cpqc += r.cpqc; sum[mkt].dsChot += r.dsChot; sum[mkt].dsDi += r.doanhSo; 
             sum[mkt].dsSauShip += r.doanhSoSauShip; sum[mkt].dsThanhCong += r.doanhsoTC;
         });
-        
         const sortedMktKeys = Object.keys(sum).sort((a, b) => (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b)));
         let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
-
         let bodyHtml = sortedMktKeys.map((mkt, i) => { 
             const s = sum[mkt]; 
             total.cpqc += s.cpqc; total.dsChot += s.dsChot; total.dsDi += s.dsDi;
             total.dsSauShip += s.dsSauShip; total.dsThanhCong += s.dsThanhCong; total.kpis += s.kpiValue;
             const cp_ds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0; const kpiPercentage = s.kpiValue ? s.dsSauShip / s.kpiValue : 0; 
             const cpdsClass = cp_ds > 0.33 ? 'bg-yellow' : ''; 
-            
             return `<tr><td class="text-center">${i+1}</td><td class="text-left">${s.team}</td><td class="text-left">${mkt}</td>
                 <td>${formatCurrency(s.cpqc)}</td><td>${formatCurrency(s.dsChot)}</td><td>${formatCurrency(s.dsDi)}</td>
                 <td>${formatCurrency(s.dsSauShip)}</td><td>${formatCurrency(s.dsThanhCong)}</td>
                 <td class="${cpdsClass}">${formatPercent(cp_ds)}</td><td>${formatPercent(kpiPercentage)}</td></tr>`;
         }).join(''); 
         document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
-
         const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0;
         const totalKpiPercentage = total.kpis ? total.dsSauShip / total.kpis : 0;
-        
         document.getElementById('kpi-summary-foot').innerHTML = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td>
                 <td class="total-value">${formatCurrency(total.cpqc)}</td><td class="total-value">${formatCurrency(total.dsChot)}</td>
                 <td class="total-value">${formatCurrency(total.dsDi)}</td><td class="total-value">${formatCurrency(total.dsSauShip)}</td>
@@ -495,7 +478,6 @@
         if (data.length === 0) { c.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không có dữ liệu chi tiết.</p>'; return; }
         const grpObj={};
         data.forEach(r=>{const d=formatDate(r.ngay);(grpObj[d]||(grpObj[d]=[])).push(r);});
-        
         Object.keys(grpObj).sort((a,b)=>new Date(b.split('/').reverse().join('-'))-new Date(a.split('/').reverse().join('-'))).forEach(date=>{
             let m=0,d=0,ch=0,pc=0;
             const sortedDailyData = grpObj[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
