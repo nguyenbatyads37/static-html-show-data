@@ -235,9 +235,9 @@
 
     function fetchAndProcessData() {
         showLoader();
-        // == CẬP NHẬT LINK API MỚI ==
+        // LINK DỮ LIỆU BÁN HÀNG MỚI NHẤT
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwGwSBxeXplEzAM-jJDPaXPkiWjNyKmpR70o6nCY5_ynqoF-3WA1gvF91RIQQfDZ9fvAQ/exec';
-        // Giữ nguyên link nhân sự vì bạn không cung cấp link mới
+        // LINK DỮ LIỆU NHÂN SỰ (GIỮ NGUYÊN)
         const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
         Promise.all([
@@ -245,43 +245,37 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
-            // == BƯỚC 1: XỬ LÝ DỮ LIỆU BÁN HÀNG (SỬA LẠI KEY CHO KHỚP) ==
-            // API mới dùng key camelCase, chỉ cần sửa một vài key không khớp
+            // == BƯỚC 1: Xử lý dữ liệu bán hàng (sử dụng key từ API mới) ==
             masterData = salesResult
                 .filter(r => r.ten && String(r.ten).trim() !== '')
                 .map(r => ({
-                    ...r, // Giữ lại hầu hết các key đã đúng
-                    // Chuẩn hóa/sửa các key cần thiết
+                    ...r,
                     ten: (r.ten || 'N/A').trim(),
                     team: (r.team || 'Khác').trim(),
-                    // Sửa lại các key số để đảm bảo là number
                     cpqc: +r.cpqc || 0,
                     soMessCmt: +r.soMessCmt || 0,
                     soDon: +r.soDon || 0,
                     dsChot: +r.dsChot || 0,
-                    doanhSo: +r.doanhSoDi || 0, // << Sửa ở đây: API dùng 'doanhSoDi'
+                    doanhSo: +r.doanhSoDi || 0, // <-- Sửa key này
                     doanhSoSauShip: +r.doanhSoSauShip || 0,
                     doanhsoTC: +r.doanhsoTC || 0,
                     kpis: +r.kpis || 0
                 }));
             
-            // == BƯỚC 2: XỬ LÝ DỮ LIỆU NHÂN SỰ (VẪN CẦN "DỊCH" KEY) ==
-            // Vì link này vẫn trả về key Tiếng Việt
-            employeeData = employeeResult.map(emp => ({
-                idnv: emp.idnv,
-                ho_va_ten: emp['Họ và tên'],
-                team: emp.team,
-                vi_tri: emp['Vị trí']
-            }));
+            // == BƯỚC 2: SỬA LỖI - Dữ liệu nhân sự đã có key đúng, KHÔNG cần map lại. ==
+            // Dùng trực tiếp kết quả từ API
+            employeeData = employeeResult;
             
-            // == BƯỚC 3: LỌC DỮ LIỆU THEO VAI TRÒ (giữ nguyên logic đúng) ==
+            // == BƯỚC 3: Lọc dữ liệu theo vai trò (giờ sẽ hoạt động đúng) ==
             let dataForFilters = masterData;
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
 
             if (idFromUrl) {
+                // `find` sẽ hoạt động vì employeeData giờ đã có cấu trúc đúng
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl); 
                 
                 if (currentUser) {
+                    // Các thuộc tính `ho_va_ten`, `team`, `vi_tri` sẽ có giá trị đúng
                     const memberName = (currentUser.ho_va_ten || '').trim();
                     const teamName = (currentUser.team || '').trim();
                     
@@ -450,7 +444,7 @@
         data.forEach(r => { 
             const mkt = r.ten;
             if (!sum[mkt]) sum[mkt] = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpiValue: r.kpis, team: r.team }; 
-            sum[mkt].cpqc += r.cpqc; sum[mkt].dsChot += r.dsChot; sum[mkt].dsDi += r.doanhSo; // <-- đã sửa doanhSoDi -> doanhSo
+            sum[mkt].cpqc += r.cpqc; sum[mkt].dsChot += r.dsChot; sum[mkt].dsDi += r.doanhSo;
             sum[mkt].dsSauShip += r.doanhSoSauShip; sum[mkt].dsThanhCong += r.doanhsoTC;
         });
         const sortedMktKeys = Object.keys(sum).sort((a, b) => (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b)));
@@ -486,7 +480,7 @@
             const sortedDailyData = grpObj[date].sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
             const rowsHtml = sortedDailyData.map(r=>{
                 m+=r.soMessCmt;d+=r.soDon;ch+=r.dsChot;pc+=r.cpqc;
-                // << Sửa ở đây: dùng r.idNS thay vì r.id >>
+                // Sửa ở đây: dùng r.idNS thay vì r.id
                 return`<tr><td class="text-center">${r.idNS}</td><td class="text-left">${r.ten}</td><td class="text-left">${r.ca}</td><td class="text-left">${r.page}</td><td class="text-left">${r.sanPham}</td><td class="text-left">${r.thiTruong}</td><td>${r.soMessCmt.toLocaleString('vi-VN')}</td><td>${r.soDon.toLocaleString('vi-VN')}</td><td>${formatCurrency(r.dsChot)}</td><td>${formatCurrency(r.cpqc)}</td><td class="text-left">${r.team}</td></tr>`
             }).join('');
             const footHtml=`<tr class='total-row'><td colspan='6' class='total-label'>Tổng</td><td class='total-value'>${m.toLocaleString('vi-VN')}</td><td class='total-value'>${d.toLocaleString('vi-VN')}</td><td class='total-value'>${formatCurrency(ch)}</td><td class='total-value'>${formatCurrency(pc)}</td><td class="text-left"></td></tr>`;
