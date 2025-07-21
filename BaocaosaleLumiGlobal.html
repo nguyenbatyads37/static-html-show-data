@@ -225,9 +225,14 @@
     </form>
 
     <div id="responseMessage"></div>
+
+    <!-- *** THAY ĐỔI: Datalist cho tên nhân viên, được đặt ở đây một lần và tái sử dụng *** -->
+    <datalist id="employee-datalist"></datalist>
+
   </div>
   <script>
     let appData = {
+      // *** THAY ĐỔI: Bổ sung các tên mới vào danh sách ***
       employeeList: [
         "Trần Thị Ngọc Ánh", "Dương Thị Hạnh", "Dương Đức Mạnh", "Trần Thị Hồng Nhung",
         "Bùi Thị Thu Huyền", "Nguyễn Duy Đức", "Nguyễn Thị Thảo", "Đặng Thị Nga", "Phạm Thị Yến",
@@ -239,7 +244,8 @@
         "Trịnh Ngọc Thanh Phương", "Nguyễn Thị Lan Anh", "Nguyễn Thị Thanh Tuyền", "Nguyễn Thị Lan Anh 2",
         "Thái Thị Kim Chi", "Đỗ Thúy Hiền", "Nguyễn Thị Mỹ Uyên", "Mã Tuyết Nhi",
         "Nguyễn Thị Dương", "Trần Ngọc Kim Thùy", "Nguyễn Thùy Trang", "Vũ Thị Phương Thanh",
-        "Phan Nhân", "Trang Trọng Tín", "Nguyễn Thị Thu Trang", "Nguyễn Tuyết Nhi", "Trần Thị Kim Anh"
+        "Phan Nhân", "Trang Trọng Tín", "Nguyễn Thị Thu Trang", "Nguyễn Tuyết Nhi", "Trần Thị Kim Anh",
+        "Phạm Hải Yến", "Trần Thị Nhung", "Lê Ngọc Đài Trang", "Đỗ Thị Thu Hằng", "Mai Thị Lý" // Tên mới được thêm
       ],
       shiftList: ["Hết ca", "Cuối ca"],
       productList: ["Kem body","Fitgum CAFE 20X","Bakuchiol Retinol","Nám","Kẹo Dâu","Serum Sâm","Kẹo Dâu New","DG","Kẹo Táo"],
@@ -252,6 +258,7 @@
     const form = document.getElementById('dataForm');
     const statusDiv = document.getElementById('status');
     const respMsg = document.getElementById('responseMessage');
+    const employeeDatalist = document.getElementById('employee-datalist');
 
     let rowCounter = 0;
 
@@ -274,6 +281,13 @@
     }
 
     function createOptions(list, selectedValue = '') { return list.map(item => `<option value="${escapeHtml(item)}" ${item === selectedValue ? 'selected' : ''}>${escapeHtml(item)}</option>`).join(''); }
+
+    // *** THAY ĐỔI: Hàm để điền dữ liệu vào datalist của nhân viên ***
+    function populateEmployeeDatalist() {
+        // Sắp xếp danh sách tên theo alphabet để dễ tìm
+        appData.employeeList.sort((a, b) => a.localeCompare(b, 'vi'));
+        employeeDatalist.innerHTML = appData.employeeList.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
+    }
 
     function formatNumberInput(input) {
         let value = input.value;
@@ -303,7 +317,10 @@
         <td class="action-buttons">
           <button type="button" class="removeRow" onclick="removeRow(this)">❌</button>
         </td>
-        <td><select name="Tên"><option value="">-- Chọn tên --</option>${createOptions(appData.employeeList, data.Tên)}</select></td>
+        <!-- *** THAY ĐỔI: Sử dụng input với datalist cho cột Tên *** -->
+        <td>
+          <input name="Tên" list="employee-datalist" placeholder="-- Chọn hoặc nhập tên --" value="${escapeHtml(data.Tên || '')}" autocomplete="off">
+        </td>
         <td><input name="Ngày" type="date" value="${data.Ngày || getToday()}"></td>
         <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(appData.shiftList, data.Ca)}</select></td>
         <td>
@@ -434,7 +451,6 @@
           tableBody.innerHTML = '';
           rowCounter = 0;
           
-          // *** THAY ĐỔI: Lấy lại tên từ URL để điền cho dòng mới sau khi gửi thành công ***
           const urlParams = new URLSearchParams(window.location.search);
           const employeeNameFromUrl = urlParams.get('hoten');
           addNewRow({ Tên: employeeNameFromUrl });
@@ -454,7 +470,6 @@
     }
 
     async function initializeApp() {
-        // *** THAY ĐỔI: Lấy tên nhân viên từ tham số URL 'hoten' ***
         const urlParams = new URLSearchParams(window.location.search);
         const employeeNameFromUrl = urlParams.get('hoten');
         
@@ -467,15 +482,16 @@
             }
             const loadedData = await response.json();
 
-            // Cập nhật danh sách nếu có dữ liệu từ server, nếu không dùng danh sách mặc định
             if(loadedData.productList && loadedData.productList.length > 0) appData.productList = loadedData.productList;
             if(loadedData.marketList && loadedData.marketList.length > 0) appData.marketList = loadedData.marketList;
+
+            // *** THAY ĐỔI: Điền dữ liệu cho datalist sau khi tải thành công ***
+            populateEmployeeDatalist();
 
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
             updateStatus('Tải dữ liệu thành công. Ứng dụng đã sẵn sàng!');
-
-            // *** THAY ĐỔI: Truyền tên nhân viên vào dòng đầu tiên ***
+            
             addNewRow({ Tên: employeeNameFromUrl });
 
         } catch(error) {
@@ -483,10 +499,13 @@
             updateStatus(`Không thể tải dữ liệu từ server. Sử dụng dữ liệu dự phòng. Lỗi: ${error.message}`, true);
             respMsg.className = 'error';
             respMsg.textContent = 'Lỗi: Không thể tải dữ liệu mới, đang sử dụng danh sách dự phòng. Vui lòng kiểm tra kết nối mạng.';
-            // Vẫn cho phép chạy với dữ liệu mặc định
+            
+            // *** THAY ĐỔI: Vẫn điền dữ liệu cho datalist ngay cả khi lỗi, sử dụng danh sách mặc định ***
+            populateEmployeeDatalist();
+            
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
-            // *** THAY ĐỔI: Truyền tên nhân viên vào dòng đầu tiên ngay cả khi lỗi mạng ***
+
             addNewRow({ Tên: employeeNameFromUrl });
         }
     }
