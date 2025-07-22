@@ -190,19 +190,11 @@
 <script>
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let rawData = [];
-    let employeeData = [];
-    let isRestrictedView = false;
-    let allowedNames = [];
 
     const loader = document.getElementById('loading-overlay');
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
     
-    function getUrlParameter(name) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(name);
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
       addEventListeners();
       setDefaultDates();
@@ -230,16 +222,9 @@
         showLoader();
 
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
-        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
-        Promise.all([
-            fetch(salesDataUrl).then(res => res.json()),
-            fetch(employeeDataUrl).then(res => res.json())
-        ])
-        .then(([salesResult, employeeResult]) => {
-            // =====================================================================
-            // START: PHẦN SỬA LỖI - ĐÃ TRẢ LẠI ĐÚNG LOGIC BIẾN GỐC
-            // =====================================================================
+        fetch(salesDataUrl).then(res => res.json())
+        .then(salesResult => {
             rawData = salesResult
                 .filter(r => 
                     r.trangThai && String(r.trangThai).trim() !== '' &&
@@ -249,56 +234,17 @@
                 .map(r => ({
                     ...r, 
                     ten: (r.ten || '').trim(), 
-                    // ĐÃ KHÔI PHỤC LOGIC GỐC: Ánh xạ từ biến API (soMess, donMess) sang biến nội bộ
+                    team: (r.team || '').trim(),
                     soMessCmt: +r.soMess || 0,
                     soDon: +r.donMess || 0,
                     dsChot: +r.doanhSoMess || 0,
                     phanHoi: +r.phanHoi || 0,
-                    team: (r.team || '').trim(),
                 }));
-            // =====================================================================
-            // END: PHẦN SỬA LỖI
-            // =====================================================================
 
-            employeeData = employeeResult;
-            const idFromUrl = getUrlParameter('id');
-            let restrictedTeamName = null;
-
-            if (idFromUrl) {
-                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
-                if (currentUser) {
-                    isRestrictedView = true; 
-                    if (currentUser.vi_tri === "Leader") {
-                        restrictedTeamName = currentUser.team;
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${restrictedTeamName}`;
-                        allowedNames = employeeData
-                            .filter(emp => emp.team === restrictedTeamName)
-                            .map(emp => (emp.ho_va_ten || '').trim());
-                    } else {
-                        const cleanName = (currentUser.ho_va_ten || '').trim();
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
-                        allowedNames = [cleanName];
-                    }
-                } else {
-                    isRestrictedView = true; 
-                    allowedNames = [];
-                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
-                }
-            } else {
-                isRestrictedView = false;
-                allowedNames = [];
-                document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
-            }
-            
-            let dataForFilters;
-            if (isRestrictedView) {
-                dataForFilters = rawData.filter(r => allowedNames.includes(r.ten));
-            } else {
-                dataForFilters = rawData;
-            }
-            
-            populateAllFilters(dataForFilters, restrictedTeamName); 
-            
+            // --- LOGIC LỌC THEO ID/TEAM ĐÃ ĐƯỢC GỠ BỎ ---
+            // Luôn hiển thị tiêu đề chung và dùng toàn bộ dữ liệu để tạo bộ lọc
+            document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
+            populateAllFilters(rawData); 
             applyFilters();
 
         }).catch(err => { 
@@ -309,16 +255,10 @@
         });
     }
 
-    function populateAllFilters(data, restrictedTeamName = null) {
+    function populateAllFilters(data) {
         const populate = (key, containerId, className) => {
             const container = document.getElementById(containerId);
-            let uniqueValues = [];
-
-            if (key === 'team' && restrictedTeamName) {
-                uniqueValues = [restrictedTeamName]; 
-            } else {
-                uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
-            }
+            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
             
             container.innerHTML = uniqueValues.map(val => {
                 return `<label class='indent'><input type='checkbox' class='${className}' value='${val}' checked> ${val}</label>`;
@@ -349,8 +289,7 @@
         const selT = getSelectedOptions('team-all', 'filter-team');
 
         return rawData.filter(r => {
-            const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
-            if (!isUserAllowed) return false; 
+            // Đã gỡ bỏ logic lọc theo isUserAllowed
             
             const d = new Date(r.ngay); 
             
@@ -364,7 +303,6 @@
         });
     }
     
-    // HÀM SỬA LỖI MÚI GIỜ (VẪN GIỮ NGUYÊN)
     function formatDate(v) {
         const d = new Date(v);
         if (isNaN(d.getTime())) return v;
