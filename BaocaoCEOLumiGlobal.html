@@ -392,6 +392,7 @@
     function formatDate(v) { 
       const d = new Date(v); 
       if (isNaN(d.getTime())) return v; 
+      // SỬA LỖI: Luôn sử dụng phương thức UTC để lấy ngày tháng năm chính xác
       const day = String(d.getUTCDate()).padStart(2, '0');
       const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       const year = d.getUTCFullYear();
@@ -405,6 +406,7 @@
     function getUrlParameter(name) { return new URLSearchParams(window.location.search).get(name); }
     function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
     
+    // HÀM MỚI: Chuyển đổi ngày tháng có 'Z' thành chuỗi YYYY-MM-DD để so sánh chính xác
     function getUTCDateString(dateValue) {
         if (!dateValue) return null;
         const d = new Date(dateValue);
@@ -454,14 +456,18 @@
         const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
         const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
         const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
-        const tAll = teamCbId ? document.getElementById(teamCbId).checked : true, selT = tAll ? null : [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value);
+        const tAll = teamCbId ? document.getElementById(teamCbId).checked : true, selT = tAll ? null : [...document.querySelectorAll(`.${teamOptionsClass}:checked`)].map(cb => cb.value) : null;
         const normalize = (s) => (s||'').trim().toLowerCase(), capitalize = (s) => s.charAt(0).toUpperCase()+s.slice(1);
         const getGroup = (norm) => { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); };
 
         return costRawData.filter(r => {
+            // SỬA LỖI: Chuyển đổi ngày của dữ liệu sang YYYY-MM-DD để so sánh chuỗi
             const dataDateStr = getUTCDateString(r.ngay);
-            if (!dataDateStr) return false;
+            if (!dataDateStr) return false; // Bỏ qua nếu ngày không hợp lệ
+
+            // So sánh chuỗi YYYY-MM-DD, đảm bảo chính xác
             const isDateOk = (!startDateValue || dataDateStr >= startDateValue) && (!endDateValue || dataDateStr <= endDateValue);
+            
             const isProductOk = !selP || selP.includes(r.sanPham), marketGroup = getGroup(normalize(r.thiTruong));
             const isMarketOk = !selM || selM.includes(marketGroup) || selM.includes(r.thiTruong);
             const isCaOk = !selCa || selCa.includes(r.ca), isTeamOk = !selT || selT.includes(r.team);
@@ -586,9 +592,14 @@
 
         return salesRawData.filter(r => {
             if (isRestrictedView && !allowedNames.includes(r.ten)) { return false; }
+            
+            // SỬA LỖI: Chuyển đổi ngày của dữ liệu sang YYYY-MM-DD để so sánh chuỗi
             const dataDateStr = getUTCDateString(r.ngay);
-            if (!dataDateStr) return false;
+            if (!dataDateStr) return false; // Bỏ qua nếu ngày không hợp lệ
+
+            // So sánh chuỗi YYYY-MM-DD, đảm bảo chính xác
             const isDateOk = (!sdVal || dataDateStr >= sdVal) && (!edVal || dataDateStr <= edVal);
+
             const isProductOk = !selP || selP.includes(r.sanPham), isMarketOk = !selM || selM.includes(r.thiTruong);
             const isCaOk = !selCa || selCa.includes(String(r.ca)), isTeamOk = !selT || selT.includes(String(r.team));
             return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
