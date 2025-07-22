@@ -414,19 +414,11 @@
 <script>
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let rawData = [];
-    let employeeData = [];
-    let isRestrictedView = false;
-    let allowedNames = [];
 
     const loader = document.getElementById('loading-overlay');
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
     
-    function getUrlParameter(name) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(name);
-    }
-
     document.addEventListener('DOMContentLoaded', () => {
       addEventListeners();
       setDefaultDates();
@@ -467,90 +459,43 @@
     
     function fetchAndProcessData() {
         showLoader();
-
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
-        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
-
-        Promise.all([
-            fetch(salesDataUrl).then(res => res.json()),
-            fetch(employeeDataUrl).then(res => res.json())
-        ])
-        .then(([salesResult, employeeResult]) => {
-            rawData = salesResult
-                .filter(r => 
-                    r.trangThai && String(r.trangThai).trim() !== '' &&
-                    r.ten && String(r.ten).trim() !== '' &&       
-                    r.team && String(r.team).trim() !== ''      
-                )
-                .map(r => ({
-                    ...r, 
-                    ten: (r.ten || '').trim(), 
-                    team: (r.team || '').trim(),
-                    soMessCmt: +r.soMess || 0,
-                    soDon: +r.donMess || 0,
-                    dsChot: +r.doanhSoMess || 0,
-                    phanHoi: +r.phanHoi || 0,
-                }));
-            
-            employeeData = employeeResult;
-            const idFromUrl = getUrlParameter('id');
-            let restrictedTeamName = null;
-
-            if (idFromUrl) {
-                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
-                if (currentUser) {
-                    isRestrictedView = true; 
-                    if (currentUser.vi_tri === "Leader") {
-                        restrictedTeamName = currentUser.team;
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${restrictedTeamName}`;
-                        allowedNames = employeeData
-                            .filter(emp => emp.team === restrictedTeamName)
-                            .map(emp => (emp.ho_va_ten || '').trim());
-                    } else {
-                        const cleanName = (currentUser.ho_va_ten || '').trim();
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
-                        allowedNames = [cleanName];
-                    }
-                } else {
-                    isRestrictedView = true; 
-                    allowedNames = [];
-                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
-                }
-            } else {
-                isRestrictedView = false;
-                allowedNames = [];
+        
+        fetch(salesDataUrl)
+            .then(res => res.json())
+            .then(salesResult => {
+                rawData = salesResult
+                    .filter(r => 
+                        r.trangThai && String(r.trangThai).trim() !== '' &&
+                        r.ten && String(r.ten).trim() !== '' &&       
+                        r.team && String(r.team).trim() !== ''      
+                    )
+                    .map(r => ({
+                        ...r, 
+                        ten: (r.ten || '').trim(), 
+                        team: (r.team || '').trim(),
+                        soMessCmt: +r.soMess || 0,
+                        soDon: +r.donMess || 0,
+                        dsChot: +r.doanhSoMess || 0,
+                        phanHoi: +r.phanHoi || 0,
+                    }));
+                
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
-            }
-            
-            let dataForFilters;
-            if (isRestrictedView) {
-                dataForFilters = rawData.filter(r => allowedNames.includes(r.ten));
-            } else {
-                dataForFilters = rawData;
-            }
-            
-            populateAllFilters(dataForFilters, restrictedTeamName); 
-            
-            applyFilters();
+                populateAllFilters(rawData); 
+                applyFilters();
 
-        }).catch(err => { 
-            console.error("Lỗi khi tải dữ liệu:", err); 
-            alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
-        }).finally(() => {
-            hideLoader();
-        });
+            }).catch(err => { 
+                console.error("Lỗi khi tải dữ liệu:", err); 
+                alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
+            }).finally(() => {
+                hideLoader();
+            });
     }
 
-    function populateAllFilters(data, restrictedTeamName = null) {
+    function populateAllFilters(data) {
         const populate = (key, containerId, className) => {
             const container = document.getElementById(containerId);
-            let uniqueValues = [];
-
-            if (key === 'team' && restrictedTeamName) {
-                uniqueValues = [restrictedTeamName]; 
-            } else {
-                uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
-            }
+            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val != null && val !== ''))].sort();
             
             container.innerHTML = uniqueValues.map(val => {
                 return `<label><input type='checkbox' class='${className}' value='${val}' checked> ${val}</label>`;
@@ -581,9 +526,6 @@
         const selT = getSelectedOptions('team-all', 'filter-team');
 
         return rawData.filter(r => {
-            const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
-            if (!isUserAllowed) return false; 
-            
             const d = new Date(r.ngay); 
             
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
@@ -599,11 +541,9 @@
     function formatDate(v) {
         const d = new Date(v);
         if (isNaN(d.getTime())) return v;
-        
         const day = String(d.getDate()).padStart(2, '0');
         const month = String(d.getMonth() + 1).padStart(2, '0');
         const year = d.getFullYear();
-
         return `${day}/${month}/${year}`;
     }
 
@@ -655,7 +595,6 @@
             const rate = s.mess ? s.don / s.mess : 0;
             const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
             
-            // Thêm class top cho 3 người đầu
             let rowClass = '';
             if (index === 0) rowClass = 'top-1';
             else if (index === 1) rowClass = 'top-2';
@@ -714,7 +653,16 @@
         sortedDates.forEach(date => {
             let total = { mess: 0, don: 0, chot: 0, phanHoi: 0 };
             
-            const sortedDailyData = groupedByDate[date].sort((a, b) => a.ten.localeCompare(b.ten));
+            // --- THAY ĐỔI: Cập nhật logic sắp xếp 2 cấp ---
+            const sortedDailyData = groupedByDate[date].sort((a, b) => {
+                // Cấp 1: Sắp xếp theo Tên (A-Z)
+                const nameCompare = a.ten.localeCompare(b.ten);
+                if (nameCompare !== 0) {
+                    return nameCompare;
+                }
+                // Cấp 2: Nếu cùng tên, sắp xếp theo DS Chốt giảm dần
+                return b.dsChot - a.dsChot;
+            });
             
             let rowIndex = 0;
             const rowsHtml = sortedDailyData.map(r=>{
