@@ -305,7 +305,7 @@
     }
 
     // --- HÀM TIỆN ÍCH CHUNG ---
-    function formatDate(v) { const d = new Date(v); if (isNaN(d.getTime())) return v; return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`; }
+    function formatDate(v) { const d = new Date(v); if (isNaN(d.getTime())) return v; return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`; }
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
     function formatPriceShort(v) { const num = Number(v || 0); if (v === null || v === undefined) return ''; if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr'; if (num >= 1000) return (num / 1000).toFixed(0) + 'k'; return num.toLocaleString('vi-VN'); }
@@ -313,19 +313,13 @@
     function getUrlParameter(name) { return new URLSearchParams(window.location.search).get(name); }
     function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
     
-    // --- HÀM MỚI: Xử lý ngày tháng theo UTC để tránh lỗi múi giờ ---
-    /**
-     * Chuyển đổi một ngày (từ API) thành chuỗi 'YYYY-MM-DD' dựa trên giá trị UTC của nó.
-     * @param {string | Date} dateValue - Ngày từ API (ví dụ: "2023-10-26T17:00:00.000Z")
-     * @returns {string|null} - Chuỗi 'YYYY-MM-DD' hoặc null nếu ngày không hợp lệ.
-     */
     function getUTCDateString(dateValue) {
         if (!dateValue) return null;
         const d = new Date(dateValue);
-        if (isNaN(d.getTime())) return null; // Kiểm tra ngày không hợp lệ
+        if (isNaN(d.getTime())) return null; 
 
         const year = d.getUTCFullYear();
-        const month = String(d.getUTCMonth() + 1).padStart(2, '0'); // getUTCMonth() trả về 0-11
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
         const day = String(d.getUTCDate()).padStart(2, '0');
         
         return `${year}-${month}-${day}`;
@@ -370,8 +364,8 @@
 
     function getFilteredCostData(filterIds) {
         const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
-        const startDateValue = document.getElementById(startDateId).value; // Lấy chuỗi YYYY-MM-DD
-        const endDateValue = document.getElementById(endDateId).value; // Lấy chuỗi YYYY-MM-DD
+        const startDateValue = document.getElementById(startDateId).value;
+        const endDateValue = document.getElementById(endDateId).value;
         const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
         const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
         const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
@@ -381,13 +375,11 @@
         const getGroup = (norm) => { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); };
 
         return costRawData.filter(r => {
-            // --- SỬA LỖI MÚI GIỜ ---
             const dataDateStr = getUTCDateString(r.ngay);
-            if (!dataDateStr) return false; // Bỏ qua dòng nếu ngày không hợp lệ
+            if (!dataDateStr) return false;
 
             const isDateOk = (!startDateValue || dataDateStr >= startDateValue) && 
                            (!endDateValue || dataDateStr <= endDateValue);
-            // --- KẾT THÚC SỬA LỖI ---
             
             const isProductOk = !selP || selP.includes(r.sanPham);
             const marketGroup = getGroup(normalize(r.thiTruong));
@@ -516,26 +508,29 @@
         populate('team', 'team-options-tab3', 'filter-team-tab3');
     }
     
+    // =========================================================================================
+    // === SỬA LỖI MÚI GIỜ (TIMEZONE) CHO TAB 3 BẰNG CÁCH THAY ĐỔI HOÀN TOÀN HÀM NÀY ===
+    // =========================================================================================
     function getFilteredSalesData() {
-        const sdVal = document.getElementById('start-date-tab3').value; // Lấy chuỗi YYYY-MM-DD
-        const edVal = document.getElementById('end-date-tab3').value; // Lấy chuỗi YYYY-MM-DD
+        const sdVal = document.getElementById('start-date-tab3').value;
+        const edVal = document.getElementById('end-date-tab3').value;
         
         const getSelectedOptions = (masterId, childClass) => document.getElementById(masterId).checked ? null : [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
-        const selP = getSelectedOptions('product-all-tab3', 'filter-product-tab3'), selM = getSelectedOptions('market-all-tab3', 'filter-market-tab3');
-        const selCa = getSelectedOptions('ca-all-tab3', 'filter-ca-tab3'), selT = getSelectedOptions('team-all-tab3', 'filter-team-tab3');
+        const selP = getSelectedOptions('product-all-tab3', 'filter-product-tab3');
+        const selM = getSelectedOptions('market-all-tab3', 'filter-market-tab3');
+        const selCa = getSelectedOptions('ca-all-tab3', 'filter-ca-tab3');
+        const selT = getSelectedOptions('team-all-tab3', 'filter-team-tab3');
 
         return salesRawData.filter(r => {
             if (isRestrictedView && !allowedNames.includes(r.ten)) {
                 return false;
             }
 
-            // --- SỬA LỖI MÚI GIỜ ---
             const dataDateStr = getUTCDateString(r.ngay);
-            if (!dataDateStr) return false; // Bỏ qua dòng nếu ngày không hợp lệ
+            if (!dataDateStr) return false;
 
             const isDateOk = (!sdVal || dataDateStr >= sdVal) && 
                            (!edVal || dataDateStr <= edVal);
-            // --- KẾT THÚC SỬA LỖI ---
             
             const isProductOk = !selP || selP.includes(r.sanPham);
             const isMarketOk = !selM || selM.includes(r.thiTruong);
