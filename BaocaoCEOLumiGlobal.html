@@ -312,6 +312,24 @@
     function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
     function getUrlParameter(name) { return new URLSearchParams(window.location.search).get(name); }
     function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
+    
+    // --- HÀM MỚI: Xử lý ngày tháng theo UTC để tránh lỗi múi giờ ---
+    /**
+     * Chuyển đổi một ngày (từ API) thành chuỗi 'YYYY-MM-DD' dựa trên giá trị UTC của nó.
+     * @param {string | Date} dateValue - Ngày từ API (ví dụ: "2023-10-26T17:00:00.000Z")
+     * @returns {string|null} - Chuỗi 'YYYY-MM-DD' hoặc null nếu ngày không hợp lệ.
+     */
+    function getUTCDateString(dateValue) {
+        if (!dateValue) return null;
+        const d = new Date(dateValue);
+        if (isNaN(d.getTime())) return null; // Kiểm tra ngày không hợp lệ
+
+        const year = d.getUTCFullYear();
+        const month = String(d.getUTCMonth() + 1).padStart(2, '0'); // getUTCMonth() trả về 0-11
+        const day = String(d.getUTCDate()).padStart(2, '0');
+        
+        return `${year}-${month}-${day}`;
+    }
 
 
     // ====================================================================================================
@@ -352,7 +370,8 @@
 
     function getFilteredCostData(filterIds) {
         const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
-        const startDateValue = document.getElementById(startDateId).value, endDateValue = document.getElementById(endDateId).value;
+        const startDateValue = document.getElementById(startDateId).value; // Lấy chuỗi YYYY-MM-DD
+        const endDateValue = document.getElementById(endDateId).value; // Lấy chuỗi YYYY-MM-DD
         const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
         const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
         const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
@@ -362,10 +381,14 @@
         const getGroup = (norm) => { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); };
 
         return costRawData.filter(r => {
-            if (!r.ngay || isNaN(new Date(r.ngay).getTime())) return false;
-            const d = new Date(r.ngay);
-            const dataDateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-            const isDateOk = (!startDateValue || dataDateStr >= startDateValue) && (!endDateValue || dataDateStr <= endDateValue);
+            // --- SỬA LỖI MÚI GIỜ ---
+            const dataDateStr = getUTCDateString(r.ngay);
+            if (!dataDateStr) return false; // Bỏ qua dòng nếu ngày không hợp lệ
+
+            const isDateOk = (!startDateValue || dataDateStr >= startDateValue) && 
+                           (!endDateValue || dataDateStr <= endDateValue);
+            // --- KẾT THÚC SỬA LỖI ---
+            
             const isProductOk = !selP || selP.includes(r.sanPham);
             const marketGroup = getGroup(normalize(r.thiTruong));
             const isMarketOk = !selM || selM.includes(marketGroup) || selM.includes(r.thiTruong);
@@ -494,22 +517,32 @@
     }
     
     function getFilteredSalesData() {
-        const sdVal = document.getElementById('start-date-tab3').value, edVal = document.getElementById('end-date-tab3').value;
-        const sd = sdVal ? new Date(sdVal + 'T00:00:00Z') : null, ed = edVal ? new Date(edVal + 'T23:59:59Z') : null;
+        const sdVal = document.getElementById('start-date-tab3').value; // Lấy chuỗi YYYY-MM-DD
+        const edVal = document.getElementById('end-date-tab3').value; // Lấy chuỗi YYYY-MM-DD
+        
         const getSelectedOptions = (masterId, childClass) => document.getElementById(masterId).checked ? null : [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
         const selP = getSelectedOptions('product-all-tab3', 'filter-product-tab3'), selM = getSelectedOptions('market-all-tab3', 'filter-market-tab3');
         const selCa = getSelectedOptions('ca-all-tab3', 'filter-ca-tab3'), selT = getSelectedOptions('team-all-tab3', 'filter-team-tab3');
 
         return salesRawData.filter(r => {
-            if (!isRestrictedView || allowedNames.includes(r.ten)) {
-                const d = new Date(r.ngay); 
-                return ((!sd || d >= sd) && (!ed || d <= ed)) &&
-                       (!selP || selP.includes(r.sanPham)) &&
-                       (!selM || selM.includes(r.thiTruong)) &&
-                       (!selCa || selCa.includes(String(r.ca))) &&
-                       (!selT || selT.includes(String(r.team)));
+            if (isRestrictedView && !allowedNames.includes(r.ten)) {
+                return false;
             }
-            return false;
+
+            // --- SỬA LỖI MÚI GIỜ ---
+            const dataDateStr = getUTCDateString(r.ngay);
+            if (!dataDateStr) return false; // Bỏ qua dòng nếu ngày không hợp lệ
+
+            const isDateOk = (!sdVal || dataDateStr >= sdVal) && 
+                           (!edVal || dataDateStr <= edVal);
+            // --- KẾT THÚC SỬA LỖI ---
+            
+            const isProductOk = !selP || selP.includes(r.sanPham);
+            const isMarketOk = !selM || selM.includes(r.thiTruong);
+            const isCaOk = !selCa || selCa.includes(String(r.ca));
+            const isTeamOk = !selT || selT.includes(String(r.team));
+            
+            return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
         });
     }
 
