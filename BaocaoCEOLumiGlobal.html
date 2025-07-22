@@ -21,14 +21,14 @@
 
     /* --- CÀI ĐẶT CHUNG & TABS --- */
     html {
-      font-size: 21px; /* TĂNG KÍCH THƯỚC CHỮ GỐC LẦN 2 */
+      font-size: 21px;
     }
     body { 
       font-family: 'Roboto', Arial, sans-serif; 
       padding: 25px; 
       background-color: #f4f4f4; 
       color: var(--text-dark);
-      font-weight: 500; /* TĂNG ĐỘ ĐẬM MẶC ĐỊNH */
+      font-weight: 500;
     }
     .tab-container { 
       overflow: hidden; 
@@ -88,7 +88,7 @@
     
     th { 
       text-align: center !important; 
-      font-weight: 900; /* Tăng độ đậm tiêu đề bảng */
+      font-weight: 900;
       font-size: 1rem;
     }
     td { text-align: right !important; }
@@ -103,7 +103,7 @@
     
     tr.total-row, tr.total-row:hover { 
       background: #fffbeb; 
-      font-weight: 900; /* Tăng độ đậm dòng tổng */
+      font-weight: 900;
       font-size: 1.05rem;
       color: #713f12;
       border-top: 3px solid var(--primary-green-light);
@@ -160,7 +160,7 @@
     .header h2 { 
       margin: 0; 
       color: var(--primary-green); 
-      font-weight: 900; /* Tăng độ đậm tiêu đề chính */
+      font-weight: 900;
       font-size: 2rem;
     }
     #kpi-summary-table { margin-top: 30px; }
@@ -347,6 +347,7 @@
     const groupChildren = { 'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US', 'Canada'] };
 
     document.addEventListener('DOMContentLoaded', () => {
+      console.log("Trang đã tải xong. Bắt đầu thực thi script.");
       document.getElementById("defaultOpen").click();
       addMasterEventListeners();
       setAllDefaultDates();
@@ -383,16 +384,13 @@
         
         ['start-date-tab1', 'start-date-tab2', 'start-date-tab3'].forEach(id => document.getElementById(id).value = firstDayStr);
         ['end-date-tab1', 'end-date-tab2', 'end-date-tab3'].forEach(id => document.getElementById(id).value = lastDayStr);
+        console.log(`Ngày mặc định được đặt từ ${firstDayStr} đến ${lastDayStr}`);
     }
 
     // --- HÀM TIỆN ÍCH CHUNG ---
-    // ====================================================================================================
-    // SỬA LỖI HIỂN THỊ NGÀY: Dùng getUTCDate, getUTCMonth, getUTCFullYear để đảm bảo ngày hiển thị là ngày gốc từ API
-    // ====================================================================================================
     function formatDate(v) { 
       const d = new Date(v); 
       if (isNaN(d.getTime())) return v; 
-      // SỬA LỖI: Luôn sử dụng phương thức UTC để lấy ngày tháng năm chính xác
       const day = String(d.getUTCDate()).padStart(2, '0');
       const month = String(d.getUTCMonth() + 1).padStart(2, '0');
       const year = d.getUTCFullYear();
@@ -406,11 +404,14 @@
     function getUrlParameter(name) { return new URLSearchParams(window.location.search).get(name); }
     function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
     
-    // HÀM MỚI: Chuyển đổi ngày tháng có 'Z' thành chuỗi YYYY-MM-DD để so sánh chính xác
     function getUTCDateString(dateValue) {
-        if (!dateValue) return null;
+        if (!dateValue) {
+            return null;
+        }
         const d = new Date(dateValue);
-        if (isNaN(d.getTime())) return null; 
+        if (isNaN(d.getTime())) { 
+            return null; 
+        }
         const year = d.getUTCFullYear();
         const month = String(d.getUTCMonth() + 1).padStart(2, '0');
         const day = String(d.getUTCDate()).padStart(2, '0');
@@ -421,17 +422,22 @@
     // --- LOGIC CHO BÁO CÁO CHI PHÍ (TAB 1 & 2) ---
     // ====================================================================================================
     function fetchCostData() {
+        console.log("Bắt đầu tải dữ liệu Chi phí...");
         showLoader();
         fetch('https://script.google.com/macros/s/AKfycbwGwSBxeXplEzAM-jJDPaXPkiWjNyKmpR70o6nCY5_ynqoF-3WA1gvF91RIQQfDZ9fvAQ/exec')
-        .then(res => res.json())
+        .then(res => {
+            if (!res.ok) { throw new Error(`Lỗi mạng: ${res.statusText}`); }
+            return res.json();
+        })
         .then(data => {
+          console.log(`Tải thành công ${data.length} bản ghi Chi phí. Xem chi tiết bên dưới:`, data);
           costRawData = data.map(r => ({ ...r, team: r.team || 'Khác', ten: r.ten || 'N/A', dsChot: +r.dsChot || 0, cpqc: +r.cpqc || 0, soDon: +r.soDon || 0, soMessCmt: +r.soMessCmt || 0, doanhsoTC: +r.doanhsoTC || 0, tienShip: +r.tienShip || 0, doanhSo: +r.doanhSo || 0, doanhSoSauShip: +r.doanhSoSauShip || 0, kpis: +r.kpis || 0 }));
           populateCostFilters(costRawData);
           applyCostTabFilters();
           if (document.getElementById('CostDailyReport').style.display === 'block') { applyDailyCostFilters(); }
         }).catch(err => { 
-          console.error("Lỗi khi tải dữ liệu chi phí:", err); 
-          alert('Không thể tải dữ liệu Chi phí. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
+          console.error("LỖI NGHIÊM TRỌNG khi tải dữ liệu chi phí:", err); 
+          alert('Không thể tải dữ liệu Chi phí. Vui lòng kiểm tra Console (F12) để biết chi tiết.'); 
         }).finally(() => { hideLoader(); });
     }
 
@@ -452,7 +458,10 @@
 
     function getFilteredCostData(filterIds) {
         const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
-        const startDateValue = document.getElementById(startDateId).value, endDateValue = document.getElementById(endDateId).value;
+        const startDateValue = document.getElementById(startDateId).value;
+        const endDateValue = document.getElementById(endDateId).value;
+        console.log(`Bắt đầu lọc dữ liệu Chi phí. Từ ngày: ${startDateValue}, Đến ngày: ${endDateValue}`);
+        
         const pAll = document.getElementById(productCbId).checked, selP = pAll ? null : [...document.querySelectorAll(`.${productOptionsClass}:checked`)].map(cb => cb.value);
         const mAll = document.getElementById(marketCbId).checked, selM = mAll ? null : [...document.querySelectorAll(`.${marketOptionsClass}:checked`)].map(cb => cb.value);
         const cAll = caCbId ? document.getElementById(caCbId).checked : true, selCa = caCbId && !cAll ? [...document.querySelectorAll(`.${caOptionsClass}:checked`)].map(cb => cb.value) : null;
@@ -460,41 +469,51 @@
         const normalize = (s) => (s||'').trim().toLowerCase(), capitalize = (s) => s.charAt(0).toUpperCase()+s.slice(1);
         const getGroup = (norm) => { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); };
 
-        return costRawData.filter(r => {
-            // SỬA LỖI: Chuyển đổi ngày của dữ liệu sang YYYY-MM-DD để so sánh chuỗi
+        let recordsChecked = 0;
+        const filteredData = costRawData.filter(r => {
+            recordsChecked++;
             const dataDateStr = getUTCDateString(r.ngay);
-            if (!dataDateStr) return false; // Bỏ qua nếu ngày không hợp lệ
+            
+            if (recordsChecked <= 5) {
+                 console.log(`- Kiểm tra bản ghi ${r.id || '(no-id)'}: Ngày gốc [${r.ngay}], Chuyển đổi thành [${dataDateStr}]. So sánh với khoảng [${startDateValue}] -> [${endDateValue}]`);
+            }
 
-            // So sánh chuỗi YYYY-MM-DD, đảm bảo chính xác
+            if (!dataDateStr) return false;
             const isDateOk = (!startDateValue || dataDateStr >= startDateValue) && (!endDateValue || dataDateStr <= endDateValue);
             
             const isProductOk = !selP || selP.includes(r.sanPham), marketGroup = getGroup(normalize(r.thiTruong));
             const isMarketOk = !selM || selM.includes(marketGroup) || selM.includes(r.thiTruong);
             const isCaOk = !selCa || selCa.includes(r.ca), isTeamOk = !selT || selT.includes(r.team);
+
             return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
         });
+        console.log(`Lọc xong. Từ ${costRawData.length} bản ghi Chi phí, còn lại ${filteredData.length} bản ghi.`);
+        return filteredData;
     }
 
     function handleCostTabFilters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyCostTabFilters(); hideLoader(); }, 10); }
     function applyCostTabFilters() {
+        console.log("Áp dụng bộ lọc cho Tab Chi tiết Chi phí...");
         const filterIds = { startDateId: 'start-date-tab1', endDateId: 'end-date-tab1', productCbId: 'product-all-tab1', productOptionsClass: 'filter-product-tab1', marketCbId: 'market-all-tab1', marketOptionsClass: 'filter-market-tab1', caCbId: 'ca-all-tab1', caOptionsClass: 'filter-ca-tab1', teamCbId: 'team-all-tab1', teamOptionsClass: 'filter-team-tab1' };
         const filtered = getFilteredCostData(filterIds);
         const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
-        renderCostSummary(filtered, selectedMarkets); renderKpiSummary(filtered); renderCostDailyBreakdown(filtered);
+        renderCostSummary(filtered, selectedMarkets); 
+        renderKpiSummary(filtered); 
+        renderCostDailyBreakdown(filtered);
     }
     
     function renderCostSummary(data, selectedMarkets) {
         const getCpsCellStyle = (cps, markets) => { const hasChauA = markets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m)); const hasNgoaiChauA = markets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m)); const isChauAOnly = hasChauA && !hasNgoaiChauA && markets.length > 0; if (isChauAOnly) { if (cps > 1000000) return 'bg-lightred'; if (cps > 700000) return 'bg-yellow'; } else { if (cps > 1500000) return 'bg-lightred'; if (cps > 1000000) return 'bg-yellow'; } return ''; };
         const summaryData = {}; data.forEach(r => { const name = r.ten; if (!summaryData[name]) summaryData[name] = { team: r.team, mess: 0, don: 0, chot: 0, cpqc: 0 }; summaryData[name].mess += r.soMessCmt; summaryData[name].don += r.soDon; summaryData[name].chot += r.dsChot; summaryData[name].cpqc += r.cpqc; });
-        const flatList = Object.keys(summaryData).map(name => ({ name, team: summaryData[name].team, data: summaryData[name] })).sort((a,b) => a.team.localeCompare(b.team) || a.name.localeCompare(b.name));
+        const flatList = Object.keys(summaryData).map(name => ({ name, team: summaryData[name].team, data: summaryData[name] })).sort((a,b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.name.localeCompare(b.name));
         let total = { mess: 0, don: 0, chot: 0, cpqc: 0 };
         document.getElementById('summary-body').innerHTML = flatList.map((item, index) => {
             const s = item.data; total.mess += s.mess; total.don += s.don; total.chot += s.chot; total.cpqc += s.cpqc;
             const rate = s.mess ? s.don / s.mess : 0, pm = s.mess ? s.cpqc / s.mess : 0, pd = s.don ? s.cpqc / s.don : 0, pc = s.chot ? s.cpqc / s.chot : 0, pdt = s.don ? s.chot / s.don : 0;
-            return `<tr><td class="text-center">${index + 1}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(s.mess)}</td><td>${formatCurrency(s.cpqc)}</td><td>${formatNumber(s.don)}</td><td>${formatCurrency(s.chot)}</td><td class="${rate > 0.1 ? 'bg-green' : 'bg-yellow'}">${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td class="${getCpsCellStyle(pd, selectedMarkets)}">${formatCurrency(pd)}</td><td class="${pc > 0.33 ? 'bg-yellow' : ''}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
+            return `<tr><td class="text-center">${index + 1}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(s.mess)}</td><td>${formatNumber(s.don)}</td><td>${formatCurrency(s.chot)}</td><td>${formatCurrency(s.cpqc)}</td><td class="${rate > 0.1 ? 'bg-green' : 'bg-yellow'}">${formatPercent(rate)}</td><td>${formatCurrency(pm)}</td><td class="${getCpsCellStyle(pd, selectedMarkets)}">${formatCurrency(pd)}</td><td class="${pc > 0.33 ? 'bg-yellow' : ''}">${formatPercent(pc)}</td><td>${formatCurrency(pdt)}</td></tr>`;
         }).join('');
         const totalRate = total.mess ? total.don / total.mess : 0, totalPm = total.mess ? total.cpqc / total.mess : 0, totalPd = total.don ? total.cpqc / total.don : 0, totalPc = total.chot ? total.cpqc / total.chot : 0, totalPdt = total.don ? total.chot / total.don : 0;
-        document.getElementById('summary-foot').innerHTML = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatCurrency(total.cpqc)}</td><td class="total-value">${formatNumber(total.don)}</td><td class="total-value">${formatCurrency(total.chot)}</td><td class="total-value">${formatPercent(totalRate)}</td><td class="total-value">${formatCurrency(totalPm)}</td><td class="total-value">${formatCurrency(totalPd)}</td><td class="total-value">${formatPercent(totalPc)}</td><td class="total-value">${formatCurrency(totalPdt)}</td></tr>`;
+        document.getElementById('summary-foot').innerHTML = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatNumber(total.don)}</td><td class="total-value">${formatCurrency(total.chot)}</td><td class="total-value">${formatCurrency(total.cpqc)}</td><td class="total-value">${formatPercent(totalRate)}</td><td class="total-value">${formatCurrency(totalPm)}</td><td class="total-value">${formatCurrency(totalPd)}</td><td class="total-value">${formatPercent(totalPc)}</td><td class="total-value">${formatCurrency(totalPdt)}</td></tr>`;
     }
 
     function renderKpiSummary(data) { 
@@ -534,12 +553,19 @@
     // --- LOGIC CHO BÁO CÁO TỔNG HỢP (TAB 3) ---
     // ====================================================================================================
     function fetchSalesData() {
+        console.log("Bắt đầu tải dữ liệu Sales...");
         showLoader();
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
         const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
 
-        Promise.all([ fetch(salesDataUrl).then(res => res.json()), fetch(employeeDataUrl).then(res => res.json()) ])
+        Promise.all([ 
+            fetch(salesDataUrl).then(res => { if (!res.ok) throw new Error(`Lỗi mạng Sales: ${res.statusText}`); return res.json(); }), 
+            fetch(employeeDataUrl).then(res => { if (!res.ok) throw new Error(`Lỗi mạng Employee: ${res.statusText}`); return res.json(); })
+        ])
         .then(([salesResult, employeeResult]) => {
+            console.log(`Tải thành công ${salesResult.length} bản ghi Sales. Xem chi tiết bên dưới:`, salesResult);
+            console.log(`Tải thành công ${employeeResult.length} bản ghi Employee.`, employeeResult);
+
             salesRawData = salesResult.filter(r => r.trangThai && String(r.trangThai).trim() !== '' && r.ten && String(r.ten).trim() !== '' && r.team && String(r.team).trim() !== '')
                 .map(r => ({ ...r, ten: (r.ten || '').trim(), team: (r.team || '').trim(), soMessCmt: +r.soMess || 0, soDon: +r.donMess || 0, dsChot: +r.doanhSoMess || 0, phanHoi: +r.phanHoi || 0, }));
             employeeData = employeeResult;
@@ -567,8 +593,8 @@
             applySalesTabFilters();
 
         }).catch(err => { 
-            console.error("Lỗi khi tải dữ liệu Sales:", err); 
-            alert('Không thể tải dữ liệu Sales.'); 
+            console.error("LỖI NGHIÊM TRỌNG khi tải dữ liệu Sales:", err); 
+            alert('Không thể tải dữ liệu Sales. Vui lòng kiểm tra Console (F12).'); 
         }).finally(() => { hideLoader(); });
     }
 
@@ -586,24 +612,25 @@
     
     function getFilteredSalesData() {
         const sdVal = document.getElementById('start-date-tab3').value, edVal = document.getElementById('end-date-tab3').value;
+        console.log(`Bắt đầu lọc dữ liệu Sales. Từ ngày: ${sdVal}, Đến ngày: ${edVal}`);
+
         const getSelectedOptions = (masterId, childClass) => document.getElementById(masterId).checked ? null : [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
         const selP = getSelectedOptions('product-all-tab3', 'filter-product-tab3'), selM = getSelectedOptions('market-all-tab3', 'filter-market-tab3');
         const selCa = getSelectedOptions('ca-all-tab3', 'filter-ca-tab3'), selT = getSelectedOptions('team-all-tab3', 'filter-team-tab3');
 
-        return salesRawData.filter(r => {
+        const filteredData = salesRawData.filter(r => {
             if (isRestrictedView && !allowedNames.includes(r.ten)) { return false; }
-            
-            // SỬA LỖI: Chuyển đổi ngày của dữ liệu sang YYYY-MM-DD để so sánh chuỗi
             const dataDateStr = getUTCDateString(r.ngay);
-            if (!dataDateStr) return false; // Bỏ qua nếu ngày không hợp lệ
-
-            // So sánh chuỗi YYYY-MM-DD, đảm bảo chính xác
+            if (!dataDateStr) return false;
+            
             const isDateOk = (!sdVal || dataDateStr >= sdVal) && (!edVal || dataDateStr <= edVal);
-
             const isProductOk = !selP || selP.includes(r.sanPham), isMarketOk = !selM || selM.includes(r.thiTruong);
             const isCaOk = !selCa || selCa.includes(String(r.ca)), isTeamOk = !selT || selT.includes(String(r.team));
             return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
         });
+        
+        console.log(`Lọc xong. Từ ${salesRawData.length} bản ghi Sales, còn lại ${filteredData.length} bản ghi.`);
+        return filteredData;
     }
 
     function handleSalesTabFilters(target) { 
@@ -619,6 +646,7 @@
     }
     
     function applySalesTabFilters() {
+        console.log("Áp dụng bộ lọc cho Tab Tổng hợp Sales...");
         const filtered = getFilteredSalesData();
         renderSalesSummary(filtered); 
         renderSalesDailyBreakdown(filtered);
@@ -657,5 +685,6 @@
         }); 
     }
 </script>
+
 </body>
 </html>
