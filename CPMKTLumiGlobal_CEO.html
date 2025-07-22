@@ -285,11 +285,8 @@
         });
     }
     
-        // ==========================================================
-    // THAY THẾ TOÀN BỘ HÀM getFilteredData CŨ BẰNG HÀM NÀY
     // ==========================================================
-       // ==========================================================
-    // THAY THẾ TOÀN BỘ HÀM getFilteredData CŨ BẰNG HÀM NÀY
+    // SỬA LỖI MÚI GIỜ - THAY THẾ TOÀN BỘ HÀM getFilteredData CŨ
     // ==========================================================
     function getFilteredData(filterIds) {
         const { startDateId, endDateId, productCbId, productOptionsClass, marketCbId, marketOptionsClass, caCbId, caOptionsClass, teamCbId, teamOptionsClass } = filterIds;
@@ -305,6 +302,8 @@
         
         return rawData.filter(r => {
             // === PHẦN SỬA LỖI MÚI GIỜ (TIMEZONE) ===
+            if (!r.ngay) return false; // Bỏ qua nếu không có ngày
+            
             const d = new Date(r.ngay);
             // Bỏ qua các dòng có ngày không hợp lệ
             if (isNaN(d.getTime())) {
@@ -318,7 +317,7 @@
             const day = String(d.getDate()).padStart(2, '0');
             const dataDateStr = `${year}-${month}-${day}`;
             
-            // So sánh chuỗi trực tiếp. Đây là cách chính xác nhất.
+            // So sánh chuỗi trực tiếp. Đây là cách chính xác nhất để tránh lỗi timezone.
             const isDateOk = (!startDateValue || dataDateStr >= startDateValue) && (!endDateValue || dataDateStr <= endDateValue);
             // === KẾT THÚC PHẦN SỬA LỖI ===
 
@@ -330,6 +329,7 @@
             return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
         });
     }
+
     function populateAllFilters(data) {
         const prodSet=new Set(), caSet=new Set(), teamSet=new Set(), mktSet=new Set();
         data.forEach(r=>{ if(r.sanPham) prodSet.add(r.sanPham); if(r.ca) caSet.add(r.ca); if(r.team) teamSet.add(r.team); if(r.thiTruong) mktSet.add(r.thiTruong); });
@@ -385,7 +385,7 @@
         
         let bodyHtml = flatList.map((item, index) => {
             const s = item.data;
-            Object.keys(total).forEach(key => total[key] += s[key]);
+            total.mess += s.mess; total.don += s.don; total.chot += s.chot; total.cpqc += s.cpqc;
             const rate = s.mess ? s.don / s.mess : 0; const pm = s.mess ? s.cpqc / s.mess : 0;
             const pd = s.don ? s.cpqc / s.don : 0; const pc = s.chot ? s.cpqc / s.chot : 0;
             const pdt = s.don ? s.chot / s.don : 0;
@@ -415,40 +415,41 @@
     }
 
     // ==========================================================
-    // CẬP NHẬT TRONG HÀM NÀY
+    // SỬA LỖI LOGIC TÍNH TOÁN KPI - THAY THẾ TOÀN BỘ HÀM NÀY
     // ==========================================================
     function renderKpiSummary(data) { 
-        const sum = {}; 
-        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
+        const summaryByMkt = {}; 
         
         data.forEach(r => { 
-            const mkt = r.ten;
-            if (!sum[mkt]) {
+            const mktName = r.ten;
+            if (!summaryByMkt[mktName]) {
                 // 1. Khởi tạo đối tượng cho nhân sự mới
-                sum[mkt] = { 
+                summaryByMkt[mktName] = { 
                     cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, 
                     // THAY ĐỔI: Không cộng dồn kpis, chỉ lưu lại giá trị kpis gốc của nhân sự
+                    // Điều này đảm bảo mỗi nhân sự chỉ được tính KPI một lần, ngay cả khi họ có nhiều dòng dữ liệu.
                     kpiValue: r.kpis, 
                     team: r.team 
                 }; 
             }
             // Các giá trị khác vẫn cộng dồn bình thường
-            sum[mkt].cpqc += r.cpqc;
-            sum[mkt].dsChot += r.dsChot;
-            sum[mkt].dsDi += r.doanhSo; 
-            sum[mkt].dsSauShip += r.doanhSoSauShip;
-            sum[mkt].dsThanhCong += r.doanhsoTC;
+            summaryByMkt[mktName].cpqc += r.cpqc;
+            summaryByMkt[mktName].dsChot += r.dsChot;
+            summaryByMkt[mktName].dsDi += r.doanhSo; 
+            summaryByMkt[mktName].dsSauShip += r.doanhSoSauShip;
+            summaryByMkt[mktName].dsThanhCong += r.doanhsoTC;
         });
         
-        const sortedMktKeys = Object.keys(sum).sort((a, b) => {
-            return (sum[a].team.localeCompare(sum[b].team)) || (a.localeCompare(b));
+        const sortedMktKeys = Object.keys(summaryByMkt).sort((a, b) => {
+            const teamA = summaryByMkt[a].team || 'zzz';
+            const teamB = summaryByMkt[b].team || 'zzz';
+            return teamA.localeCompare(teamB) || a.localeCompare(b);
         });
 
-        // Reset lại total trước khi tính tổng mới
-        total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
+        let total = { cpqc: 0, dsChot: 0, dsDi: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0 };
 
         let bodyHtml = sortedMktKeys.map((mkt, i) => { 
-            const s = sum[mkt]; 
+            const s = summaryByMkt[mkt]; 
 
             // Cộng dồn vào dòng tổng
             total.cpqc += s.cpqc;
@@ -477,7 +478,7 @@
         document.getElementById('kpi-summary-body').innerHTML = bodyHtml;
 
         const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0;
-        // 3. TÍNH TOÁN TỔNG KPI: Tổng DS Sau Ship / Tổng KPI của các nhân sự có trong bảng
+        // 3. TÍNH TOÁN TỔNG KPI CHÍNH XÁC: Tổng DS Sau Ship / Tổng KPI của các nhân sự có trong bảng
         const totalKpiPercentage = total.kpis ? total.dsSauShip / total.kpis : 0;
         
         const footerHtml = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td>
