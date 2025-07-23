@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v16.1 - Lấy data theo Page)</title>
+  <title>Báo Cáo MKT (v17.0 - Dependent Select)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -23,6 +23,13 @@
     th { background-color: var(--primary-color); color: white; font-weight: 600; position: sticky; top: 0; z-index: 1; }
     tr:nth-child(even) { background-color: var(--light-gray); }
     input, button, select { box-sizing: border-box; padding: 0.6rem 0.8rem; border: 1px solid var(--medium-gray); border-radius: 6px; width: 100%; font-family: inherit; font-size: 1rem; min-height: 42px; }
+    
+    /* --- YÊU CẦU 1: Tăng cỡ chữ và in đậm --- */
+    #dataTable input {
+        font-size: 1.2rem; /* Tăng cỡ chữ */
+        font-weight: bold; /* In đậm */
+    }
+
     button { background-color: var(--primary-color); color: white; border: none; cursor: pointer; }
     button:disabled { background-color: #6c757d; cursor: not-allowed; }
     .add-row-btn { background-color: var(--success-color); margin-bottom: 1.5rem; }
@@ -30,10 +37,10 @@
     .status { background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 14px; }
     .error-cell { background-color: #f8d7da !important; border: 1px solid var(--danger-color) !important; }
     
-    /* Điều chỉnh độ rộng cột theo quy trình mới */
+    /* --- YÊU CẦU 2: Cập nhật độ rộng cột theo thứ tự mới --- */
     #dataTable th:nth-child(1), #dataTable td:nth-child(1) { width: 75px; text-align: center; } /* Hành động */
-    #dataTable th:nth-child(2), #dataTable td:nth-child(2) { width: 40%; min-width: 450px; } /* Tên Page */
-    #dataTable th:nth-child(3), #dataTable td:nth-child(3) { width: 170px; } /* Tên MKT */
+    #dataTable th:nth-child(2), #dataTable td:nth-child(2) { width: 170px; } /* Tên MKT */
+    #dataTable th:nth-child(3), #dataTable td:nth-child(3) { width: 40%; min-width: 450px; } /* Tên Page */
     #dataTable th:nth-child(4), #dataTable td:nth-child(4) { width: 170px; } /* Sản phẩm */
     #dataTable th:nth-child(5), #dataTable td:nth-child(5) { width: 150px; } /* Thị trường */
     #dataTable th:nth-child(6), #dataTable td:nth-child(6) { width: 150px; } /* TKQC */
@@ -50,17 +57,18 @@
     <div class="status" id="status">Đang khởi tạo...</div>
     <button id="addRowBtn" type="button" class="add-row-btn">➕ Thêm dòng trống</button>
 
-    <!-- Datalist chứa tất cả các Page sẽ được tạo ở đây -->
-    <datalist id="master-page-list"></datalist>
+    <!-- Datalist chứa tất cả tên MKT sẽ được tạo ở đây -->
+    <datalist id="master-mkt-list"></datalist>
 
     <form id="dataForm" novalidate autocomplete="off">
       <div class="table-wrapper">
         <table id="dataTable">
           <thead>
+            <!-- YÊU CẦU 2: Đổi thứ tự cột header -->
             <tr>
               <th>Hành động</th>
-              <th>Tên Page</th>
               <th>Tên MKT</th>
+              <th>Tên Page</th>
               <th>Sản phẩm</th>
               <th>Thị trường</th>
               <th>TKQC</th>
@@ -91,6 +99,38 @@
     // --- CORE FUNCTIONS ---
     
     /**
+     * YÊU CẦU 3: Cập nhật danh sách Page dựa trên MKT đã chọn.
+     * @param {HTMLInputElement} mktInput - Ô input của Tên MKT.
+     */
+    function updatePageOptions(mktInput) {
+        const selectedMkt = mktInput.value;
+        const row = mktInput.closest('tr');
+        
+        const pageInput = row.querySelector('[name="Tên Page"]');
+        const pageDatalist = row.querySelector('.page-options-list');
+        
+        // Xóa giá trị page cũ và các trường phụ thuộc
+        pageInput.value = '';
+        fillRowData(pageInput); // Gọi hàm fill với input rỗng để xóa các trường khác
+        
+        if (selectedMkt && pageDatalist) {
+            // Lọc các page thuộc về MKT đã chọn
+            const relevantPages = allPagesData.filter(item => item.mkt === selectedMkt);
+            // Cập nhật datalist cho page
+            pageDatalist.innerHTML = relevantPages.map(p => `<option value="${p.page}"></option>`).join('');
+            
+            // Mở khóa ô nhập Page
+            pageInput.readOnly = false;
+            pageInput.placeholder = "Gõ để tìm Page...";
+        } else {
+            // Nếu không chọn MKT, khóa ô Page lại
+            pageDatalist.innerHTML = '';
+            pageInput.readOnly = true;
+            pageInput.placeholder = "Vui lòng chọn MKT";
+        }
+    }
+
+    /**
      * Tự động điền dữ liệu cho một dòng dựa trên Tên Page được chọn.
      * @param {HTMLInputElement} pageInput - Ô input chứa Tên Page.
      */
@@ -101,20 +141,17 @@
         // Tìm kiếm dữ liệu tương ứng với page đã chọn
         const pageData = allPagesData.find(item => item.page === selectedPageName);
 
-        const mktInput = row.querySelector('[name="Tên MKT"]');
         const productInput = row.querySelector('[name="Sản phẩm"]');
         const marketInput = row.querySelector('[name="Thị trường"]');
         const tkqcInput = row.querySelector('[name="TKQC"]');
 
         if (pageData) {
             // Tự động điền dữ liệu tìm thấy
-            mktInput.value = pageData.mkt || '';
             productInput.value = pageData.product || '';
             marketInput.value = pageData.market || '';
             tkqcInput.value = pageData.tkqc || '';
         } else {
-            // Nếu người dùng gõ một page mới, xoá các trường tự động điền
-            mktInput.value = '';
+            // Nếu người dùng gõ một page mới hoặc xóa page, xoá các trường tự động điền
             productInput.value = '';
             marketInput.value = '';
             tkqcInput.value = '';
@@ -126,13 +163,22 @@
      */
     function addNewRow() {
         const row = document.createElement('tr');
+        // Tạo một ID duy nhất cho datalist của dòng này để chúng không xung đột
+        const uniqueDatalistId = `page-list-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+        // YÊU CẦU 2 & 3: Cập nhật cấu trúc HTML của dòng mới
         row.innerHTML = `
             <td style="text-align:center;"><button type="button" style="background-color: #6c757d;" onclick="this.closest('tr').remove()">❌</button></td>
-            <td><input name="Tên Page" list="master-page-list" placeholder="Gõ để tìm Page..." oninput="fillRowData(this)" autocomplete="off"></td>
-            <td><input name="Tên MKT" placeholder="Tự động điền" readonly autocomplete="off"></td>
-            <td><input name="Sản phẩm" placeholder="Tự động điền" readonly autocomplete="off"></td>
-            <td><input name="Thị trường" placeholder="Tự động điền" readonly autocomplete="off"></td>
-            <td><input name="TKQC" placeholder="Tự động hoặc nhập tay" autocomplete="off"></td>
+            <td>
+                <input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT trước..." oninput="updatePageOptions(this)" autocomplete="off">
+            </td>
+            <td>
+                <input name="Tên Page" list="${uniqueDatalistId}" placeholder="Vui lòng chọn MKT" oninput="fillRowData(this)" autocomplete="off" readonly>
+                <datalist id="${uniqueDatalistId}" class="page-options-list"></datalist>
+            </td>
+            <td><input name="Sản phẩm" placeholder="Tự động" readonly autocomplete="off"></td>
+            <td><input name="Thị trường" placeholder="Tự động" readonly autocomplete="off"></td>
+            <td><input name="TKQC" placeholder="Tự động/Nhập tay" autocomplete="off"></td>
             <td><input name="Ngày" type="date" value="${new Date().toISOString().split('T')[0]}" autocomplete="off"></td>
             <td><input name="Ca" placeholder="Nhập ca..." autocomplete="off"></td>
             <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off"></td>
@@ -153,7 +199,9 @@
         const allRows = Array.from(tableBody.querySelectorAll('tr')).map(row => {
             const rowData = {};
             row.querySelectorAll('input').forEach(input => {
-                rowData[input.name.replace(/\s/g, '')] = (input.name === 'CPQC') ? (input.value.replace(/\./g, '') || 0) : input.value;
+                const key = input.name.replace(/\s/g, '').replace('+',''); // Xóa khoảng trắng và dấu +
+                const value = (input.name === 'CPQC') ? (input.value.replace(/\./g, '') || 0) : input.value;
+                rowData[key] = value;
             });
             return rowData;
         });
@@ -161,7 +209,6 @@
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
 
-        // ====================== URL GỬI DỮ LIỆU ĐÃ ĐƯỢC CẬP NHẬT ======================
         const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
         
         try {
@@ -169,7 +216,7 @@
             const result = await response.json();
             
             const respMsg = document.getElementById('responseMessage');
-            respMsg.className = result.error ? 'error' : 'success';
+            respMsg.style.color = result.error ? 'var(--danger-color)' : 'var(--success-color)';
             respMsg.textContent = result.error || result.message || 'Gửi thành công!';
 
             if (!result.error) {
@@ -178,6 +225,7 @@
             }
         } catch (err) {
             document.getElementById('responseMessage').textContent = 'Lỗi gửi dữ liệu: ' + err.message;
+            document.getElementById('responseMessage').style.color = 'var(--danger-color)';
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = '🚀 Gửi báo cáo';
@@ -188,9 +236,8 @@
     document.addEventListener('DOMContentLoaded', async () => {
         addRowBtn.disabled = true;
         submitBtn.disabled = true;
-        statusDiv.textContent = 'Đang tải dữ liệu Page từ Google Sheet...';
+        statusDiv.textContent = 'Đang tải dữ liệu từ Google Sheet...';
         
-        // ====================== URL LẤY DỮ LIỆU ĐÃ ĐƯỢC CẬP NHẬT ======================
         const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
 
         try {
@@ -202,12 +249,12 @@
 
             allPagesData = data;
             
-            // Tạo danh sách gợi ý cho Page
-            const masterDatalist = document.getElementById('master-page-list');
-            const pageNames = allPagesData.map(item => item.page).filter(Boolean);
-            masterDatalist.innerHTML = pageNames.map(name => `<option value="${name}"></option>`).join('');
+            // YÊU CẦU 3: Tạo danh sách MKT duy nhất để lựa chọn
+            const masterMktDatalist = document.getElementById('master-mkt-list');
+            const mktNames = [...new Set(allPagesData.map(item => item.mkt).filter(Boolean))]; // Lấy danh sách MKT duy nhất
+            masterMktDatalist.innerHTML = mktNames.map(name => `<option value="${name}"></option>`).join('');
             
-            statusDiv.textContent = `Tải thành công ${allPagesData.length} pages. Hệ thống đã sẵn sàng.`;
+            statusDiv.textContent = `Tải thành công dữ liệu từ ${allPagesData.length} pages. Hệ thống đã sẵn sàng.`;
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
             addNewRow(); // Thêm dòng trống đầu tiên
