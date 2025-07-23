@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT LumiGlobal (v13 - Tải dữ liệu động)</title>
+  <title>Báo Cáo MKT LumiGlobal (v14 - Refactored Dynamic Data)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -131,15 +131,14 @@
 
   <script>
     // --- START: DATA CONFIGURATION (Sẽ được tải từ URL) ---
-      const employeeList = ["Phùng Kim Anh","Nguyễn Đức Anh","Nguyễn Văn VIệt","Lâm Thị Thu Thảo","Nguyễn Nam Khánh","Nguyễn Quang Minh","Nguyễn Đức Anh","Nguyễn Danh Nam","Nguyễn Văn Việt","Lâm Thị Thu Thảo","Nguyễn Quang Minh","Nguyễn Duy Hiếu","Phạm Tiến Thành","Lê Đình Toản","Trần Quốc Khải","Mạnh Cường","Nguyễn Thị Hiếu","Vũ Viết Anh","Lục Trần Minh Trí","Đoàn Ngọc Huân","Nguyễn Hiền Lương","Trần Huy Hùng","Nguyễn Anh Tuấn","Trần Tiến","Nguyễn Thị Như Quỳnh","Nguyễn Quang Trường"];
-    const shiftList = ["Hết ca","Giữa ca","Ca Chiều"];
+    let employeeList = [];
+    let shiftList = [];
     let productList = [];
     let marketList = [];
     let tkqcData = {};
-    let pageDataByEmployee = {};
+    let dynamicPageData = {}; // This is the map: { "Nguyễn Văn A": ["Page 1", "Page 2"], ... }
     // --- END: DATA CONFIGURATION ---
 
-    let dynamicPageData = {}; // Sẽ được gán giá trị sau khi tải
     const tableBody = document.getElementById('tableBody'), addRowBtn = document.getElementById('addRowBtn'), form = document.getElementById('dataForm'), statusDiv = document.getElementById('status'), respMsg = document.getElementById('responseMessage');
     let rowCounter = 0;
     let sessionTrackingId = ''; 
@@ -149,7 +148,7 @@
     function formatCurrency(input) { let val = input.value.replace(/[^0-9]/g, ''); input.value = val ? parseInt(val, 10).toLocaleString('vi-VN') : ''; }
     
     function formatDateToInput(dateString) {
-      if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) { return new Date().toISOString().split('T')[0]; }
+      if (!dateString || !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) { return new Date().toISOString().split('T')[0]; }
       const parts = dateString.split('/');
       const day = parts[1].padStart(2, '0');
       const month = parts[0].padStart(2, '0');
@@ -163,19 +162,23 @@
     function createDatalistOptions(list) { return list.map(item => `<option value="${escapeHtml(item)}"></option>`).join(''); }
 
     function updateEmployeeData(employeeName, row) {
-      const rowId = row.dataset.rowId;
-      const pageDatalist = document.getElementById(`page-list-${rowId}`);
-      const tkqcDatalist = document.getElementById(`tkqc-list-${rowId}`);
-      // Dùng dynamicPageData đã được gán giá trị
-      const pageList = dynamicPageData[employeeName] || [];
-      const tkqcList = tkqcData[employeeName] || [];
-      if (pageDatalist) pageDatalist.innerHTML = createDatalistOptions(pageList);
-      if (tkqcDatalist) tkqcDatalist.innerHTML = createDatalistOptions(tkqcList);
-      const pageInput = row.querySelector('input[name="page"]');
-      const tkqcInput = row.querySelector('input[name="TKQC"]');
-      pageInput.value = ''; // Xóa page cũ khi đổi tên
-      tkqcInput.value = ''; // Xóa TKQC cũ khi đổi tên
-      updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page.`);
+        // look up pages and TKQC codes for this employee
+        const pages = dynamicPageData[employeeName] || [];
+        const tkqcs = tkqcData[employeeName] || [];
+
+        // find the datalists in the row using more specific selectors
+        const pageDatalist = row.querySelector(`datalist#page-list-${row.dataset.rowId}`);
+        const tkqcDatalist = row.querySelector(`datalist#tkqc-list-${row.dataset.rowId}`);
+
+        // re-fill them
+        if (pageDatalist) pageDatalist.innerHTML = createDatalistOptions(pages);
+        if (tkqcDatalist) tkqcDatalist.innerHTML = createDatalistOptions(tkqcs);
+
+        // clear out any previous inputs
+        row.querySelector('input[name="page"]').value = '';
+        row.querySelector('input[name="TKQC"]').value = '';
+
+        updateStatus(`Cập nhật cho ${employeeName}: ${pages.length} Page, ${tkqcs.length} TKQC.`);
     }
 
     function addNewRow(data = {}, insertAfter = null) {
@@ -183,13 +186,18 @@
       const rowId = `row${rowCounter}`;
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
-      const tkqcList = tkqcData[data.Tên] || [];
-      const pageList = dynamicPageData[data.Tên] || [];
+      const tkqcListForInitialRender = tkqcData[data.Tên] || [];
+      const pageListForInitialRender = dynamicPageData[data.Tên] || [];
       const dateValue = data.Ngày ? formatDateToInput(data.Ngày) : getToday();
       
       row.innerHTML = `
         <td class="action-buttons"><button type="button" class="removeRow" onclick="removeRow(this)">❌</button></td>
-        <td><select name="Tên" onchange="updateEmployeeData(this.value, this.closest('tr'))"><option value="">-- Chọn tên --</option>${createOptions(employeeList, data.Tên)}</select></td>
+        <td>
+          <select name="Tên" onchange="updateEmployeeData(this.value, this.closest('tr'))">
+            <option value="">-- Chọn tên --</option>
+            ${createOptions(employeeList, data.Tên)}
+          </select>
+        </td>
         <td><input name="Ngày" type="date" value="${dateValue}" autocomplete="off"></td>
         <td><select name="ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList, data.ca)}</select></td>
         <td><select name="Sản_phẩm"><option value="">-- Chọn sản phẩm --</option>${createOptions(productList, data.Sản_phẩm)}</select></td>
@@ -202,8 +210,8 @@
             <button type="button" class="addSimilar" onclick="addSimilarRow(this, false)">➕</button>
           </div>
         </td>
-        <td><div class="input-container"><input name="page" list="page-list-${rowId}" value="${escapeHtml(data.page || '')}" placeholder="Nhập hoặc chọn tên page..." autocomplete="off"><button type="button" class="addSimilar" onclick="addSimilarRow(this, true)">➕</button></div><datalist id="page-list-${rowId}">${createDatalistOptions(pageList)}</datalist></td>
-        <td><input name="TKQC" list="tkqc-list-${rowId}" value="${escapeHtml(data.TKQC || '')}" placeholder="Nhập TKQC..." autocomplete="off"><datalist id="tkqc-list-${rowId}">${createDatalistOptions(tkqcList)}</datalist></td>
+        <td><div class="input-container"><input name="page" list="page-list-${rowId}" value="${escapeHtml(data.page || '')}" placeholder="Nhập hoặc chọn tên page..." autocomplete="off"><button type="button" class="addSimilar" onclick="addSimilarRow(this, true)">➕</button></div><datalist id="page-list-${rowId}">${createDatalistOptions(pageListForInitialRender)}</datalist></td>
+        <td><input name="TKQC" list="tkqc-list-${rowId}" value="${escapeHtml(data.TKQC || '')}" placeholder="Nhập TKQC..." autocomplete="off"><datalist id="tkqc-list-${rowId}">${createDatalistOptions(tkqcListForInitialRender)}</datalist></td>
         <td><input name="CPQC" type="text" value="${data.CPQC || ''}" oninput="formatCurrency(this)" placeholder="Nhập CPQC..." autocomplete="off"></td>
         <td><input name="Via_log" value="${escapeHtml(data.Via_log || '')}" placeholder="Nhập Via log..." autocomplete="off"></td>
         <td><input name="Số_Mess_Cmt" type="number" value="${data.Số_Mess_Cmt || ''}" placeholder="Nhập số mess+cmt..." autocomplete="off"></td>
@@ -214,7 +222,6 @@
 
       insertAfter ? insertAfter.after(row) : tableBody.appendChild(row);
       const cpqcInput = row.querySelector('[name="CPQC"]'); if (cpqcInput.value) formatCurrency(cpqcInput);
-      if(data.Tên) { updateEmployeeData(data.Tên, row); }
       updateStatus(`Đã thêm dòng ${rowCounter}`);
     }
 
@@ -303,7 +310,6 @@
       });
     }
 
-    // --- START: NEW INITIALIZATION LOGIC ---
     function initializeApp() {
         const urlParams = new URLSearchParams(window.location.search);
         sessionTrackingId = urlParams.get('id') || 'SESSION_' + Date.now();
@@ -318,47 +324,35 @@
         const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycbyJFypolFBm94GEsIAeMn62hjP6clM6Km40TQo5uwiwLSzdV74w-CTJ0RLON3DFGfolGA/exec';
         updateStatus('Đang tải dữ liệu cấu hình từ máy chủ...');
         
-        // Vô hiệu hóa các nút trong khi tải
         addRowBtn.disabled = true;
         document.getElementById('submitBtn').disabled = true;
 
         fetch(DATA_SOURCE_URL)
             .then(res => {
-                if (!res.ok) {
-                    throw new Error(`Lỗi mạng khi tải dữ liệu: ${res.status} ${res.statusText}`);
-                }
+                if (!res.ok) { throw new Error(`Lỗi mạng: ${res.status} ${res.statusText}`); }
                 return res.json();
             })
             .then(data => {
                 updateStatus('Tải dữ liệu cấu hình thành công.');
-                
-                // Gán dữ liệu đã tải vào các biến toàn cục
-                employeeList = data.employeeList || [];
-                shiftList = data.shiftList || [];
-                productList = data.productList || [];
-                marketList = data.marketList || [];
-                tkqcData = data.tkqcData || {};
-                pageDataByEmployee = data.pageDataByEmployee || {};
-                dynamicPageData = pageDataByEmployee; // Gán cho biến sẽ được sử dụng
 
-                // Kích hoạt lại các nút
+                // Overwrite our top‐level lists with what came back from the server
+                employeeList    = data.employeeList    || [];
+                shiftList       = data.shiftList       || [];
+                productList     = data.productList     || [];
+                marketList      = data.marketList      || [];
+                tkqcData        = data.tkqcData        || {};
+                dynamicPageData = data.pageDataByEmployee || {};
+
+                // Now we can enable the UI and initialize the application logic
                 addRowBtn.disabled = false;
                 document.getElementById('submitBtn').disabled = false;
-                
-                // Bắt đầu khởi tạo ứng dụng với dữ liệu mới
                 initializeApp();
             })
             .catch(error => {
                 console.error('Lỗi nghiêm trọng khi tải dữ liệu cấu hình:', error);
-                statusDiv.innerHTML = `
-                    <strong style="color: red;">LỖI NGHIÊM TRỌNG:</strong> Không thể tải dữ liệu cần thiết để chạy ứng dụng.
-                    <br>Vui lòng kiểm tra lại đường link dữ liệu, kết nối mạng và thử tải lại trang.
-                    <br>Chi tiết lỗi: ${error.message}
-                `;
-                // Giữ các nút bị vô hiệu hóa vì ứng dụng không thể hoạt động
+                statusDiv.innerHTML = `<strong style="color: red;">LỖI:</strong> Không thể tải dữ liệu. Vui lòng kiểm tra kết nối mạng và thử tải lại trang. <br>Chi tiết: ${error.message}`;
             });
     });
-    // --- END: NEW INITIALIZATION LOGIC ---
 
     window.updateEmployeeData = updateEmployeeData; window.removeRow = removeRow; window.addSimilarRow = addSimilarRow; window.formatCurrency = formatCurrency;
     form.addEventListener('submit', handleSubmit); addRowBtn.addEventListener('click', () => addNewRow());
