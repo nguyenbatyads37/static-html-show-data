@@ -5,17 +5,20 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v18.0 - Logic Mới)</title>
+  <title>Báo Cáo MKT (v19.0 - Logic Hoàn Chỉnh)</title>
   <style>
     :root {
       --primary-color: #0056b3;
       --success-color: #28a745;
       --danger-color: #dc3545;
+      --info-color: #17a2b8;
       --light-gray: #f8f9fa;
       --medium-gray: #ddd;
+      --border-radius: 8px;
+      --box-shadow: 0 4px 20px rgba(0,0,0,0.08);
     }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: var(--light-gray); font-size: 16px; }
-    .container { max-width: 98vw; margin: 1rem auto; background-color: white; border-radius: 6px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); padding: 1.5rem; }
+    .container { max-width: 98vw; margin: 1rem auto; background-color: white; border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 1.5rem; }
     h1 { color: var(--primary-color); }
     .table-wrapper { overflow-x: auto; border: 1px solid var(--medium-gray); border-radius: 6px; }
     table { width: 100%; border-collapse: collapse; table-layout: fixed; }
@@ -24,7 +27,7 @@
     tr:nth-child(even) { background-color: var(--light-gray); }
     input, button, select { box-sizing: border-box; padding: 0.6rem 0.8rem; border: 1px solid var(--medium-gray); border-radius: 6px; width: 100%; font-family: inherit; font-size: 1rem; min-height: 42px; }
     
-    #dataTable input {
+    #dataTable input, #dataTable select {
         font-size: 1.2rem;
         font-weight: bold;
     }
@@ -43,10 +46,40 @@
     #dataTable th:nth-child(5), #dataTable td:nth-child(5) { width: 150px; }
     #dataTable th:nth-child(6), #dataTable td:nth-child(6) { width: 180px; }
     #dataTable th:nth-child(7), #dataTable td:nth-child(7) { width: 160px; }
-    #dataTable th:nth-child(8), #dataTable td:nth-child(8) { width: 100px; }
+    #dataTable th:nth-child(8), #dataTable td:nth-child(8) { width: 120px; }
     #dataTable th:nth-child(9), #dataTable td:nth-child(9) { width: 120px; }
     #dataTable th:nth-child(10), #dataTable td:nth-child(10) { width: 130px; }
     #dataTable th:nth-child(11), #dataTable td:nth-child(11) { width: 110px; }
+
+    /* CSS cho Video */
+    .video-section {
+        max-width: 900px;
+        margin: 2rem auto;
+        background-color: white;
+        border-radius: var(--border-radius);
+        box-shadow: var(--box-shadow);
+        padding: 2rem;
+    }
+    .video-section h2 {
+        text-align: center;
+        color: var(--primary-color);
+        margin-bottom: 1.5rem;
+    }
+    .video-wrapper {
+        position: relative;
+        padding-bottom: 56.25%; /* Tỷ lệ 16:9 */
+        height: 0;
+        overflow: hidden;
+        border-radius: var(--border-radius);
+    }
+    .video-wrapper iframe {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+    }
   </style>
 </head>
 <body>
@@ -83,74 +116,103 @@
     <div id="responseMessage" style="margin-top: 1rem;"></div>
   </div>
 
+  <!-- PHẦN VIDEO ĐƯỢC THÊM LẠI -->
+  <div class="video-section">
+      <h2>Video hướng dẫn</h2>
+      <div class="video-wrapper">
+          <iframe src="https://www.youtube.com/embed/X-ZBSrwouRs?si=5kej-gAlKZjX--f-" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+      </div>
+  </div>
+
   <script>
-    // --- CẤU TRÚC DỮ LIỆU VÀ BIẾN TOÀN CỤC ---
-    let mktToPages = {};     // Map từ MKT -> danh sách Page
-    let mktToTkqcs = {};     // Map từ MKT -> danh sách TKQC
-    let pageDetails = {};    // Map từ Page -> chi tiết (Sản phẩm, Thị trường)
+    // --- DATA, CONFIG & DOM ELEMENTS ---
+    let allPagesData = [];
+    const shiftList = ["Hết ca", "Giữa ca", "Ca Chiều"]; // YÊU CẦU 1: Giữ lại danh sách ca
     
     const tableBody = document.getElementById('tableBody');
     const addRowBtn = document.getElementById('addRowBtn');
     const submitBtn = document.getElementById('submitBtn');
     const statusDiv = document.getElementById('status');
     const form = document.getElementById('dataForm');
-
-    // --- CÁC HÀM XỬ LÝ LOGIC CHÍNH ---
-
-    /**
-     * Xử lý khi người dùng chọn Tên MKT.
-     * Sẽ cập nhật danh sách gợi ý cho Tên Page và TKQC.
-     * @param {HTMLInputElement} mktInput - Ô input Tên MKT.
-     */
-    function handleMktSelection(mktInput) {
-        const selectedMkt = mktInput.value;
-        const row = mktInput.closest('tr');
-        
-        const pageInput = row.querySelector('[name="Tên Page"]');
-        const pageDatalist = row.querySelector('.page-options-list');
-        const tkqcInput = row.querySelector('[name="TKQC"]');
-        const tkqcDatalist = row.querySelector('.tkqc-options-list');
-
-        // Xóa các giá trị cũ khi chọn lại MKT
-        pageInput.value = '';
-        tkqcInput.value = '';
-        row.querySelector('[name="Sản phẩm"]').value = '';
-        row.querySelector('[name="Thị trường"]').value = '';
-        
-        // Lấy danh sách từ các map đã xử lý
-        const pagesForMkt = mktToPages[selectedMkt] || [];
-        const tkqcsForMkt = mktToTkqcs[selectedMkt] || [];
-        
-        // Cập nhật Datalist cho Page
-        pageDatalist.innerHTML = pagesForMkt.map(p => `<option value="${p}"></option>`).join('');
-        pageInput.readOnly = false;
-        pageInput.placeholder = "Gõ để tìm Page...";
-        
-        // Cập nhật Datalist cho TKQC
-        tkqcDatalist.innerHTML = tkqcsForMkt.map(t => `<option value="${t}"></option>`).join('');
-        tkqcInput.readOnly = false;
-        tkqcInput.placeholder = "Chọn hoặc nhập TKQC...";
+    
+    // --- CORE LOGIC FUNCTIONS ---
+    
+    // Hàm tiện ích để tạo các options cho thẻ select
+    function createOptions(list, selectedValue = '') {
+        return list.map(item => `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`).join('');
     }
 
     /**
-     * Xử lý khi người dùng chọn Tên Page.
-     * Sẽ tự động điền Sản phẩm và Thị trường.
+     * Cập nhật danh sách Page khi Tên MKT thay đổi.
+     * @param {HTMLInputElement} mktInput - Ô input Tên MKT.
+     */
+    function updatePageOptions(mktInput) {
+        const selectedMkt = mktInput.value;
+        const row = mktInput.closest('tr');
+        
+        // Reset tất cả các trường phụ thuộc
+        const fieldsToReset = ['Tên Page', 'Sản phẩm', 'Thị trường', 'TKQC'];
+        fieldsToReset.forEach(name => {
+            const input = row.querySelector(`[name="${name}"]`);
+            if (input) input.value = '';
+        });
+
+        const pageInput = row.querySelector('[name="Tên Page"]');
+        const pageDatalist = row.querySelector('.page-options-list');
+        const tkqcDatalist = row.querySelector('.tkqc-options-list');
+        tkqcDatalist.innerHTML = ''; // Xóa danh sách TKQC cũ
+
+        if (selectedMkt && pageDatalist) {
+            const relevantPages = allPagesData.filter(item => item.mkt === selectedMkt);
+            pageDatalist.innerHTML = relevantPages.map(p => `<option value="${p.page}"></option>`).join('');
+            pageInput.readOnly = false;
+            pageInput.placeholder = "Gõ để tìm Page...";
+        } else {
+            pageDatalist.innerHTML = '';
+            pageInput.readOnly = true;
+            pageInput.placeholder = "Vui lòng chọn MKT";
+        }
+    }
+
+    /**
+     * Tự động điền dữ liệu (Sản phẩm, Thị trường, TKQC) dựa trên Tên Page.
+     * YÊU CẦU 3: Sổ TKQC được lọc theo Page đã chọn.
      * @param {HTMLInputElement} pageInput - Ô input Tên Page.
      */
-    function handlePageSelection(pageInput) {
+    function fillRowData(pageInput) {
         const selectedPageName = pageInput.value;
         const row = pageInput.closest('tr');
-        const details = pageDetails[selectedPageName];
+        const pageData = allPagesData.find(item => item.page === selectedPageName);
 
         const productInput = row.querySelector('[name="Sản phẩm"]');
         const marketInput = row.querySelector('[name="Thị trường"]');
+        const tkqcInput = row.querySelector('[name="TKQC"]');
+        const tkqcDatalist = row.querySelector('.tkqc-options-list');
 
-        if (details) {
-            productInput.value = details.product || '';
-            marketInput.value = details.market || '';
+        // Reset trước khi điền mới
+        productInput.value = '';
+        marketInput.value = '';
+        tkqcInput.value = '';
+        tkqcDatalist.innerHTML = '';
+        
+        if (pageData) {
+            // Điền Sản phẩm và Thị trường
+            productInput.value = pageData.product || '';
+            marketInput.value = pageData.market || '';
+            
+            // Xử lý và điền TKQC
+            if (pageData.tkqc && typeof pageData.tkqc === 'string') {
+                const tkqcOptions = pageData.tkqc.split(',').map(item => item.trim()).filter(Boolean);
+                tkqcDatalist.innerHTML = tkqcOptions.map(opt => `<option value="${opt}"></option>`).join('');
+                if (tkqcOptions.length === 1) {
+                    tkqcInput.value = tkqcOptions[0]; // Tự điền nếu chỉ có 1
+                }
+                tkqcInput.placeholder = 'Chọn hoặc nhập TKQC...';
+            } else {
+                tkqcInput.placeholder = 'Page không có TKQC';
+            }
         } else {
-            productInput.value = '';
-            marketInput.value = '';
+             tkqcInput.placeholder = 'Chọn Page để xem TKQC';
         }
     }
 
@@ -166,20 +228,21 @@
         row.innerHTML = `
             <td style="text-align:center;"><button type="button" style="background-color: #6c757d;" onclick="this.closest('tr').remove()">❌</button></td>
             <td>
-                <input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT..." oninput="handleMktSelection(this)" autocomplete="off">
+                <input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT..." oninput="updatePageOptions(this)" autocomplete="off">
             </td>
             <td>
-                <input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="handlePageSelection(this)" autocomplete="off" readonly>
+                <input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly>
                 <datalist id="${pageDatalistId}" class="page-options-list"></datalist>
             </td>
             <td><input name="Sản phẩm" placeholder="Tự động" readonly autocomplete="off"></td>
             <td><input name="Thị trường" placeholder="Tự động" readonly autocomplete="off"></td>
             <td>
-                <input name="TKQC" list="${tkqcDatalistId}" placeholder="Chọn MKT trước" autocomplete="off" readonly>
+                <input name="TKQC" list="${tkqcDatalistId}" placeholder="Chọn Page trước" autocomplete="off">
                 <datalist id="${tkqcDatalistId}" class="tkqc-options-list"></datalist>
             </td>
             <td><input name="Ngày" type="date" value="${new Date().toISOString().split('T')[0]}" autocomplete="off"></td>
-            <td><input name="Ca" placeholder="Nhập ca..." autocomplete="off"></td>
+            <!-- YÊU CẦU 1: Sử dụng select cho Ca -->
+            <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList)}</select></td>
             <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off"></td>
             <td><input name="Via log" placeholder="Nhập via..." autocomplete="off"></td>
             <td><input name="Số Mess+Cmt" type="number" placeholder="Nhập số..." autocomplete="off"></td>
@@ -197,7 +260,7 @@
 
         const allRows = Array.from(tableBody.querySelectorAll('tr')).map(row => {
             const rowData = {};
-            row.querySelectorAll('input').forEach(input => {
+            row.querySelectorAll('input, select').forEach(input => { // Thêm select vào query
                 const key = input.name.replace(/\s/g, '').replace('+','');
                 const value = (input.name === 'CPQC') ? (input.value.replace(/\./g, '') || 0) : input.value;
                 rowData[key] = value;
@@ -231,11 +294,11 @@
         }
     }
 
-    // --- KHỞI TẠO ỨNG DỤNG ---
+    // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', async () => {
         addRowBtn.disabled = true;
         submitBtn.disabled = true;
-        statusDiv.textContent = 'Đang tải và xử lý dữ liệu từ Google Sheet...';
+        statusDiv.textContent = 'Đang tải dữ liệu từ Google Sheet...';
         
         const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
 
@@ -246,34 +309,13 @@
             const data = await response.json();
             if (data.error) throw new Error(`Lỗi từ Google Script: ${data.error}`);
 
-            // Xử lý dữ liệu thô thành các map để tra cứu nhanh
-            data.forEach(item => {
-                if (!item.mkt || !item.page) return;
-
-                // 1. Map chi tiết của Page
-                pageDetails[item.page] = { product: item.product, market: item.market };
-
-                // 2. Map từ MKT đến Pages (dùng Set để tránh trùng lặp)
-                if (!mktToPages[item.mkt]) mktToPages[item.mkt] = new Set();
-                mktToPages[item.mkt].add(item.page);
-
-                // 3. Map từ MKT đến TKQCs (dùng Set để tránh trùng lặp)
-                if (item.tkqc && typeof item.tkqc === 'string') {
-                    if (!mktToTkqcs[item.mkt]) mktToTkqcs[item.mkt] = new Set();
-                    const tkqcArray = item.tkqc.split(',').map(t => t.trim()).filter(Boolean);
-                    tkqcArray.forEach(t => mktToTkqcs[item.mkt].add(t));
-                }
-            });
-
-            // Chuyển Set thành Array để dễ sử dụng sau này
-            for (const mkt in mktToPages) { mktToPages[mkt] = [...mktToPages[mkt]]; }
-            for (const mkt in mktToTkqcs) { mktToTkqcs[mkt] = [...mktToTkqcs[mkt]]; }
+            allPagesData = data; // Quay lại sử dụng một mảng dữ liệu duy nhất
             
-            // Cập nhật danh sách MKT chính
             const masterMktDatalist = document.getElementById('master-mkt-list');
-            masterMktDatalist.innerHTML = Object.keys(mktToPages).map(name => `<option value="${name}"></option>`).join('');
+            const mktNames = [...new Set(allPagesData.map(item => item.mkt).filter(Boolean))];
+            masterMktDatalist.innerHTML = mktNames.map(name => `<option value="${name}"></option>`).join('');
             
-            statusDiv.textContent = `Tải thành công dữ liệu. Hệ thống đã sẵn sàng.`;
+            statusDiv.textContent = `Tải thành công dữ liệu từ ${allPagesData.length} pages. Hệ thống đã sẵn sàng.`;
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
             addNewRow();
