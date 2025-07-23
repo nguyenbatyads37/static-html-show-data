@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v19.0 - Logic Hoàn Chỉnh)</title>
+  <title>Báo Cáo MKT (v20.0 - Sản phẩm & Thị trường linh hoạt)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -51,35 +51,12 @@
     #dataTable th:nth-child(10), #dataTable td:nth-child(10) { width: 130px; }
     #dataTable th:nth-child(11), #dataTable td:nth-child(11) { width: 110px; }
 
-    /* CSS cho Video */
     .video-section {
-        max-width: 900px;
-        margin: 2rem auto;
-        background-color: white;
-        border-radius: var(--border-radius);
-        box-shadow: var(--box-shadow);
-        padding: 2rem;
+        max-width: 900px; margin: 2rem auto; background-color: white; border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 2rem;
     }
-    .video-section h2 {
-        text-align: center;
-        color: var(--primary-color);
-        margin-bottom: 1.5rem;
-    }
-    .video-wrapper {
-        position: relative;
-        padding-bottom: 56.25%; /* Tỷ lệ 16:9 */
-        height: 0;
-        overflow: hidden;
-        border-radius: var(--border-radius);
-    }
-    .video-wrapper iframe {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        border: 0;
-    }
+    .video-section h2 { text-align: center; color: var(--primary-color); margin-bottom: 1.5rem; }
+    .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--border-radius); }
+    .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
   </style>
 </head>
 <body>
@@ -88,24 +65,18 @@
     <div class="status" id="status">Đang khởi tạo...</div>
     <button id="addRowBtn" type="button" class="add-row-btn">➕ Thêm dòng trống</button>
 
+    <!-- DATALIST TỔNG CHO TOÀN BỘ TRANG -->
     <datalist id="master-mkt-list"></datalist>
+    <datalist id="master-product-list"></datalist>
+    <datalist id="master-market-list"></datalist>
 
     <form id="dataForm" novalidate autocomplete="off">
       <div class="table-wrapper">
         <table id="dataTable">
           <thead>
             <tr>
-              <th>Hành động</th>
-              <th>Tên MKT</th>
-              <th>Tên Page</th>
-              <th>Sản phẩm</th>
-              <th>Thị trường</th>
-              <th>TKQC</th>
-              <th>Ngày</th>
-              <th>Ca</th>
-              <th>CPQC</th>
-              <th>Via log</th>
-              <th>Số Mess+Cmt</th>
+              <th>Hành động</th><th>Tên MKT</th><th>Tên Page</th><th>Sản phẩm</th><th>Thị trường</th><th>TKQC</th>
+              <th>Ngày</th><th>Ca</th><th>CPQC</th><th>Via log</th><th>Số Mess+Cmt</th>
             </tr>
           </thead>
           <tbody id="tableBody"></tbody>
@@ -116,7 +87,6 @@
     <div id="responseMessage" style="margin-top: 1rem;"></div>
   </div>
 
-  <!-- PHẦN VIDEO ĐƯỢC THÊM LẠI -->
   <div class="video-section">
       <h2>Video hướng dẫn</h2>
       <div class="video-wrapper">
@@ -127,7 +97,10 @@
   <script>
     // --- DATA, CONFIG & DOM ELEMENTS ---
     let allPagesData = [];
-    const shiftList = ["Hết ca", "Giữa ca", "Ca Chiều"]; // YÊU CẦU 1: Giữ lại danh sách ca
+    // YÊU CẦU MỚI: Danh sách cố định cho Sản phẩm và Thị trường
+    const productList = ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Kẹo Táo", "Serum Sâm"];
+    const marketList = [...new Set(["Canada", "US", "Úc", "EU", "Nhật Bản", "Hàn Quốc", "UK"])];
+    const shiftList = ["Hết ca", "Giữa ca", "Ca Chiều"];
     
     const tableBody = document.getElementById('tableBody');
     const addRowBtn = document.getElementById('addRowBtn');
@@ -136,21 +109,14 @@
     const form = document.getElementById('dataForm');
     
     // --- CORE LOGIC FUNCTIONS ---
-    
-    // Hàm tiện ích để tạo các options cho thẻ select
     function createOptions(list, selectedValue = '') {
         return list.map(item => `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`).join('');
     }
 
-    /**
-     * Cập nhật danh sách Page khi Tên MKT thay đổi.
-     * @param {HTMLInputElement} mktInput - Ô input Tên MKT.
-     */
     function updatePageOptions(mktInput) {
         const selectedMkt = mktInput.value;
         const row = mktInput.closest('tr');
         
-        // Reset tất cả các trường phụ thuộc
         const fieldsToReset = ['Tên Page', 'Sản phẩm', 'Thị trường', 'TKQC'];
         fieldsToReset.forEach(name => {
             const input = row.querySelector(`[name="${name}"]`);
@@ -160,7 +126,7 @@
         const pageInput = row.querySelector('[name="Tên Page"]');
         const pageDatalist = row.querySelector('.page-options-list');
         const tkqcDatalist = row.querySelector('.tkqc-options-list');
-        tkqcDatalist.innerHTML = ''; // Xóa danh sách TKQC cũ
+        tkqcDatalist.innerHTML = '';
 
         if (selectedMkt && pageDatalist) {
             const relevantPages = allPagesData.filter(item => item.mkt === selectedMkt);
@@ -174,11 +140,6 @@
         }
     }
 
-    /**
-     * Tự động điền dữ liệu (Sản phẩm, Thị trường, TKQC) dựa trên Tên Page.
-     * YÊU CẦU 3: Sổ TKQC được lọc theo Page đã chọn.
-     * @param {HTMLInputElement} pageInput - Ô input Tên Page.
-     */
     function fillRowData(pageInput) {
         const selectedPageName = pageInput.value;
         const row = pageInput.closest('tr');
@@ -196,16 +157,15 @@
         tkqcDatalist.innerHTML = '';
         
         if (pageData) {
-            // Điền Sản phẩm và Thị trường
+            // TỰ ĐỘNG ĐIỀN nhưng người dùng vẫn có thể sửa
             productInput.value = pageData.product || '';
             marketInput.value = pageData.market || '';
             
-            // Xử lý và điền TKQC
             if (pageData.tkqc && typeof pageData.tkqc === 'string') {
                 const tkqcOptions = pageData.tkqc.split(',').map(item => item.trim()).filter(Boolean);
                 tkqcDatalist.innerHTML = tkqcOptions.map(opt => `<option value="${opt}"></option>`).join('');
                 if (tkqcOptions.length === 1) {
-                    tkqcInput.value = tkqcOptions[0]; // Tự điền nếu chỉ có 1
+                    tkqcInput.value = tkqcOptions[0];
                 }
                 tkqcInput.placeholder = 'Chọn hoặc nhập TKQC...';
             } else {
@@ -234,14 +194,14 @@
                 <input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly>
                 <datalist id="${pageDatalistId}" class="page-options-list"></datalist>
             </td>
-            <td><input name="Sản phẩm" placeholder="Tự động" readonly autocomplete="off"></td>
-            <td><input name="Thị trường" placeholder="Tự động" readonly autocomplete="off"></td>
+            <!-- THAY ĐỔI: Sử dụng input với datalist, bỏ readonly -->
+            <td><input name="Sản phẩm" list="master-product-list" placeholder="Tự động/Chọn" autocomplete="off"></td>
+            <td><input name="Thị trường" list="master-market-list" placeholder="Tự động/Chọn" autocomplete="off"></td>
             <td>
                 <input name="TKQC" list="${tkqcDatalistId}" placeholder="Chọn Page trước" autocomplete="off">
                 <datalist id="${tkqcDatalistId}" class="tkqc-options-list"></datalist>
             </td>
             <td><input name="Ngày" type="date" value="${new Date().toISOString().split('T')[0]}" autocomplete="off"></td>
-            <!-- YÊU CẦU 1: Sử dụng select cho Ca -->
             <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList)}</select></td>
             <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off"></td>
             <td><input name="Via log" placeholder="Nhập via..." autocomplete="off"></td>
@@ -260,7 +220,7 @@
 
         const allRows = Array.from(tableBody.querySelectorAll('tr')).map(row => {
             const rowData = {};
-            row.querySelectorAll('input, select').forEach(input => { // Thêm select vào query
+            row.querySelectorAll('input, select').forEach(input => {
                 const key = input.name.replace(/\s/g, '').replace('+','');
                 const value = (input.name === 'CPQC') ? (input.value.replace(/\./g, '') || 0) : input.value;
                 rowData[key] = value;
@@ -271,7 +231,7 @@
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
 
-        const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycby6w0yKs1ML0irL8IUeZo75gbZG2_tVbkcqz7DRi2ELqpdlu2gq_B67TwViZemq-QK8Xw/exec';
+        const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
         
         try {
             const response = await fetch(SCRIPT_URL_POST, { method: 'POST', body: formData });
@@ -300,6 +260,10 @@
         submitBtn.disabled = true;
         statusDiv.textContent = 'Đang tải dữ liệu từ Google Sheet...';
         
+        // NẠP DỮ LIỆU CHO CÁC DATALIST TỔNG
+        document.getElementById('master-product-list').innerHTML = productList.map(p => `<option value="${p}"></option>`).join('');
+        document.getElementById('master-market-list').innerHTML = marketList.map(m => `<option value="${m}"></option>`).join('');
+
         const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
 
         try {
@@ -309,7 +273,7 @@
             const data = await response.json();
             if (data.error) throw new Error(`Lỗi từ Google Script: ${data.error}`);
 
-            allPagesData = data; // Quay lại sử dụng một mảng dữ liệu duy nhất
+            allPagesData = data;
             
             const masterMktDatalist = document.getElementById('master-mkt-list');
             const mktNames = [...new Set(allPagesData.map(item => item.mkt).filter(Boolean))];
