@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v21.0 - Tải dữ liệu từ URL)</title>
+  <title>Báo Cáo MKT (v22.0 - Bắt buộc điền)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -34,8 +34,11 @@
     .add-row-btn { background-color: var(--success-color); margin-bottom: 1.5rem; }
     .submit-btn { background-color: var(--danger-color); margin-top: 1.5rem; }
     .status { background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 14px; }
-    .error-cell { background-color: #f8d7da !important; border: 1px solid var(--danger-color) !important; }
     
+    /* YÊU CẦU 1: CSS cho ô bị lỗi */
+    .error-cell { background-color: #f8d7da !important; }
+    .error-cell input, .error-cell select { border-color: var(--danger-color) !important; }
+
     #dataTable th:nth-child(1), #dataTable td:nth-child(1) { width: 75px; text-align: center; }
     #dataTable th:nth-child(2), #dataTable td:nth-child(2) { width: 220px; }
     #dataTable th:nth-child(3), #dataTable td:nth-child(3) { width: 40%; min-width: 450px; }
@@ -99,6 +102,7 @@
     const submitBtn = document.getElementById('submitBtn');
     const statusDiv = document.getElementById('status');
     const form = document.getElementById('dataForm');
+    const respMsg = document.getElementById('responseMessage');
     
     function createOptions(list, selectedValue = '') {
         return list.map(item => `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`).join('');
@@ -109,10 +113,7 @@
         const row = mktInput.closest('tr');
         
         const fieldsToReset = ['Tên Page', 'Sản phẩm', 'Thị trường', 'TKQC'];
-        fieldsToReset.forEach(name => {
-            const input = row.querySelector(`[name="${name}"]`);
-            if (input) input.value = '';
-        });
+        fieldsToReset.forEach(name => (row.querySelector(`[name="${name}"]`).value = ''));
 
         const pageInput = row.querySelector('[name="Tên Page"]');
         const pageDatalist = row.querySelector('.page-options-list');
@@ -158,26 +159,20 @@
 
     function formatDateFromUrl(dateString) {
       if (!dateString || !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) return '';
-      const parts = dateString.split('/'); // MM/DD/YYYY
-      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`; // YYYY-MM-DD
+      const parts = dateString.split('/');
+      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
     }
 
     function addNewRow(data = {}) {
         const row = document.createElement('tr');
         const uniqueId = Date.now() + Math.random().toString(36).substr(2, 9);
-        const pageDatalistId = `page-list-${uniqueId}`;
-        const tkqcDatalistId = `tkqc-list-${uniqueId}`;
-
         row.innerHTML = `
             <td style="text-align:center;"><button type="button" style="background-color: #6c757d;" onclick="this.closest('tr').remove()">❌</button></td>
             <td><input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT..." oninput="updatePageOptions(this)" autocomplete="off" value="${data['Tên MKT'] || ''}"></td>
-            <td><input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly value="${data['Tên Page'] || ''}">
-                <datalist id="${pageDatalistId}" class="page-options-list"></datalist></td>
+            <td><input name="Tên Page" list="page-list-${uniqueId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly value="${data['Tên Page'] || ''}"><datalist id="page-list-${uniqueId}" class="page-options-list"></datalist></td>
             <td><input name="Sản phẩm" list="master-product-list" placeholder="Tự động/Chọn" autocomplete="off" value="${data['Sản phẩm'] || ''}"></td>
             <td><input name="Thị trường" list="master-market-list" placeholder="Tự động/Chọn" autocomplete="off" value="${data['Thị trường'] || ''}"></td>
-            <td><input name="TKQC" list="${tkqcDatalistId}" placeholder="Chọn Page trước" autocomplete="off" value="${data['TKQC'] || ''}">
-                <datalist id="${tkqcDatalistId}" class="tkqc-options-list"></datalist></td>
-            <!-- YÊU CẦU 1: Bỏ tự động điền ngày -->
+            <td><input name="TKQC" list="tkqc-list-${uniqueId}" placeholder="Chọn Page trước" autocomplete="off" value="${data['TKQC'] || ''}"><datalist id="tkqc-list-${uniqueId}" class="tkqc-options-list"></datalist></td>
             <td><input name="Ngày" type="date" value="${data['Ngày'] || ''}" autocomplete="off"></td>
             <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList, data['Ca'])}</select></td>
             <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off" value="${data['CPQC'] || ''}"></td>
@@ -185,53 +180,33 @@
             <td><input name="Số Mess+Cmt" type="number" placeholder="Nhập số..." autocomplete="off" value="${data['Số Mess+Cmt'] || ''}"></td>
         `;
         
-        // Sau khi tạo HTML, chạy logic để điền datalist cho dòng được tải từ URL
         if (data['Tên MKT']) {
             const mktInput = row.querySelector('[name="Tên MKT"]');
-            updatePageOptions(mktInput); // Điều này sẽ điền datalist page và mở khóa ô page
-            row.querySelector('[name="Tên Page"]').value = data['Tên Page'] || ''; // Gán lại giá trị page
+            updatePageOptions(mktInput);
+            row.querySelector('[name="Tên Page"]').value = data['Tên Page'] || '';
         }
         if (data['Tên Page']) {
             const pageInput = row.querySelector('[name="Tên Page"]');
-            fillRowData(pageInput); // Điều này sẽ điền sản phẩm, thị trường và datalist TKQC
-            // Gán lại các giá trị vì fillRowData có thể ghi đè
+            fillRowData(pageInput);
             row.querySelector('[name="Sản phẩm"]').value = data['Sản phẩm'] || row.querySelector('[name="Sản phẩm"]').value;
             row.querySelector('[name="Thị trường"]').value = data['Thị trường'] || row.querySelector('[name="Thị trường"]').value;
             row.querySelector('[name="TKQC"]').value = data['TKQC'] || row.querySelector('[name="TKQC"]').value;
         }
-
         tableBody.appendChild(row);
     }
     
-    // YÊU CẦU 2: HÀM ĐỌC DỮ LIỆU TỪ URL
     function parseUrlData(dataString) {
       try {
-        const result = [];
-        // Ánh xạ từ khóa trong URL sang tên cột trong form
-        const fieldMap = {
-            'Tên': 'Tên MKT',
-            'Page': 'Tên Page',
-            'Ngày': 'Ngày',
-            'Ca': 'Ca',
-            'Sảnphẩm': 'Sản phẩm',
-            'Thịtrường': 'Thị trường',
-            'TKQC': 'TKQC', // Thêm các cột mới
-            'CPQC': 'CPQC',
-            'Vialog': 'Via log',
-            'SốMessCmt': 'Số Mess+Cmt'
-        };
-        
+        const result = [], fieldMap = {'Tên':'Tên MKT','Page':'Tên Page','Ngày':'Ngày','Ca':'Ca','Sảnphẩm':'Sản phẩm','Thịtrường':'Thị trường','TKQC':'TKQC','CPQC':'CPQC','Vialog':'Via log','SốMessCmt':'Số Mess+Cmt'};
         const rows = dataString.split('_b_');
         rows.forEach((rowStr) => {
           if (!rowStr.trim()) return;
           const rowData = {};
           const fields = rowStr.split('_a_');
           for (let i = 0; i < fields.length; i += 2) {
-            const urlKey = fields[i];
+            const urlKey = fields[i], formKey = fieldMap[urlKey];
             let fieldValue = fields[i + 1] !== undefined ? decodeURIComponent(fields[i + 1].replace(/\+/g, ' ')).trim() : '';
-            const formKey = fieldMap[urlKey];
             if (formKey) {
-              // Định dạng lại ngày nếu là cột Ngày
               if(formKey === 'Ngày') fieldValue = formatDateFromUrl(fieldValue);
               rowData[formKey] = fieldValue;
             }
@@ -239,34 +214,62 @@
           if (Object.keys(rowData).length > 0) result.push(rowData);
         });
         return result;
-      } catch (error) {
-        console.error('Lỗi phân tích dữ liệu URL:', error);
-        return [];
-      }
+      } catch (error) { console.error('Lỗi phân tích dữ liệu URL:', error); return []; }
     }
     
     function loadDataFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const dataString = urlParams.get('data');
+        const urlParams = new URLSearchParams(window.location.search), dataString = urlParams.get('data');
         if (!dataString) return false;
-
         try {
             statusDiv.textContent = 'Đang đọc dữ liệu từ URL...';
             const data = parseUrlData(dataString);
             if (data.length === 0) throw new Error('Dữ liệu URL không hợp lệ.');
-            
-            tableBody.innerHTML = ''; // Xóa bảng trước khi thêm dòng mới
+            tableBody.innerHTML = '';
             data.forEach(rowData => addNewRow(rowData));
             statusDiv.textContent = `Đã tải thành công ${data.length} dòng từ URL.`;
             return true;
-        } catch(e) {
-            statusDiv.textContent = `Lỗi tải dữ liệu từ URL: ${e.message}`;
-            return false;
-        }
+        } catch(e) { statusDiv.textContent = `Lỗi tải dữ liệu từ URL: ${e.message}`; return false; }
     }
     
+    // YÊU CẦU 1: HÀM KIỂM TRA DỮ LIỆU
+    function validateForm() {
+        // Xóa các lỗi cũ
+        document.querySelectorAll('.error-cell').forEach(c => c.classList.remove('error-cell'));
+        let isValid = true;
+        const rows = tableBody.querySelectorAll('tr');
+
+        if (rows.length === 0) {
+            respMsg.textContent = 'Bảng trống, không có gì để gửi.';
+            respMsg.style.color = 'var(--danger-color)';
+            return false;
+        }
+
+        const requiredFields = ['Tên MKT', 'Tên Page', 'Sản phẩm', 'Thị trường', 'TKQC', 'Ngày', 'Ca', 'CPQC', 'Via log', 'Số Mess+Cmt'];
+        
+        rows.forEach(row => {
+            requiredFields.forEach(fieldName => {
+                const input = row.querySelector(`[name="${fieldName}"]`);
+                if (input && !input.value.trim()) {
+                    isValid = false;
+                    input.closest('td').classList.add('error-cell');
+                }
+            });
+        });
+
+        if (!isValid) {
+            respMsg.textContent = 'Vui lòng điền đầy đủ tất cả các ô được đánh dấu màu đỏ.';
+            respMsg.style.color = 'var(--danger-color)';
+        } else {
+            respMsg.textContent = ''; // Xóa thông báo lỗi nếu hợp lệ
+        }
+        return isValid;
+    }
+
     async function handleSubmit(e) {
         e.preventDefault();
+        // Thêm bước kiểm tra dữ liệu trước khi gửi
+        if (!validateForm()) return;
+
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang gửi...';
 
@@ -282,18 +285,19 @@
 
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
+
+        // YÊU CẦU 2: THAY ĐỔI LINK ĐÍCH
         const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycby6w0yKs1ML0irL8IUeZo75gbZG2_tVbkcqz7DRi2ELqpdlu2gq_B67TwViZemq-QK8Xw/exec';
         
         try {
             const response = await fetch(SCRIPT_URL_POST, { method: 'POST', body: formData });
             const result = await response.json();
-            const respMsg = document.getElementById('responseMessage');
             respMsg.style.color = result.error ? 'var(--danger-color)' : 'var(--success-color)';
             respMsg.textContent = result.error || result.message || 'Gửi thành công!';
             if (!result.error) { tableBody.innerHTML = ''; addNewRow(); }
         } catch (err) {
-            document.getElementById('responseMessage').textContent = 'Lỗi gửi dữ liệu: ' + err.message;
-            document.getElementById('responseMessage').style.color = 'var(--danger-color)';
+            respMsg.textContent = 'Lỗi gửi dữ liệu: ' + err.message;
+            respMsg.style.color = 'var(--danger-color)';
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = '🚀 Gửi báo cáo';
@@ -307,7 +311,8 @@
         document.getElementById('master-product-list').innerHTML = productList.map(p => `<option value="${p}"></option>`).join('');
         document.getElementById('master-market-list').innerHTML = marketList.map(m => `<option value="${m}"></option>`).join('');
 
-        const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
+        // YÊU CẦU 2: THAY ĐỔI LINK NGUỒN
+        const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycby6w0yKs1ML0irL8IUeZo75gbZG2_tVbkcqz7DRi2ELqpdlu2gq_B67TwViZemq-QK8Xw/exec';
 
         try {
             const response = await fetch(DATA_SOURCE_URL);
@@ -322,7 +327,6 @@
             
             addRowBtn.disabled = false; submitBtn.disabled = false;
             
-            // THAY ĐỔI: Tải dữ liệu từ URL trước, nếu không có thì mới thêm dòng trống
             if (!loadDataFromUrl()) {
                 addNewRow();
                 statusDiv.textContent = `Tải thành công dữ liệu. Hệ thống đã sẵn sàng.`;
