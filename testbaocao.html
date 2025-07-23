@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v20.0 - Sản phẩm & Thị trường linh hoạt)</title>
+  <title>Báo Cáo MKT (v21.0 - Tải dữ liệu từ URL)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -27,10 +27,7 @@
     tr:nth-child(even) { background-color: var(--light-gray); }
     input, button, select { box-sizing: border-box; padding: 0.6rem 0.8rem; border: 1px solid var(--medium-gray); border-radius: 6px; width: 100%; font-family: inherit; font-size: 1rem; min-height: 42px; }
     
-    #dataTable input, #dataTable select {
-        font-size: 1.2rem;
-        font-weight: bold;
-    }
+    #dataTable input, #dataTable select { font-size: 1.2rem; font-weight: bold; }
 
     button { background-color: var(--primary-color); color: white; border: none; cursor: pointer; }
     button:disabled { background-color: #6c757d; cursor: not-allowed; }
@@ -51,9 +48,7 @@
     #dataTable th:nth-child(10), #dataTable td:nth-child(10) { width: 130px; }
     #dataTable th:nth-child(11), #dataTable td:nth-child(11) { width: 110px; }
 
-    .video-section {
-        max-width: 900px; margin: 2rem auto; background-color: white; border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 2rem;
-    }
+    .video-section { max-width: 900px; margin: 2rem auto; background-color: white; border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 2rem; }
     .video-section h2 { text-align: center; color: var(--primary-color); margin-bottom: 1.5rem; }
     .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--border-radius); }
     .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
@@ -65,7 +60,6 @@
     <div class="status" id="status">Đang khởi tạo...</div>
     <button id="addRowBtn" type="button" class="add-row-btn">➕ Thêm dòng trống</button>
 
-    <!-- DATALIST TỔNG CHO TOÀN BỘ TRANG -->
     <datalist id="master-mkt-list"></datalist>
     <datalist id="master-product-list"></datalist>
     <datalist id="master-market-list"></datalist>
@@ -95,9 +89,7 @@
   </div>
 
   <script>
-    // --- DATA, CONFIG & DOM ELEMENTS ---
     let allPagesData = [];
-    // YÊU CẦU MỚI: Danh sách cố định cho Sản phẩm và Thị trường
     const productList = ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Kẹo Táo", "Serum Sâm"];
     const marketList = [...new Set(["Canada", "US", "Úc", "EU", "Nhật Bản", "Hàn Quốc", "UK"])];
     const shiftList = ["Hết ca", "Giữa ca", "Ca Chiều"];
@@ -108,7 +100,6 @@
     const statusDiv = document.getElementById('status');
     const form = document.getElementById('dataForm');
     
-    // --- CORE LOGIC FUNCTIONS ---
     function createOptions(list, selectedValue = '') {
         return list.map(item => `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`).join('');
     }
@@ -150,36 +141,28 @@
         const tkqcInput = row.querySelector('[name="TKQC"]');
         const tkqcDatalist = row.querySelector('.tkqc-options-list');
 
-        // Reset trước khi điền mới
-        productInput.value = '';
-        marketInput.value = '';
-        tkqcInput.value = '';
-        tkqcDatalist.innerHTML = '';
+        productInput.value = ''; marketInput.value = ''; tkqcInput.value = ''; tkqcDatalist.innerHTML = '';
         
         if (pageData) {
-            // TỰ ĐỘNG ĐIỀN nhưng người dùng vẫn có thể sửa
             productInput.value = pageData.product || '';
             marketInput.value = pageData.market || '';
             
             if (pageData.tkqc && typeof pageData.tkqc === 'string') {
                 const tkqcOptions = pageData.tkqc.split(',').map(item => item.trim()).filter(Boolean);
                 tkqcDatalist.innerHTML = tkqcOptions.map(opt => `<option value="${opt}"></option>`).join('');
-                if (tkqcOptions.length === 1) {
-                    tkqcInput.value = tkqcOptions[0];
-                }
+                if (tkqcOptions.length === 1) tkqcInput.value = tkqcOptions[0];
                 tkqcInput.placeholder = 'Chọn hoặc nhập TKQC...';
-            } else {
-                tkqcInput.placeholder = 'Page không có TKQC';
-            }
-        } else {
-             tkqcInput.placeholder = 'Chọn Page để xem TKQC';
-        }
+            } else { tkqcInput.placeholder = 'Page không có TKQC'; }
+        } else { tkqcInput.placeholder = 'Chọn Page để xem TKQC'; }
     }
 
-    /**
-     * Thêm một dòng mới vào bảng.
-     */
-    function addNewRow() {
+    function formatDateFromUrl(dateString) {
+      if (!dateString || !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) return '';
+      const parts = dateString.split('/'); // MM/DD/YYYY
+      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`; // YYYY-MM-DD
+    }
+
+    function addNewRow(data = {}) {
         const row = document.createElement('tr');
         const uniqueId = Date.now() + Math.random().toString(36).substr(2, 9);
         const pageDatalistId = `page-list-${uniqueId}`;
@@ -187,32 +170,101 @@
 
         row.innerHTML = `
             <td style="text-align:center;"><button type="button" style="background-color: #6c757d;" onclick="this.closest('tr').remove()">❌</button></td>
-            <td>
-                <input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT..." oninput="updatePageOptions(this)" autocomplete="off">
-            </td>
-            <td>
-                <input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly>
-                <datalist id="${pageDatalistId}" class="page-options-list"></datalist>
-            </td>
-            <!-- THAY ĐỔI: Sử dụng input với datalist, bỏ readonly -->
-            <td><input name="Sản phẩm" list="master-product-list" placeholder="Tự động/Chọn" autocomplete="off"></td>
-            <td><input name="Thị trường" list="master-market-list" placeholder="Tự động/Chọn" autocomplete="off"></td>
-            <td>
-                <input name="TKQC" list="${tkqcDatalistId}" placeholder="Chọn Page trước" autocomplete="off">
-                <datalist id="${tkqcDatalistId}" class="tkqc-options-list"></datalist>
-            </td>
-            <td><input name="Ngày" type="date" value="${new Date().toISOString().split('T')[0]}" autocomplete="off"></td>
-            <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList)}</select></td>
-            <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off"></td>
-            <td><input name="Via log" placeholder="Nhập via..." autocomplete="off"></td>
-            <td><input name="Số Mess+Cmt" type="number" placeholder="Nhập số..." autocomplete="off"></td>
+            <td><input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT..." oninput="updatePageOptions(this)" autocomplete="off" value="${data['Tên MKT'] || ''}"></td>
+            <td><input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly value="${data['Tên Page'] || ''}">
+                <datalist id="${pageDatalistId}" class="page-options-list"></datalist></td>
+            <td><input name="Sản phẩm" list="master-product-list" placeholder="Tự động/Chọn" autocomplete="off" value="${data['Sản phẩm'] || ''}"></td>
+            <td><input name="Thị trường" list="master-market-list" placeholder="Tự động/Chọn" autocomplete="off" value="${data['Thị trường'] || ''}"></td>
+            <td><input name="TKQC" list="${tkqcDatalistId}" placeholder="Chọn Page trước" autocomplete="off" value="${data['TKQC'] || ''}">
+                <datalist id="${tkqcDatalistId}" class="tkqc-options-list"></datalist></td>
+            <!-- YÊU CẦU 1: Bỏ tự động điền ngày -->
+            <td><input name="Ngày" type="date" value="${data['Ngày'] || ''}" autocomplete="off"></td>
+            <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList, data['Ca'])}</select></td>
+            <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off" value="${data['CPQC'] || ''}"></td>
+            <td><input name="Via log" placeholder="Nhập via..." autocomplete="off" value="${data['Via log'] || ''}"></td>
+            <td><input name="Số Mess+Cmt" type="number" placeholder="Nhập số..." autocomplete="off" value="${data['Số Mess+Cmt'] || ''}"></td>
         `;
+        
+        // Sau khi tạo HTML, chạy logic để điền datalist cho dòng được tải từ URL
+        if (data['Tên MKT']) {
+            const mktInput = row.querySelector('[name="Tên MKT"]');
+            updatePageOptions(mktInput); // Điều này sẽ điền datalist page và mở khóa ô page
+            row.querySelector('[name="Tên Page"]').value = data['Tên Page'] || ''; // Gán lại giá trị page
+        }
+        if (data['Tên Page']) {
+            const pageInput = row.querySelector('[name="Tên Page"]');
+            fillRowData(pageInput); // Điều này sẽ điền sản phẩm, thị trường và datalist TKQC
+            // Gán lại các giá trị vì fillRowData có thể ghi đè
+            row.querySelector('[name="Sản phẩm"]').value = data['Sản phẩm'] || row.querySelector('[name="Sản phẩm"]').value;
+            row.querySelector('[name="Thị trường"]').value = data['Thị trường'] || row.querySelector('[name="Thị trường"]').value;
+            row.querySelector('[name="TKQC"]').value = data['TKQC'] || row.querySelector('[name="TKQC"]').value;
+        }
+
         tableBody.appendChild(row);
     }
+    
+    // YÊU CẦU 2: HÀM ĐỌC DỮ LIỆU TỪ URL
+    function parseUrlData(dataString) {
+      try {
+        const result = [];
+        // Ánh xạ từ khóa trong URL sang tên cột trong form
+        const fieldMap = {
+            'Tên': 'Tên MKT',
+            'Page': 'Tên Page',
+            'Ngày': 'Ngày',
+            'Ca': 'Ca',
+            'Sảnphẩm': 'Sản phẩm',
+            'Thịtrường': 'Thị trường',
+            'TKQC': 'TKQC', // Thêm các cột mới
+            'CPQC': 'CPQC',
+            'Vialog': 'Via log',
+            'SốMessCmt': 'Số Mess+Cmt'
+        };
+        
+        const rows = dataString.split('_b_');
+        rows.forEach((rowStr) => {
+          if (!rowStr.trim()) return;
+          const rowData = {};
+          const fields = rowStr.split('_a_');
+          for (let i = 0; i < fields.length; i += 2) {
+            const urlKey = fields[i];
+            let fieldValue = fields[i + 1] !== undefined ? decodeURIComponent(fields[i + 1].replace(/\+/g, ' ')).trim() : '';
+            const formKey = fieldMap[urlKey];
+            if (formKey) {
+              // Định dạng lại ngày nếu là cột Ngày
+              if(formKey === 'Ngày') fieldValue = formatDateFromUrl(fieldValue);
+              rowData[formKey] = fieldValue;
+            }
+          }
+          if (Object.keys(rowData).length > 0) result.push(rowData);
+        });
+        return result;
+      } catch (error) {
+        console.error('Lỗi phân tích dữ liệu URL:', error);
+        return [];
+      }
+    }
+    
+    function loadDataFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const dataString = urlParams.get('data');
+        if (!dataString) return false;
 
-    /**
-     * Xử lý việc gửi form.
-     */
+        try {
+            statusDiv.textContent = 'Đang đọc dữ liệu từ URL...';
+            const data = parseUrlData(dataString);
+            if (data.length === 0) throw new Error('Dữ liệu URL không hợp lệ.');
+            
+            tableBody.innerHTML = ''; // Xóa bảng trước khi thêm dòng mới
+            data.forEach(rowData => addNewRow(rowData));
+            statusDiv.textContent = `Đã tải thành công ${data.length} dòng từ URL.`;
+            return true;
+        } catch(e) {
+            statusDiv.textContent = `Lỗi tải dữ liệu từ URL: ${e.message}`;
+            return false;
+        }
+    }
+    
     async function handleSubmit(e) {
         e.preventDefault();
         submitBtn.disabled = true;
@@ -222,7 +274,7 @@
             const rowData = {};
             row.querySelectorAll('input, select').forEach(input => {
                 const key = input.name.replace(/\s/g, '').replace('+','');
-                const value = (input.name === 'CPQC') ? (input.value.replace(/\./g, '') || 0) : input.value;
+                const value = (input.name === 'CPQC') ? (input.value.replace(/[,.]/g, '') || 0) : input.value;
                 rowData[key] = value;
             });
             return rowData;
@@ -230,21 +282,15 @@
 
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
-
         const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycbxRkEoEIoXya_PdcYGT1tmXlMJ-ef3aOaBldi_chinJTfTLoSUj535vVaV3spDbD03L5A/exec';
         
         try {
             const response = await fetch(SCRIPT_URL_POST, { method: 'POST', body: formData });
             const result = await response.json();
-            
             const respMsg = document.getElementById('responseMessage');
             respMsg.style.color = result.error ? 'var(--danger-color)' : 'var(--success-color)';
             respMsg.textContent = result.error || result.message || 'Gửi thành công!';
-
-            if (!result.error) {
-                tableBody.innerHTML = '';
-                addNewRow();
-            }
+            if (!result.error) { tableBody.innerHTML = ''; addNewRow(); }
         } catch (err) {
             document.getElementById('responseMessage').textContent = 'Lỗi gửi dữ liệu: ' + err.message;
             document.getElementById('responseMessage').style.color = 'var(--danger-color)';
@@ -254,13 +300,10 @@
         }
     }
 
-    // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', async () => {
-        addRowBtn.disabled = true;
-        submitBtn.disabled = true;
+        addRowBtn.disabled = true; submitBtn.disabled = true;
         statusDiv.textContent = 'Đang tải dữ liệu từ Google Sheet...';
         
-        // NẠP DỮ LIỆU CHO CÁC DATALIST TỔNG
         document.getElementById('master-product-list').innerHTML = productList.map(p => `<option value="${p}"></option>`).join('');
         document.getElementById('master-market-list').innerHTML = marketList.map(m => `<option value="${m}"></option>`).join('');
 
@@ -269,30 +312,31 @@
         try {
             const response = await fetch(DATA_SOURCE_URL);
             if (!response.ok) throw new Error(`Lỗi mạng: ${response.status}`);
-            
             const data = await response.json();
             if (data.error) throw new Error(`Lỗi từ Google Script: ${data.error}`);
-
             allPagesData = data;
             
             const masterMktDatalist = document.getElementById('master-mkt-list');
             const mktNames = [...new Set(allPagesData.map(item => item.mkt).filter(Boolean))];
             masterMktDatalist.innerHTML = mktNames.map(name => `<option value="${name}"></option>`).join('');
             
-            statusDiv.textContent = `Tải thành công dữ liệu từ ${allPagesData.length} pages. Hệ thống đã sẵn sàng.`;
-            addRowBtn.disabled = false;
-            submitBtn.disabled = false;
-            addNewRow();
+            addRowBtn.disabled = false; submitBtn.disabled = false;
+            
+            // THAY ĐỔI: Tải dữ liệu từ URL trước, nếu không có thì mới thêm dòng trống
+            if (!loadDataFromUrl()) {
+                addNewRow();
+                statusDiv.textContent = `Tải thành công dữ liệu. Hệ thống đã sẵn sàng.`;
+            }
 
         } catch (error) {
             console.error('Lỗi nghiêm trọng khi tải dữ liệu:', error);
-            statusDiv.textContent = `Lỗi: ${error.message}. Vui lòng kiểm tra lại link Google Script và file Sheet.`;
+            statusDiv.textContent = `Lỗi: ${error.message}. Vui lòng kiểm tra lại link Google Script.`;
             statusDiv.style.color = 'var(--danger-color)';
         }
     });
 
     form.addEventListener('submit', handleSubmit);
-    addRowBtn.addEventListener('click', addNewRow);
+    addRowBtn.addEventListener('click', () => addNewRow());
   </script>
 </body>
 </html>
