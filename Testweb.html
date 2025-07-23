@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT LumiGlobal (v14 - Cascading Form)</title>
+  <title>Báo Cáo MKT LumiGlobal (v15 - Tên từ URL)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -65,12 +65,12 @@
     
     #dataTable th:nth-child(1), #dataTable td:nth-child(1) { width: 80px; text-align: center; } 
     #dataTable th:nth-child(2), #dataTable td:nth-child(2) { width: 170px; } 
-    #dataTable th:nth-child(3), #dataTable td:nth-child(3) { width: 130px; } 
-    #dataTable th:nth-child(4), #dataTable td:nth-child(4) { width: 100px; } 
-    #dataTable th:nth-child(5), #dataTable td:nth-child(5) { width: 180px; } 
-    #dataTable th:nth-child(6), #dataTable td:nth-child(6) { width: 180px; } 
-    #dataTable th:nth-child(7), #dataTable td:nth-child(7) { width: 40%; min-width: 450px; } 
-    #dataTable th:nth-child(8), #dataTable td:nth-child(8) { width: 150px; } 
+    #dataTable th:nth-child(3), #dataTable td:nth-child(3) { width: 40%; min-width: 450px; } /* Page */
+    #dataTable th:nth-child(4), #dataTable td:nth-child(4) { width: 180px; } /* Thị trường */
+    #dataTable th:nth-child(5), #dataTable td:nth-child(5) { width: 180px; } /* Sản phẩm */
+    #dataTable th:nth-child(6), #dataTable td:nth-child(6) { width: 150px; } /* TKQC */
+    #dataTable th:nth-child(7), #dataTable td:nth-child(7) { width: 130px; } /* Ngày */
+    #dataTable th:nth-child(8), #dataTable td:nth-child(8) { width: 100px; } /* Ca */
     #dataTable th:nth-child(9), #dataTable td:nth-child(9) { width: 120px; } 
     #dataTable th:nth-child(10), #dataTable td:nth-child(10) { width: 130px; } 
     #dataTable th:nth-child(11), #dataTable td:nth-child(11) { width: 110px; }
@@ -136,13 +136,11 @@
         const selectedEmployee = selectElement.value;
         const row = selectElement.closest('tr');
 
-        // Get all pages for the selected employee
         const pagesForEmployee = [...new Set(masterData
             .filter(record => record.nhanvien === selectedEmployee)
             .map(record => record.page)
         )];
         
-        // Update the Page dropdown and reset subsequent fields
         const pageSelect = row.querySelector('select[name="page"]');
         pageSelect.innerHTML = createOptions(pagesForEmployee, '', '-- Chọn Page --');
         pageSelect.disabled = !selectedEmployee;
@@ -160,7 +158,6 @@
         const row = selectElement.closest('tr');
         const selectedEmployee = row.querySelector('select[name="Tên"]').value;
         
-        // Find the full record from masterData
         const record = masterData.find(r => r.nhanvien === selectedEmployee && r.page === selectedPage);
 
         if (record) {
@@ -174,14 +171,16 @@
         }
     }
 
-    function addNewRow() {
+    // *** START: UPDATED FUNCTION ***
+    function addNewRow(data = {}) {
         rowCounter++;
         const row = document.createElement('tr');
         
-        // Reordered columns to match the new logic flow
+        const preselectedName = data.Tên || '';
+
         row.innerHTML = `
             <td class="action-buttons"><button type="button" onclick="this.closest('tr').remove()">❌</button></td>
-            <td><select name="Tên" onchange="onEmployeeChange(this)">${createOptions(employeeList, '', '-- Chọn tên --')}</select></td>
+            <td><select name="Tên" onchange="onEmployeeChange(this)">${createOptions(employeeList, preselectedName, '-- Chọn tên --')}</select></td>
             <td><select name="page" onchange="onPageChange(this)" disabled><option value="">-- Chọn tên trước --</option></select></td>
             <td><input name="Thị_trường" type="text" placeholder="Tự động" readonly></td>
             <td><input name="Sản_phẩm" type="text" placeholder="Tự động" readonly></td>
@@ -194,8 +193,16 @@
             <td class="hidden"><input name="id" value="R${Date.now()}_${rowCounter}" readonly></td>
         `;
         tableBody.appendChild(row);
-        updateStatus(`Đã thêm dòng mới. Vui lòng chọn nhân viên.`);
+
+        // If a name was pre-selected, trigger the logic to populate the next dropdown
+        const tenSelect = row.querySelector('select[name="Tên"]');
+        if (tenSelect.value) {
+            onEmployeeChange(tenSelect);
+        }
+
+        updateStatus(`Đã thêm dòng mới. Vui lòng điền thông tin.`);
     }
+    // *** END: UPDATED FUNCTION ***
 
     function validateForm() {
         document.querySelectorAll('.error-cell').forEach(c => c.classList.remove('error-cell'));
@@ -241,7 +248,6 @@
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
         
-        // This URL should point to your script that handles form submission
         const SUBMIT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6w0yKs1ML0irL8IUeZo75gbZG2_tVbkcqz7DRi2ELqpdlu2gq_B67TwViZemq-QK8Xw/exec';
         
         fetch(SUBMIT_SCRIPT_URL, { method: 'POST', body: formData })
@@ -250,8 +256,10 @@
             respMsg.className = result.error ? 'error' : 'success';
             respMsg.textContent = result.error || result.message || 'Gửi thành công!';
             if (!result.error) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const nameFromUrl = urlParams.get('ten');
                 tableBody.innerHTML = '';
-                addNewRow();
+                addNewRow({ Tên: nameFromUrl }); // Re-add the first row with the name from URL
             }
           })
           .catch(err => {
@@ -265,6 +273,7 @@
           });
     }
 
+    // *** START: UPDATED FUNCTION ***
     async function fetchConfigurationData() {
         updateStatus('Đang tải cấu hình từ Google Sheet...');
         try {
@@ -282,7 +291,12 @@
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
             
-            addNewRow();
+            // Get name from URL parameter 'ten'
+            const urlParams = new URLSearchParams(window.location.search);
+            const nameFromUrl = urlParams.get('ten');
+
+            // Add the first row, pre-selecting the name if it exists in the URL
+            addNewRow({ Tên: nameFromUrl });
 
         } catch (error) {
             updateStatus(`Không thể tải cấu hình: ${error.message}`, true);
@@ -290,11 +304,12 @@
             respMsg.textContent = `Lỗi nghiêm trọng: Không thể tải dữ liệu cấu hình từ Google Sheet. Vui lòng kiểm tra lại URL và quyền truy cập của Apps Script.`;
         }
     }
+    // *** END: UPDATED FUNCTION ***
 
     // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', fetchConfigurationData);
     form.addEventListener('submit', handleSubmit);
-    addRowBtn.addEventListener('click', addNewRow);
+    addRowBtn.addEventListener('click', () => addNewRow()); // Add a new blank row
 </script>
 </body>
 </html>
