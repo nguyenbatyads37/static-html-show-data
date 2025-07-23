@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT LumiGlobal (v17 - Final)</title>
+  <title>Báo Cáo MKT LumiGlobal (v18 - Input Datalist)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -45,7 +45,7 @@
     }
     
     td input, td select { height: auto; min-height: 42px; }
-    input[readonly] { background-color: #e9ecef; cursor: not-allowed; }
+    input[readonly], input[disabled] { background-color: #e9ecef; cursor: not-allowed; }
     input:focus, select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2); outline: none; }
     button { background-color: var(--primary-color); color: white; border: none; cursor: pointer; font-weight: 500; }
     button:hover { background-color: var(--primary-color-dark); }
@@ -129,6 +129,10 @@
         html += list.map(item => `<option value="${escapeHtml(item)}" ${item === selected ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
         return html;
     }
+    // ** NEW HELPER FUNCTION for <datalist> **
+    function createDatalistOptions(list) {
+        return list.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
+    }
     function formatCurrency(input) { let val = input.value.replace(/[^0-9]/g, ''); input.value = val ? parseInt(val, 10).toLocaleString('vi-VN') : ''; }
     const getToday = () => new Date().toISOString().split('T')[0];
     function formatDateToInput(dateString) {
@@ -141,64 +145,96 @@
       return `${year}-${month}-${day}`;
     }
 
-    // --- CORE LOGIC ---
+    // --- CORE LOGIC (INTEGRATED FROM YOUR SAMPLE) ---
     function onEmployeeChange(selectElement) {
-        const selectedEmployee = selectElement.value;
+        const selectedEmployee = selectElement.value.trim();
         const row = selectElement.closest('tr');
 
-        // FIXED: Use .trim() to prevent whitespace issues between hardcoded list and sheet data
         const pagesForEmployee = [...new Set(masterData
-            .filter(record => (record.nhanvien || '').trim() === selectedEmployee)
-            .map(record => record.page)
+            .filter(r => (r.nhanvien || '').trim() === selectedEmployee)
+            .map(r => r.page)
         )];
         
-        const pageSelect = row.querySelector('select[name="page"]');
-        pageSelect.innerHTML = createOptions(pagesForEmployee, '', '-- Chọn Page --');
-        pageSelect.disabled = !selectedEmployee;
+        // Update the datalist, not a select
+        const datalist = row.querySelector('datalist');
+        if(datalist) datalist.innerHTML = createDatalistOptions(pagesForEmployee);
 
-        const fieldsToReset = ['Thị_trường', 'Sản_phẩm', 'TKQC'];
-        fieldsToReset.forEach(name => {
+        // Enable and clear the Page input field
+        const pageInput = row.querySelector('input[name="page"]');
+        if(pageInput) {
+            pageInput.disabled = !selectedEmployee;
+            pageInput.value = '';
+        }
+
+        // Reset dependent fields
+        ['Thị_trường', 'Sản_phẩm', 'TKQC'].forEach(name => {
             const input = row.querySelector(`input[name="${name}"]`);
             if (input) input.value = '';
         });
-        updateStatus(`Đã chọn nhân viên: ${selectedEmployee}. Vui lòng chọn Page.`);
+        updateStatus(`Đã chọn nhân viên: ${selectedEmployee}. Vui lòng chọn hoặc nhập Page.`);
     }
 
-    function onPageChange(selectElement) {
-        const selectedPage = selectElement.value;
-        const row = selectElement.closest('tr');
-        const selectedEmployee = row.querySelector('select[name="Tên"]').value;
-        
-        // FIXED: Use .trim() for consistency
-        const record = masterData.find(r => (r.nhanvien || '').trim() === selectedEmployee && r.page === selectedPage);
+    function onPageChange(inputElement) {
+        const selectedPage = inputElement.value.trim();
+        const row = inputElement.closest('tr');
+        const selectedEmployee = row.querySelector('select[name="Tên"]').value.trim();
+
+        const record = masterData.find(r =>
+            (r.nhanvien || '').trim() === selectedEmployee &&
+            (r.page || '').trim() === selectedPage
+        );
+
+        const thiTruongInput = row.querySelector('input[name="Thị_trường"]');
+        const sanPhamInput = row.querySelector('input[name="Sản_phẩm"]');
+        const tkqcInput = row.querySelector('input[name="TKQC"]');
 
         if (record) {
-            row.querySelector('input[name="Thị_trường"]').value = record.thitruong || '';
-            row.querySelector('input[name="Sản_phẩm"]').value = record.sanpham || '';
-            row.querySelector('input[name="TKQC"]').value = record.tkqc || '';
+            // Found a record, auto-fill and make readonly
+            thiTruongInput.value = record.thitruong || '';
+            sanPhamInput.value = record.sanpham || '';
+            tkqcInput.value = record.tkqc || '';
+            thiTruongInput.readOnly = true;
+            sanPhamInput.readOnly = true;
+            tkqcInput.readOnly = true;
             updateStatus(`Đã tự động điền thông tin cho Page: ${selectedPage}`);
         } else {
-             const fieldsToReset = ['Thị_trường', 'Sản_phẩm', 'TKQC'];
-             fieldsToReset.forEach(name => { row.querySelector(`input[name="${name}"]`).value = ''; });
+            // No record found (new page), clear fields and make them editable
+            thiTruongInput.value = '';
+            sanPhamInput.value = '';
+            tkqcInput.value = '';
+            thiTruongInput.readOnly = false;
+            sanPhamInput.readOnly = false;
+            tkqcInput.readOnly = false;
+            updateStatus(`Page mới. Vui lòng nhập thông tin thủ công.`);
         }
     }
     
     function addNewRow(data = {}) {
         rowCounter++;
         const row = document.createElement('tr');
+        const rowId = `row_${rowCounter}`;
         
         const preselectedName = data.Tên || '';
         const preselectedPage = data.page || '';
-        // FIXED: Use .trim() here as well for pre-populating from URL
         const pagesForEmployee = preselectedName ? [...new Set(masterData.filter(r => (r.nhanvien || '').trim() === preselectedName).map(r => r.page))] : [];
+        
+        const isExistingPage = preselectedPage && masterData.some(r => (r.nhanvien || '').trim() === preselectedName && (r.page || '').trim() === preselectedPage);
 
         row.innerHTML = `
             <td class="action-buttons"><button type="button" onclick="this.closest('tr').remove()">❌</button></td>
             <td><select name="Tên" onchange="onEmployeeChange(this)">${createOptions(employeeList, preselectedName, '-- Chọn tên --')}</select></td>
-            <td><select name="page" onchange="onPageChange(this)" ${preselectedName ? '' : 'disabled'}>${createOptions(pagesForEmployee, preselectedPage, '-- Chọn Page --')}</select></td>
-            <td><input name="Thị_trường" type="text" value="${escapeHtml(data.Thị_trường || '')}" placeholder="Tự động" readonly></td>
-            <td><input name="Sản_phẩm" type="text" value="${escapeHtml(data.Sản_phẩm || '')}" placeholder="Tự động" readonly></td>
-            <td><input name="TKQC" type="text" value="${escapeHtml(data.TKQC || '')}" placeholder="Tự động" readonly></td>
+            
+            <!-- ** NEW PAGE INPUT STRUCTURE ** -->
+            <td>
+              <input name="page" list="${rowId}_datalist" placeholder="Chọn hoặc nhập Page…" onchange="onPageChange(this)"
+                     value="${escapeHtml(preselectedPage)}" ${preselectedName ? '' : 'disabled'}>
+              <datalist id="${rowId}_datalist">${createDatalistOptions(pagesForEmployee)}</datalist>
+            </td>
+
+            <td><input name="Thị_trường" type="text" value="${escapeHtml(data.Thị_trường || '')}" placeholder="Nhập thị trường..." ${isExistingPage ? 'readonly' : ''}></td>
+            <td><input name="Sản_phẩm" type="text" value="${escapeHtml(data.Sản_phẩm || '')}" placeholder="Nhập sản phẩm..." ${isExistingPage ? 'readonly' : ''}></td>
+            <td><input name="TKQC" type="text" value="${escapeHtml(data.TKQC || '')}" placeholder="Nhập TKQC..." ${isExistingPage ? 'readonly' : ''}></td>
+            
             <td><input name="Ngày" type="date" value="${formatDateToInput(data.Ngày)}" autocomplete="off"></td>
             <td><select name="ca">${createOptions(shiftList, data.ca, '-- Chọn ca --')}</select></td>
             <td><input name="CPQC" type="text" value="${data.CPQC || ''}" oninput="formatCurrency(this)" placeholder="Nhập CPQC..." autocomplete="off"></td>
@@ -211,6 +247,7 @@
         if (cpqcInput.value) formatCurrency(cpqcInput);
     }
 
+    // --- UTILITY AND SUBMISSION LOGIC (largely unchanged) ---
     function parseUrlData(dataString) {
       try {
         const result = [];
@@ -231,10 +268,7 @@
           if (Object.keys(rowData).length > 0) result.push(rowData);
         });
         return result;
-      } catch (error) {
-        console.error('Lỗi phân tích dữ liệu URL:', error);
-        return [];
-      }
+      } catch (error) { console.error('Lỗi phân tích dữ liệu URL:', error); return []; }
     }
 
     function loadDataFromUrl() {
@@ -266,7 +300,7 @@
             respMsg.className = 'error'; respMsg.textContent = 'Chưa có dòng nào để gửi!'; return false;
         }
 
-        const requiredFields = ['Tên', 'page', 'Ngày', 'ca', 'CPQC', 'Via_log', 'Số_Mess_Cmt'];
+        const requiredFields = ['Tên', 'page', 'Ngày', 'ca', 'CPQC', 'Via_log', 'Số_Mess_Cmt', 'Thị_trường', 'Sản_phẩm', 'TKQC'];
         rows.forEach((row, index) => {
             requiredFields.forEach(name => {
                 const input = row.querySelector(`[name="${name}"]`);
@@ -352,9 +386,10 @@
         }
     }
 
+    // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', initializeApp);
     form.addEventListener('submit', handleSubmit);
-    addRowBtn.addEventListener('click', () => addNewRow());
+    addRowBtn.addEventListener('click', () => addNewRow({})); // Pass empty object for blank row
 </script>
 </body>
 </html>
