@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v22.0 - Cập nhật & Validation)</title>
+  <title>Báo Cáo MKT (v23.0 - Sửa lỗi ID)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -35,7 +35,6 @@
     .submit-btn { background-color: var(--danger-color); margin-top: 1.5rem; }
     .status { background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 14px; }
     
-    /* YÊU CẦU 2: Kiểu cho ô bị lỗi */
     .error-cell input, .error-cell select {
         border: 2px solid var(--danger-color) !important;
         background-color: #f8d7da !important;
@@ -89,7 +88,6 @@
   <div class="video-section">
       <h2>Video hướng dẫn</h2>
       <div class="video-wrapper">
-          <!-- YÊU CẦU 3: THAY ĐỔI VIDEO -->
           <iframe src="https://www.youtube.com/embed/CgCVZdcKcqY?si=fLinbvdacpkN31ne" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
       </div>
   </div>
@@ -169,17 +167,22 @@
       return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`; // YYYY-MM-DD
     }
     
-    const today = new Date().toISOString().split('T')[0]; // Định dạng YYYY-MM-DD
+    const today = new Date().toISOString().split('T')[0];
+
     function addNewRow(data = {}) {
         const row = document.createElement('tr');
-        const uniqueId = Date.now() + Math.random().toString(36).substr(2, 9);
+        const uniqueId = `ID-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const pageDatalistId = `page-list-${uniqueId}`;
         const tkqcDatalistId = `tkqc-list-${uniqueId}`;
         
         const cpqcValue = data['CPQC'] ? parseInt(data['CPQC'].replace(/[^0-9]/g, ''), 10).toLocaleString('vi-VN') : '';
 
         row.innerHTML = `
-            <td style="text-align:center;"><button type="button" style="background-color: #6c757d;" onclick="this.closest('tr').remove()">❌</button></td>
+            <td style="text-align:center;">
+                <!-- SỬA LỖI: Thêm input ẩn để chứa ID -->
+                <input type="hidden" name="ID" value="${data['ID'] || uniqueId}">
+                <button type="button" style="background-color: #6c757d;" onclick="this.closest('tr').remove()">❌</button>
+            </td>
             <td><input name="Tên MKT" list="master-mkt-list" placeholder="Chọn MKT..." oninput="updatePageOptions(this)" autocomplete="off" value="${data['Tên MKT'] || ''}"></td>
             <td><input name="Tên Page" list="${pageDatalistId}" placeholder="Chọn MKT trước" oninput="fillRowData(this)" autocomplete="off" readonly value="${data['Tên Page'] || ''}">
                 <datalist id="${pageDatalistId}" class="page-options-list"></datalist></td>
@@ -214,7 +217,7 @@
       try {
         const result = [];
         const fieldMap = {
-            'Tên': 'Tên MKT', 'Page': 'Tên Page', 'Ngày': 'Ngày', 'Ca': 'Ca',
+            'ID': 'ID', 'Tên': 'Tên MKT', 'Page': 'Tên Page', 'Ngày': 'Ngày', 'Ca': 'Ca',
             'Sảnphẩm': 'Sản phẩm', 'Thịtrường': 'Thị trường', 'TKQC': 'TKQC',
             'CPQC': 'CPQC', 'Vialog': 'Via log', 'SốMessCmt': 'Số Mess+Cmt'
         };
@@ -265,12 +268,10 @@
     async function handleSubmit(e) {
         e.preventDefault();
         
-        // YÊU CẦU 2: LOGIC VALIDATION
         let isValid = true;
         responseMessageDiv.textContent = '';
         responseMessageDiv.style.color = 'var(--danger-color)';
         
-        // Xóa tất cả các cảnh báo lỗi cũ
         document.querySelectorAll('#dataTable .error-cell').forEach(cell => {
             cell.classList.remove('error-cell');
         });
@@ -295,14 +296,15 @@
 
         if (!isValid) {
             responseMessageDiv.textContent = 'Lỗi: Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ.';
-            return; // Dừng việc gửi form
+            return;
         }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang gửi...';
 
-        // YÊU CẦU 1: ÁNH XẠ TÊN TRƯỜNG
+        // SỬA LỖI: Thêm 'ID' vào keyMap để gửi đi
         const keyMap = {
+            "ID": "ID",
             "Tên MKT": "Tên",
             "Ngày": "Ngày",
             "Ca": "ca",
@@ -317,6 +319,7 @@
         
         const allRows = rowsToProcess.map(row => {
             const rowData = {};
+            // Lấy tất cả input, bao gồm cả input ẩn 'ID'
             row.querySelectorAll('input, select').forEach(input => {
                 const mappedKey = keyMap[input.name];
                 if (mappedKey) {
