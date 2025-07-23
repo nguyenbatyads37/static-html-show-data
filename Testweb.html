@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT LumiGlobal (v13 - Tải dữ liệu động)</title>
+  <title>Báo Cáo MKT LumiGlobal (v14 - Lấy Page từ link động)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -65,15 +65,16 @@
     input:focus, select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2); outline: none; }
     button { background-color: var(--primary-color); color: white; border: none; cursor: pointer; font-weight: 500; }
     button:hover { background-color: var(--primary-color-dark); }
+    button:disabled { background-color: #6c757d; cursor: not-allowed; }
     
     .action-buttons { display: flex; gap: 0.5rem; justify-content: center; }
     .action-buttons button { padding: 0.4rem 0.6rem; }
     
     .add-row-btn, .submit-btn { padding: 0.8rem 1.8rem; font-size: 1.1rem; }
     .add-row-btn { background-color: var(--success-color); margin-bottom: 1.5rem; }
-    .add-row-btn:hover { background-color: #218838; }
+    .add-row-btn:hover:not(:disabled) { background-color: #218838; }
     .submit-btn { background-color: var(--danger-color); margin-top: 1.5rem; }
-    .submit-btn:hover { background-color: #c82333; }
+    .submit-btn:hover:not(:disabled) { background-color: #c82333; }
     
     #responseMessage { margin-top: 1.5rem; padding: 1rem; border-radius: var(--border-radius); text-align: center; font-weight: bold; }
     .success { background-color: #d4edda; color: #155724; }
@@ -130,23 +131,26 @@
   </div>
 
   <script>
+    // --- START: DATA CONFIGURATION ---
     const employeeList = ["Phùng Kim Anh","Nguyễn Đức Anh","Nguyễn Văn VIệt","Lâm Thị Thu Thảo","Nguyễn Nam Khánh","Nguyễn Quang Minh","Nguyễn Đức Anh","Nguyễn Danh Nam","Nguyễn Văn Việt","Lâm Thị Thu Thảo","Nguyễn Quang Minh","Nguyễn Duy Hiếu","Phạm Tiến Thành","Lê Đình Toản","Trần Quốc Khải","Mạnh Cường","Nguyễn Thị Hiếu","Vũ Viết Anh","Lục Trần Minh Trí","Đoàn Ngọc Huân","Nguyễn Hiền Lương","Trần Huy Hùng","Nguyễn Anh Tuấn","Trần Tiến","Nguyễn Thị Như Quỳnh","Nguyễn Quang Trường"];
     const shiftList = ["Hết ca","Giữa ca","Ca Chiều"];
     const productList = ["Fitgum CAFE 20X","Kem Body","Bakuchiol Retinol","Serum sâm","Glutathione Collagen","Glutathione Collagen NEW","DG","Kẹo Táo","Serum Sâm"];
     const marketList = [...new Set(["Canada", "US", "Úc","EU", "Nhật Bản", "Hàn Quốc", "UK"])];
     const tkqcData = { "Lê Đình Toản": ["lumi hn 07(1)","tcm 365(1)","tcm 386(1)","tcm 389-b(1)","tcm 427-b"], "Lục Trần Minh Trí": ["tcm 399-b","tcm 456"], "Mạnh Cường": ["lumi hn 04","lumi hn 06","tcm 372-b","tcm 376-b","tcm 378(1)","tcm 394(1)","tcm 407(1)","tcm 418(1)","tcm 442(1)"], "Nguyễn Anh Tuấn": ["lumi hn 11","tcm  395"], "Nguyễn Hiền Lương": ["lumi hn 13(1)","tcm 410-b(1)","tcm 430-b","tcm 434-b(1)"], "Nguyễn Quang Trường": ["lumi hn 09"], "Nguyễn Thị Hiếu": ["lumi hn 10","tcm 381(1)","tcm 406(1)","tcm 413-b","tcm 440(1)","tcm 443(1)"], "Nguyễn Thị Như Quỳnh": ["lumi hn 08 hold"], "Phạm Tiến Thành": ["lumi hn 05(1)","lumi hn 14(1)","tcm 300","tcm 393(1)","tcm 431(1)","tcm 449(1)"], "Trần Huy Hùng": ["lumi hn 01","tcm 429-b(1)","tcm 438(1)"], "Trần Quốc Khải": ["lumi hn 02(1)","lumi hn 12","tcm 369-b(1)","tcm 380(1)","tcm 387(1)","tcm 455"], "Trần Tiến": ["tcm 426-b"], "Vũ Viết Anh": ["tcm 390","tcm 450(1)"], "Đoàn Ngọc Huân": ["lumi hn 03(1)","tcm 400-b(1)"] };
     
+    // Dữ liệu Page sẽ được tải động, không còn khai báo cứng ở đây.
     let dynamicPageData = {}; 
 
     const tableBody = document.getElementById('tableBody'), addRowBtn = document.getElementById('addRowBtn'), form = document.getElementById('dataForm'), statusDiv = document.getElementById('status'), respMsg = document.getElementById('responseMessage'), submitBtn = document.getElementById('submitBtn');
     let rowCounter = 0;
     let sessionTrackingId = ''; 
 
+    // --- UTILITY FUNCTIONS ---
     function updateStatus(message) { statusDiv.textContent = new Date().toLocaleTimeString() + ': ' + message; }
     function formatCurrency(input) { let val = input.value.replace(/[^0-9]/g, ''); input.value = val ? parseInt(val, 10).toLocaleString('vi-VN') : ''; }
     
     function formatDateToInput(dateString) {
-      if (!/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) { return new Date().toISOString().split('T')[0]; }
+      if (!dateString || !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) { return new Date().toISOString().split('T')[0]; }
       const parts = dateString.split('/');
       const day = parts[1].padStart(2, '0');
       const month = parts[0].padStart(2, '0');
@@ -163,14 +167,20 @@
       const rowId = row.dataset.rowId;
       const pageDatalist = document.getElementById(`page-list-${rowId}`);
       const tkqcDatalist = document.getElementById(`tkqc-list-${rowId}`);
+      
+      // Lấy danh sách Page từ dữ liệu động đã tải về
       const pageList = dynamicPageData[employeeName] || [];
       const tkqcList = tkqcData[employeeName] || [];
+
       if (pageDatalist) pageDatalist.innerHTML = createDatalistOptions(pageList);
       if (tkqcDatalist) tkqcDatalist.innerHTML = createDatalistOptions(tkqcList);
+      
+      // Tự động xóa lựa chọn cũ nếu không có trong danh sách mới
       const pageInput = row.querySelector('input[name="page"]');
       const tkqcInput = row.querySelector('input[name="TKQC"]');
-      if (pageInput.value === '') pageInput.value = '';
-      if (tkqcInput.value === '') tkqcInput.value = '';
+      pageInput.value = '';
+      tkqcInput.value = '';
+      
       updateStatus(`Cập nhật cho ${employeeName}: ${tkqcList.length} TKQC, ${pageList.length} Page.`);
     }
 
@@ -179,6 +189,7 @@
       const rowId = `row${rowCounter}`;
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
+
       const tkqcList = tkqcData[data.Tên] || [];
       const pageList = dynamicPageData[data.Tên] || [];
       const dateValue = data.Ngày ? formatDateToInput(data.Ngày) : getToday();
@@ -211,10 +222,10 @@
       insertAfter ? insertAfter.after(row) : tableBody.appendChild(row);
       const cpqcInput = row.querySelector('[name="CPQC"]'); if (cpqcInput.value) formatCurrency(cpqcInput);
       if(data.Tên) { updateEmployeeData(data.Tên, row); }
-      updateStatus(`Đã thêm dòng ${rowCounter}`);
+      updateStatus(`Đã thêm dòng ${rowCounter}.`);
     }
 
-    function removeRow(button) { button.closest('tr').remove(); updateStatus('Đã xóa dòng'); }
+    function removeRow(button) { button.closest('tr').remove(); updateStatus('Đã xóa dòng.'); }
     
     function addSimilarRow(button, keepPage) {
       const currentRow = button.closest('tr'), data = {};
@@ -223,6 +234,27 @@
       const fieldsToClear = keepPage ? ['CPQC', 'Số_Mess_Cmt'] : ['page', 'TKQC', 'CPQC', 'Via_log', 'Số_Mess_Cmt'];
       fieldsToClear.forEach(k => delete data[k]);
       addNewRow(data, currentRow);
+    }
+    
+    function loadDataFromUrl() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dataString = urlParams.get('data');
+      if (!dataString) return false;
+      try {
+        updateStatus('Đang đọc dữ liệu từ URL...');
+        const data = parseUrlData(dataString);
+        if (data.length === 0) throw new Error('Dữ liệu URL không hợp lệ hoặc rỗng.');
+        tableBody.innerHTML = '';
+        rowCounter = 0;
+        data.forEach(rowData => addNewRow(rowData));
+        respMsg.className = 'success';
+        respMsg.textContent = `Đã tải thành công ${data.length} dòng từ URL.`;
+        updateStatus(`Hoàn tất tải ${data.length} dòng từ URL.`);
+        return true;
+      } catch (error) {
+        respMsg.className = 'error'; respMsg.textContent = 'Lỗi khi đọc dữ liệu từ URL: ' + error.message;
+        updateStatus('Lỗi tải URL: ' + error.message); return false;
+      }
     }
     
     function parseUrlData(dataString) {
@@ -251,27 +283,6 @@
       }
     }
 
-    function loadDataFromUrl() {
-      const urlParams = new URLSearchParams(window.location.search);
-      const dataString = urlParams.get('data');
-      if (!dataString) return false;
-      try {
-        updateStatus('Đang đọc dữ liệu từ URL...');
-        const data = parseUrlData(dataString);
-        if (data.length === 0) throw new Error('Dữ liệu URL không hợp lệ hoặc rỗng.');
-        tableBody.innerHTML = '';
-        rowCounter = 0;
-        data.forEach(rowData => addNewRow(rowData));
-        respMsg.className = 'success';
-        respMsg.textContent = `Đã tải thành công ${data.length} dòng từ URL.`;
-        updateStatus(`Hoàn tất tải ${data.length} dòng từ URL.`);
-        return true;
-      } catch (error) {
-        respMsg.className = 'error'; respMsg.textContent = 'Lỗi khi đọc dữ liệu từ URL: ' + error.message;
-        updateStatus('Lỗi tải URL: ' + error.message); return false;
-      }
-    }
-
     function validateForm() {
       document.querySelectorAll('.error-cell').forEach(c => c.classList.remove('error-cell'));
       let isValid = true; const rows = tableBody.querySelectorAll('tr');
@@ -284,7 +295,7 @@
 
     function handleSubmit(e) {
       e.preventDefault(); if (!validateForm()) return;
-      const btn = document.getElementById('submitBtn'); btn.disabled = true; btn.textContent = 'Đang gửi...';
+      submitBtn.disabled = true; submitBtn.textContent = 'Đang gửi...';
       const allRows = Array.from(tableBody.querySelectorAll('tr')).map(row => { const rowData = {}; row.querySelectorAll('input, select').forEach(input => { if (input.name) rowData[input.name] = (input.name === 'CPQC') ? input.value.replace(/\./g, '') : input.value; }); return rowData; });
       const formData = new FormData(); formData.append('rows', JSON.stringify(allRows));
       const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby6w0yKs1ML0irL8IUeZo75gbZG2_tVbkcqz7DRi2ELqpdlu2gq_B67TwViZemq-QK8Xw/exec';
@@ -295,7 +306,7 @@
       }).catch(err => {
         respMsg.className = 'error'; respMsg.textContent = 'Lỗi gửi dữ liệu: ' + err.message;
       }).finally(() => {
-        btn.disabled = false; btn.textContent = '🚀 Gửi báo cáo'; updateStatus('Hoàn thành gửi báo cáo');
+        submitBtn.disabled = false; submitBtn.textContent = '🚀 Gửi báo cáo'; updateStatus('Hoàn thành gửi báo cáo.');
       });
     }
 
@@ -318,9 +329,8 @@
         submitBtn.disabled = true;
         updateStatus('Đang tải dữ liệu Page động từ nguồn...');
 
-        // ====================== URL ĐÃ ĐƯỢC CẬP NHẬT THEO YÊU CẦU ======================
+        // URL NGUỒN DỮ LIỆU ĐỘNG CHO PAGE
         const DATA_SOURCE_URL = 'https://script.google.com/macros/s/AKfycby6P5MnQ09QnOLPCJTsXTUVqqN8Q2x7lsc260t8-gjKt4-bx4OcbzQjyhsYhu4AEphJYw/exec';
-        // ==============================================================================
 
         fetch(DATA_SOURCE_URL)
             .then(res => {
@@ -328,15 +338,17 @@
                 return res.json();
             })
             .then(data => {
+                // Gán dữ liệu Page đã tải về vào biến
                 dynamicPageData = data.pageDataByEmployee || {};
+                // Chỉ khởi tạo giao diện sau khi đã tải dữ liệu thành công
                 initializeApp(); 
             })
             .catch(error => {
                 console.error('Lỗi nghiêm trọng khi tải dữ liệu Page:', error);
                 statusDiv.textContent = 'Lỗi nghiêm trọng: Không thể tải dữ liệu Page. Vui lòng F5 tải lại trang.';
-                statusDiv.style.color = 'red';
+                statusDiv.style.color = 'var(--danger-color)';
                 respMsg.className = 'error';
-                respMsg.textContent = `Không thể tải dữ liệu Page. Chi tiết: ${error.message}`;
+                respMsg.textContent = `Không thể tải dữ liệu Page. Chi tiết: ${error.message}. Hãy kiểm tra lại link Google Script hoặc kết nối mạng.`;
             });
     });
 
