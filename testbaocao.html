@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v24.4 - Tùy chỉnh ngày mặc định)</title>
+  <title>Báo Cáo MKT (v24.5 - Tự động xóa dấu ngoặc kép khi Paste)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -138,7 +138,6 @@
     }
 
     function updatePageOptions(mktInput) {
-        // ... (hàm này không thay đổi)
         const selectedMkt = mktInput.value;
         const row = mktInput.closest('tr');
         const fieldsToReset = ['Tên Page', 'Sản phẩm', 'Thị trường', 'TKQC'];
@@ -163,7 +162,6 @@
     }
 
     function fillRowData(pageInput) {
-        // ... (hàm này không thay đổi)
         const selectedPageName = pageInput.value;
         const row = pageInput.closest('tr');
         const pageData = allPagesData.find(item => item.page === selectedPageName);
@@ -191,7 +189,6 @@
     }
     
     function cloneRow(buttonElement) {
-        // ... (hàm này không thay đổi)
         const sourceRow = buttonElement.closest('tr');
         const rowData = {};
         const fieldsToClone = ['Tên MKT', 'Tên Page', 'Sản phẩm', 'Thị trường', 'Ngày', 'Ca', 'CPQC'];
@@ -210,9 +207,6 @@
         
         const cpqcValue = data['CPQC'] ? parseInt(String(data['CPQC']).replace(/[^0-9]/g, ''), 10).toLocaleString('vi-VN') : '';
 
-        // --- DÒNG DUY NHẤT THAY ĐỔI TRONG HÀM NÀY ---
-        // Thay vì `data['Ngày'] || today`, chúng ta dùng `data['Ngày'] || ''`
-        // để mặc định là rỗng thay vì ngày hôm nay.
         row.innerHTML = `
             <td style="text-align:center;">
                 <input type="hidden" name="ID" value="${rowId}">
@@ -258,8 +252,8 @@
         return row;
     }
     
+    // --- HÀM handlePaste ĐÃ ĐƯỢC CẬP NHẬT ---
     function handlePaste(e) {
-        // ... (hàm này không thay đổi)
         const targetElement = e.target;
         if (!['INPUT', 'SELECT'].includes(targetElement.tagName) || !tableBody.contains(targetElement)) return;
         e.preventDefault();
@@ -271,6 +265,7 @@
         const allTableRows = Array.from(tableBody.children);
         const startRowIndex = allTableRows.indexOf(startRow);
         const startCellIndex = Array.from(startRow.children).indexOf(startCell);
+
         rowsOfData.forEach((rowData, rowIndex) => {
             let currentRowIndex = startRowIndex + rowIndex;
             let targetRow = allTableRows[currentRowIndex];
@@ -284,11 +279,21 @@
                 if (!targetCell) return;
                 const input = targetCell.querySelector('input, select');
                 if (input && !input.readOnly) {
+                    // --- ĐOẠN CODE ĐƯỢC SỬA ĐỔI ---
+                    let processedValue = cellData.trim();
+                    // Nếu giá trị bắt đầu và kết thúc bằng dấu ngoặc kép, hãy loại bỏ chúng.
+                    if (processedValue.startsWith('"') && processedValue.endsWith('"')) {
+                        processedValue = processedValue.substring(1, processedValue.length - 1);
+                    }
+                    // --- KẾT THÚC SỬA ĐỔI ---
+
                     if (input.name === 'CPQC') {
-                         const numericValue = parseInt(String(cellData).replace(/[^0-9]/g, ''), 10);
+                         // Sử dụng processedValue đã được xử lý
+                         const numericValue = parseInt(String(processedValue).replace(/[^0-9]/g, ''), 10);
                          input.value = isNaN(numericValue) ? '' : numericValue.toLocaleString('vi-VN');
                     } else {
-                        input.value = cellData.trim();
+                        // Sử dụng processedValue đã được xử lý
+                        input.value = processedValue;
                     }
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -310,7 +315,6 @@
     }
 
     function updateSelection(currentCell) {
-        // ... (hàm này không thay đổi)
         clearSelection();
         if (!startCell || !currentCell) return;
         const allRows = Array.from(tableBody.rows);
@@ -331,10 +335,8 @@
     }
 
     tableBody.addEventListener('mousedown', (e) => {
-        // ... (hàm này không thay đổi)
         const target = e.target.closest('td');
-        if (!target) return;
-        if (e.target.tagName === 'BUTTON') return;
+        if (!target || e.target.tagName === 'BUTTON') return;
         isSelecting = true;
         startCell = target;
         endCell = target;
@@ -343,7 +345,6 @@
     });
 
     tableBody.addEventListener('mouseover', (e) => {
-        // ... (hàm này không thay đổi)
         if (!isSelecting) return;
         const target = e.target.closest('td');
         if (target && target !== endCell) {
@@ -353,14 +354,12 @@
     });
 
     document.addEventListener('mouseup', () => {
-        // ... (hàm này không thay đổi)
         isSelecting = false;
         startCell = null;
         endCell = null;
     });
 
     document.addEventListener('keydown', (e) => {
-        // ... (hàm này không thay đổi)
         if (e.key === 'Delete' || e.key === 'Backspace') {
             const selectedCells = document.querySelectorAll('.cell-selected');
             if (selectedCells.length > 0) {
@@ -392,17 +391,13 @@
         let isValid = true;
         responseMessageDiv.textContent = '';
         responseMessageDiv.style.color = 'var(--danger-color)';
-        
         document.querySelectorAll('#dataTable .error-cell').forEach(cell => cell.classList.remove('error-cell'));
-        
         const rowsToProcess = Array.from(tableBody.querySelectorAll('tr'));
         if (rowsToProcess.length === 0) {
             responseMessageDiv.textContent = 'Không có dữ liệu để gửi. Vui lòng thêm ít nhất một dòng.';
             return;
         }
-
         const requiredFields = ['Tên MKT', 'Tên Page', 'TKQC', 'Ngày', 'Ca', 'CPQC', 'Số Mess+Cmt'];
-
         rowsToProcess.forEach((row, index) => {
             requiredFields.forEach(fieldName => {
                 const input = row.querySelector(`[name="${fieldName}"]`);
@@ -412,15 +407,12 @@
                 }
             });
         });
-        
         if (!isValid) {
             responseMessageDiv.textContent = 'Lỗi: Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ.';
             return;
         }
-
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang gửi...';
-        
         const keyMap = {
             "ID": "ID", "Tên MKT": "Tên", "Ngày": "Ngày", "Ca": "ca",
             "Sản phẩm": "Sản_phẩm", "Thị trường": "Thị_trường", "Tên Page": "page",
@@ -440,11 +432,9 @@
             });
             return rowData;
         });
-
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
         const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycbyqS-QaklxjXadFcwPwXohn7-NlU_BzaBf_Rj1sHlC_ZHFwGog6qCjnlWmH2-7lRgJZWQ/exec';
-        
         try {
             const response = await fetch(SCRIPT_URL_POST, { method: 'POST', body: formData });
             const result = await response.json();
@@ -465,7 +455,6 @@
     }
 
     document.addEventListener('DOMContentLoaded', async () => {
-        // ... (hàm này không thay đổi)
         addRowBtn.disabled = true; submitBtn.disabled = true;
         statusDiv.textContent = 'Đang tải dữ liệu từ Google Sheet...';
         document.getElementById('master-product-list').innerHTML = productList.map(p => `<option value="${p}"></option>`).join('');
@@ -480,7 +469,8 @@
             const masterMktDatalist = document.getElementById('master-mkt-list');
             const mktNames = [...new Set(allPagesData.map(item => item.mkt).filter(Boolean))];
             masterMktDatalist.innerHTML = mktNames.map(name => `<option value="${name}"></option>`).join('');
-            addRowBtn.disabled = false; submitBtn.disabled = false;
+            addRowBtn.disabled = false;
+            submitBtn.disabled = false;
             if (!loadDataFromUrl()) {
                 addNewRow();
                 statusDiv.textContent = `Tải thành công dữ liệu. Hệ thống đã sẵn sàng.`;
