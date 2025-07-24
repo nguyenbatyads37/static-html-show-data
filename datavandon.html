@@ -11,19 +11,44 @@
             --selection-color: #aed6f1;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f7fa; color: #333; line-height: 1.6; font-size: 14px; }
-        .container { max-width: 100%; margin: 20px auto; padding: 0 15px; }
-        .header { background-color: var(--primary-color); color: white; padding: 15px 20px; border-radius: 5px 5px 0 0; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        
+        /* --- APPLICATION LAYOUT --- */
+        html, body {
+            height: 100%;
+            overflow: hidden; /* Ngăn trang chính cuộn */
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa; color: #333; line-height: 1.6; font-size: 14px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Chiếm toàn bộ chiều cao màn hình */
+            padding: 20px 15px 15px 15px;
+        }
+        .header { flex-shrink: 0; }
+        .controls-container { flex-shrink: 0; }
+        .table-container {
+            flex-grow: 1; /* Chiếm toàn bộ không gian còn lại */
+            overflow: auto; /* QUAN TRỌNG: Tạo thanh cuộn riêng cho bảng */
+            min-height: 0; /* Fix cho flexbox */
+            border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            background-color: white; margin-top: 15px;
+        }
+        /* --- END APPLICATION LAYOUT --- */
+
+        .header { background-color: var(--primary-color); color: white; padding: 15px 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .header h1 { font-size: 1.6rem; font-weight: 600; }
         .user-info { background-color: #ecf0f1; padding: 10px; border-radius: 4px; font-weight: 500; color: #34495e; }
-        .controls-container { background-color: #fff; padding: 10px 15px; margin-top: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+        .controls-container { background-color: #fff; padding: 10px 15px; margin-top: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
         .controls-container button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background-color 0.2s; color: white; }
         #reloadDataBtn { background-color: var(--primary-color); }
         #copySelectedBtn { background-color: var(--secondary-color); }
         #copyAllBtn { background-color: var(--success-color); }
         #resetBtn { background-color: var(--warning-color); }
         button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
-        .table-container { background-color: white; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 1px; }
+        
         table { width: 100%; border-collapse: collapse; min-width: 4500px; }
         thead { background-color: var(--primary-color); color: white; position: sticky; top: 0; z-index: 10; }
         th, td { padding: 12px 15px; text-align: left; vertical-align: top; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 15px; white-space: nowrap; }
@@ -39,14 +64,6 @@
         tbody tr:hover td, tbody tr:hover .frozen { background-color: #e9f7fe; }
         td.cell-selected { background-color: var(--selection-color) !important; outline: 2px solid var(--primary-color); outline-offset: -1px; }
         .loading, .error, .no-results { text-align: center; padding: 20px; font-size: 1.2rem; font-weight: 500; }
-        #toast-notification {
-            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background-color: var(--secondary-color); color: white; padding: 12px 24px;
-            border-radius: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
-            z-index: 9999; opacity: 0; visibility: hidden;
-            transition: opacity 0.4s, visibility 0.4s, bottom 0.4s;
-        }
-        #toast-notification.show { opacity: 1; visibility: visible; bottom: 30px; }
     </style>
 </head>
 <body>
@@ -95,7 +112,6 @@
                 </tbody>
             </table>
         </div>
-        <div id="toast-notification"></div>
     </div>
 
     <script>
@@ -122,8 +138,6 @@
             tableContainer.addEventListener('mousedown', handleMouseDown);
             tableContainer.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
-            // *** NEW: Listen for Ctrl+C ***
-            document.addEventListener('keydown', handleGlobalCopy);
         }
 
         async function initiateDataLoad() {
@@ -149,10 +163,10 @@
                 if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên');
                 const data = await response.json();
                 const staffMember = data.find(staff => String(staff.idnv) === idns);
-                if (!staffMember) return showError(`Không tìm thấy nhân viên với ID: ${idns}`);
+                if (!staffMember) throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`);
                 document.getElementById('userInfo').textContent = `Nhân viên: ${staffMember.ho_va_ten}`;
                 return staffMember.ho_va_ten;
-            } catch (error) { showError('Lỗi khi tải dữ liệu nhân viên.'); throw error; }
+            } catch (error) { showError(error.message); throw error; }
         }
         
         async function fetchOrderData(staffName) {
@@ -166,7 +180,7 @@
                 allOrders = data.filter(order => order.nvVanDon && order.nvVanDon.trim() === staffNameTrimmed);
                 displayOrders(allOrders);
                 if (allOrders.length > 0) populateFilterDropdowns(allOrders);
-            } catch (error) { console.error("Lỗi chi tiết:", error); showError('Lỗi khi tải dữ liệu đơn hàng.'); throw error; }
+            } catch (error) { console.error("Lỗi chi tiết:", error); showError(error.message); throw error; }
         }
 
         function populateFilterDropdowns(orders) {
@@ -237,65 +251,8 @@
         function selectCell(cell) { cell.classList.add('cell-selected'); selectedCells.add(cell); }
         function toggleCellSelection(cell) { if (selectedCells.has(cell)) { cell.classList.remove('cell-selected'); selectedCells.delete(cell); } else { selectCell(cell); } }
         function selectCellsInRectangle(start, end) { const tableBody = document.getElementById('orderTableBody'); const allRows = Array.from(tableBody.rows); const startCoords = { row: allRows.indexOf(start.parentElement), col: start.cellIndex }; const endCoords = { row: allRows.indexOf(end.parentElement), col: end.cellIndex }; const [rowStart, rowEnd] = [Math.min(startCoords.row, endCoords.row), Math.max(startCoords.row, endCoords.row)]; const [colStart, colEnd] = [Math.min(startCoords.col, endCoords.col), Math.max(startCoords.col, endCoords.col)]; for (let i = rowStart; i <= rowEnd; i++) for (let j = colStart; j <= colEnd; j++) if(allRows[i] && allRows[i].cells[j]) selectCell(allRows[i].cells[j]); }
-        
-        function handleGlobalCopy(event) {
-            if (event.ctrlKey && event.key.toLowerCase() === 'c') {
-                if (selectedCells.size > 0 && window.getSelection().toString() === '') {
-                    event.preventDefault(); 
-                    copySelectedToClipboard();
-                }
-            }
-        }
-
-        function getFormattedSelectedCellsText() {
-            if (selectedCells.size === 0) return null;
-            const sortedCells = Array.from(selectedCells).sort((a, b) => (a.parentElement.rowIndex - b.parentElement.rowIndex) || (a.cellIndex - b.cellIndex));
-            let clipboardText = '', lastRowIndex = -1;
-            sortedCells.forEach(cell => {
-                const rowIndex = cell.parentElement.rowIndex;
-                if (lastRowIndex !== -1 && rowIndex !== lastRowIndex) clipboardText += '\n';
-                else if (lastRowIndex !== -1) clipboardText += '\t';
-                clipboardText += cell.innerText.trim();
-                lastRowIndex = rowIndex;
-            });
-            return clipboardText;
-        }
-
-        function copySelectedToClipboard() {
-            const textToCopy = getFormattedSelectedCellsText();
-            if (!textToCopy) { showToast("Chưa có ô nào được chọn.", true); return; }
-            navigator.clipboard.writeText(textToCopy)
-                .then(() => showToast(`Đã sao chép ${selectedCells.size} ô.`))
-                .catch(err => { console.error("Lỗi clipboard:", err); showToast("Lỗi khi sao chép.", true); });
-        }
-        
-        let toastTimeout;
-        function showToast(message, isError = false) {
-            const toast = document.getElementById('toast-notification');
-            if (!toast) return;
-            toast.textContent = message;
-            toast.style.backgroundColor = isError ? 'var(--danger-color)' : 'var(--secondary-color)';
-            clearTimeout(toastTimeout);
-            toast.classList.add('show');
-            toastTimeout = setTimeout(() => toast.classList.remove('show'), 2500);
-        }
-
-        function downloadCSV() { 
-            if (currentDisplayedOrders.length === 0) return showToast("Không có dữ liệu để tải về.", true);
-            const headers = [ "maDonHang", "ngayLenDon", "name", "phone", "address", "city", "state", "zipcode", "matHang", "tenMatHang1", "soLuongMatHang1", "tenMatHang2", "soLuongMatHang2", "quaTang", "soLuongQuaKem", "giaBan", "loaiTienThanhToan", "tongTienVND", "hinhThucThanhToan", "ghiChu", "ketQuaCheck", "trangThaiGiaoHangNB", "lyDo", "donViVanChuyen", "tenLenDon", "khuVuc", "ngayDongHang", "maTracking", "trangThaiGiaoHang", "thoiGianGiaoDuKien", "phiShipNoiDiaUSD", "phiXuLyDonUSD", "ghiChu2" ];
-            let csvContent = headers.join(',') + '\n';
-            currentDisplayedOrders.forEach(order => {
-                const rowData = headers.map(header => order[header]);
-                csvContent += rowData.map(field => `"${String(field || '').replace(/"/g, '""')}"`).join(',') + '\n';
-            });
-            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = "don_hang_da_loc.csv";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
+        function copySelectedToClipboard() { if (selectedCells.size === 0) return alert("Chưa có ô nào được chọn."); const sortedCells = Array.from(selectedCells).sort((a, b) => (a.parentElement.rowIndex - b.parentElement.rowIndex) || (a.cellIndex - b.cellIndex)); let clipboardText = '', lastRowIndex = -1; sortedCells.forEach(cell => { const rowIndex = cell.parentElement.rowIndex; if (lastRowIndex !== -1 && rowIndex !== lastRowIndex) clipboardText += '\n'; else if (lastRowIndex !== -1) clipboardText += '\t'; clipboardText += cell.innerText.trim(); lastRowIndex = rowIndex; }); navigator.clipboard.writeText(clipboardText).then(() => alert(`Đã sao chép ${selectedCells.size} ô.`)).catch(err => console.error(err)); }
+        function downloadCSV() { if (currentDisplayedOrders.length === 0) return alert("Không có dữ liệu để tải về."); const headers = [ "maDonHang", "ngayLenDon", "name", "phone", "address", "city", "state", "zipcode", "matHang", "tenMatHang1", "soLuongMatHang1", "tenMatHang2", "soLuongMatHang2", "quaTang", "soLuongQuaKem", "giaBan", "loaiTienThanhToan", "tongTienVND", "hinhThucThanhToan", "ghiChu", "ketQuaCheck", "trangThaiGiaoHangNB", "lyDo", "donViVanChuyen", "tenLenDon", "khuVuc", "ngayDongHang", "maTracking", "trangThaiGiaoHang", "thoiGianGiaoDuKien", "phiShipNoiDiaUSD", "phiXuLyDonUSD", "ghiChu2" ]; let csvContent = headers.join(',') + '\n'; currentDisplayedOrders.forEach(order => { const rowData = headers.map(header => order[header]); csvContent += rowData.map(field => `"${String(field || '').replace(/"/g, '""')}"`).join(',') + '\n'; }); const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = "don_hang_da_loc.csv"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
         function showError(message) { document.getElementById('userInfo').textContent = 'Lỗi'; document.getElementById('orderTableBody').innerHTML = `<tr><td colspan="34" class="error">${message}</td></tr>`; }
         function showNoOrders() { document.getElementById('rowCount').textContent = "Không có đơn hàng nào."; document.getElementById('orderTableBody').innerHTML = `<tr><td colspan="34" class="no-results">Không có đơn hàng nào được gán cho nhân viên này.</td></tr>`; }
     </script>
