@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý đơn hàng - Nhân viên vận đơn</title>
+    <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2980b9;
+            --success-color: #2ecc71;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+            --light-color: #ecf0f1;
+            --dark-color: #34495e;
+            --text-color: #333;
+            --border-color: #ddd;
+        }
+        
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background-color: #f5f7fa;
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 20px auto;
+            padding: 0 15px;
+        }
+        
+        .header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 5px 5px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        
+        .user-info {
+            background-color: var(--light-color);
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+        
+        .table-container {
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 1200px;
+        }
+        
+        thead {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        th {
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+        }
+        
+        tbody tr {
+            border-bottom: 1px solid var(--border-color);
+            transition: background-color 0.2s;
+        }
+        
+        tbody tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        tbody tr:hover {
+            background-color: #e9f7fe;
+        }
+        
+        td {
+            padding: 12px 15px;
+            vertical-align: top;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        
+        .status-pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .status-completed {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-cancelled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-shipping {
+            background-color: #cce5ff;
+            color: #004085;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 1.2rem;
+            color: var(--dark-color);
+        }
+        
+        .error {
+            color: var(--danger-color);
+            padding: 20px;
+            text-align: center;
+            font-weight: 500;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 3px 7px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 10px;
+        }
+        
+        .badge-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        
+        .badge-warning {
+            background-color: var(--warning-color);
+            color: white;
+        }
+        
+        .badge-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Quản lý đơn hàng - Nhân viên vận đơn</h1>
+            <div class="user-info" id="userInfo">Đang tải thông tin...</div>
+        </div>
+        
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Mã đơn hàng</th>
+                        <th>Ngày lên đơn</th>
+                        <th>Tên KH</th>
+                        <th>SĐT</th>
+                        <th>Địa chỉ</th>
+                        <th>Thành phố</th>
+                        <th>Tỉnh</th>
+                        <th>Mặt hàng</th>
+                        <th>Tổng tiền</th>
+                        <th>Hình thức TT</th>
+                        <th>Ghi chú</th>
+                        <th>Trạng thái giao</th>
+                        <th>Đơn vị VC</th>
+                        <th>Trạng thái thu tiền</th>
+                    </tr>
+                </thead>
+                <tbody id="orderTableBody">
+                    <tr>
+                        <td colspan="14" class="loading">Đang tải dữ liệu...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get the ID from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const idns = urlParams.get('idns');
+            
+            if (!idns) {
+                showError('Không tìm thấy thông tin nhân viên trong URL');
+                return;
+            }
+            
+            // Fetch staff data first
+            fetchStaffData(idns);
+        });
+        
+        function fetchStaffData(idns) {
+            const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
+            
+            fetch(staffApiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    // Find the staff member with matching idnv
+                    const staffMember = data.find(staff => staff.idnv === idns);
+                    
+                    if (!staffMember) {
+                        showError('Không tìm thấy nhân viên với ID: ' + idns);
+                        return;
+                    }
+                    
+                    if (staffMember.bo_phan !== "Vận đơn") {
+                        showError('Nhân viên này không thuộc bộ phận Vận đơn');
+                        return;
+                    }
+                    
+                    // Update user info display
+                    document.getElementById('userInfo').textContent = 
+                        `Nhân viên: ${staffMember.ho_va_ten} - Bộ phận: ${staffMember.bo_phan}`;
+                    
+                    // Now fetch order data for this shipping staff
+                    fetchOrderData(staffMember.ho_va_ten);
+                })
+                .catch(error => {
+                    console.error('Error fetching staff data:', error);
+                    showError('Lỗi khi tải dữ liệu nhân viên');
+                });
+        }
+        
+        function fetchOrderData(shippingStaffName) {
+            const orderApiUrl = 'https://script.google.com/macros/s/AKfycbx8f3epIsFEhxwB-IbyXA36JIkE55Bj181y4vam-D93I0MLZL-iMxwFJNDT9TNU4vBV/exec';
+            
+            fetch(orderApiUrl)
+                .then(response => response.json())
+                .then(data => {
+                    // Filter orders where nvVanDon matches the shipping staff name
+                    const filteredOrders = data.filter(order => order.nvVanDon === shippingStaffName);
+                    
+                    if (filteredOrders.length === 0) {
+                        showNoOrders();
+                        return;
+                    }
+                    
+                    // Display the filtered orders
+                    displayOrders(filteredOrders);
+                })
+                .catch(error => {
+                    console.error('Error fetching order data:', error);
+                    showError('Lỗi khi tải dữ liệu đơn hàng');
+                });
+        }
+        
+        function displayOrders(orders) {
+            const tableBody = document.getElementById('orderTableBody');
+            tableBody.innerHTML = '';
+            
+            orders.forEach(order => {
+                const row = document.createElement('tr');
+                
+                // Determine status badge
+                let statusBadge = '';
+                if (order.trang_thai_giao_hang_NB === 'Đã giao') {
+                    statusBadge = `<span class="status status-completed">${order.trang_thai_giao_hang_NB}</span>`;
+                } else if (order.trang_thai_giao_hang_NB === 'Đang giao') {
+                    statusBadge = `<span class="status status-shipping">${order.trang_thai_giao_hang_NB}</span>`;
+                } else if (order.trang_thai_giao_hang_NB === 'Chờ xử lý') {
+                    statusBadge = `<span class="status status-pending">${order.trang_thai_giao_hang_NB}</span>`;
+                } else {
+                    statusBadge = order.trang_thai_giao_hang_NB || 'N/A';
+                }
+                
+                // Determine payment status badge
+                let paymentBadge = '';
+                if (order.trang_thai_thu_tien === 'Đã thu') {
+                    paymentBadge = `<span class="badge badge-success">${order.trang_thai_thu_tien}</span>`;
+                } else if (order.trang_thai_thu_tien === 'Chờ thu') {
+                    paymentBadge = `<span class="badge badge-warning">${order.trang_thai_thu_tien}</span>`;
+                } else if (order.trang_thai_thu_tien === 'Không thu') {
+                    paymentBadge = `<span class="badge badge-danger">${order.trang_thai_thu_tien}</span>`;
+                } else {
+                    paymentBadge = order.trang_thai_thu_tien || 'N/A';
+                }
+                
+                // Format total amount with commas
+                const totalAmount = order.tong_tien_VND ? 
+                    parseInt(order.tong_tien_VND).toLocaleString('vi-VN') : '0';
+                
+                row.innerHTML = `
+                    <td>${order.ma_don_hang || 'N/A'}</td>
+                    <td>${order.ngay_len_don || 'N/A'}</td>
+                    <td>${order.name || 'N/A'}</td>
+                    <td>${order.phone || 'N/A'}</td>
+                    <td>${order.add || 'N/A'}</td>
+                    <td>${order.city || 'N/A'}</td>
+                    <td>${order.state || 'N/A'}</td>
+                    <td>${order.mat_hang || 'N/A'}</td>
+                    <td>${totalAmount} VNĐ</td>
+                    <td>${order.hinh_thuc_thanh_toan || 'N/A'}</td>
+                    <td>${order.ghi_chu || ''}</td>
+                    <td>${statusBadge}</td>
+                    <td>${order.don_vi_van_chuyen || 'N/A'}</td>
+                    <td>${paymentBadge}</td>
+                `;
+                
+                tableBody.appendChild(row);
+            });
+        }
+        
+        function showError(message) {
+            document.getElementById('userInfo').textContent = message;
+            document.getElementById('orderTableBody').innerHTML = `
+                <tr>
+                    <td colspan="14" class="error">${message}</td>
+                </tr>
+            `;
+        }
+        
+        function showNoOrders() {
+            document.getElementById('orderTableBody').innerHTML = `
+                <tr>
+                    <td colspan="14" class="loading">Không có đơn hàng nào được giao cho nhân viên này</td>
+                </tr>
+            `;
+        }
+    </script>
+</body>
+</html>
