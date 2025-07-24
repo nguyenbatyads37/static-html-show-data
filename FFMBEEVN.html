@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <title>Danh sách đơn hàng vận chuyển bởi BEE</title>
+    <!-- Thêm một chút CSS để bảng trông đẹp hơn -->
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      th, td {
+        border: 1px solid #ddd;
+        padding: 12px;
+        text-align: left;
+      }
+      th {
+        background-color: #f2f2f2;
+        font-weight: bold;
+        text-transform: capitalize; /* Tự động viết hoa chữ cái đầu */
+      }
+      tr:nth-child(even) {
+        background-color: #f9f9f9;
+      }
+      tr:hover {
+        background-color: #f1f1f1;
+      }
+      #loading-message {
+        font-size: 1.2em;
+        color: #555;
+        font-style: italic;
+      }
+      #error-message {
+        color: red;
+        font-weight: bold;
+        display: none; /* Ẩn mặc định */
+      }
+    </style>
+  </head>
+  <body>
+
+    <h1>Danh sách đơn hàng vận chuyển bởi "BEE"</h1>
+
+    <!-- Thông báo đang tải -->
+    <div id="loading-message">Đang tải dữ liệu, vui lòng chờ...</div>
+
+    <!-- Thông báo lỗi -->
+    <div id="error-message"></div>
+
+    <!-- Bảng sẽ được điền dữ liệu vào đây -->
+    <table id="data-table">
+      <thead>
+        <!-- Hàng tiêu đề sẽ được tạo tự động bằng JavaScript -->
+      </thead>
+      <tbody>
+        <!-- Các hàng dữ liệu sẽ được tạo tự động bằng JavaScript -->
+      </tbody>
+    </table>
+
+    <script>
+      // URL API bạn cung cấp
+      const API_URL = "https://script.google.com/macros/s/AKfycbwqkdJyB7KGfY7yOEWzNpouDxJAAotREMtNwtQTN1uZ_22eMthIOHjN4t_OknZdjloS/exec";
+
+      // Hàm để lấy dữ liệu và xây dựng bảng
+      async function fetchDataAndBuildTable() {
+        const loadingDiv = document.getElementById('loading-message');
+        const errorDiv = document.getElementById('error-message');
+        const table = document.getElementById('data-table');
+        const tableHead = table.querySelector('thead');
+        const tableBody = table.querySelector('tbody');
+
+        try {
+          // Gọi API bằng fetch
+          const response = await fetch(API_URL);
+          if (!response.ok) {
+            throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`);
+          }
+          const allData = await response.json();
+
+          // Lọc dữ liệu: chỉ giữ lại các mục có donViVanChuyen là "BEE"
+          const filteredData = allData.filter(item => item.donViVanChuyen === "BEE");
+
+          // Ẩn thông báo đang tải
+          loadingDiv.style.display = 'none';
+
+          // Kiểm tra nếu không có dữ liệu nào phù hợp
+          if (filteredData.length === 0) {
+            errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE".';
+            errorDiv.style.display = 'block';
+            return;
+          }
+
+          // 1. TẠO TIÊU ĐỀ BẢNG (HEADERS)
+          // Lấy tất cả các key từ đối tượng đầu tiên làm tiêu đề cột
+          const headers = Object.keys(filteredData[0]);
+          let headerRow = '<tr>';
+          headers.forEach(headerText => {
+            headerRow += `<th>${headerText}</th>`;
+          });
+          headerRow += '</tr>';
+          tableHead.innerHTML = headerRow;
+
+          // 2. TẠO CÁC HÀNG DỮ LIỆU (ROWS)
+          let tableRows = '';
+          filteredData.forEach(rowData => {
+            let row = '<tr>';
+            headers.forEach(header => {
+              // Lấy giá trị tương ứng với header, nếu null/undefined thì hiển thị chuỗi rỗng
+              const cellValue = rowData[header] !== null && rowData[header] !== undefined ? rowData[header] : '';
+              row += `<td>${cellValue}</td>`;
+            });
+            row += '</tr>';
+            tableRows += row;
+          });
+          tableBody.innerHTML = tableRows;
+
+        } catch (error) {
+          // Xử lý lỗi nếu có
+          loadingDiv.style.display = 'none';
+          errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message;
+          errorDiv.style.display = 'block';
+          console.error("Lỗi chi tiết:", error);
+        }
+      }
+
+      // Gọi hàm khi trang được tải xong
+      window.addEventListener('load', fetchDataAndBuildTable);
+    </script>
+  </body>
+</html>
