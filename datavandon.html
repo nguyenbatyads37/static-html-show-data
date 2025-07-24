@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale-1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý đơn hàng - Nhân viên</title>
     <style>
         :root {
@@ -19,7 +19,6 @@
         .container { display: flex; flex-direction: column; height: 100vh; padding: 20px 15px 15px 15px; }
         .header, .controls-container { flex-shrink: 0; }
         .table-container { flex-grow: 1; overflow: auto; min-height: 0; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); background-color: white; margin-top: 15px; }
-
         .header { background-color: var(--primary-color); color: white; padding: 15px 20px; border-radius: 5px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
         .header h1 { font-size: 1.6rem; font-weight: 600; }
         .user-info { background-color: #ecf0f1; padding: 10px; border-radius: 4px; font-weight: 500; color: #34495e; }
@@ -38,22 +37,21 @@
         th, td { padding: 12px 15px; text-align: left; vertical-align: top; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; font-size: 15px; white-space: nowrap; }
         th { font-weight: 600; }
         td { white-space: normal; word-break: break-word; }
-        
-        .frozen {
-            position: sticky;
-            background-color: var(--light-color);
-            z-index: 5;
-        }
-        thead .frozen {
-            z-index: 15;
-            background-color: var(--primary-color);
-        }
-        
+        .frozen { position: sticky; background-color: var(--light-color); z-index: 5; }
+        thead .frozen { z-index: 15; background-color: var(--primary-color); }
         .filter-row th { padding: 5px 10px; }
         .filter-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background-color: #fff; }
         tbody tr:hover td, tbody tr:hover .frozen { background-color: #e9f7fe; }
         td.cell-selected { background-color: var(--selection-color) !important; outline: 2px solid var(--primary-color); outline-offset: -1px; }
         .loading, .error, .no-results { text-align: center; padding: 20px; font-size: 1.2rem; font-weight: 500; }
+        #toast-notification {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background-color: var(--secondary-color); color: white; padding: 12px 24px;
+            border-radius: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            z-index: 9999; opacity: 0; visibility: hidden;
+            transition: opacity 0.4s, visibility 0.4s, bottom 0.4s;
+        }
+        #toast-notification.show { opacity: 1; visibility: visible; bottom: 30px; }
     </style>
 </head>
 <body>
@@ -104,6 +102,7 @@
                 </tbody>
             </table>
         </div>
+        <div id="toast-notification"></div>
     </div>
 
     <script>
@@ -132,16 +131,87 @@
             tableContainer.addEventListener('mousedown', handleMouseDown);
             tableContainer.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
+            // *** KHÔI PHỤC: Lắng nghe sự kiện Ctrl+C ***
+            document.addEventListener('keydown', handleGlobalCopy);
         }
 
-        async function initiateDataLoad() { /* ... unchanged ... */ }
-        async function fetchStaffName(idns) { /* ... unchanged ... */ }
-        async function fetchOrderData(staffName) { /* ... unchanged ... */ }
-        function populateFilterDropdowns(orders) { /* ... unchanged ... */ }
-        function applyFilters() { /* ... unchanged ... */ }
-        function resetFilters(redisplay = true) { /* ... unchanged ... */ }
+        async function initiateDataLoad() {
+            const reloadBtn = document.getElementById('reloadDataBtn');
+            const tableBody = document.getElementById('orderTableBody');
+            reloadBtn.disabled = true;
+            resetFilters(false); 
+            tableBody.innerHTML = `<tr><td colspan="34" class="loading">Đang tải dữ liệu mới...</td></tr>`;
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const idns = urlParams.get('idns');
+                if (!idns) return showError('Không tìm thấy ID nhân viên trong URL.');
+                const staffName = await fetchStaffName(idns);
+                await fetchOrderData(staffName);
+            } catch (error) { /* Errors handled in child functions */ } 
+            finally { reloadBtn.disabled = false; }
+        }
 
-        // --- DYNAMIC COLUMN FREEZING ---
+        async function fetchStaffName(idns) {
+            try {
+                const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
+                const response = await fetch(staffApiUrl, { cache: "no-store" });
+                if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên');
+                const data = await response.json();
+                const staffMember = data.find(staff => String(staff.idnv) === idns);
+                if (!staffMember) throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`);
+                document.getElementById('userInfo').textContent = `Nhân viên: ${staffMember.ho_va_ten}`;
+                return staffMember.ho_va_ten;
+            } catch (error) { showError(error.message); throw error; }
+        }
+        
+        async function fetchOrderData(staffName) {
+            if (!staffName) return;
+            try {
+                const orderApiUrl = 'https://script.google.com/macros/s/AKfycbx8f3epIsFEhxwB-IbyXA36JIkE55Bj181y4vam-D93I0MLZL-iMxwFJNDT9TNU4vBV/exec';
+                const response = await fetch(orderApiUrl, { cache: "no-store" });
+                if (!response.ok) throw new Error('Lỗi mạng khi tải data đơn hàng');
+                const data = await response.json();
+                const staffNameTrimmed = staffName.trim();
+                allOrders = data.filter(order => order.nvVanDon && order.nvVanDon.trim() === staffNameTrimmed);
+                displayOrders(allOrders);
+                if (allOrders.length > 0) populateFilterDropdowns(allOrders);
+            } catch (error) { console.error("Lỗi chi tiết:", error); showError(error.message); throw error; }
+        }
+
+        function populateFilterDropdowns(orders) {
+            const dropdownColumns = ['city', 'state', 'loaiTienThanhToan', 'hinhThucThanhToan', 'ketQuaCheck', 'trangThaiGiaoHangNB', 'donViVanChuyen', 'khuVuc'];
+            const uniqueValues = Object.fromEntries(dropdownColumns.map(col => [col, new Set()]));
+            for (const order of orders) {
+                for (const col of dropdownColumns) { if (order[col]) uniqueValues[col].add(String(order[col]).trim()); }
+            }
+            for (const col of dropdownColumns) {
+                const selectEl = document.querySelector(`.filter-control[data-column="${col}"]`);
+                if (!selectEl) continue;
+                const sortedValues = Array.from(uniqueValues[col]).sort((a, b) => a.localeCompare(b, 'vi'));
+                selectEl.innerHTML = '<option value="">-- Tất cả --</option>';
+                sortedValues.forEach(value => selectEl.innerHTML += `<option value="${value}">${value}</option>`);
+            }
+        }
+
+        function applyFilters() {
+            clearSelection();
+            const filters = Array.from(document.querySelectorAll('.filter-control')).filter(c => c.value).map(c => ({ key: c.dataset.column, value: c.value.toLowerCase().trim(), isSelect: c.tagName === 'SELECT' }));
+            if (filters.length === 0) return displayOrders(allOrders);
+            const filteredData = allOrders.filter(order => filters.every(filter => {
+                const orderValue = order[filter.key];
+                if (orderValue === null || orderValue === undefined) return false;
+                let orderValueStr = String(orderValue).toLowerCase();
+                if (filter.key === 'ngayLenDon' && order.ngayLenDon) orderValueStr = new Date(order.ngayLenDon).toLocaleDateString('vi-VN');
+                return filter.isSelect ? orderValueStr === filter.value : orderValueStr.includes(filter.value);
+            }));
+            displayOrders(filteredData);
+        }
+
+        function resetFilters(redisplay = true) {
+            document.querySelectorAll('.filter-control').forEach(control => control.value = '');
+            if(redisplay) applyFilters();
+        }
+
         function loadFreezePreference() {
             const savedCount = localStorage.getItem(FREEZE_COUNT_KEY);
             frozenColumnCount = savedCount ? parseInt(savedCount, 10) : 3;
@@ -157,15 +227,8 @@
         function applyColumnFreeze() {
             const table = document.querySelector('.table-container table');
             if (!table) return;
-
-            // Unfreeze all cells first
-            table.querySelectorAll('.frozen').forEach(cell => {
-                cell.classList.remove('frozen');
-                cell.style.left = '';
-            });
-
+            table.querySelectorAll('.frozen').forEach(cell => { cell.classList.remove('frozen'); cell.style.left = ''; });
             if (frozenColumnCount === 0) return;
-
             const rows = table.querySelectorAll('tr');
             rows.forEach(row => {
                 let currentLeftOffset = 0;
@@ -188,7 +251,6 @@
             if (allOrders.length === 0) { showNoOrders(); return; }
             rowCountEl.textContent = `Hiển thị ${orders.length} / ${allOrders.length} đơn hàng`;
             if (orders.length === 0) { tableBody.innerHTML = `<tr><td colspan="34" class="no-results">Không có kết quả nào khớp với bộ lọc.</td></tr>`; return; }
-            
             let tableHTML = '';
             for (const order of orders) {
                 const safeText = (text) => (text && String(text).trim()) ? String(text) : '';
@@ -206,12 +268,9 @@
                 </tr>`;
             }
             tableBody.innerHTML = tableHTML;
-
-            // IMPORTANT: Apply freeze after table is rendered
             applyColumnFreeze();
         }
         
-        // --- SELECTION & COPY/PASTE LOGIC ---
         function clearSelection() { selectedCells.forEach(cell => cell.classList.remove('cell-selected')); selectedCells.clear(); }
         function handleMouseDown(e) { const cell = e.target.closest('td'); if (!cell) return; isMouseDown = true; startCell = cell; if (e.shiftKey && lastClickedCell) { clearSelection(); selectCellsInRectangle(lastClickedCell, cell); } else if (e.ctrlKey) { toggleCellSelection(cell); } else { clearSelection(); selectCell(cell); } lastClickedCell = cell; e.preventDefault(); }
         function handleMouseMove(e) { if (!isMouseDown || !startCell) return; const endCell = e.target.closest('td'); if (endCell) { clearSelection(); selectCellsInRectangle(startCell, endCell); } }
@@ -219,14 +278,75 @@
         function selectCell(cell) { cell.classList.add('cell-selected'); selectedCells.add(cell); }
         function toggleCellSelection(cell) { if (selectedCells.has(cell)) { cell.classList.remove('cell-selected'); selectedCells.delete(cell); } else { selectCell(cell); } }
         function selectCellsInRectangle(start, end) { const tableBody = document.getElementById('orderTableBody'); const allRows = Array.from(tableBody.rows); const startCoords = { row: allRows.indexOf(start.parentElement), col: start.cellIndex }; const endCoords = { row: allRows.indexOf(end.parentElement), col: end.cellIndex }; const [rowStart, rowEnd] = [Math.min(startCoords.row, endCoords.row), Math.max(startCoords.row, endCoords.row)]; const [colStart, colEnd] = [Math.min(startCoords.col, endCoords.col), Math.max(startCoords.col, endCoords.col)]; for (let i = rowStart; i <= rowEnd; i++) for (let j = colStart; j <= colEnd; j++) if(allRows[i] && allRows[i].cells[j]) selectCell(allRows[i].cells[j]); }
-        function copySelectedToClipboard() { if (selectedCells.size === 0) return alert("Chưa có ô nào được chọn."); const sortedCells = Array.from(selectedCells).sort((a, b) => (a.parentElement.rowIndex - b.parentElement.rowIndex) || (a.cellIndex - b.cellIndex)); let clipboardText = '', lastRowIndex = -1; sortedCells.forEach(cell => { const rowIndex = cell.parentElement.rowIndex; if (lastRowIndex !== -1 && rowIndex !== lastRowIndex) clipboardText += '\n'; else if (lastRowIndex !== -1) clipboardText += '\t'; clipboardText += cell.innerText.trim(); lastRowIndex = rowIndex; }); navigator.clipboard.writeText(clipboardText).then(() => alert(`Đã sao chép ${selectedCells.size} ô.`)).catch(err => console.error(err)); }
         
-        function downloadCSV() { /* ... unchanged ... */ }
-        function showError(message) { /* ... unchanged ... */ }
-        function showNoOrders() { /* ... unchanged ... */ }
-    
-    // Paste minified helper functions to save space
-    initiateDataLoad=async function(){const t=document.getElementById("reloadDataBtn"),e=document.getElementById("orderTableBody");t.disabled=!0,resetFilters(!1),e.innerHTML='<tr><td colspan="34" class="loading">Đang tải dữ liệu mới...</td></tr>';try{const o=new URLSearchParams(window.location.search).get("idns");if(!o)return showError("Không tìm thấy ID nhân viên trong URL.");const n=await fetchStaffName(o);await fetchOrderData(n)}catch(s){}finally{t.disabled=!1}};fetchStaffName=async function(t){try{const e=await fetch("https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec",{cache:"no-store"});if(!e.ok)throw new Error("Lỗi mạng khi tải data nhân viên");const o=(await e.json()).find(e=>String(e.idnv)===t);if(!o)throw new Error(`Không tìm thấy nhân viên với ID: ${t}`);return document.getElementById("userInfo").textContent=`Nhân viên: ${o.ho_va_ten}`,o.ho_va_ten}catch(n){throw showError(n.message),n}};fetchOrderData=async function(t){if(t)try{const e=await fetch("https://script.google.com/macros/s/AKfycbx8f3epIsFEhxwB-IbyXA36JIkE55Bj181y4vam-D93I0MLZL-iMxwFJNDT9TNU4vBV/exec",{cache:"no-store"});if(!e.ok)throw new Error("Lỗi mạng khi tải data đơn hàng");const o=(await e.json()).filter(e=>e.nvVanDon&&e.nvVanDon.trim()===t.trim());allOrders=o,displayOrders(allOrders),o.length>0&&populateFilterDropdowns(o)}catch(n){throw console.error("Lỗi chi tiết:",n),showError(n.message),n}};applyFilters=function(){clearSelection();const t=Array.from(document.querySelectorAll(".filter-control")).filter(t=>t.value).map(t=>({key:t.dataset.column,value:t.value.toLowerCase().trim(),isSelect:"SELECT"===t.tagName}));if(0===t.length)return displayOrders(allOrders);const e=allOrders.filter(e=>t.every(t=>{const o=e[t.key];if(null===o||void 0===o)return!1;let n=String(o).toLowerCase();"ngayLenDon"===t.key&&e.ngayLenDon&&(n=new Date(e.ngayLenDon).toLocaleDateString("vi-VN"));return t.isSelect?n===t.value:n.includes(t.value)}));displayOrders(e)};resetFilters=function(t=!0){document.querySelectorAll(".filter-control").forEach(t=>t.value=""),t&&applyFilters()};downloadCSV=function(){if(0===currentDisplayedOrders.length)return alert("Không có dữ liệu để tải về.");const t=["maDonHang","ngayLenDon","name","phone","address","city","state","zipcode","matHang","tenMatHang1","soLuongMatHang1","tenMatHang2","soLuongMatHang2","quaTang","soLuongQuaKem","giaBan","loaiTienThanhToan","tongTienVND","hinhThucThanhToan","ghiChu","ketQuaCheck","trangThaiGiaoHangNB","lyDo","donViVanChuyen","tenLenDon","khuVuc","ngayDongHang","maTracking","trangThaiGiaoHang","thoiGianGiaoDuKien","phiShipNoiDiaUSD","phiXuLyDonUSD","ghiChu2"];let e=t.join(",")+"\n";currentDisplayedOrders.forEach(o=>{const n=t.map(t=>o[t]);e+=n.map(t=>`"${String(t||"").replace(/"/g,'""')}"`).join(",")+"\n"});const o=new Blob(["\uFEFF"+e],{type:"text/csv;charset=utf-8;"}),n=document.createElement("a");n.href=URL.createObjectURL(o),n.download="don_hang_da_loc.csv",document.body.appendChild(n),n.click(),document.body.removeChild(n)};showError=function(t){document.getElementById("userInfo").textContent="Lỗi",document.getElementById("orderTableBody").innerHTML=`<tr><td colspan="34" class="error">${t}</td></tr>`};showNoOrders=function(){document.getElementById("rowCount").textContent="Không có đơn hàng nào.",document.getElementById("orderTableBody").innerHTML='<tr><td colspan="34" class="no-results">Không có đơn hàng nào được gán cho nhân viên này.</td></tr>'};
+        // *** KHÔI PHỤC: Logic Ctrl+C và Toast Notification ***
+        function handleGlobalCopy(event) {
+            if (event.ctrlKey && event.key.toLowerCase() === 'c') {
+                // Chỉ copy khi không có văn bản nào đang được bôi đen (ví dụ trong ô input)
+                if (selectedCells.size > 0 && window.getSelection().toString() === '') {
+                    event.preventDefault(); 
+                    copySelectedToClipboard();
+                }
+            }
+        }
+
+        function getFormattedSelectedCellsText() {
+            if (selectedCells.size === 0) return null;
+            const sortedCells = Array.from(selectedCells).sort((a, b) => (a.parentElement.rowIndex - b.parentElement.rowIndex) || (a.cellIndex - b.cellIndex));
+            let clipboardText = '', lastRowIndex = -1;
+            sortedCells.forEach(cell => {
+                const rowIndex = cell.parentElement.rowIndex;
+                if (lastRowIndex !== -1 && rowIndex !== lastRowIndex) clipboardText += '\n';
+                else if (lastRowIndex !== -1) clipboardText += '\t';
+                clipboardText += cell.innerText.trim();
+                lastRowIndex = rowIndex;
+            });
+            return clipboardText;
+        }
+
+        function copySelectedToClipboard() {
+            const textToCopy = getFormattedSelectedCellsText();
+            if (!textToCopy) {
+                showToast("Chưa có ô nào được chọn.", true);
+                return;
+            }
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => showToast(`Đã sao chép ${selectedCells.size} ô.`))
+                .catch(err => {
+                    console.error("Lỗi clipboard:", err);
+                    showToast("Lỗi khi sao chép.", true);
+                });
+        }
+        
+        let toastTimeout;
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast-notification');
+            if (!toast) return;
+            toast.textContent = message;
+            toast.style.backgroundColor = isError ? 'var(--danger-color)' : 'var(--secondary-color)';
+            clearTimeout(toastTimeout);
+            toast.classList.add('show');
+            toastTimeout = setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        function downloadCSV() { 
+            if (currentDisplayedOrders.length === 0) return showToast("Không có dữ liệu để tải về.", true);
+            const headers = [ "maDonHang", "ngayLenDon", "name", "phone", "address", "city", "state", "zipcode", "matHang", "tenMatHang1", "soLuongMatHang1", "tenMatHang2", "soLuongMatHang2", "quaTang", "soLuongQuaKem", "giaBan", "loaiTienThanhToan", "tongTienVND", "hinhThucThanhToan", "ghiChu", "ketQuaCheck", "trangThaiGiaoHangNB", "lyDo", "donViVanChuyen", "tenLenDon", "khuVuc", "ngayDongHang", "maTracking", "trangThaiGiaoHang", "thoiGianGiaoDuKien", "phiShipNoiDiaUSD", "phiXuLyDonUSD", "ghiChu2" ];
+            let csvContent = headers.join(',') + '\n';
+            currentDisplayedOrders.forEach(order => {
+                const rowData = headers.map(header => order[header]);
+                csvContent += rowData.map(field => `"${String(field || '').replace(/"/g, '""')}"`).join(',') + '\n';
+            });
+            const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "don_hang_da_loc.csv";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        function showError(message) { document.getElementById('userInfo').textContent = 'Lỗi'; document.getElementById('orderTableBody').innerHTML = `<tr><td colspan="34" class="error">${message}</td></tr>`; }
+        function showNoOrders() { document.getElementById('rowCount').textContent = "Không có đơn hàng nào."; document.getElementById('orderTableBody').innerHTML = `<tr><td colspan="34" class="no-results">Không có đơn hàng nào được gán cho nhân viên này.</td></tr>`; }
     </script>
 </body>
 </html>
