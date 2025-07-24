@@ -215,7 +215,6 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Lấy ID từ tham số URL
             const urlParams = new URLSearchParams(window.location.search);
             const idns = urlParams.get('idns');
             
@@ -224,7 +223,6 @@
                 return;
             }
             
-            // Lấy dữ liệu nhân viên trước
             fetchStaffData(idns);
         });
         
@@ -239,7 +237,6 @@
                     return response.json();
                 })
                 .then(data => {
-                    // Chuyển đổi staff.idnv thành chuỗi để so sánh với idns
                     const staffMember = data.find(staff => String(staff.idnv) === idns);
                     
                     if (!staffMember) {
@@ -247,15 +244,9 @@
                         return;
                     }
                     
-                    /* === THAY ĐỔI THEO YÊU CẦU === */
-                    // Khối kiểm tra bộ phận đã được loại bỏ. Giờ đây, bất kỳ nhân viên nào
-                    // cũng có thể xem đơn hàng được gán cho họ theo tên.
-                    
-                    // Cập nhật thông tin người dùng (vẫn hiển thị bộ phận để cung cấp thông tin)
                     document.getElementById('userInfo').textContent = 
                         `Nhân viên: ${staffMember.ho_va_ten} - Bộ phận: ${staffMember.bo_phan}`;
                     
-                    // Lấy dữ liệu đơn hàng gán cho nhân viên này bằng cách so sánh tên
                     fetchOrderData(staffMember.ho_va_ten);
                 })
                 .catch(error => {
@@ -265,7 +256,6 @@
         }
         
         function fetchOrderData(staffName) {
-            // Biến nvVanDon trong link data của bạn chính là cột 'nv_van_don' trong JSON
             const orderApiUrl = 'https://script.google.com/macros/s/AKfycbx8f3epIsFEhxwB-IbyXA36JIkE55Bj181y4vam-D93I0MLZL-iMxwFJNDT9TNU4vBV/exec';
             
             fetch(orderApiUrl)
@@ -276,15 +266,22 @@
                     return response.json();
                 })
                 .then(data => {
-                    // Lọc đơn hàng có cột 'nv_van_don' trùng với tên nhân viên (staffName)
-                    const filteredOrders = data.filter(order => order.nv_van_don === staffName);
+                    // *** SỬA LỖI QUAN TRỌNG ***
+                    // Dùng 'nvVanDon' (camelCase) thay vì 'nv_van_don' để khớp với key từ API.
+                    // Dùng .trim() để xóa khoảng trắng thừa ở đầu/cuối tên.
+                    const staffNameTrimmed = staffName.trim();
+                    const filteredOrders = data.filter(order => {
+                        if (order.nvVanDon) {
+                            return order.nvVanDon.trim() === staffNameTrimmed;
+                        }
+                        return false;
+                    });
                     
                     if (filteredOrders.length === 0) {
                         showNoOrders();
                         return;
                     }
                     
-                    // Hiển thị các đơn hàng đã lọc
                     displayOrders(filteredOrders);
                 })
                 .catch(error => {
@@ -300,8 +297,10 @@
             orders.forEach(order => {
                 const row = document.createElement('tr');
                 
+                // *** SỬA LỖI KEY ***: Các key dưới đây đều được đổi sang camelCase
+                
                 let statusBadge = '';
-                const deliveryStatus = order.trang_thai_giao_hang_NB;
+                const deliveryStatus = order.trangThaiGiaoHangNB; // Sửa từ trang_thai_giao_hang_NB
                 if (deliveryStatus === 'Đã giao') {
                     statusBadge = `<span class="status status-completed">${deliveryStatus}</span>`;
                 } else if (deliveryStatus === 'Đang giao') {
@@ -313,7 +312,8 @@
                 }
                 
                 let paymentBadge = '';
-                const paymentStatus = order.trang_thai_thu_tien;
+                // Giả định key là trangThaiThuTien, bạn cần kiểm tra lại trong API nếu sai
+                const paymentStatus = order.trangThaiThuTien; 
                 if (paymentStatus === 'Đã thu') {
                     paymentBadge = `<span class="badge badge-success">${paymentStatus}</span>`;
                 } else if (paymentStatus === 'Chờ thu') {
@@ -324,23 +324,24 @@
                     paymentBadge = paymentStatus || 'N/A';
                 }
                 
-                const totalAmount = order.tong_tien_VND ? 
-                    parseInt(order.tong_tien_VND).toLocaleString('vi-VN') : '0';
+                const totalAmount = order.tongTienVND ? // Sửa từ tong_tien_VND
+                    parseInt(order.tongTienVND).toLocaleString('vi-VN') : '0';
                 
+                // *** SỬA LỖI KEY ***: Tất cả các order.key đều được sửa sang camelCase
                 row.innerHTML = `
-                    <td>${order.ma_don_hang || 'N/A'}</td>
-                    <td>${order.ngay_len_don || 'N/A'}</td>
+                    <td>${order.maDonHang || 'N/A'}</td>
+                    <td>${order.ngayLenDon ? new Date(order.ngayLenDon).toLocaleDateString('vi-VN') : 'N/A'}</td>
                     <td>${order.name || 'N/A'}</td>
                     <td>${order.phone || 'N/A'}</td>
-                    <td>${order.add || 'N/A'}</td>
+                    <td>${order.address || 'N/A'}</td>
                     <td>${order.city || 'N/A'}</td>
                     <td>${order.state || 'N/A'}</td>
-                    <td>${order.mat_hang || 'N/A'}</td>
+                    <td>${order.matHang || 'N/A'}</td>
                     <td>${totalAmount} VNĐ</td>
-                    <td>${order.hinh_thuc_thanh_toan || 'N/A'}</td>
-                    <td>${order.ghi_chu || ''}</td>
+                    <td>${order.hinhThucThanhToan || 'N/A'}</td>
+                    <td>${order.ghiChu || ''}</td>
                     <td>${statusBadge}</td>
-                    <td>${order.don_vi_van_chuyen || 'N/A'}</td>
+                    <td>${order.donViVanChuyen || 'N/A'}</td>
                     <td>${paymentBadge}</td>
                 `;
                 
