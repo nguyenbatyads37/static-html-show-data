@@ -35,6 +35,7 @@
         tbody tr:hover td, tbody tr:hover .frozen { background-color: #e9f7fe; }
         td.cell-selected { background-color: var(--selection-color) !important; outline: 2px solid var(--primary-color); outline-offset: -1px; }
         .loading, .error, .no-results { text-align: center; padding: 20px; font-size: 1.2rem; font-weight: 500; }
+        .error { color: var(--danger-color); }
     </style>
 </head>
 <body>
@@ -86,9 +87,7 @@
         let allOrders = [];
         let currentDisplayedOrders = [];
         let selectedCells = new Set();
-        let isMouseDown = false;
-        let startCell = null;
-        let lastClickedCell = null;
+        let isMouseDown = false, startCell = null, lastClickedCell = null;
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -118,14 +117,16 @@
             try {
                 const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
                 const response = await fetch(staffApiUrl);
-                if (!response.ok) throw new Error('Network response was not ok.');
+                if (!response.ok) throw new Error(`Lỗi mạng khi tải data nhân viên: ${response.statusText}`);
                 const data = await response.json();
                 const staffMember = data.find(staff => String(staff.idnv) === idns);
                 if (!staffMember) return showError(`Không tìm thấy nhân viên với ID: ${idns}`);
                 document.getElementById('userInfo').textContent = `Nhân viên: ${staffMember.ho_va_ten} - Bộ phận: ${staffMember.bo_phan}`;
                 await fetchOrderData(staffMember.ho_va_ten);
             } catch (error) {
-                showError('Lỗi khi tải dữ liệu nhân viên. Vui lòng kiểm tra lại đường truyền.');
+                // *** CẢI TIẾN GHI LỖI ***
+                console.error("Lỗi chi tiết khi tải dữ liệu nhân viên:", error);
+                showError('Lỗi khi tải dữ liệu nhân viên. Vui lòng kiểm tra lại đường truyền và F12 > Console để xem chi tiết.');
             }
         }
         
@@ -133,82 +134,70 @@
             try {
                 const orderApiUrl = 'https://script.google.com/macros/s/AKfycbx8f3epIsFEhxwB-IbyXA36JIkE55Bj181y4vam-D93I0MLZL-iMxwFJNDT9TNU4vBV/exec';
                 const response = await fetch(orderApiUrl);
-                if (!response.ok) throw new Error('Network response was not ok.');
+                if (!response.ok) throw new Error(`Lỗi mạng khi tải data đơn hàng: ${response.statusText}`);
+                
                 const data = await response.json();
+                
+                // Lọc dữ liệu trước khi làm bất cứ điều gì khác
                 const staffNameTrimmed = staffName.trim();
                 allOrders = data.filter(order => order.nvVanDon && order.nvVanDon.trim() === staffNameTrimmed);
                 
-                // *** ROBUST DISPLAY LOGIC ***
-                // Always display data first. Then, safely populate filters.
+                // Hiển thị ngay lập tức, đây là bước quan trọng nhất để đảm bảo trang không trắng
                 displayOrders(allOrders);
 
+                // Sau khi đã hiển thị an toàn, mới tiến hành các tác vụ phụ có thể gây lỗi
                 if (allOrders.length > 0) {
-                    try {
-                        populateFilterDropdowns(allOrders);
-                    } catch (e) {
-                        console.error("Lỗi khi tạo bộ lọc dropdown, nhưng bảng vẫn hiển thị:", e);
-                    }
-                } else {
-                    showNoOrders();
+                    populateFilterDropdowns(allOrders);
                 }
             } catch (error) {
-                showError('Lỗi khi tải dữ liệu đơn hàng. Vui lòng kiểm tra lại đường truyền.');
+                // *** CẢI TIẾN GHI LỖI ***
+                console.error("Lỗi chi tiết khi xử lý dữ liệu đơn hàng:", error);
+                showError('Lỗi khi tải dữ liệu đơn hàng. Vui lòng kiểm tra lại đường truyền và F12 > Console để xem chi tiết.');
             }
         }
 
         // --- FILTERING LOGIC ---
         function populateFilterDropdowns(orders) {
-            const dropdownColumns = ['city', 'state', 'hinhThucThanhToan', 'trangThaiGiaoHangNB', 'donViVanChuyen', 'trangThaiThuTien'];
-            const uniqueValues = Object.fromEntries(dropdownColumns.map(col => [col, new Set()]));
+            try {
+                const dropdownColumns = ['city', 'state', 'hinhThucThanhToan', 'trangThaiGiaoHangNB', 'donViVanChuyen', 'trangThaiThuTien'];
+                const uniqueValues = Object.fromEntries(dropdownColumns.map(col => [col, new Set()]));
 
-            for (const order of orders) {
-                for (const col of dropdownColumns) {
-                    if (order[col] !== null && order[col] !== undefined && String(order[col]).trim() !== '') {
-                        uniqueValues[col].add(String(order[col]).trim());
+                for (const order of orders) {
+                    for (const col of dropdownColumns) {
+                        const value = order[col];
+                        if (value !== null && value !== undefined && String(value).trim() !== '') {
+                            uniqueValues[col].add(String(value).trim());
+                        }
                     }
                 }
-            }
 
-            for (const col of dropdownColumns) {
-                const selectEl = document.querySelector(`.filter-control[data-column="${col}"]`);
-                if (!selectEl) continue;
+                for (const col of dropdownColumns) {
+                    const selectEl = document.querySelector(`.filter-control[data-column="${col}"]`);
+                    if (!selectEl) continue;
 
-                const sortedValues = Array.from(uniqueValues[col]).sort((a, b) => a.localeCompare(b, 'vi'));
-                selectEl.innerHTML = '<option value="">-- Tất cả --</option>';
-                for (const value of sortedValues) {
-                    selectEl.innerHTML += `<option value="${value}">${value}</option>`;
+                    const sortedValues = Array.from(uniqueValues[col]).sort((a, b) => a.localeCompare(b, 'vi'));
+                    selectEl.innerHTML = '<option value="">-- Tất cả --</option>';
+                    for (const value of sortedValues) {
+                        selectEl.innerHTML += `<option value="${value}">${value}</option>`;
+                    }
                 }
+            } catch (e) {
+                 console.error("Lỗi không nghiêm trọng khi tạo bộ lọc dropdown:", e);
             }
         }
 
         function applyFilters() {
+             // Logic này đã ổn định, giữ nguyên
             clearSelection();
-            const filters = Array.from(document.querySelectorAll('.filter-control'))
-                .filter(control => control.value)
-                .map(control => ({
-                    key: control.dataset.column,
-                    value: control.value.toLowerCase().trim(),
-                    isSelect: control.tagName === 'SELECT'
-                }));
-
-            if (filters.length === 0) {
-                displayOrders(allOrders);
-                return;
-            }
-
-            const filteredData = allOrders.filter(order => {
-                return filters.every(filter => {
-                    const orderValue = order[filter.key];
-                    if (orderValue === null || orderValue === undefined) return false;
-                    
-                    let orderValueStr = String(orderValue).toLowerCase();
-                    if (filter.key === 'ngayLenDon' && order.ngayLenDon) {
-                        orderValueStr = new Date(order.ngayLenDon).toLocaleDateString('vi-VN');
-                    }
-                    
-                    return filter.isSelect ? orderValueStr === filter.value : orderValueStr.includes(filter.value);
-                });
-            });
+            const filters = Array.from(document.querySelectorAll('.filter-control')).filter(c => c.value).map(c => ({ key: c.dataset.column, value: c.value.toLowerCase().trim(), isSelect: c.tagName === 'SELECT' }));
+            if (filters.length === 0) return displayOrders(allOrders);
+            const filteredData = allOrders.filter(order => filters.every(filter => {
+                const orderValue = order[filter.key];
+                if (orderValue === null || orderValue === undefined) return false;
+                let orderValueStr = String(orderValue).toLowerCase();
+                if (filter.key === 'ngayLenDon' && order.ngayLenDon) orderValueStr = new Date(order.ngayLenDon).toLocaleDateString('vi-VN');
+                return filter.isSelect ? orderValueStr === filter.value : orderValueStr.includes(filter.value);
+            }));
             displayOrders(filteredData);
         }
 
@@ -223,50 +212,41 @@
             clearSelection();
             const tableBody = document.getElementById('orderTableBody');
             const rowCountEl = document.getElementById('rowCount');
+
+            if (allOrders.length === 0) { showNoOrders(); return; }
             
-            if (orders.length === 0 && allOrders.length > 0) {
+            rowCountEl.textContent = `Hiển thị ${orders.length} / ${allOrders.length} đơn hàng`;
+
+            if (orders.length === 0) {
                  tableBody.innerHTML = `<tr><td colspan="15" class="no-results">Không có kết quả nào khớp với bộ lọc.</td></tr>`;
-                 rowCountEl.textContent = `Hiển thị 0 / ${allOrders.length} đơn hàng`;
                  return;
             }
 
-            if (allOrders.length === 0) {
-                showNoOrders();
-                return;
-            }
-
-            rowCountEl.textContent = `Hiển thị ${orders.length} / ${allOrders.length} đơn hàng`;
             let tableHTML = '';
             for (const order of orders) {
-                const totalAmount = order.tongTienVND ? parseInt(order.tongTienVND).toLocaleString('vi-VN') : '0';
-                const formattedDate = order.ngayLenDon ? new Date(order.ngayLenDon).toLocaleDateString('vi-VN') : 'N/A';
-                
                 const createBadge = (text) => {
                     if (!text) return 'N/A';
                     const classMap = { 'Đã giao': 'status status-completed', 'Đang giao': 'status status-shipping', 'Chờ xử lý': 'status status-pending', 'Đã thu': 'badge badge-success', 'Chờ thu': 'badge badge-warning', 'Không thu': 'badge badge-danger' };
                     return `<span class="${classMap[text] || ''}">${text}</span>`;
                 };
-
-                tableHTML += `
-                    <tr>
-                        <td class="frozen col-1">📋</td>
-                        <td class="frozen col-2">${order.maDonHang || 'N/A'}</td>
-                        <td class="frozen col-3">${formattedDate}</td>
-                        <td>${order.name || 'N/A'}</td> <td>${order.phone || 'N/A'}</td>
-                        <td>${order.address || 'N/A'}</td> <td>${order.city || 'N/A'}</td>
-                        <td>${order.state || 'N/A'}</td> <td>${order.matHang || 'N/A'}</td>
-                        <td>${totalAmount} VNĐ</td> <td>${order.hinhThucThanhToan || 'N/A'}</td>
-                        <td>${order.ghiChu || ''}</td>
-                        <td>${createBadge(order.trangThaiGiaoHangNB)}</td>
-                        <td>${order.donViVanChuyen || 'N/A'}</td>
-                        <td>${createBadge(order.trangThaiThuTien)}</td>
-                    </tr>
-                `;
+                tableHTML += `<tr>
+                    <td class="frozen col-1">📋</td>
+                    <td class="frozen col-2">${order.maDonHang || 'N/A'}</td>
+                    <td class="frozen col-3">${order.ngayLenDon ? new Date(order.ngayLenDon).toLocaleDateString('vi-VN') : 'N/A'}</td>
+                    <td>${order.name || 'N/A'}</td> <td>${order.phone || 'N/A'}</td>
+                    <td>${order.address || 'N/A'}</td> <td>${order.city || 'N/A'}</td>
+                    <td>${order.state || 'N/A'}</td> <td>${order.matHang || 'N/A'}</td>
+                    <td>${order.tongTienVND ? parseInt(order.tongTienVND).toLocaleString('vi-VN') : '0'} VNĐ</td>
+                    <td>${order.hinhThucThanhToan || 'N/A'}</td> <td>${order.ghiChu || ''}</td>
+                    <td>${createBadge(order.trangThaiGiaoHangNB)}</td>
+                    <td>${order.donViVanChuyen || 'N/A'}</td>
+                    <td>${createBadge(order.trangThaiThuTien)}</td>
+                </tr>`;
             }
             tableBody.innerHTML = tableHTML;
         }
         
-        // --- SELECTION & COPY/PASTE LOGIC (Unchanged, but robust) ---
+        // --- SELECTION & COPY/PASTE LOGIC (Đã ổn định) ---
         function handleMouseDown(e) { const cell = e.target.closest('td'); if (!cell) return; isMouseDown = true; startCell = cell; if (e.shiftKey && lastClickedCell) { clearSelection(); selectCellsInRectangle(lastClickedCell, cell); } else if (e.ctrlKey) { toggleCellSelection(cell); } else { clearSelection(); selectCell(cell); } lastClickedCell = cell; e.preventDefault(); }
         function handleMouseMove(e) { if (!isMouseDown || !startCell) return; const endCell = e.target.closest('td'); if (endCell) { clearSelection(); selectCellsInRectangle(startCell, endCell); } }
         function handleMouseUp() { isMouseDown = false; }
