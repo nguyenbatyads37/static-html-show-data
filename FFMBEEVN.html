@@ -2,343 +2,285 @@
 <html>
 <head>
   <base target="_top">
-  <title>Danh sách đơn hàng vận chuyển bởi BEE</title>
+  <title>Cập nhật Đơn hàng BEE</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      padding: 20px;
-      font-size: 14px;
-    }
-    h1 {
-      color: #333;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 20px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      table-layout: fixed; /* Giúp cột đều hơn */
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 8px 10px;
-      text-align: left;
-      white-space: nowrap;      /* Ngăn xuống dòng */
-      overflow: hidden;         /* Ẩn nội dung thừa */
-      text-overflow: ellipsis;  /* Hiển thị '...' */
-      position: relative; /* Cần thiết cho drag-handle */
-    }
-    th {
-      background-color: #f2f2f2;
-      font-weight: bold;
-      position: sticky; /* Giữ header cố định khi cuộn */
-      top: 0;
-      z-index: 2;
-    }
-    tr:nth-child(even) {
-      background-color: #f9f9f9;
-    }
-    #loading-message, #error-message {
-      font-size: 1.2em;
-      color: #555;
-      font-style: italic;
-      margin-top: 20px;
-    }
-    #error-message {
-      color: red;
-      font-weight: bold;
-    }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; padding: 20px; font-size: 14px; }
+    h1 { color: #333; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); table-layout: fixed; }
+    th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: relative; }
+    th { background-color: #f2f2f2; font-weight: bold; position: sticky; top: 0; z-index: 2; }
+    tr:nth-child(even) { background-color: #f9f9f9; }
+    #loading-message, #error-message { font-size: 1.2em; color: #555; font-style: italic; margin-top: 20px; }
+    #error-message { color: red; font-weight: bold; }
 
     /* === CSS cho các tính năng chỉnh sửa === */
-    .editable-cell {
-      background-color: #e8f0fe; /* Màu nền nhẹ để phân biệt */
-      cursor: cell;
-    }
-    .editable-cell:focus {
-      outline: 2px solid #4285f4; /* Viền xanh khi focus */
-      background-color: #fff;
-      white-space: normal; /* Cho phép text xuống dòng khi sửa */
-      overflow: visible;
+    .editable-cell { background-color: #e8f0fe; cursor: cell; }
+    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; white-space: normal; overflow: visible; }
+    
+    /* MỚI: Màu nền cho ô đã thay đổi */
+    .editable-cell.modified {
+      background-color: #fffbe6; /* Màu vàng nhạt */
+      font-weight: bold;
+      color: #c95e00;
     }
     
-    /* Tay cầm để kéo (drag handle) */
-    .drag-handle {
-      position: absolute;
-      right: 0;
-      bottom: 0;
-      width: 8px;
-      height: 8px;
-      background-color: #4285f4;
-      cursor: crosshair;
-      display: none; /* Mặc định ẩn */
-      z-index: 10;
-    }
-    
-    /* Hiển thị handle khi focus vào ô cha */
-    .editable-cell:focus .drag-handle {
-      display: block;
-    }
+    .drag-handle { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; background-color: #4285f4; cursor: crosshair; display: none; z-index: 10; }
+    .editable-cell:focus .drag-handle { display: block; }
+    .drag-selection { border: 2px dotted #4285f4 !important; }
 
-    /* Viền cho vùng chọn khi kéo */
-    .drag-selection {
-        border: 2px dotted #4285f4 !important;
+    /* === CSS cho nút và thông báo === */
+    .controls { margin-top: 20px; display: flex; align-items: center; gap: 20px; }
+    #send-button { background-color: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
+    #send-button:hover { background-color: #185abc; }
+    #send-button:disabled { background-color: #ccc; cursor: not-allowed; }
+    #status-message { font-weight: bold; }
+    .status-success { color: #1e8e3e; }
+    .status-error { color: #d93025; }
+
+    /* MỚI: CSS cho menu chuột phải (context menu) */
+    #context-menu {
+        display: none;
+        position: absolute;
+        z-index: 1000;
+        background-color: white;
+        border: 1px solid #ccc;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        border-radius: 5px;
+        min-width: 150px;
+    }
+    .context-menu-item {
+        padding: 8px 12px;
+        cursor: pointer;
+    }
+    .context-menu-item:hover {
+        background-color: #f0f0f0;
     }
   </style>
 </head>
 <body>
-
   <h1>Danh sách đơn hàng vận chuyển bởi "BEE"</h1>
+
+  <div class="controls">
+    <button id="send-button">Gửi Dữ Liệu</button>
+    <div id="status-message"></div>
+  </div>
+
   <div id="loading-message">Đang tải dữ liệu, vui lòng chờ...</div>
   <div id="error-message" style="display: none;"></div>
 
-  <div style="overflow-x: auto;"> <!-- Container cho phép cuộn ngang -->
+  <div style="overflow-x: auto;">
     <table id="data-table">
       <thead></thead>
       <tbody></tbody>
     </table>
   </div>
 
+  <!-- MỚI: Menu chuột phải ẩn -->
+  <div id="context-menu">
+      <div class="context-menu-item" id="revert-action">Hoàn tác thay đổi</div>
+  </div>
+
+
 <script>
   // ==========================================================
-  // CẤU HÌNH TRUNG TÂM
+  // CẤU HÌNH TRUNG TÂM (KHÔNG ĐỔI)
   // ==========================================================
   const API_URL = "https://script.google.com/macros/s/AKfycbwqkdJyB7KGfY7yOEWzNpouDxJAAotREMtNwtQTN1uZ_22eMthIOHjN4t_OknZdjloS/exec";
-
-  // Ánh xạ tên biến sang Tiếng Việt (thứ tự cột sẽ theo thứ tự này)
   const COLUMN_MAPPING = {
-    maDonHang: 'Mã Đơn Hàng',
-    ngayLenDon: 'Ngày Lên Đơn',
-    tenKhachHang: 'Tên Khách Hàng',
-    sdtKhach: 'SĐT Khách',
-    diaChiGiao: 'Địa Chỉ Giao',
-    tenSanPham: 'Tên Sản Phẩm',
-    maVanDon: 'Mã Vận Đơn',
-    thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
-    ghiChuNB: 'Ghi Chú Nội Bộ',
-    tenSale: 'Tên Sale',
-    // --- Các biến sẽ bị ẩn ---
-    nvVanDon: 'NV Vận Đơn',
-    ketQuaCheck: 'Kết Quả Check',
-    trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB',
-    lyDo: 'Lý Do',
-    donViVanChuyen: 'Đơn Vị Vận Chuyển',
-    tenLenDon: 'Tên Lên Đơn'
+    maDonHang: 'Mã Đơn Hàng', ngayLenDon: 'Ngày Lên Đơn', tenKhachHang: 'Tên Khách Hàng', sdtKhach: 'SĐT Khách',
+    diaChiGiao: 'Địa Chỉ Giao', tenSanPham: 'Tên Sản Phẩm', maVanDon: 'Mã Vận Đơn', thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
+    ghiChuNB: 'Ghi Chú Nội Bộ', tenSale: 'Tên Sale', nvVanDon: 'NV Vận Đơn', ketQuaCheck: 'Kết Quả Check',
+    trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB', lyDo: 'Lý Do', donViVanChuyen: 'Đơn Vị Vận Chuyển', tenLenDon: 'Tên Lên Đơn'
   };
-
-  // Danh sách các cột cần ẨN khỏi bảng
-  const HIDDEN_COLUMNS = [
-    'nvVanDon', 'ketQuaCheck', 'trangThaiGiaoHangNB', 
-    'lyDo', 'donViVanChuyen', 'tenLenDon'
-  ];
-
-  // Danh sách các cột có thể CHỈNH SỬA
+  const HIDDEN_COLUMNS = ['nvVanDon', 'ketQuaCheck', 'trangThaiGiaoHangNB', 'lyDo', 'donViVanChuyen', 'tenLenDon'];
   const EDITABLE_COLUMNS = ['maVanDon', 'ghiChuNB'];
-
-  // Danh sách các cột cần định dạng NGÀY THÁNG
   const DATE_COLUMNS = ['ngayLenDon', 'thoiGianGiaoDuKien'];
 
   // ==========================================================
   // LOGIC CHÍNH
   // ==========================================================
   
-  // Hàm định dạng ngày tháng từ chuỗi ISO
-  function formatDateTime(isoString) {
-    if (!isoString) return '';
-    try {
-      const date = new Date(isoString);
-      if (isNaN(date)) return isoString; // Trả về chuỗi gốc nếu không hợp lệ
-      
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      const hours = String(date.getHours()).padStart(2, '0');
-      const minutes = String(date.getMinutes()).padStart(2, '0');
-      
-      return `${day}/${month}/${year} ${hours}:${minutes}`;
-    } catch (e) {
-      return isoString; // An toàn nếu có lỗi
-    }
+  function formatDateTime(isoString) { /* ... Giữ nguyên hàm này ... */
+    if (!isoString) return ''; try { const date = new Date(isoString); if (isNaN(date)) return isoString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); return `${day}/${month}/${year} ${hours}:${minutes}`; } catch (e) { return isoString; }
   }
 
-  // Hàm chính để lấy dữ liệu và xây dựng bảng
+  // CẬP NHẬT: Thêm logic lưu giá trị gốc
   async function fetchDataAndBuildTable() {
-    const loadingDiv = document.getElementById('loading-message');
-    const errorDiv = document.getElementById('error-message');
-    const table = document.getElementById('data-table');
-    const tableHead = table.querySelector('thead');
-    const tableBody = table.querySelector('tbody');
-
-    try {
-      const response = await fetch(API_URL);
-      if (!response.ok) throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`);
-      const allData = await response.json();
-      
-      const filteredData = allData.filter(item => item.donViVanChuyen === "BEE");
-
-      loadingDiv.style.display = 'none';
-
-      if (filteredData.length === 0) {
-        errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE".';
-        errorDiv.style.display = 'block';
-        return;
-      }
-      
-      // Lấy danh sách các key sẽ được hiển thị (đã lọc các cột ẩn)
-      const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key));
-      
-      // 1. TẠO TIÊU ĐỀ BẢNG
-      let headerRow = '<tr>';
+    // ... Phần đầu hàm giữ nguyên ...
+    const loadingDiv = document.getElementById('loading-message'); const errorDiv = document.getElementById('error-message'); const table = document.getElementById('data-table'); const tableHead = table.querySelector('thead'); const tableBody = table.querySelector('tbody'); try { const response = await fetch(API_URL); if (!response.ok) throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`); const allData = await response.json(); const filteredData = allData.filter(item => item.donViVanChuyen === "BEE"); loadingDiv.style.display = 'none'; if (filteredData.length === 0) { errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE".'; errorDiv.style.display = 'block'; return; } const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); let headerRow = '<tr>'; visibleColumns.forEach(key => { headerRow += `<th>${COLUMN_MAPPING[key]}</th>`; }); headerRow += '</tr>'; tableHead.innerHTML = headerRow; tableBody.innerHTML = '';
+    
+    filteredData.forEach(rowData => {
+      const rowEl = document.createElement('tr');
+      rowEl.dataset.maDonHang = rowData.maDonHang;
       visibleColumns.forEach(key => {
-        headerRow += `<th>${COLUMN_MAPPING[key]}</th>`;
+        const cellEl = document.createElement('td');
+        let cellValue = rowData[key] ?? '';
+        let displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue;
+        
+        cellEl.textContent = displayValue;
+        cellEl.dataset.columnKey = key;
+        
+        if (EDITABLE_COLUMNS.includes(key)) {
+          cellEl.classList.add('editable-cell');
+          cellEl.setAttribute('contenteditable', 'true');
+          
+          // MỚI: Lưu giá trị gốc vào data attribute
+          cellEl.dataset.originalValue = displayValue;
+          
+          const dragHandle = document.createElement('div');
+          dragHandle.className = 'drag-handle';
+          cellEl.appendChild(dragHandle);
+        }
+        rowEl.appendChild(cellEl);
       });
-      headerRow += '</tr>';
-      tableHead.innerHTML = headerRow;
-
-      // 2. TẠO CÁC HÀNG DỮ LIỆU
-      tableBody.innerHTML = ''; // Xóa nội dung cũ
-      filteredData.forEach(rowData => {
-        const rowEl = document.createElement('tr');
-        visibleColumns.forEach(key => {
-          const cellEl = document.createElement('td');
-          let cellValue = rowData[key] ?? '';
-
-          // Định dạng ngày tháng
-          if (DATE_COLUMNS.includes(key)) {
-            cellValue = formatDateTime(cellValue);
-          }
-          
-          cellEl.textContent = cellValue;
-          
-          // Thêm thuộc tính cho các ô có thể chỉnh sửa
-          if (EDITABLE_COLUMNS.includes(key)) {
-            cellEl.classList.add('editable-cell');
-            cellEl.setAttribute('contenteditable', 'true');
-            
-            // Thêm handle để kéo
-            const dragHandle = document.createElement('div');
-            dragHandle.className = 'drag-handle';
-            cellEl.appendChild(dragHandle);
-          }
-          
-          rowEl.appendChild(cellEl);
-        });
-        tableBody.appendChild(rowEl);
-      });
-      
-      // 3. Khởi tạo các tính năng tương tác
-      initializeInteractiveFeatures();
-
-    } catch (error) {
-      loadingDiv.style.display = 'none';
-      errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message;
-      errorDiv.style.display = 'block';
-      console.error("Lỗi chi tiết:", error);
-    }
-  }
-
-  // Hàm khởi tạo các sự kiện cho bảng
-  function initializeInteractiveFeatures() {
-    const tableBody = document.getElementById('data-table').querySelector('tbody');
-    
-    // Xử lý sự kiện DÁN (PASTE)
-    tableBody.addEventListener('paste', handlePaste);
-    
-    // Xử lý sự kiện KÉO ĐỂ ĐIỀN (DRAG-FILL)
-    let isDragging = false;
-    let startCell = null;
-    let fillValue = '';
-
-    tableBody.addEventListener('mousedown', (e) => {
-        if (e.target.classList.contains('drag-handle')) {
-            isDragging = true;
-            startCell = e.target.parentElement;
-            fillValue = startCell.textContent;
-            e.preventDefault(); // Ngăn hành vi mặc định
-            
-            // Xóa các vùng chọn cũ
-            document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection'));
-            startCell.classList.add('drag-selection');
-        }
+      tableBody.appendChild(rowEl);
     });
-
-    tableBody.addEventListener('mouseover', (e) => {
-        if (isDragging && e.target.tagName === 'TD') {
-            const endCell = e.target;
-            const startColumnIndex = startCell.cellIndex;
-            const endColumnIndex = endCell.cellIndex;
-
-            // Chỉ cho phép kéo trong cùng một cột
-            if (startColumnIndex === endColumnIndex) {
-                 updateDragSelection(startCell, endCell);
-            }
-        }
-    });
+    initializeInteractiveFeatures();
     
-    document.addEventListener('mouseup', (e) => {
-        if (isDragging) {
-            isDragging = false;
-            // Áp dụng giá trị cho các ô đã chọn
-            document.querySelectorAll('.drag-selection').forEach(cell => {
-                // Chỉ điền nếu ô đó có thể chỉnh sửa
-                if (cell.classList.contains('editable-cell')) {
-                    // Lấy textContent mà không có div của drag-handle
-                    const handle = cell.querySelector('.drag-handle');
-                    if(handle) cell.textContent = ''; // Xóa text cũ và cả handle
-                    cell.textContent = fillValue;
-                    if(handle) cell.appendChild(handle); // Gắn lại handle
-                }
-            });
-            startCell = null;
-        }
-    });
+    // ... Phần catch lỗi giữ nguyên ...
+    } catch (error) { loadingDiv.style.display = 'none'; errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message; errorDiv.style.display = 'block'; console.error("Lỗi chi tiết:", error); }
   }
   
-  function updateDragSelection(start, end) {
-      document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection'));
-      const tableRows = Array.from(document.getElementById('data-table').rows);
-      const startRowIndex = start.parentElement.rowIndex;
-      const endRowIndex = end.parentElement.rowIndex;
-      const colIndex = start.cellIndex;
-      
-      const minRow = Math.min(startRowIndex, endRowIndex);
-      const maxRow = Math.max(startRowIndex, endRowIndex);
+  // CẬP NHẬT: Thêm logic kiểm tra thay đổi và menu chuột phải
+  function initializeInteractiveFeatures() {
+    const tableBody = document.getElementById('data-table').querySelector('tbody');
+    const sendButton = document.getElementById('send-button');
+    const contextMenu = document.getElementById('context-menu');
+    const revertAction = document.getElementById('revert-action');
+    let cellToRevert = null;
 
-      for(let i = minRow; i <= maxRow; i++) {
-          tableRows[i].cells[colIndex]?.classList.add('drag-selection');
+    // CẬP NHẬT: Sự kiện input để so sánh giá trị và đánh dấu
+    tableBody.addEventListener('input', e => {
+      if (e.target.isContentEditable) {
+        updateCellModifiedState(e.target);
       }
-  }
+    });
 
-  // Hàm xử lý dán dữ liệu
-  function handlePaste(e) {
-    const targetCell = e.target;
-    if (!targetCell.classList.contains('editable-cell')) return;
+    // MỚI: Sự kiện chuột phải để hiển thị menu hoàn tác
+    tableBody.addEventListener('contextmenu', e => {
+        const cell = e.target.closest('.editable-cell.modified');
+        if (cell) {
+            e.preventDefault();
+            cellToRevert = cell;
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = `${e.pageX}px`;
+            contextMenu.style.top = `${e.pageY}px`;
+        }
+    });
 
-    e.preventDefault();
-    const pasteData = (e.clipboardData || window.clipboardData).getData('text');
-    const lines = pasteData.trim().split(/\r\n|\n|\r/); // Tách theo các loại xuống dòng
+    // MỚI: Sự kiện click để ẩn menu
+    document.addEventListener('click', () => {
+        contextMenu.style.display = 'none';
+        cellToRevert = null;
+    });
 
-    let currentRow = targetCell.parentElement;
-    const cellIndex = targetCell.cellIndex;
+    // MỚI: Sự kiện click vào nút hoàn tác
+    revertAction.addEventListener('click', () => {
+        if (cellToRevert) {
+            const originalValue = cellToRevert.dataset.originalValue;
+            // Phải xử lý trường hợp có drag-handle
+            const handle = cellToRevert.querySelector('.drag-handle');
+            cellToRevert.textContent = originalValue;
+            if (handle) cellToRevert.appendChild(handle);
+            
+            updateCellModifiedState(cellToRevert); // Cập nhật lại trạng thái
+        }
+    });
 
-    lines.forEach((line, index) => {
-      if (!currentRow) return;
-      const cellToUpdate = currentRow.cells[cellIndex];
-      
-      if (cellToUpdate && cellToUpdate.classList.contains('editable-cell')) {
-        // Lấy handle ra trước khi gán text
-        const handle = cellToUpdate.querySelector('.drag-handle');
-        if(handle) cellToUpdate.textContent = ''; // Xóa text cũ và cả handle
-        cellToUpdate.textContent = line;
-        if(handle) cellToUpdate.appendChild(handle); // Gắn lại handle
+    // Sự kiện cho nút gửi (không đổi)
+    sendButton.addEventListener('click', submitChanges);
+
+    // Dán và Kéo để điền (cần cập nhật để đánh dấu 'modified')
+    /* ... Giữ nguyên các hàm mousedown, mouseover, updateDragSelection ... */
+    let isDragging = false; let startCell = null; let fillValue = ''; tableBody.addEventListener('mousedown', (e) => { if (e.target.classList.contains('drag-handle')) { isDragging = true; startCell = e.target.parentElement; fillValue = startCell.childNodes[0].nodeValue || ''; e.preventDefault(); document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); startCell.classList.add('drag-selection'); } }); tableBody.addEventListener('mouseover', (e) => { if (isDragging && e.target.tagName === 'TD') { const endCell = e.target; if (startCell.cellIndex === endCell.cellIndex) { updateDragSelection(startCell, endCell); } } }); 
+    
+    // CẬP NHẬT: Mouseup và Paste để gọi hàm updateCellModifiedState
+    document.addEventListener('mouseup', () => {
+      if (isDragging) {
+        isDragging = false;
+        document.querySelectorAll('.drag-selection').forEach(cell => {
+          if (cell.classList.contains('editable-cell')) {
+            const handle = cell.querySelector('.drag-handle');
+            cell.textContent = fillValue;
+            if(handle) cell.appendChild(handle);
+            updateCellModifiedState(cell); // Cập nhật trạng thái
+          }
+        });
+        startCell = null;
       }
-      
-      currentRow = currentRow.nextElementSibling; // Di chuyển xuống hàng tiếp theo
+    });
+
+    tableBody.addEventListener('paste', e => {
+      const targetCell = e.target; if (!targetCell.classList.contains('editable-cell')) return; e.preventDefault(); const pasteData = (e.clipboardData || window.clipboardData).getData('text'); const lines = pasteData.trim().split(/\r\n|\n|\r/); let currentRow = targetCell.parentElement; const cellIndex = targetCell.cellIndex; lines.forEach((line) => { if (!currentRow) return; const cellToUpdate = currentRow.cells[cellIndex]; if (cellToUpdate && cellToUpdate.classList.contains('editable-cell')) { const handle = cellToUpdate.querySelector('.drag-handle'); cellToUpdate.textContent = line; if(handle) cellToUpdate.appendChild(handle); updateCellModifiedState(cellToUpdate); } currentRow = currentRow.nextElementSibling; });
     });
   }
 
-  // Gọi hàm chính khi trang tải xong
-  window.addEventListener('load', fetchDataAndBuildTable);
+  // MỚI: Hàm tập trung logic kiểm tra và đánh dấu ô thay đổi
+  function updateCellModifiedState(cell) {
+    const originalValue = cell.dataset.originalValue;
+    const currentValue = cell.textContent;
 
+    if (currentValue !== originalValue) {
+        cell.classList.add('modified');
+        cell.title = `Giá trị gốc: ${originalValue}`; // Thêm tooltip
+    } else {
+        cell.classList.remove('modified');
+        cell.title = ''; // Xóa tooltip
+    }
+  }
+
+  // Các hàm còn lại giữ nguyên
+  function updateDragSelection(start, end) { /* ... Giữ nguyên hàm này ... */
+    document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); const tableRows = Array.from(document.getElementById('data-table').rows); const startRowIndex = start.parentElement.rowIndex; const endRowIndex = end.parentElement.rowIndex; const colIndex = start.cellIndex; const minRow = Math.min(startRowIndex, endRowIndex); const maxRow = Math.max(startRowIndex, endRowIndex); for(let i = minRow; i <= maxRow; i++) { tableRows[i].cells[colIndex]?.classList.add('drag-selection'); }
+  }
+  function submitChanges() { /* ... Giữ nguyên hàm này ... */
+    const sendButton = document.getElementById('send-button'); const statusDiv = document.getElementById('status-message'); const modifiedCells = document.querySelectorAll('.editable-cell.modified'); if (modifiedCells.length === 0) { statusDiv.textContent = 'Không có thay đổi nào để gửi.'; statusDiv.className = 'status-error'; return; } sendButton.disabled = true; statusDiv.textContent = `Đang gửi ${modifiedCells.length} thay đổi...`; statusDiv.className = ''; const changes = Array.from(modifiedCells).map(cell => { return { maDonHang: cell.parentElement.dataset.maDonHang, columnKey: cell.dataset.columnKey, newValue: cell.textContent }; }); google.script.run .withSuccessHandler(response => { sendButton.disabled = false; statusDiv.textContent = response.message; if (response.success) { statusDiv.className = 'status-success'; modifiedCells.forEach(cell => { cell.classList.remove('modified'); cell.title = ''; cell.dataset.originalValue = cell.textContent; }); } else { statusDiv.className = 'status-error'; } }) .withFailureHandler(error => { sendButton.disabled = false; statusDiv.textContent = 'Lỗi: ' + error.message; statusDiv.className = 'status-error'; }) .updateSheetData(changes);
+  }
+
+  // CẬP NHẬT: Hàm submitChanges để cập nhật lại giá trị gốc sau khi gửi thành công
+  function submitChanges() {
+    const sendButton = document.getElementById('send-button');
+    const statusDiv = document.getElementById('status-message');
+    const modifiedCells = document.querySelectorAll('.editable-cell.modified');
+    if (modifiedCells.length === 0) {
+      statusDiv.textContent = 'Không có thay đổi nào để gửi.';
+      statusDiv.className = 'status-error';
+      return;
+    }
+    sendButton.disabled = true;
+    statusDiv.textContent = `Đang gửi ${modifiedCells.length} thay đổi...`;
+    statusDiv.className = '';
+    const changes = Array.from(modifiedCells).map(cell => ({
+      maDonHang: cell.parentElement.dataset.maDonHang,
+      columnKey: cell.dataset.columnKey,
+      newValue: cell.textContent
+    }));
+    google.script.run
+      .withSuccessHandler(response => {
+        sendButton.disabled = false;
+        statusDiv.textContent = response.message;
+        if (response.success) {
+          statusDiv.className = 'status-success';
+          // CẬP NHẬT LẠI GIÁ TRỊ GỐC SAU KHI LƯU THÀNH CÔNG
+          modifiedCells.forEach(cell => {
+            cell.classList.remove('modified');
+            cell.title = '';
+            // Giá trị hiện tại bây giờ là giá trị "gốc" mới
+            cell.dataset.originalValue = cell.textContent;
+          });
+        } else {
+          statusDiv.className = 'status-error';
+        }
+      })
+      .withFailureHandler(error => {
+        sendButton.disabled = false;
+        statusDiv.textContent = 'Lỗi: ' + error.message;
+        statusDiv.className = 'status-error';
+      })
+      .updateSheetData(changes);
+  }
+
+  window.addEventListener('load', fetchDataAndBuildTable);
 </script>
 </body>
 </html>
