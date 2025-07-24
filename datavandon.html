@@ -57,6 +57,7 @@
             padding: 10px;
             border-radius: 4px;
             font-weight: 500;
+            color: var(--dark-color); /* Thêm màu cho dễ đọc */
         }
         
         .table-container {
@@ -84,6 +85,7 @@
             font-weight: 500;
             position: sticky;
             top: 0;
+            z-index: 1; /* Đảm bảo header luôn ở trên */
         }
         
         tbody tr {
@@ -110,6 +112,7 @@
             border-radius: 4px;
             font-size: 0.8rem;
             font-weight: 500;
+            white-space: nowrap; /* Tránh ngắt dòng */
         }
         
         .status-pending {
@@ -212,16 +215,16 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Get the ID from URL parameter
+            // Lấy ID từ tham số URL
             const urlParams = new URLSearchParams(window.location.search);
             const idns = urlParams.get('idns');
             
             if (!idns) {
-                showError('Không tìm thấy thông tin nhân viên trong URL');
+                showError('Không tìm thấy ID nhân viên trong URL (tham số idns).');
                 return;
             }
             
-            // Fetch staff data first
+            // Lấy dữ liệu nhân viên trước
             fetchStaffData(idns);
         });
         
@@ -229,10 +232,16 @@
             const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
             
             fetch(staffApiUrl)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`Lỗi mạng: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    // Find the staff member with matching idnv
-                    const staffMember = data.find(staff => staff.idnv === idns);
+                    // **SỬA LỖI 1: So sánh kiểu dữ liệu string với string**
+                    // Chuyển đổi staff.idnv thành chuỗi để so sánh với idns (luôn là chuỗi từ URL)
+                    const staffMember = data.find(staff => String(staff.idnv) === idns);
                     
                     if (!staffMember) {
                         showError('Không tìm thấy nhân viên với ID: ' + idns);
@@ -240,20 +249,20 @@
                     }
                     
                     if (staffMember.bo_phan !== "Vận đơn") {
-                        showError('Nhân viên này không thuộc bộ phận Vận đơn');
+                        showError('Nhân viên này không thuộc bộ phận Vận đơn.');
                         return;
                     }
                     
-                    // Update user info display
+                    // Cập nhật thông tin người dùng
                     document.getElementById('userInfo').textContent = 
                         `Nhân viên: ${staffMember.ho_va_ten} - Bộ phận: ${staffMember.bo_phan}`;
                     
-                    // Now fetch order data for this shipping staff
+                    // Lấy dữ liệu đơn hàng cho nhân viên vận đơn này
                     fetchOrderData(staffMember.ho_va_ten);
                 })
                 .catch(error => {
-                    console.error('Error fetching staff data:', error);
-                    showError('Lỗi khi tải dữ liệu nhân viên');
+                    console.error('Lỗi khi tải dữ liệu nhân viên:', error);
+                    showError('Lỗi khi tải dữ liệu nhân viên. Vui lòng kiểm tra lại đường truyền hoặc API.');
                 });
         }
         
@@ -261,22 +270,27 @@
             const orderApiUrl = 'https://script.google.com/macros/s/AKfycbx8f3epIsFEhxwB-IbyXA36JIkE55Bj181y4vam-D93I0MLZL-iMxwFJNDT9TNU4vBV/exec';
             
             fetch(orderApiUrl)
-                .then(response => response.json())
+                .then(response => {
+                     if (!response.ok) {
+                        throw new Error(`Lỗi mạng: ${response.statusText}`);
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    // Filter orders where nvVanDon matches the shipping staff name
-                    const filteredOrders = data.filter(order => order.nvVanDon === shippingStaffName);
+                    // **SỬA LỖI 2: Sử dụng đúng key 'nv_van_don' (snake_case) để lọc**
+                    const filteredOrders = data.filter(order => order.nv_van_don === shippingStaffName);
                     
                     if (filteredOrders.length === 0) {
                         showNoOrders();
                         return;
                     }
                     
-                    // Display the filtered orders
+                    // Hiển thị các đơn hàng đã lọc
                     displayOrders(filteredOrders);
                 })
                 .catch(error => {
-                    console.error('Error fetching order data:', error);
-                    showError('Lỗi khi tải dữ liệu đơn hàng');
+                    console.error('Lỗi khi tải dữ liệu đơn hàng:', error);
+                    showError('Lỗi khi tải dữ liệu đơn hàng. Vui lòng kiểm tra lại đường truyền hoặc API.');
                 });
         }
         
@@ -287,31 +301,33 @@
             orders.forEach(order => {
                 const row = document.createElement('tr');
                 
-                // Determine status badge
+                // Xác định badge trạng thái giao hàng
                 let statusBadge = '';
-                if (order.trang_thai_giao_hang_NB === 'Đã giao') {
-                    statusBadge = `<span class="status status-completed">${order.trang_thai_giao_hang_NB}</span>`;
-                } else if (order.trang_thai_giao_hang_NB === 'Đang giao') {
-                    statusBadge = `<span class="status status-shipping">${order.trang_thai_giao_hang_NB}</span>`;
-                } else if (order.trang_thai_giao_hang_NB === 'Chờ xử lý') {
-                    statusBadge = `<span class="status status-pending">${order.trang_thai_giao_hang_NB}</span>`;
+                const deliveryStatus = order.trang_thai_giao_hang_NB;
+                if (deliveryStatus === 'Đã giao') {
+                    statusBadge = `<span class="status status-completed">${deliveryStatus}</span>`;
+                } else if (deliveryStatus === 'Đang giao') {
+                    statusBadge = `<span class="status status-shipping">${deliveryStatus}</span>`;
+                } else if (deliveryStatus === 'Chờ xử lý') {
+                    statusBadge = `<span class="status status-pending">${deliveryStatus}</span>`;
                 } else {
-                    statusBadge = order.trang_thai_giao_hang_NB || 'N/A';
+                    statusBadge = deliveryStatus || 'N/A';
                 }
                 
-                // Determine payment status badge
+                // Xác định badge trạng thái thu tiền
                 let paymentBadge = '';
-                if (order.trang_thai_thu_tien === 'Đã thu') {
-                    paymentBadge = `<span class="badge badge-success">${order.trang_thai_thu_tien}</span>`;
-                } else if (order.trang_thai_thu_tien === 'Chờ thu') {
-                    paymentBadge = `<span class="badge badge-warning">${order.trang_thai_thu_tien}</span>`;
-                } else if (order.trang_thai_thu_tien === 'Không thu') {
-                    paymentBadge = `<span class="badge badge-danger">${order.trang_thai_thu_tien}</span>`;
+                const paymentStatus = order.trang_thai_thu_tien;
+                if (paymentStatus === 'Đã thu') {
+                    paymentBadge = `<span class="badge badge-success">${paymentStatus}</span>`;
+                } else if (paymentStatus === 'Chờ thu') {
+                    paymentBadge = `<span class="badge badge-warning">${paymentStatus}</span>`;
+                } else if (paymentStatus === 'Không thu') {
+                    paymentBadge = `<span class="badge badge-danger">${paymentStatus}</span>`;
                 } else {
-                    paymentBadge = order.trang_thai_thu_tien || 'N/A';
+                    paymentBadge = paymentStatus || 'N/A';
                 }
                 
-                // Format total amount with commas
+                // Định dạng tổng tiền có dấu phẩy
                 const totalAmount = order.tong_tien_VND ? 
                     parseInt(order.tong_tien_VND).toLocaleString('vi-VN') : '0';
                 
@@ -337,7 +353,8 @@
         }
         
         function showError(message) {
-            document.getElementById('userInfo').textContent = message;
+            const userInfo = document.getElementById('userInfo');
+            if (userInfo) userInfo.textContent = 'Lỗi';
             document.getElementById('orderTableBody').innerHTML = `
                 <tr>
                     <td colspan="14" class="error">${message}</td>
@@ -348,7 +365,7 @@
         function showNoOrders() {
             document.getElementById('orderTableBody').innerHTML = `
                 <tr>
-                    <td colspan="14" class="loading">Không có đơn hàng nào được giao cho nhân viên này</td>
+                    <td colspan="14" class="loading">Không có đơn hàng nào được giao cho nhân viên này.</td>
                 </tr>
             `;
         }
