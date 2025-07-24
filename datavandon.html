@@ -18,12 +18,9 @@
         .user-info { background-color: #ecf0f1; padding: 10px; border-radius: 4px; font-weight: 500; color: #34495e; }
         .controls-container { background-color: #fff; padding: 10px 15px; margin-top: 20px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
         .controls-container button { padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 14px; transition: background-color 0.2s; color: white; }
-        #globalSearchInput {
-            flex-grow: 1; padding: 8px 12px; font-size: 15px; border: 1px solid #ccc;
-            border-radius: 4px; min-width: 250px;
-        }
         #copySelectedBtn { background-color: var(--secondary-color); }
         #copyAllBtn { background-color: var(--success-color); }
+        #resetBtn { background-color: var(--warning-color); }
         .table-container { background-color: white; border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); overflow-x: auto; margin-top: 1px; }
         table { width: 100%; border-collapse: collapse; min-width: 2000px; }
         thead { background-color: var(--primary-color); color: white; position: sticky; top: 0; z-index: 10; }
@@ -33,6 +30,8 @@
         thead .frozen { z-index: 15; background-color: var(--primary-color); }
         .col-1 { left: 0; min-width: 50px; } .col-2 { left: 50px; min-width: 150px; } .col-3 { left: 200px; min-width: 130px; }
         td:nth-child(4), th:nth-child(4) { min-width: 200px; } td:nth-child(5), th:nth-child(5) { min-width: 130px; } td:nth-child(6), th:nth-child(6) { min-width: 300px; } td:nth-child(9), th:nth-child(9) { min-width: 180px; } td:nth-child(12), th:nth-child(12) { min-width: 200px; } 
+        .filter-row th { padding: 5px 10px; }
+        .filter-control { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; background-color: #fff; }
         tbody tr:hover td, tbody tr:hover .frozen { background-color: #e9f7fe; }
         td.cell-selected { background-color: var(--selection-color) !important; outline: 2px solid var(--primary-color); outline-offset: -1px; }
         .loading, .error, .no-results { text-align: center; padding: 20px; font-size: 1.2rem; font-weight: 500; }
@@ -40,13 +39,12 @@
 </head>
 <body>
     <div class="container">
+        <!-- Header and Controls -->
         <div class="header"><h1>Quản lý đơn hàng</h1><div class="user-info" id="userInfo">Đang tải...</div></div>
-        
-        <!-- Simplified Controls -->
         <div class="controls-container">
-            <input type="text" id="globalSearchInput" placeholder="Tìm kiếm mọi thứ trong bảng...">
             <button id="copySelectedBtn">Sao chép vùng chọn</button>
-            <button id="copyAllBtn">Tải về CSV (Kết quả tìm kiếm)</button>
+            <button id="copyAllBtn">Tải về CSV</button>
+            <button id="resetBtn">Xóa bộ lọc</button>
             <span id="rowCount"></span>
         </div>
         
@@ -57,6 +55,23 @@
                         <th class="frozen col-1">#</th> <th class="frozen col-2">Mã đơn hàng</th> <th class="frozen col-3">Ngày lên đơn</th>
                         <th>Tên KH</th> <th>SĐT</th> <th>Địa chỉ</th> <th>Thành phố</th> <th>Tỉnh</th> <th>Mặt hàng</th>
                         <th>Tổng tiền</th> <th>Hình thức TT</th> <th>Ghi chú</th> <th>Trạng thái giao</th> <th>Đơn vị VC</th> <th>Trạng thái thu tiền</th>
+                    </tr>
+                    <tr class="filter-row">
+                        <th class="frozen col-1"></th>
+                        <th class="frozen col-2"><input type="text" class="filter-control" data-column="maDonHang" placeholder="Lọc mã..."></th>
+                        <th class="frozen col-3"><input type="text" class="filter-control" data-column="ngayLenDon" placeholder="Lọc ngày..."></th>
+                        <th><input type="text" class="filter-control" data-column="name" placeholder="Lọc tên..."></th>
+                        <th><input type="text" class="filter-control" data-column="phone" placeholder="Lọc SĐT..."></th>
+                        <th><input type="text" class="filter-control" data-column="address" placeholder="Lọc địa chỉ..."></th>
+                        <th><select class="filter-control" data-column="city"></select></th>
+                        <th><select class="filter-control" data-column="state"></select></th>
+                        <th><input type="text" class="filter-control" data-column="matHang" placeholder="Lọc mặt hàng..."></th>
+                        <th><input type="text" class="filter-control" data-column="tongTienVND" placeholder="Lọc tiền..."></th>
+                        <th><select class="filter-control" data-column="hinhThucThanhToan"></select></th>
+                        <th><input type="text" class="filter-control" data-column="ghiChu" placeholder="Lọc ghi chú..."></th>
+                        <th><select class="filter-control" data-column="trangThaiGiaoHangNB"></select></th>
+                        <th><select class="filter-control" data-column="donViVanChuyen"></select></th>
+                        <th><select class="filter-control" data-column="trangThaiThuTien"></select></th>
                     </tr>
                 </thead>
                 <tbody id="orderTableBody">
@@ -83,7 +98,11 @@
         });
 
         function setupEventListeners() {
-            document.getElementById('globalSearchInput').addEventListener('input', applyGlobalSearch);
+            document.querySelectorAll('.filter-control').forEach(control => {
+                const eventType = control.tagName === 'INPUT' ? 'input' : 'change';
+                control.addEventListener(eventType, applyFilters);
+            });
+            document.getElementById('resetBtn').addEventListener('click', resetFilters);
             document.getElementById('copyAllBtn').addEventListener('click', downloadCSV);
             document.getElementById('copySelectedBtn').addEventListener('click', copySelectedToClipboard);
             const tableContainer = document.querySelector('.table-container');
@@ -92,7 +111,7 @@
             document.addEventListener('mouseup', handleMouseUp);
         }
 
-        // --- DATA FETCHING ---
+        // --- DATA FETCHING & PROCESSING ---
         async function fetchStaffData(idns) {
             try {
                 const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
@@ -104,7 +123,7 @@
                 document.getElementById('userInfo').textContent = `Nhân viên: ${staffMember.ho_va_ten}`;
                 await fetchOrderData(staffMember.ho_va_ten);
             } catch (error) {
-                showError('Lỗi khi tải dữ liệu nhân viên.');
+                showError('Lỗi khi tải dữ liệu nhân viên. Vui lòng kiểm tra lại đường truyền.');
             }
         }
         
@@ -117,26 +136,55 @@
                 const staffNameTrimmed = staffName.trim();
                 allOrders = data.filter(order => order.nvVanDon && order.nvVanDon.trim() === staffNameTrimmed);
                 displayOrders(allOrders);
+                if (allOrders.length > 0) {
+                    populateFilterDropdowns(allOrders);
+                }
             } catch (error) {
-                showError('Lỗi khi tải dữ liệu đơn hàng.');
+                console.error("Lỗi chi tiết:", error);
+                showError('Lỗi khi tải dữ liệu đơn hàng. Vui lòng kiểm tra F12 > Console để xem chi tiết.');
             }
         }
 
-        // --- GLOBAL SEARCH ---
-        function applyGlobalSearch() {
-            clearSelection();
-            const searchTerm = document.getElementById('globalSearchInput').value.toLowerCase().trim();
-            if (!searchTerm) {
-                displayOrders(allOrders);
-                return;
+        // --- FILTERING LOGIC ---
+        function populateFilterDropdowns(orders) {
+            const dropdownColumns = ['city', 'state', 'hinhThucThanhToan', 'trangThaiGiaoHangNB', 'donViVanChuyen', 'trangThaiThuTien'];
+            const uniqueValues = Object.fromEntries(dropdownColumns.map(col => [col, new Set()]));
+            for (const order of orders) {
+                for (const col of dropdownColumns) {
+                    const value = order[col];
+                    if (value !== null && value !== undefined && String(value).trim() !== '') {
+                        uniqueValues[col].add(String(value).trim());
+                    }
+                }
             }
-            const filteredData = allOrders.filter(order => {
-                // Search across all values of the order object
-                return Object.values(order).some(value => 
-                    value !== null && String(value).toLowerCase().includes(searchTerm)
-                );
-            });
+            for (const col of dropdownColumns) {
+                const selectEl = document.querySelector(`.filter-control[data-column="${col}"]`);
+                if (!selectEl) continue;
+                const sortedValues = Array.from(uniqueValues[col]).sort((a, b) => a.localeCompare(b, 'vi'));
+                selectEl.innerHTML = '<option value="">-- Tất cả --</option>';
+                for (const value of sortedValues) {
+                    selectEl.innerHTML += `<option value="${value}">${value}</option>`;
+                }
+            }
+        }
+
+        function applyFilters() {
+            clearSelection();
+            const filters = Array.from(document.querySelectorAll('.filter-control')).filter(c => c.value).map(c => ({ key: c.dataset.column, value: c.value.toLowerCase().trim(), isSelect: c.tagName === 'SELECT' }));
+            if (filters.length === 0) return displayOrders(allOrders);
+            const filteredData = allOrders.filter(order => filters.every(filter => {
+                const orderValue = order[filter.key];
+                if (orderValue === null || orderValue === undefined) return false;
+                let orderValueStr = String(orderValue).toLowerCase();
+                if (filter.key === 'ngayLenDon' && order.ngayLenDon) orderValueStr = new Date(order.ngayLenDon).toLocaleDateString('vi-VN');
+                return filter.isSelect ? orderValueStr === filter.value : orderValueStr.includes(filter.value);
+            }));
             displayOrders(filteredData);
+        }
+
+        function resetFilters() {
+            document.querySelectorAll('.filter-control').forEach(control => control.value = '');
+            applyFilters();
         }
 
         // --- UI & DISPLAY ---
@@ -145,16 +193,9 @@
             clearSelection();
             const tableBody = document.getElementById('orderTableBody');
             const rowCountEl = document.getElementById('rowCount');
-
             if (allOrders.length === 0) { showNoOrders(); return; }
-            
             rowCountEl.textContent = `Hiển thị ${orders.length} / ${allOrders.length} đơn hàng`;
-
-            if (orders.length === 0) {
-                 tableBody.innerHTML = `<tr><td colspan="15" class="no-results">Không có kết quả nào khớp với tìm kiếm.</td></tr>`;
-                 return;
-            }
-
+            if (orders.length === 0) { tableBody.innerHTML = `<tr><td colspan="15" class="no-results">Không có kết quả nào khớp với bộ lọc.</td></tr>`; return; }
             let tableHTML = '';
             for (const order of orders) {
                 const createBadge = (text) => {
@@ -179,7 +220,7 @@
             tableBody.innerHTML = tableHTML;
         }
         
-        // --- SELECTION & COPY/PASTE LOGIC (Unchanged) ---
+        // --- SELECTION & COPY/PASTE LOGIC ---
         function clearSelection() { selectedCells.forEach(cell => cell.classList.remove('cell-selected')); selectedCells.clear(); }
         function handleMouseDown(e) { const cell = e.target.closest('td'); if (!cell) return; isMouseDown = true; startCell = cell; if (e.shiftKey && lastClickedCell) { clearSelection(); selectCellsInRectangle(lastClickedCell, cell); } else if (e.ctrlKey) { toggleCellSelection(cell); } else { clearSelection(); selectCell(cell); } lastClickedCell = cell; e.preventDefault(); }
         function handleMouseMove(e) { if (!isMouseDown || !startCell) return; const endCell = e.target.closest('td'); if (endCell) { clearSelection(); selectCellsInRectangle(startCell, endCell); } }
