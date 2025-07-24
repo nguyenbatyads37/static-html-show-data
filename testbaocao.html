@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Báo Cáo MKT (v24.1 - Thêm/Sửa/Clone theo ID)</title>
+  <title>Báo Cáo MKT (v24.2 - Paste từ Clipboard)</title>
   <style>
     :root {
       --primary-color: #0056b3;
@@ -57,23 +57,24 @@
     .video-wrapper { position: relative; padding-bottom: 56.25%; height: 0; overflow: hidden; border-radius: var(--border-radius); }
     .video-wrapper iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
 
-    /* --- CSS MỚI ĐƯỢC THÊM --- */
     .page-cell-content { display: flex; align-items: center; gap: 8px; }
     .page-cell-content input { flex-grow: 1; }
     .clone-btn {
-        background-color: var(--success-color);
-        color: white;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        min-height: 32px;
-        padding: 0;
-        font-size: 1.5rem;
-        line-height: 1;
-        flex-shrink: 0;
-        font-weight: bold;
+        background-color: var(--success-color); color: white; border-radius: 50%;
+        width: 32px; height: 32px; min-height: 32px; padding: 0;
+        font-size: 1.5rem; line-height: 1; flex-shrink: 0; font-weight: bold;
     }
     .clone-btn:hover { opacity: 0.85; }
+
+    /* --- CSS MỚI CHO TÍNH NĂNG PASTE --- */
+    .paste-tip {
+        background-color: #e6f7ff;
+        border: 1px solid #91d5ff;
+        border-radius: var(--border-radius);
+        padding: 1rem;
+        margin-bottom: 1.5rem;
+        font-size: 1rem;
+    }
     /* --- KẾT THÚC CSS MỚI --- */
 
   </style>
@@ -82,6 +83,12 @@
   <div class="container">
     <h1>Báo Cáo MKT</h1>
     <div class="status" id="status">Đang khởi tạo...</div>
+    
+    <!-- HƯỚNG DẪN TÍNH NĂNG PASTE -->
+    <div class="paste-tip">
+        <b>💡 Mẹo:</b> Bạn có thể sao chép (Ctrl+C) nhiều ô từ Excel/Sheet và dán (Ctrl+V) trực tiếp vào một ô trong bảng để điền dữ liệu hàng loạt.
+    </div>
+
     <button id="addRowBtn" type="button" class="add-row-btn">➕ Thêm dòng trống</button>
 
     <datalist id="master-mkt-list"></datalist>
@@ -183,32 +190,23 @@
 
     function formatDateFromUrl(dateString) {
       if (!dateString || !/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateString)) return '';
-      const parts = dateString.split('/'); // MM/DD/YYYY
-      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`; // YYYY-MM-DD
+      const parts = dateString.split('/');
+      return `${parts[2]}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
     }
     
     const today = new Date().toISOString().split('T')[0];
 
-    // --- HÀM MỚI ---
     function cloneRow(buttonElement) {
         const sourceRow = buttonElement.closest('tr');
         const rowData = {};
-        
-        // Các trường cần sao chép
         const fieldsToClone = ['Tên MKT', 'Tên Page', 'Sản phẩm', 'Thị trường', 'Ngày', 'Ca', 'CPQC'];
-        
         fieldsToClone.forEach(fieldName => {
             const input = sourceRow.querySelector(`[name="${fieldName}"]`);
-            if (input) {
-                rowData[fieldName] = input.value;
-            }
+            if (input) rowData[fieldName] = input.value;
         });
-        
-        // Thêm dòng mới ngay bên dưới dòng hiện tại
         addNewRow(rowData, sourceRow);
     }
     
-    // --- HÀM addNewRow ĐƯỢC SỬA ĐỔI ---
     function addNewRow(data = {}, insertAfterElement = null) {
         const row = document.createElement('tr');
         const rowId = data['ID'] || `ID-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -217,7 +215,6 @@
         
         const cpqcValue = data['CPQC'] ? parseInt(String(data['CPQC']).replace(/[^0-9]/g, ''), 10).toLocaleString('vi-VN') : '';
 
-        // --- TEMPLATE HTML ĐƯỢC SỬA ĐỔI ---
         row.innerHTML = `
             <td style="text-align:center;">
                 <input type="hidden" name="ID" value="${rowId}">
@@ -237,19 +234,17 @@
                 <datalist id="${tkqcDatalistId}" class="tkqc-options-list"></datalist></td>
             <td><input name="Ngày" type="date" value="${data['Ngày'] || today}" autocomplete="off"></td>
             <td><select name="Ca"><option value="">-- Chọn ca --</option>${createOptions(shiftList, data['Ca'])}</select></td>
-            <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off" value="${data['CPQC'] || ''}"></td>
+            <td><input name="CPQC" type="text" placeholder="Nhập chi phí..." oninput="this.value = (parseInt(this.value.replace(/[^0-9]/g, ''), 10) || '').toLocaleString('vi-VN')" autocomplete="off" value="${cpqcValue}"></td>
             <td><input name="Via log" placeholder="Nhập via..." autocomplete="off" value="${data['Via log'] || ''}"></td>
             <td><input name="Số Mess+Cmt" type="number" placeholder="Nhập số..." autocomplete="off" value="${data['Số Mess+Cmt'] || ''}"></td>
         `;
         
-        // --- LOGIC CHÈN DÒNG ĐƯỢC SỬA ĐỔI ---
         if (insertAfterElement) {
             insertAfterElement.parentNode.insertBefore(row, insertAfterElement.nextSibling);
         } else {
             tableBody.appendChild(row);
         }
 
-        // Kích hoạt lại các hàm tự động điền cho dòng mới
         if (data['Tên MKT']) {
             const mktInput = row.querySelector('[name="Tên MKT"]');
             updatePageOptions(mktInput);
@@ -258,13 +253,76 @@
         if (data['Tên Page']) {
             const pageInput = row.querySelector('[name="Tên Page"]');
             fillRowData(pageInput);
-            // Ghi đè lại dữ liệu nếu nó được truyền vào từ hàm clone
             row.querySelector('[name="Sản phẩm"]').value = data['Sản phẩm'] || row.querySelector('[name="Sản phẩm"]').value;
             row.querySelector('[name="Thị trường"]').value = data['Thị trường'] || row.querySelector('[name="Thị trường"]').value;
             row.querySelector('[name="TKQC"]').value = data['TKQC'] || row.querySelector('[name="TKQC"]').value;
         }
+        return row; // Trả về element của dòng mới tạo
     }
     
+    // --- START: CODE MỚI CHO TÍNH NĂNG DÁN (PASTE) TỪ CLIPBOARD ---
+    
+    function handlePaste(e) {
+        // Chỉ xử lý khi dán vào một input hoặc select trong bảng
+        const targetElement = e.target;
+        if (!['INPUT', 'SELECT'].includes(targetElement.tagName) || !tableBody.contains(targetElement)) {
+            return;
+        }
+
+        e.preventDefault(); // Ngăn hành vi dán mặc định
+
+        const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+        if (!pastedText) return;
+
+        // Tách dữ liệu thành các hàng và các ô
+        const rowsOfData = pastedText.trim().split(/\r?\n/).map(row => row.split('\t'));
+
+        // Lấy vị trí bắt đầu
+        const startCell = targetElement.closest('td');
+        const startRow = targetElement.closest('tr');
+        const allTableRows = Array.from(tableBody.children);
+        const startRowIndex = allTableRows.indexOf(startRow);
+        const startCellIndex = Array.from(startRow.children).indexOf(startCell);
+
+        // Duyệt qua dữ liệu đã dán và điền vào bảng
+        rowsOfData.forEach((rowData, rowIndex) => {
+            let currentRowIndex = startRowIndex + rowIndex;
+            let targetRow = allTableRows[currentRowIndex];
+
+            // Nếu hàng không tồn tại, tạo hàng mới
+            if (!targetRow) {
+                targetRow = addNewRow();
+                // Cập nhật lại danh sách hàng trong bảng
+                allTableRows.push(targetRow);
+            }
+            
+            rowData.forEach((cellData, cellIndex) => {
+                let targetCellIndex = startCellIndex + cellIndex;
+                let targetCell = targetRow.cells[targetCellIndex];
+
+                if (!targetCell) return; // Bỏ qua nếu dán ra ngoài phạm vi bảng
+
+                const input = targetCell.querySelector('input, select');
+                if (input && !input.readOnly) {
+                    // Xử lý riêng cho các trường đặc biệt
+                    if (input.name === 'CPQC') {
+                         const numericValue = parseInt(String(cellData).replace(/[^0-9]/g, ''), 10);
+                         input.value = isNaN(numericValue) ? '' : numericValue.toLocaleString('vi-VN');
+                    } else {
+                        input.value = cellData.trim();
+                    }
+                    // Kích hoạt event để các logic khác (như updatePageOptions) chạy
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+        });
+    }
+
+    tableBody.addEventListener('paste', handlePaste);
+    
+    // --- END: CODE MỚI CHO TÍNH NĂNG DÁN (PASTE) TỪ CLIPBOARD ---
+
     function parseUrlData(dataString) {
       try {
         const result = [];
@@ -273,7 +331,6 @@
             'Sảnphẩm': 'Sản phẩm', 'Thịtrường': 'Thị trường', 'TKQC': 'TKQC',
             'CPQC': 'CPQC', 'Vialog': 'Via log', 'SốMessCmt': 'Số Mess+Cmt'
         };
-        
         const rows = dataString.split('_b_');
         rows.forEach((rowStr) => {
           if (!rowStr.trim()) return;
@@ -301,12 +358,10 @@
         const urlParams = new URLSearchParams(window.location.search);
         const dataString = urlParams.get('data');
         if (!dataString) return false;
-
         try {
             statusDiv.textContent = 'Đang đọc dữ liệu từ URL...';
             const data = parseUrlData(dataString);
             if (data.length === 0) throw new Error('Dữ liệu URL không hợp lệ.');
-            
             tableBody.innerHTML = '';
             data.forEach(rowData => addNewRow(rowData));
             statusDiv.textContent = `Đã tải thành công ${data.length} dòng từ URL. Dữ liệu sẵn sàng để chỉnh sửa.`;
@@ -319,23 +374,16 @@
     
     async function handleSubmit(e) {
         e.preventDefault();
-        
         let isValid = true;
         responseMessageDiv.textContent = '';
         responseMessageDiv.style.color = 'var(--danger-color)';
-        
-        document.querySelectorAll('#dataTable .error-cell').forEach(cell => {
-            cell.classList.remove('error-cell');
-        });
-
+        document.querySelectorAll('#dataTable .error-cell').forEach(cell => cell.classList.remove('error-cell'));
         const rowsToProcess = Array.from(tableBody.querySelectorAll('tr'));
         if (rowsToProcess.length === 0) {
             responseMessageDiv.textContent = 'Không có dữ liệu để gửi. Vui lòng thêm ít nhất một dòng.';
             return;
         }
-
         const requiredFields = ['Tên MKT', 'Tên Page', 'Ngày', 'Ca'];
-
         rowsToProcess.forEach((row, index) => {
             requiredFields.forEach(fieldName => {
                 const input = row.querySelector(`[name="${fieldName}"]`);
@@ -345,22 +393,18 @@
                 }
             });
         });
-
         if (!isValid) {
             responseMessageDiv.textContent = 'Lỗi: Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ.';
             return;
         }
-
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang gửi...';
-
         const keyMap = {
             "ID": "ID", "Tên MKT": "Tên", "Ngày": "Ngày", "Ca": "ca",
             "Sản phẩm": "Sản_phẩm", "Thị trường": "Thị_trường", "Tên Page": "page",
             "TKQC": "TKQC", "CPQC": "CPQC", "Via log": "Via_log",
             "Số Mess+Cmt": "Số_Mess_Cmt"
         };
-        
         const allRows = rowsToProcess.map(row => {
             const rowData = {};
             row.querySelectorAll('input, select').forEach(input => {
@@ -374,11 +418,9 @@
             });
             return rowData;
         });
-
         const formData = new FormData();
         formData.append('rows', JSON.stringify(allRows));
         const SCRIPT_URL_POST = 'https://script.google.com/macros/s/AKfycbyqS-QaklxjXadFcwPwXohn7-NlU_BzaBf_Rj1sHlC_ZHFwGog6qCjnlWmH2-7lRgJZWQ/exec';
-        
         try {
             const response = await fetch(SCRIPT_URL_POST, { method: 'POST', body: formData });
             const result = await response.json();
