@@ -15,10 +15,16 @@
 
     /* === CSS cho các tính năng chỉnh sửa === */
     .editable-cell { background-color: #e8f0fe; cursor: cell; }
-    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; white-space: normal; overflow: visible; z-index: 5; }
+    
+    /* Giữ nguyên giao diện khi sửa, không xuống dòng */
+    .editable-cell:focus { 
+      outline: 2px solid #4285f4; 
+      background-color: #fff; 
+      z-index: 5; 
+    }
     
     .editable-cell.modified {
-      background-color: #fffbe6; /* Màu vàng nhạt */
+      background-color: #fffbe6;
       font-weight: bold;
       color: #c95e00;
     }
@@ -38,22 +44,11 @@
 
     /* === CSS cho menu chuột phải (context menu) === */
     #context-menu {
-        display: none;
-        position: absolute;
-        z-index: 1000;
-        background-color: white;
-        border: 1px solid #ccc;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-        border-radius: 5px;
-        min-width: 150px;
+        display: none; position: absolute; z-index: 1000; background-color: white; border: 1px solid #ccc;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 5px; min-width: 150px;
     }
-    .context-menu-item {
-        padding: 8px 12px;
-        cursor: pointer;
-    }
-    .context-menu-item:hover {
-        background-color: #f0f0f0;
-    }
+    .context-menu-item { padding: 8px 12px; cursor: pointer; }
+    .context-menu-item:hover { background-color: #f0f0f0; }
   </style>
 </head>
 <body>
@@ -84,24 +79,44 @@
   // CẤU HÌNH TRUNG TÂM
   // ==========================================================
   
-  // *** ĐÃ THAY ĐỔI LINK API THEO YÊU CẦU ***
-  const API_URL = "https://script.google.com/macros/s/AKfycbxnXxzJ3IQZE2_QujfyenaMH1ZfGcJBayV6Gp7FMMu40aVOfDq7vlKYmtTaM-9QAm9P/exec";
+  // Link để LẤY dữ liệu đơn hàng
+  const DATA_SOURCE_URL = "https://script.google.com/macros/s/AKfycbwqkdJyB7KGfY7yOEWzNpouDxJAAotREMtNwtQTN1uZ_22eMthIOHjN4t_OknZdjloS/exec";
   
+  // THAY ĐỔI 1: Ánh xạ lại các biến cho đúng với dữ liệu JSON mới
   const COLUMN_MAPPING = {
-    maDonHang: 'Mã Đơn Hàng', ngayLenDon: 'Ngày Lên Đơn', tenKhachHang: 'Tên Khách Hàng', sdtKhach: 'SĐT Khách',
-    diaChiGiao: 'Địa Chỉ Giao', tenSanPham: 'Tên Sản Phẩm', maVanDon: 'Mã Vận Đơn', thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
-    ghiChuNB: 'Ghi Chú Nội Bộ', tenSale: 'Tên Sale', nvVanDon: 'NV Vận Đơn', ketQuaCheck: 'Kết Quả Check',
-    trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB', lyDo: 'Lý Do', donViVanChuyen: 'Đơn Vị Vận Chuyển', tenLenDon: 'Tên Lên Đơn'
+    maDonHang: 'Mã Đơn Hàng',
+    ngayLenDon: 'Ngày Lên Đơn',
+    name: 'Tên Khách Hàng',       // Key mới: name
+    phone: 'SĐT Khách',          // Key mới: phone
+    diaChiGiao: 'Địa Chỉ Giao',    // Giữ nguyên key này làm định danh, nhưng sẽ tạo giá trị ghép
+    matHang: 'Tên Sản Phẩm',       // Key mới: matHang
+    maTracking: 'Mã Vận Đơn',      // Key mới: maTracking
+    thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
+    trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB',
+    lyDo: 'Lý Do',
+    tenLenDon: 'Tên Lên Đơn',
+    // Các key sau dùng cho việc ẩn và lọc, không hiển thị
+    ghiChu: 'Ghi Chú Nội Bộ',     // Key mới: ghiChu
+    nhanVienSale: 'Tên Sale',   // Key mới: nhanVienSale
+    nvVanDon: 'NV Vận Đơn',
+    ketQuaCheck: 'Kết Quả Check',
+    donViVanChuyen: 'Đơn Vị Vận Chuyển'
   };
   
-  const HIDDEN_COLUMNS = ['ghiChuNB', 'tenSale', 'nvVanDon', 'ketQuaCheck', 'donViVanChuyen']; 
+  const HIDDEN_COLUMNS = ['ghiChu', 'nhanVienSale', 'nvVanDon', 'ketQuaCheck', 'donViVanChuyen']; 
   
-  const EDITABLE_COLUMNS = ['maVanDon'];
+  // Cho phép điền vào các cột được yêu cầu với KEY MỚI
+  const EDITABLE_COLUMNS = [
+    'maTracking', // Mã Vận Đơn
+    'name',       // Tên Khách Hàng
+    'phone',      // SĐT Khách
+    'matHang'     // Tên Sản Phẩm
+  ];
   
   const DATE_COLUMNS = ['ngayLenDon', 'thoiGianGiaoDuKien'];
 
   // ==========================================================
-  // LOGIC CHÍNH (Các hàm hiển thị giữ nguyên)
+  // LOGIC CHÍNH
   // ==========================================================
   
   function formatDateTime(isoString) {
@@ -111,13 +126,13 @@
   async function fetchDataAndBuildTable() {
     const loadingDiv = document.getElementById('loading-message'); const errorDiv = document.getElementById('error-message'); const table = document.getElementById('data-table'); const tableHead = table.querySelector('thead'); const tableBody = table.querySelector('tbody'); 
     try { 
-        const response = await fetch(API_URL); 
-        if (!response.ok) throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`); 
+        const response = await fetch(DATA_SOURCE_URL); 
+        if (!response.ok) throw new Error(`Lỗi HTTP khi lấy dữ liệu! Trạng thái: ${response.status}`); 
         const allData = await response.json(); 
         const filteredData = allData.filter(item => item.donViVanChuyen === "BEE");
         loadingDiv.style.display = 'none'; 
         if (filteredData.length === 0) { 
-            errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE".'; 
+            errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE" từ nguồn dữ liệu.'; 
             errorDiv.style.display = 'block'; return; 
         } 
         const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); 
@@ -131,10 +146,22 @@
             rowEl.dataset.maDonHang = rowData.maDonHang; 
             visibleColumns.forEach(key => {
                 const cellEl = document.createElement('td');
-                let cellValue = rowData[key] ?? '';
-                let displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue;
+                let displayValue = '';
+                
+                // THAY ĐỔI 2: Xử lý đặc biệt cho cột địa chỉ
+                if (key === 'diaChiGiao') {
+                    // Ghép các thành phần địa chỉ lại, bỏ qua các phần rỗng
+                    displayValue = [rowData.address, rowData.city, rowData.state, rowData.zipcode]
+                        .filter(Boolean) // Lọc ra các giá trị null, undefined, ""
+                        .join(', ');
+                } else {
+                    let cellValue = rowData[key] ?? '';
+                    displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue;
+                }
+                
                 cellEl.textContent = displayValue;
                 cellEl.dataset.columnKey = key;
+
                 if (EDITABLE_COLUMNS.includes(key)) {
                     cellEl.classList.add('editable-cell');
                     cellEl.setAttribute('contenteditable', 'true');
@@ -156,6 +183,7 @@
     }
   }
   
+  // Các hàm bên dưới không cần thay đổi
   function initializeInteractiveFeatures() {
     const tableBody = document.getElementById('data-table').querySelector('tbody');
     const sendButton = document.getElementById('send-button');
@@ -193,8 +221,7 @@
     let isDragging = false; let startCell = null; let fillValue = ''; 
     tableBody.addEventListener('mousedown', (e) => { 
         if (e.target.classList.contains('drag-handle')) { 
-            isDragging = true; 
-            startCell = e.target.parentElement; 
+            isDragging = true; startCell = e.target.parentElement; 
             fillValue = startCell.childNodes[0].nodeValue || ''; 
             e.preventDefault(); 
             document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); 
@@ -290,8 +317,7 @@
       }
       changesByRow[maDonHang][columnKey] = newValue;
     });
-    // google.script.run sẽ tự động trỏ đến script đã cung cấp trang HTML này.
-    // Vì vậy không cần thay đổi gì ở đây.
+    // Gửi dữ liệu về script đã host trang web này (...9QAm9P/exec)
     google.script.run
       .withSuccessHandler(response => {
         sendButton.disabled = false;
