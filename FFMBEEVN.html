@@ -2,7 +2,7 @@
 <html>
 <head>
   <base target="_top">
-  <title>Cập nhật Đơn hàng</title> <!-- Đã đổi tên tiêu đề -->
+  <title>Cập nhật Đơn hàng BEE</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; padding: 20px; font-size: 14px; }
     h1 { color: #333; }
@@ -15,7 +15,7 @@
 
     /* === CSS cho các tính năng chỉnh sửa === */
     .editable-cell { background-color: #e8f0fe; cursor: cell; }
-    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; white-space: normal; overflow: visible; z-index: 5; } /* Thêm z-index */
+    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; white-space: normal; overflow: visible; z-index: 5; }
     
     .editable-cell.modified {
       background-color: #fffbe6; /* Màu vàng nhạt */
@@ -57,7 +57,7 @@
   </style>
 </head>
 <body>
-  <h1>Danh sách toàn bộ đơn hàng</h1> <!-- Đã đổi tiêu đề H1 -->
+  <h1>Danh sách đơn hàng vận chuyển bởi "BEE"</h1>
 
   <div class="controls">
     <button id="send-button">Gửi Dữ Liệu</button>
@@ -85,7 +85,7 @@
   // ==========================================================
   const API_URL = "https://script.google.com/macros/s/AKfycbwqkdJyB7KGfY7yOEWzNpouDxJAAotREMtNwtQTN1uZ_22eMthIOHjN4t_OknZdjloS/exec";
   
-  // Vẫn giữ lại để biết thứ tự cột, nhưng không dùng để hiển thị tên nữa
+  // Ánh xạ tên trường dữ liệu sang tên Tiếng Việt để hiển thị
   const COLUMN_MAPPING = {
     maDonHang: 'Mã Đơn Hàng', ngayLenDon: 'Ngày Lên Đơn', tenKhachHang: 'Tên Khách Hàng', sdtKhach: 'SĐT Khách',
     diaChiGiao: 'Địa Chỉ Giao', tenSanPham: 'Tên Sản Phẩm', maVanDon: 'Mã Vận Đơn', thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
@@ -93,12 +93,13 @@
     trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB', lyDo: 'Lý Do', donViVanChuyen: 'Đơn Vị Vận Chuyển', tenLenDon: 'Tên Lên Đơn'
   };
   
-  // THAY ĐỔI 3: Để trống mảng này để không ẩn cột nào cả
-  const HIDDEN_COLUMNS = []; 
+  // THAY ĐỔI 2: Các cột cần ẩn đi
+  const HIDDEN_COLUMNS = ['ghiChuNB', 'tenSale', 'nvVanDon', 'ketQuaCheck', 'donViVanChuyen']; 
   
-  // THAY ĐỔI 3: Không cần mảng này nữa vì tất cả các cột đều có thể chỉnh sửa
-  // const EDITABLE_COLUMNS = ['maVanDon', 'ghiChuNB'];
+  // Các cột có thể chỉnh sửa được
+  const EDITABLE_COLUMNS = ['maVanDon'];
   
+  // Các cột có định dạng ngày tháng
   const DATE_COLUMNS = ['ngayLenDon', 'thoiGianGiaoDuKien'];
 
   // ==========================================================
@@ -115,28 +116,32 @@
         const response = await fetch(API_URL); 
         if (!response.ok) throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`); 
         
-        // THAY ĐỔI 2: Lấy toàn bộ dữ liệu, không lọc theo "BEE" nữa
         const allData = await response.json(); 
+
+        // THAY ĐỔI 1: Chỉ lấy các đơn hàng của "BEE"
+        const filteredData = allData.filter(item => item.donViVanChuyen === "BEE");
         
         loadingDiv.style.display = 'none'; 
-        if (allData.length === 0) { 
-            errorDiv.textContent = 'Không có dữ liệu nào được tìm thấy.'; 
-            errorDiv.style.display = 'block'; return; 
+        if (filteredData.length === 0) { 
+            errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE".'; 
+            errorDiv.style.display = 'block'; 
+            return; 
         } 
         
+        // Xác định các cột sẽ hiển thị dựa trên cấu hình HIDDEN_COLUMNS
         const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); 
+        
         let headerRow = '<tr>'; 
         visibleColumns.forEach(key => { 
-            // THAY ĐỔI 1: Hiển thị tên trường dữ liệu (key) thay vì tên tiếng Việt
-            headerRow += `<th>${key}</th>`; 
+            // Hiển thị tên Tiếng Việt từ COLUMN_MAPPING
+            headerRow += `<th>${COLUMN_MAPPING[key]}</th>`; 
         }); 
         headerRow += '</tr>'; 
         tableHead.innerHTML = headerRow; 
         tableBody.innerHTML = '';
     
-        allData.forEach(rowData => {
+        filteredData.forEach(rowData => {
             const rowEl = document.createElement('tr');
-            // QUAN TRỌNG: Lưu mã đơn hàng làm định danh cho hàng
             rowEl.dataset.maDonHang = rowData.maDonHang; 
             
             visibleColumns.forEach(key => {
@@ -147,20 +152,15 @@
                 cellEl.textContent = displayValue;
                 cellEl.dataset.columnKey = key;
                 
-                // THAY ĐỔI 3: Áp dụng tính năng chỉnh sửa cho TẤT CẢ các ô
-                // Không cần kiểm tra `if (EDITABLE_COLUMNS.includes(key))` nữa
-                cellEl.classList.add('editable-cell');
-                cellEl.setAttribute('contenteditable', 'true');
-                cellEl.dataset.originalValue = displayValue;
-                
-                const dragHandle = document.createElement('div');
-                dragHandle.className = 'drag-handle';
-                cellEl.appendChild(dragHandle);
-
-                // Cảnh báo: Không nên sửa cột khóa chính 'maDonHang'
-                if (key === 'maDonHang') {
-                    cellEl.style.backgroundColor = '#ffebee'; // Màu đỏ nhạt để cảnh báo
-                    cellEl.title = 'Cảnh báo: Không nên thay đổi giá trị ở cột này!';
+                // Chỉ cho phép chỉnh sửa các cột trong EDITABLE_COLUMNS
+                if (EDITABLE_COLUMNS.includes(key)) {
+                    cellEl.classList.add('editable-cell');
+                    cellEl.setAttribute('contenteditable', 'true');
+                    cellEl.dataset.originalValue = displayValue;
+                    
+                    const dragHandle = document.createElement('div');
+                    dragHandle.className = 'drag-handle';
+                    cellEl.appendChild(dragHandle);
                 }
 
                 rowEl.appendChild(cellEl);
@@ -177,7 +177,7 @@
     }
   }
   
-  // Các hàm bên dưới không cần thay đổi lớn, chỉ đảm bảo chúng hoạt động với logic mới
+  // Các hàm tương tác người dùng bên dưới không thay đổi
   // =================================================================================
   
   function initializeInteractiveFeatures() {
@@ -285,15 +285,10 @@
 
     if (currentValue !== originalValue) {
         cell.classList.add('modified');
-        // Không thêm tooltip cho cột maDonHang để giữ lại cảnh báo gốc
-        if (cell.dataset.columnKey !== 'maDonHang') {
-          cell.title = `Giá trị gốc: ${originalValue}`; 
-        }
+        cell.title = `Giá trị gốc: ${originalValue}`; 
     } else {
         cell.classList.remove('modified');
-        if (cell.dataset.columnKey !== 'maDonHang') {
-           cell.title = '';
-        }
+        cell.title = '';
     }
   }
 
@@ -319,20 +314,12 @@
       statusDiv.className = 'status-error';
       return;
     }
-    
-    // Kiểm tra xem maDonHang có bị sửa không
-    const isIdModified = Array.from(modifiedCells).some(cell => cell.dataset.columnKey === 'maDonHang');
-    if (isIdModified) {
-        if (!confirm('Cảnh báo: Bạn đang thay đổi "maDonHang". Việc này có thể làm sai lệch dữ liệu. Bạn có chắc chắn muốn tiếp tục?')) {
-            return; // Hủy nếu người dùng không đồng ý
-        }
-    }
 
     sendButton.disabled = true;
     statusDiv.textContent = `Đang gửi ${modifiedCells.length} thay đổi...`;
     statusDiv.className = '';
     const changes = Array.from(modifiedCells).map(cell => ({
-      maDonHang: cell.parentElement.dataset.maDonHang, // Dùng mã đơn hàng GỐC để tìm dòng
+      maDonHang: cell.parentElement.dataset.maDonHang,
       columnKey: cell.dataset.columnKey,
       newValue: cell.textContent
     }));
@@ -343,10 +330,11 @@
         statusDiv.textContent = response.message;
         if (response.success) {
           statusDiv.className = 'status-success';
-          // Nếu cập nhật thành công, tải lại toàn bộ bảng để đảm bảo tính nhất quán
-          // Đặc biệt quan trọng nếu maDonHang bị thay đổi
-          alert('Cập nhật thành công! Bảng sẽ được tải lại.');
-          fetchDataAndBuildTable();
+          modifiedCells.forEach(cell => {
+            cell.classList.remove('modified');
+            cell.title = '';
+            cell.dataset.originalValue = cell.textContent;
+          });
         } else {
           statusDiv.className = 'status-error';
         }
