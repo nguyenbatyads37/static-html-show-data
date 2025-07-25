@@ -12,27 +12,12 @@
     tr:nth-child(even) { background-color: #f9f9f9; }
     #loading-message, #error-message { font-size: 1.2em; color: #555; font-style: italic; margin-top: 20px; }
     #error-message { color: red; font-weight: bold; }
-
-    /* === CSS cho các tính năng chỉnh sửa === */
     .editable-cell { background-color: #e8f0fe; cursor: cell; }
-    
-    .editable-cell:focus { 
-      outline: 2px solid #4285f4; 
-      background-color: #fff; 
-      z-index: 5; 
-    }
-    
-    .editable-cell.modified {
-      background-color: #fffbe6;
-      font-weight: bold;
-      color: #c95e00;
-    }
-    
+    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; z-index: 5; }
+    .editable-cell.modified { background-color: #fffbe6; font-weight: bold; color: #c95e00; }
     .drag-handle { position: absolute; right: 0; bottom: 0; width: 8px; height: 8px; background-color: #4285f4; cursor: crosshair; display: none; z-index: 10; }
     .editable-cell:focus .drag-handle { display: block; }
     .drag-selection { border: 2px dotted #4285f4 !important; }
-
-    /* === CSS cho nút và thông báo === */
     .controls { margin-top: 20px; display: flex; align-items: center; gap: 20px; }
     #send-button { background-color: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
     #send-button:hover { background-color: #185abc; }
@@ -40,61 +25,56 @@
     #status-message { font-weight: bold; }
     .status-success { color: #1e8e3e; }
     .status-error { color: #d93025; }
-
-    /* === CSS cho menu chuột phải (context menu) === */
-    #context-menu {
-        display: none; position: absolute; z-index: 1000; background-color: white; border: 1px solid #ccc;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 5px; min-width: 150px;
-    }
+    #context-menu { display: none; position: absolute; z-index: 1000; background-color: white; border: 1px solid #ccc; box-shadow: 0 2px 10px rgba(0,0,0,0.2); border-radius: 5px; min-width: 150px; }
     .context-menu-item { padding: 8px 12px; cursor: pointer; }
     .context-menu-item:hover { background-color: #f0f0f0; }
   </style>
 </head>
 <body>
   <h1>Danh sách đơn hàng vận chuyển bởi "BEE"</h1>
-
   <div class="controls">
     <button id="send-button">Gửi Dữ Liệu</button>
     <div id="status-message"></div>
   </div>
-
   <div id="loading-message">Đang tải dữ liệu, vui lòng chờ...</div>
   <div id="error-message" style="display: none;"></div>
-
-  <div style="overflow-x: auto;">
-    <table id="data-table">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-
-  <div id="context-menu">
-      <div class="context-menu-item" id="revert-action">Hoàn tác thay đổi</div>
-  </div>
-
+  <div style="overflow-x: auto;"><table id="data-table"><thead></thead><tbody></tbody></table></div>
+  <div id="context-menu"><div class="context-menu-item" id="revert-action">Hoàn tác thay đổi</div></div>
 
 <script>
   // ==========================================================
   // CẤU HÌNH TRUNG TÂM
   // ==========================================================
   
-  // Link để LẤY dữ liệu đơn hàng
-  const DATA_SOURCE_URL = "https://script.google.com/macros/s/AKfycbwqkdJyB7KGfY7yOEWzNpouDxJAAotREMtNwtQTN1uZ_22eMthIOHjN4t_OknZdjloS/exec";
+  // *** ĐÃ THAY ĐỔI LINK API THEO YÊU CẦU ***
+  const API_URL = "https://script.google.com/macros/s/AKfycbz4fnojs4ONWZZe_XiaoG2DKmlf_zjoai8yD-8bbcCBd-v1YM3vuahumz_ZNhim4dro/exec";
   
-  // *** THAY ĐỔI QUAN TRỌNG: Link để GỬI dữ liệu về ***
-  const SUBMIT_DATA_URL = "https://script.google.com/macros/s/AKfycbz4fnojs4ONWZZe_XiaoG2DKmlf_zjoai8yD-8bbcCBd-v1YM3vuahumz_ZNhim4dro/exec";
-  
+  // Cấu hình các cột, giữ nguyên logic từ yêu cầu trước
   const COLUMN_MAPPING = {
-    maDonHang: 'Mã Đơn Hàng', ngayLenDon: 'Ngày Lên Đơn', name: 'Tên Khách Hàng', phone: 'SĐT Khách',
-    diaChiGiao: 'Địa Chỉ Giao', matHang: 'Tên Sản Phẩm', maTracking: 'Mã Vận Đơn', thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
-    trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB', lyDo: 'Lý Do', tenLenDon: 'Tên Lên Đơn',
-    ghiChu: 'Ghi Chú Nội Bộ', nhanVienSale: 'Tên Sale', nvVanDon: 'NV Vận Đơn', ketQuaCheck: 'Kết Quả Check',
+    maDonHang: 'Mã Đơn Hàng',
+    ngayLenDon: 'Ngày Lên Đơn',
+    tenLenDon: 'Tên Khách Hàng', 
+    phone: 'SĐT Khách',
+    diaChiGiao: 'Địa Chỉ Giao',
+    matHang: 'Tên Sản Phẩm',
+    maTracking: 'Mã Vận Đơn',
+    thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
+    name: 'Tên Khách Hàng Gốc',
+    trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB',
+    lyDo: 'Lý Do',
+    ghiChu: 'Ghi Chú Nội Bộ',
+    nhanVienSale: 'Tên Sale',
+    nvVanDon: 'NV Vận Đơn',
+    ketQuaCheck: 'Kết Quả Check',
     donViVanChuyen: 'Đơn Vị Vận Chuyển'
   };
   
-  const HIDDEN_COLUMNS = ['ghiChu', 'nhanVienSale', 'nvVanDon', 'ketQuaCheck', 'donViVanChuyen']; 
+  const HIDDEN_COLUMNS = [
+    'ghiChu', 'nhanVienSale', 'nvVanDon', 'ketQuaCheck', 'donViVanChuyen', 
+    'trangThaiGiaoHangNB', 'lyDo', 'name'
+  ]; 
   
-  const EDITABLE_COLUMNS = ['maTracking', 'name', 'phone', 'matHang'];
+  const EDITABLE_COLUMNS = ['maTracking', 'thoiGianGiaoDuKien'];
   
   const DATE_COLUMNS = ['ngayLenDon', 'thoiGianGiaoDuKien'];
 
@@ -102,197 +82,116 @@
   // LOGIC CHÍNH
   // ==========================================================
   
-  function formatDateTime(isoString) {
-    if (!isoString) return ''; try { const date = new Date(isoString); if (isNaN(date)) return isoString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); return `${day}/${month}/${year} ${hours}:${minutes}`; } catch (e) { return isoString; }
-  }
-
+  function formatDateTime(isoString) { if (!isoString) return ''; try { const date = new Date(isoString); if (isNaN(date)) return isoString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); return `${day}/${month}/${year} ${hours}:${minutes}`; } catch (e) { return isoString; } }
+  
   async function fetchDataAndBuildTable() {
-    const loadingDiv = document.getElementById('loading-message'); const errorDiv = document.getElementById('error-message'); const table = document.getElementById('data-table'); const tableHead = table.querySelector('thead'); const tableBody = table.querySelector('tbody'); 
-    try { 
-        const response = await fetch(DATA_SOURCE_URL); 
-        if (!response.ok) throw new Error(`Lỗi HTTP khi lấy dữ liệu! Trạng thái: ${response.status}`); 
-        const allData = await response.json(); 
-        const filteredData = allData.filter(item => item.donViVanChuyen === "BEE");
-        loadingDiv.style.display = 'none'; 
-        if (filteredData.length === 0) { 
-            errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE" từ nguồn dữ liệu.'; 
-            errorDiv.style.display = 'block'; return; 
-        } 
-        const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); 
-        let headerRow = '<tr>'; 
-        visibleColumns.forEach(key => { headerRow += `<th>${COLUMN_MAPPING[key]}</th>`; }); 
-        headerRow += '</tr>'; 
-        tableHead.innerHTML = headerRow; 
-        tableBody.innerHTML = '';
-        filteredData.forEach(rowData => {
-            const rowEl = document.createElement('tr');
-            rowEl.dataset.maDonHang = rowData.maDonHang; 
-            visibleColumns.forEach(key => {
-                const cellEl = document.createElement('td');
-                let displayValue = '';
-                if (key === 'diaChiGiao') {
-                    displayValue = [rowData.address, rowData.city, rowData.state, rowData.zipcode].filter(Boolean).join(', ');
-                } else {
-                    let cellValue = rowData[key] ?? '';
-                    displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue;
-                }
-                cellEl.textContent = displayValue;
-                cellEl.dataset.columnKey = key;
-                if (EDITABLE_COLUMNS.includes(key)) {
-                    cellEl.classList.add('editable-cell');
-                    cellEl.setAttribute('contenteditable', 'true');
-                    cellEl.dataset.originalValue = displayValue;
-                    const dragHandle = document.createElement('div');
-                    dragHandle.className = 'drag-handle';
-                    cellEl.appendChild(dragHandle);
-                }
-                rowEl.appendChild(cellEl);
-            });
-            tableBody.appendChild(rowEl);
-        });
-        initializeInteractiveFeatures();
-    } catch (error) { 
-        loadingDiv.style.display = 'none'; 
-        errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message; 
-        errorDiv.style.display = 'block'; 
-        console.error("Lỗi chi tiết:", error); 
-    }
-  }
-  
-  // Các hàm tương tác giữ nguyên
-  function initializeInteractiveFeatures() {
-    const tableBody = document.getElementById('data-table').querySelector('tbody');
-    const sendButton = document.getElementById('send-button');
-    const contextMenu = document.getElementById('context-menu');
-    const revertAction = document.getElementById('revert-action');
-    let cellToRevert = null;
-    tableBody.addEventListener('input', e => { if (e.target.isContentEditable) { updateCellModifiedState(e.target); } });
-    tableBody.addEventListener('contextmenu', e => {
-        const cell = e.target.closest('.editable-cell.modified');
-        if (cell) { e.preventDefault(); cellToRevert = cell; contextMenu.style.display = 'block'; contextMenu.style.left = `${e.pageX}px`; contextMenu.style.top = `${e.pageY}px`; }
-    });
-    document.addEventListener('click', () => { contextMenu.style.display = 'none'; cellToRevert = null; });
-    revertAction.addEventListener('click', () => {
-        if (cellToRevert) {
-            const originalValue = cellToRevert.dataset.originalValue;
-            const handle = cellToRevert.querySelector('.drag-handle');
-            cellToRevert.textContent = originalValue;
-            if (handle) cellToRevert.appendChild(handle);
-            updateCellModifiedState(cellToRevert);
-        }
-    });
-    sendButton.addEventListener('click', submitChanges);
-    let isDragging = false; let startCell = null; let fillValue = ''; 
-    tableBody.addEventListener('mousedown', (e) => { 
-        if (e.target.classList.contains('drag-handle')) { 
-            isDragging = true; startCell = e.target.parentElement; fillValue = startCell.childNodes[0].nodeValue || ''; e.preventDefault(); 
-            document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); startCell.classList.add('drag-selection'); 
-        } 
-    }); 
-    tableBody.addEventListener('mouseover', (e) => { if (isDragging && e.target.tagName === 'TD') { const endCell = e.target; if (startCell.cellIndex === endCell.cellIndex) { updateDragSelection(startCell, endCell); } } }); 
-    document.addEventListener('mouseup', () => {
-      if (isDragging) {
-        isDragging = false;
-        document.querySelectorAll('.drag-selection').forEach(cell => {
-          if (cell.classList.contains('editable-cell')) {
-            const handle = cell.querySelector('.drag-handle'); cell.textContent = fillValue;
-            if(handle) cell.appendChild(handle); updateCellModifiedState(cell); 
-          }
-        });
-        startCell = null;
-      }
-    });
-    tableBody.addEventListener('paste', e => {
-      const targetCell = e.target; if (!targetCell.classList.contains('editable-cell')) return; e.preventDefault(); 
-      const pasteData = (e.clipboardData || window.clipboardData).getData('text'); const lines = pasteData.trim().split(/\r\n|\n|\r/); 
-      let currentRow = targetCell.parentElement; const cellIndex = targetCell.cellIndex; 
-      lines.forEach((line) => { 
-        if (!currentRow) return; const cellToUpdate = currentRow.cells[cellIndex]; 
-        if (cellToUpdate && cellToUpdate.classList.contains('editable-cell')) { 
-            const handle = cellToUpdate.querySelector('.drag-handle'); cellToUpdate.textContent = line; 
-            if(handle) cellToUpdate.appendChild(handle); updateCellModifiedState(cellToUpdate); 
-        } 
-        currentRow = currentRow.nextElementSibling; 
-      });
-    });
-  }
-  function updateCellModifiedState(cell) {
-    const originalValue = cell.dataset.originalValue;
-    const currentValue = cell.textContent;
-    if (currentValue !== originalValue) { cell.classList.add('modified'); cell.title = `Giá trị gốc: ${originalValue}`; } 
-    else { cell.classList.remove('modified'); cell.title = ''; }
-  }
-  function updateDragSelection(start, end) {
-    document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); 
-    const tableRows = Array.from(document.getElementById('data-table').rows); 
-    const startRowIndex = start.parentElement.rowIndex; const endRowIndex = end.parentElement.rowIndex; const colIndex = start.cellIndex; 
-    const minRow = Math.min(startRowIndex, endRowIndex); const maxRow = Math.max(startRowIndex, endRowIndex); 
-    for(let i = minRow; i <= maxRow; i++) { tableRows[i].cells[colIndex]?.classList.add('drag-selection'); }
-  }
-  
-  // *** HÀM GỬI DỮ LIỆU ĐƯỢC VIẾT LẠI HOÀN TOÀN ***
-  function submitChanges() {
-    const sendButton = document.getElementById('send-button');
-    const statusDiv = document.getElementById('status-message');
-    const modifiedCells = document.querySelectorAll('.editable-cell.modified');
-    if (modifiedCells.length === 0) {
-      statusDiv.textContent = 'Không có thay đổi nào để gửi.';
-      statusDiv.className = 'status-error';
-      return;
-    }
-    sendButton.disabled = true;
-    statusDiv.textContent = `Đang gộp và gửi ${modifiedCells.length} thay đổi...`;
-    statusDiv.className = '';
-    const changesByRow = {};
-    modifiedCells.forEach(cell => {
-      const maDonHang = cell.parentElement.dataset.maDonHang;
-      const columnKey = cell.dataset.columnKey;
-      const newValue = cell.textContent;
-      if (!changesByRow[maDonHang]) {
-        changesByRow[maDonHang] = {};
-      }
-      changesByRow[maDonHang][columnKey] = newValue;
-    });
-
-    // Sử dụng fetch() để gửi POST request đến link đích mới
-    fetch(SUBMIT_DATA_URL, {
-      method: 'POST',
-      mode: 'cors', // Hoặc 'no-cors' nếu cần, nhưng 'cors' là tốt nhất
-      headers: {
-        'Content-Type': 'text/plain', // Gửi dưới dạng text để doPost của Apps Script dễ đọc
-      },
-      body: JSON.stringify({ action: 'updateData', payload: changesByRow }), // Gói dữ liệu lại
-      redirect: 'follow'
-    })
-    .then(response => {
-        if (!response.ok) {
-            // Nếu server trả về lỗi (ví dụ 404, 500), ném ra lỗi để catch xử lý
-            throw new Error(`Lỗi mạng: ${response.statusText}`);
-        }
-        return response.json(); // Phân tích JSON từ phản hồi
-    })
-    .then(data => {
-        // Xử lý dữ liệu trả về từ server
-        sendButton.disabled = false;
-        statusDiv.textContent = data.message;
-        if (data.success) {
-          statusDiv.className = 'status-success';
-          modifiedCells.forEach(cell => {
-            cell.classList.remove('modified');
-            cell.title = '';
-            cell.dataset.originalValue = cell.textContent;
+      const loadingDiv = document.getElementById('loading-message'); const errorDiv = document.getElementById('error-message'); const table = document.getElementById('data-table'); const tableHead = table.querySelector('thead'); const tableBody = table.querySelector('tbody'); 
+      try { 
+          const response = await fetch(API_URL); 
+          if (!response.ok) throw new Error(`Lỗi HTTP khi lấy dữ liệu! Trạng thái: ${response.status}`); 
+          const allData = await response.json(); 
+          const filteredData = allData.filter(item => item.donViVanChuyen === "BEE");
+          loadingDiv.style.display = 'none'; 
+          if (filteredData.length === 0) { errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE" từ nguồn dữ liệu.'; errorDiv.style.display = 'block'; return; } 
+          const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); 
+          let headerRow = '<tr>'; 
+          visibleColumns.forEach(key => { headerRow += `<th>${COLUMN_MAPPING[key]}</th>`; }); 
+          headerRow += '</tr>'; 
+          tableHead.innerHTML = headerRow; 
+          tableBody.innerHTML = '';
+          filteredData.forEach(rowData => {
+              const rowEl = document.createElement('tr');
+              rowEl.dataset.maDonHang = rowData.maDonHang; 
+              visibleColumns.forEach(key => {
+                  const cellEl = document.createElement('td');
+                  let displayValue = '';
+                  if (key === 'diaChiGiao') { displayValue = [rowData.address, rowData.city, rowData.state, rowData.zipcode].filter(Boolean).join(', '); } 
+                  else { let cellValue = rowData[key] ?? ''; displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue; }
+                  cellEl.textContent = displayValue;
+                  cellEl.dataset.columnKey = key;
+                  if (EDITABLE_COLUMNS.includes(key)) {
+                      cellEl.classList.add('editable-cell');
+                      cellEl.setAttribute('contenteditable', 'true');
+                      cellEl.dataset.originalValue = displayValue;
+                      const dragHandle = document.createElement('div');
+                      dragHandle.className = 'drag-handle';
+                      cellEl.appendChild(dragHandle);
+                  }
+                  rowEl.appendChild(cellEl);
+              });
+              tableBody.appendChild(rowEl);
           });
-        } else {
+          initializeInteractiveFeatures();
+      } catch (error) { 
+          loadingDiv.style.display = 'none'; 
+          errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message; 
+          errorDiv.style.display = 'block'; 
+          console.error("Lỗi chi tiết:", error); 
+      }
+  }
+
+  function initializeInteractiveFeatures() { const tableBody = document.getElementById('data-table').querySelector('tbody'); const sendButton = document.getElementById('send-button'); const contextMenu = document.getElementById('context-menu'); const revertAction = document.getElementById('revert-action'); let cellToRevert = null; tableBody.addEventListener('input', e => { if (e.target.isContentEditable) { updateCellModifiedState(e.target); } }); tableBody.addEventListener('contextmenu', e => { const cell = e.target.closest('.editable-cell.modified'); if (cell) { e.preventDefault(); cellToRevert = cell; contextMenu.style.display = 'block'; contextMenu.style.left = `${e.pageX}px`; contextMenu.style.top = `${e.pageY}px`; } }); document.addEventListener('click', () => { contextMenu.style.display = 'none'; cellToRevert = null; }); revertAction.addEventListener('click', () => { if (cellToRevert) { const originalValue = cellToRevert.dataset.originalValue; const handle = cellToRevert.querySelector('.drag-handle'); cellToRevert.textContent = originalValue; if (handle) cellToRevert.appendChild(handle); updateCellModifiedState(cellToRevert); } }); sendButton.addEventListener('click', submitChanges); let isDragging = false; let startCell = null; let fillValue = ''; tableBody.addEventListener('mousedown', (e) => { if (e.target.classList.contains('drag-handle')) { isDragging = true; startCell = e.target.parentElement; fillValue = startCell.childNodes[0].nodeValue || ''; e.preventDefault(); document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); startCell.classList.add('drag-selection'); } }); tableBody.addEventListener('mouseover', (e) => { if (isDragging && e.target.tagName === 'TD') { const endCell = e.target; if (startCell.cellIndex === endCell.cellIndex) { updateDragSelection(startCell, endCell); } } }); document.addEventListener('mouseup', () => { if (isDragging) { isDragging = false; document.querySelectorAll('.drag-selection').forEach(cell => { if (cell.classList.contains('editable-cell')) { const handle = cell.querySelector('.drag-handle'); cell.textContent = fillValue; if(handle) cell.appendChild(handle); updateCellModifiedState(cell); } }); startCell = null; } }); tableBody.addEventListener('paste', e => { const targetCell = e.target; if (!targetCell.classList.contains('editable-cell')) return; e.preventDefault(); const pasteData = (e.clipboardData || window.clipboardData).getData('text'); const lines = pasteData.trim().split(/\r\n|\n|\r/); let currentRow = targetCell.parentElement; const cellIndex = targetCell.cellIndex; lines.forEach((line) => { if (!currentRow) return; const cellToUpdate = currentRow.cells[cellIndex]; if (cellToUpdate && cellToUpdate.classList.contains('editable-cell')) { const handle = cellToUpdate.querySelector('.drag-handle'); cellToUpdate.textContent = line; if(handle) cellToUpdate.appendChild(handle); updateCellModifiedState(cellToUpdate); } currentRow = currentRow.nextElementSibling; }); }); }
+  function updateCellModifiedState(cell) { const originalValue = cell.dataset.originalValue; const currentValue = cell.textContent; if (currentValue !== originalValue) { cell.classList.add('modified'); cell.title = `Giá trị gốc: ${originalValue}`; } else { cell.classList.remove('modified'); cell.title = ''; } }
+  function updateDragSelection(start, end) { document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); const tableRows = Array.from(document.getElementById('data-table').rows); const startRowIndex = start.parentElement.rowIndex; const endRowIndex = end.parentElement.rowIndex; const colIndex = start.cellIndex; const minRow = Math.min(startRowIndex, endRowIndex); const maxRow = Math.max(startRowIndex, endRowIndex); for(let i = minRow; i <= maxRow; i++) { tableRows[i].cells[colIndex]?.classList.add('drag-selection'); } }
+  
+  function submitChanges() {
+      const sendButton = document.getElementById('send-button');
+      const statusDiv = document.getElementById('status-message');
+      const modifiedCells = document.querySelectorAll('.editable-cell.modified');
+      if (modifiedCells.length === 0) {
+          statusDiv.textContent = 'Không có thay đổi nào để gửi.';
           statusDiv.className = 'status-error';
-        }
-    })
-    .catch(error => {
-        // Bắt lỗi mạng hoặc lỗi trong quá trình xử lý
-        sendButton.disabled = false;
-        statusDiv.textContent = 'Lỗi khi gửi dữ liệu: ' + error.message;
-        statusDiv.className = 'status-error';
-        console.error('Fetch Error:', error);
-    });
+          return;
+      }
+      sendButton.disabled = true;
+      statusDiv.textContent = `Đang gộp và gửi ${modifiedCells.length} thay đổi...`;
+      statusDiv.className = '';
+      const changesByRow = {};
+      modifiedCells.forEach(cell => {
+          const maDonHang = cell.parentElement.dataset.maDonHang;
+          const columnKey = cell.dataset.columnKey;
+          const newValue = cell.textContent;
+          if (!changesByRow[maDonHang]) {
+              changesByRow[maDonHang] = {};
+          }
+          changesByRow[maDonHang][columnKey] = newValue;
+      });
+
+      fetch(API_URL, { // Gửi về chính link API đã lấy dữ liệu
+          method: 'POST',
+          mode: 'cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify({ action: 'updateData', payload: changesByRow }),
+          redirect: 'follow'
+      })
+      .then(response => {
+          if (!response.ok) { throw new Error(`Lỗi từ Server! Status: ${response.status} ${response.statusText}`); }
+          const contentType = response.headers.get("content-type");
+          if (!contentType || !contentType.includes("application/json")) { throw new TypeError("Lỗi: Server không trả về dữ liệu JSON. Có thể script đích bị lỗi hoặc chưa được cấu hình đúng."); }
+          return response.json(); 
+      })
+      .then(data => {
+          sendButton.disabled = false;
+          statusDiv.textContent = data.message;
+          if (data.success) {
+              statusDiv.className = 'status-success';
+              modifiedCells.forEach(cell => {
+                  cell.classList.remove('modified');
+                  cell.title = '';
+                  cell.dataset.originalValue = cell.textContent;
+              });
+          } else {
+              statusDiv.className = 'status-error';
+              alert(`Xảy ra lỗi khi cập nhật dữ liệu:\n\n${data.message}`);
+          }
+      })
+      .catch(error => {
+          sendButton.disabled = false;
+          statusDiv.textContent = 'Lỗi nghiêm trọng: ' + error.message;
+          statusDiv.className = 'status-error';
+          alert(`Không thể gửi dữ liệu!\n\nLỗi: ${error.message}\n\nVui lòng kiểm tra lại kết nối mạng hoặc liên hệ quản trị viên. Mở Console (F12) để xem chi tiết kỹ thuật.`);
+          console.error('Fetch Error Details:', error);
+      });
   }
 
   window.addEventListener('load', fetchDataAndBuildTable);
