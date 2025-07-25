@@ -252,7 +252,6 @@
         return row;
     }
     
-    // --- HÀM handlePaste ĐÃ ĐƯỢC CẬP NHẬT ---
     function handlePaste(e) {
         const targetElement = e.target;
         if (!['INPUT', 'SELECT'].includes(targetElement.tagName) || !tableBody.contains(targetElement)) return;
@@ -279,20 +278,14 @@
                 if (!targetCell) return;
                 const input = targetCell.querySelector('input, select');
                 if (input && !input.readOnly) {
-                    // --- ĐOẠN CODE ĐƯỢC SỬA ĐỔI ---
                     let processedValue = cellData.trim();
-                    // Nếu giá trị bắt đầu và kết thúc bằng dấu ngoặc kép, hãy loại bỏ chúng.
                     if (processedValue.startsWith('"') && processedValue.endsWith('"')) {
                         processedValue = processedValue.substring(1, processedValue.length - 1);
                     }
-                    // --- KẾT THÚC SỬA ĐỔI ---
-
                     if (input.name === 'CPQC') {
-                         // Sử dụng processedValue đã được xử lý
                          const numericValue = parseInt(String(processedValue).replace(/[^0-9]/g, ''), 10);
                          input.value = isNaN(numericValue) ? '' : numericValue.toLocaleString('vi-VN');
                     } else {
-                        // Sử dụng processedValue đã được xử lý
                         input.value = processedValue;
                     }
                     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -376,15 +369,71 @@
         }
     });
 
+    // <!-- KHÔI PHỤC -->: Bắt đầu phần khôi phục tính năng đọc dữ liệu từ URL
     function parseUrlData(dataString) {
-        // ... (hàm này không thay đổi)
-        return [];
+        // Ánh xạ các key từ URL sang name của các trường trong form
+        const urlKeyMap = {
+            'Tên': 'Tên MKT',
+            'Page': 'Tên Page',
+            'Sảnphẩm': 'Sản phẩm',
+            'Thịtrường': 'Thị trường',
+            'Vialog': 'Via log',
+            'SốMessCmt': 'Số Mess+Cmt',
+            'ID': 'ID',
+            'TKQC': 'TKQC',
+            'Ngày': 'Ngày',
+            'Ca': 'Ca',
+            'CPQC': 'CPQC'
+        };
+
+        try {
+            const decodedString = decodeURIComponent(dataString);
+            const rowStrings = decodedString.split('_b_').filter(s => s.length > 0);
+            if (rowStrings.length === 0) return [];
+            
+            const allData = rowStrings.map(rowStr => {
+                const parts = rowStr.split('_a_');
+                const rowObject = {};
+                for (let i = 0; i < parts.length; i += 2) {
+                    const urlKey = parts[i];
+                    let value = (parts[i + 1] || '').trim();
+                    // URL generator dùng '__' cho các trường rỗng, cần chuyển thành chuỗi rỗng
+                    if (value === '__') {
+                        value = '';
+                    }
+                    const formKey = urlKeyMap[urlKey] || urlKey;
+                    rowObject[formKey] = value;
+                }
+                return rowObject;
+            });
+            return allData;
+        } catch (e) {
+            console.error("Lỗi khi phân tích dữ liệu URL:", e);
+            statusDiv.textContent = 'Lỗi: Dữ liệu truyền qua URL không hợp lệ.';
+            return [];
+        }
     }
     
     function loadDataFromUrl() {
-        // ... (hàm này không thay đổi)
-        return false;
+        const urlParams = new URLSearchParams(window.location.search);
+        const dataParam = urlParams.get('data');
+
+        if (dataParam) {
+            statusDiv.textContent = 'Đang phân tích dữ liệu từ URL...';
+            const parsedData = parseUrlData(dataParam);
+
+            if (parsedData && parsedData.length > 0) {
+                tableBody.innerHTML = ''; // Xóa dòng trống mặc định
+                parsedData.forEach(rowData => {
+                    addNewRow(rowData);
+                });
+                statusDiv.textContent = `Đã tải thành công ${parsedData.length} dòng từ URL. Hệ thống đã sẵn sàng.`;
+                return true; // Báo hiệu đã tải dữ liệu thành công
+            }
+        }
+        return false; // Không có dữ liệu từ URL hoặc dữ liệu không hợp lệ
     }
+    // <!-- KHÔI PHỤC -->: Kết thúc phần khôi phục
     
     async function handleSubmit(e) {
         e.preventDefault();
@@ -469,12 +518,16 @@
             const masterMktDatalist = document.getElementById('master-mkt-list');
             const mktNames = [...new Set(allPagesData.map(item => item.mkt).filter(Boolean))];
             masterMktDatalist.innerHTML = mktNames.map(name => `<option value="${name}"></option>`).join('');
+            
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
+
+            // <!-- KHÔI PHỤC -->: Gọi hàm loadDataFromUrl. Nếu nó không tải dữ liệu, thì mới thêm dòng mới.
             if (!loadDataFromUrl()) {
                 addNewRow();
                 statusDiv.textContent = `Tải thành công dữ liệu. Hệ thống đã sẵn sàng.`;
             }
+
         } catch (error) {
             console.error('Lỗi nghiêm trọng khi tải dữ liệu:', error);
             statusDiv.textContent = `Lỗi: ${error.message}. Vui lòng kiểm tra lại link Google Script và kết nối mạng.`;
