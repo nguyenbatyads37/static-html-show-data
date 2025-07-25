@@ -2,32 +2,51 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Quản Lý Đơn Hàng BEE</title>
+    <title>Quản Lý Đơn Hàng BEE (v3.0 - Đồng bộ hóa)</title>
     <style>
+        :root {
+            --primary-color: #3498db;
+            --secondary-color: #2c3e50;
+            --success-color: #2ecc71;
+            --warning-color: #f1c40f;
+            --light-gray: #f8f9fa;
+            --medium-gray: #ddd;
+            --selection-bg-color: #a9d7f9;
+            --changed-bg-color: #fff9c4; /* Màu cho ô đã thay đổi */
+        }
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             margin: 20px;
+            background-color: var(--light-gray);
         }
         h1 {
-            color: #2c3e50;
+            color: var(--secondary-color);
         }
         .controls {
-            background-color: #f8f9fa;
+            background-color: white;
             padding: 15px;
-            border-radius: 5px;
+            border-radius: 8px;
             margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+            display: flex;
+            align-items: center;
         }
         button {
-            background-color: #3498db;
+            background-color: var(--primary-color);
             color: white;
             border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
+            padding: 10px 18px;
+            border-radius: 5px;
             cursor: pointer;
             margin-right: 10px;
+            font-size: 1rem;
+            transition: background-color 0.2s ease;
+        }
+        #syncDataBtn {
+            background-color: var(--success-color);
         }
         button:hover {
-            background-color: #2980b9;
+            opacity: 0.85;
         }
         button:disabled {
             background-color: #95a5a6;
@@ -37,40 +56,53 @@
             width: 100%;
             border-collapse: collapse;
             margin-top: 20px;
+            user-select: none;
         }
         th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
+            border: 1px solid var(--medium-gray);
+            padding: 0;
             text-align: left;
+            white-space: nowrap;
         }
         th {
-            background-color: #3498db;
+            background-color: var(--primary-color);
             color: white;
             position: sticky;
             top: 0;
+            padding: 10px 8px;
         }
-        tr:nth-child(even) {
-            background-color: #f2f2f2;
+        tr:nth-child(even) { background-color: #f2f2f2; }
+        tr:nth-child(odd) { background-color: #ffffff; }
+
+        td input {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background-color: transparent;
+            padding: 10px 8px;
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        td input:focus {
+            outline: 2px solid var(--primary-color);
+            position: relative;
+            z-index: 1;
         }
         .status {
-            padding: 10px;
+            padding: 12px;
             margin: 10px 0;
-            border-radius: 4px;
+            border-radius: 5px;
+            font-size: 1rem;
         }
-        .success {
-            background-color: #d4edda;
-            color: #155724;
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .loading { background-color: #fff3cd; color: #856404; }
+        .filter-option { margin-left: 20px; }
+        td.cell-selected, td.cell-selected input {
+            background-color: var(--selection-bg-color) !important;
         }
-        .error {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        .loading {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        .filter-option {
-            margin-top: 10px;
+        td.cell-changed, td.cell-changed input {
+            background-color: var(--changed-bg-color) !important;
         }
     </style>
 </head>
@@ -79,7 +111,7 @@
     
     <div class="controls">
         <button id="fetchData">Lấy Dữ Liệu Từ Nguồn</button>
-        <button id="transferData" disabled>Chuyển Dữ Liệu Đích</button>
+        <button id="syncDataBtn" disabled>Đồng bộ Dữ liệu</button>
         
         <div class="filter-option">
             <label>
@@ -93,257 +125,307 @@
     
     <div style="overflow-x: auto;">
         <table id="dataTable">
-            <thead>
-                <tr>
-                    <th>Mã đơn hàng</th>
-                    <th>Ngày lên đơn</th>
-                    <th>Tên KH</th>
-                    <th>SĐT</th>
-                    <th>Địa chỉ</th>
-                    <th>Thành phố</th>
-                    <th>State</th>
-                    <th>Zipcode</th>
-                    <th>Mặt hàng</th>
-                    <th>Tên mặt hàng 1</th>
-                    <th>SL mặt hàng 1</th>
-                    <th>Giá bán</th>
-                    <th>Loại tiền</th>
-                    <th>Tổng tiền (VNĐ)</th>
-                    <th>Hình thức TT</th>
-                    <th>Đơn vị VC</th>
-                    <th>Mã Tracking</th>
-                    <th>Trạng thái</th>
-                    <th>TG dự kiến</th>
-                    <th>Ngày đối soát</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <!-- Dữ liệu sẽ được thêm vào đây -->
-            </tbody>
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
         </table>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const fetchBtn = document.getElementById('fetchData');
-            const transferBtn = document.getElementById('transferData');
-            const showOnlyBeeCheckbox = document.getElementById('showOnlyBee');
-            const tableBody = document.getElementById('tableBody');
-            const statusDiv = document.getElementById('status');
-            
-            // Link nguồn dữ liệu
-            const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
-            const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbzo3JdiCq7q62z4YV-KfStgt494Rl4BBVKNSRBCutSLKJfRt-92kU2vcEvKjH3wB7DM/exec';
-            
-            let allData = [];
-            let displayedData = [];
-            
-            // Lấy dữ liệu từ nguồn
-            fetchBtn.addEventListener('click', fetchDataFromSource);
-            
-            // Tự động lấy dữ liệu khi trang load
+    document.addEventListener('DOMContentLoaded', function() {
+        const fetchBtn = document.getElementById('fetchData');
+        const syncBtn = document.getElementById('syncDataBtn');
+        const showOnlyBeeCheckbox = document.getElementById('showOnlyBee');
+        const tableHead = document.getElementById('tableHead');
+        const tableBody = document.getElementById('tableBody');
+        const statusDiv = document.getElementById('status');
+        
+        // URL đích (nơi nhận dữ liệu để cập nhật)
+        const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbw5kYjERTg-oqAPSK-aGtkQ2ru7wfYUm_EMTfvfF80KvB9vuq8_4JblRFTkoYKLsA/exec';
+        // URL nguồn (nơi lấy dữ liệu ban đầu)
+        const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
+        
+        let allData = [];
+        let displayedData = [];
+        let changedRows = new Set(); // Dùng Set để lưu trữ `maDonHang` của các hàng đã thay đổi
+
+        // Cấu trúc dữ liệu, đảm bảo `key` khớp với tên thuộc tính trong Apps Script
+        const headers = [
+            { key: 'maDonHang', name: 'Mã đơn hàng' }, { key: 'ngayLenDon', name: 'Ngày lên đơn' },
+            { key: 'name', name: 'Tên KH' }, { key: 'phone', name: 'SĐT' },
+            { key: 'address', name: 'Địa chỉ' }, { key: 'city', name: 'Thành phố' },
+            { key: 'state', name: 'State' }, { key: 'zipcode', name: 'Zipcode' },
+            { key: 'matHang', name: 'Mặt hàng' }, { key: 'tenMatHang1', name: 'Tên mặt hàng 1' },
+            { key: 'soLuongMatHang1', name: 'SL mặt hàng 1' }, { key: 'giaBan', name: 'Giá bán' },
+            { key: 'loaiTienThanhToan', name: 'Loại tiền' }, { key: 'tongTienVND', name: 'Tổng tiền (VNĐ)' },
+            { key: 'hinhThucThanhToan', name: 'Hình thức TT' }, { key: 'donViVanChuyen', name: 'Đơn vị VC' },
+            { key: 'maTracking', name: 'Mã Tracking' }, { key: 'trangThaiGiaoHang', name: 'Trạng thái' },
+            { key: 'thoiGianGiaoDuKien', name: 'TG dự kiến' }, { key: 'ngayDoiSoat', name: 'Ngày đối soát' }
+        ];
+
+        function initializeApp() {
+            renderHeader();
             fetchDataFromSource();
+            setupEventListeners();
+        }
+
+        function setupEventListeners() {
+            fetchBtn.addEventListener('click', fetchDataFromSource);
+            syncBtn.addEventListener('click', syncDataToDestination);
+            showOnlyBeeCheckbox.addEventListener('change', filterData);
             
-            function fetchDataFromSource() {
-                statusDiv.textContent = 'Đang tải dữ liệu từ nguồn...';
-                statusDiv.className = 'status loading';
-                fetchBtn.disabled = true;
-                
-                fetch(SOURCE_URL)
-                    .then(response => {
-                        if (!response.ok) {
-                            throw new Error('Không thể kết nối đến nguồn dữ liệu');
-                        }
-                        return response.json();
-                    })
-                    .then(data => {
-                        allData = data;
-                        filterData();
-                        transferBtn.disabled = false;
-                        fetchBtn.disabled = false;
-                        
-                        const beeCount = allData.filter(row => 
-                            row.donViVanChuyen && 
-                            row.donViVanChuyen.toString().toUpperCase() === 'BEE'
-                        ).length;
-                        
-                        statusDiv.textContent = `Đã tải thành công ${allData.length} đơn hàng. Trong đó có ${beeCount} đơn BEE.`;
-                        statusDiv.className = 'status success';
-                    })
-                    .catch(error => {
-                        statusDiv.textContent = 'Lỗi khi tải dữ liệu: ' + error.message;
-                        statusDiv.className = 'status error';
-                        fetchBtn.disabled = false;
-                        console.error('Lỗi:', error);
-                        
-                        // Fallback: Sử dụng dữ liệu mẫu nếu không kết nối được
-                        useSampleData();
-                    });
-            }
-            
-            function useSampleData() {
-                allData = [
-                    {
-                        "maDonHang": "Kemd9130c72",
-                        "ngayLenDon": "2025-07-16T17:00:00.000Z",
-                        "name": "Ludy flory",
-                        "phone": 9313970500,
-                        "address": "8014 Nc Highway 4",
-                        "city": "Littleton",
-                        "state": "NC",
-                        "zipcode": "27850",
-                        "matHang": "Kem Body",
-                        "tenMatHang1": "Kem Body",
-                        "soLuongMatHang1": 5,
-                        "giaBan": 179,
-                        "loaiTienThanhToan": "USD",
-                        "tongTienVND": 4296000,
-                        "hinhThucThanhToan": "Money Gram",
-                        "donViVanChuyen": "MGT",
-                        "maTracking": "1ZJ4D0920304687439",
-                        "trangThaiGiaoHang": "Đang xử lý",
-                        "thoiGianGiaoDuKien": "17/22",
-                        "ngayDoiSoat": "2025-07-16T17:00:00.000Z"
-                    },
-                    {
-                        "maDonHang": "BEE123456",
-                        "ngayLenDon": "2025-07-17T10:00:00.000Z",
-                        "name": "Nguyễn Văn A",
-                        "phone": 912345678,
-                        "address": "123 Đường ABC",
-                        "city": "Hà Nội",
-                        "state": "HN",
-                        "zipcode": "100000",
-                        "matHang": "Kem Dưỡng",
-                        "tenMatHang1": "Kem Dưỡng Trắng",
-                        "soLuongMatHang1": 2,
-                        "giaBan": 250,
-                        "loaiTienThanhToan": "USD",
-                        "tongTienVND": 6000000,
-                        "hinhThucThanhToan": "Chuyển khoản",
-                        "donViVanChuyen": "BEE",
-                        "maTracking": "BEE123456789",
-                        "trangThaiGiaoHang": "Đang vận chuyển",
-                        "thoiGianGiaoDuKien": "20/07/2025",
-                        "ngayDoiSoat": "2025-07-17T10:00:00.000Z"
+            tableBody.addEventListener('input', function(e) {
+                if (e.target.tagName === 'INPUT') {
+                    const input = e.target;
+                    const row = input.closest('tr');
+                    // Lấy `maDonHang` từ `dataset` của hàng
+                    const maDonHang = row.dataset.maDonHang;
+                    if (maDonHang) {
+                        // Thêm `maDonHang` vào danh sách các hàng cần đồng bộ
+                        changedRows.add(maDonHang);
+                        input.closest('td').classList.add('cell-changed');
+                        syncBtn.disabled = false;
                     }
-                ];
-                
-                filterData();
-                statusDiv.textContent = 'Đang sử dụng dữ liệu mẫu (không kết nối được tới nguồn)';
-                statusDiv.className = 'status loading';
-            }
-            
-            // Chuyển dữ liệu đến đích
-            transferBtn.addEventListener('click', function() {
-                if (displayedData.length === 0) {
-                    statusDiv.textContent = 'Không có dữ liệu để chuyển. Vui lòng tải dữ liệu trước.';
-                    statusDiv.className = 'status error';
-                    return;
                 }
-                
-                statusDiv.textContent = 'Đang chuyển dữ liệu đến đích...';
-                statusDiv.className = 'status loading';
-                transferBtn.disabled = true;
-                
-                fetch(DESTINATION_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(displayedData)
-                })
+            });
+
+            setupTableSelectionListeners();
+        }
+
+        function renderHeader() {
+            const tr = document.createElement('tr');
+            headers.forEach(h => {
+                const th = document.createElement('th');
+                th.textContent = h.name;
+                tr.appendChild(th);
+            });
+            tableHead.appendChild(tr);
+        }
+        
+        function fetchDataFromSource() {
+            setStatus('Đang tải dữ liệu từ nguồn...', 'loading');
+            fetchBtn.disabled = true;
+            syncBtn.disabled = true;
+            changedRows.clear();
+            
+            fetch(SOURCE_URL)
                 .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Không thể kết nối đến máy chủ đích');
-                    }
+                    if (!response.ok) throw new Error('Không thể kết nối đến nguồn dữ liệu');
                     return response.json();
                 })
                 .then(data => {
-                    statusDiv.textContent = `Đã chuyển thành công ${displayedData.length} đơn hàng đến đích.`;
-                    statusDiv.className = 'status success';
-                    transferBtn.disabled = false;
+                    allData = data.map(row => {
+                        const newRow = {};
+                        headers.forEach(h => {
+                            newRow[h.key] = row[h.key] !== undefined && row[h.key] !== null ? row[h.key] : '';
+                        });
+                        return newRow;
+                    });
+                    filterData();
+                    fetchBtn.disabled = false;
+                    const beeCount = allData.filter(row => row.donViVanChuyen?.toString().toUpperCase() === 'BEE').length;
+                    setStatus(`Đã tải thành công ${allData.length} đơn hàng. Trong đó có ${beeCount} đơn BEE.`, 'success');
                 })
                 .catch(error => {
-                    statusDiv.textContent = 'Lỗi khi chuyển dữ liệu: ' + error.message;
-                    statusDiv.className = 'status error';
-                    transferBtn.disabled = false;
+                    setStatus('Lỗi khi tải dữ liệu: ' + error.message, 'error');
+                    fetchBtn.disabled = false;
                     console.error('Lỗi:', error);
                 });
+        }
+        
+        function syncDataToDestination() {
+            if (changedRows.size === 0) {
+                setStatus('Không có thay đổi nào để đồng bộ.', 'loading');
+                return;
+            }
+
+            const dataToSync = getChangedData();
+            
+            setStatus(`Đang đồng bộ ${dataToSync.length} đơn hàng đã thay đổi...`, 'loading');
+            syncBtn.disabled = true;
+            
+            const payload = {
+                action: 'update',
+                data: dataToSync // `data` là một mảng các object, mỗi object là một hàng
+            };
+
+            fetch(DESTINATION_URL, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(() => {
+                setStatus(`Đã gửi yêu cầu đồng bộ ${dataToSync.length} đơn hàng. Vui lòng kiểm tra sheet đích.`, 'success');
+                changedRows.clear();
+                document.querySelectorAll('.cell-changed').forEach(cell => cell.classList.remove('cell-changed'));
+                setTimeout(fetchDataFromSource, 1500);
+            })
+            .catch(error => {
+                setStatus('Lỗi khi đồng bộ dữ liệu: ' + error.message, 'error');
+                console.error('Lỗi:', error);
+                syncBtn.disabled = false;
             });
-            
-            // Lọc dữ liệu khi thay đổi checkbox
-            showOnlyBeeCheckbox.addEventListener('change', filterData);
-            
-            // Hàm lọc dữ liệu theo đơn vị vận chuyển
-            function filterData() {
-                if (showOnlyBeeCheckbox.checked) {
-                    displayedData = allData.filter(row => 
-                        row.donViVanChuyen && 
-                        row.donViVanChuyen.toString().toUpperCase() === 'BEE'
-                    );
-                } else {
-                    displayedData = [...allData];
+        }
+
+        // Hàm này thu thập dữ liệu từ các hàng đã thay đổi.
+        // `maDonHang` được bao gồm trong mỗi object `rowData`.
+        function getChangedData() {
+            const data = [];
+            changedRows.forEach(maDonHang => {
+                const rowElement = tableBody.querySelector(`tr[data-ma-don-hang="${maDonHang}"]`);
+                if (rowElement) {
+                    const rowData = {};
+                    const inputs = rowElement.querySelectorAll('input');
+                    inputs.forEach(input => {
+                        // `input.name` chính là các `key` như 'maDonHang', 'name', 'phone'...
+                        rowData[input.name] = input.value;
+                    });
+                    data.push(rowData);
                 }
-                renderTable();
+            });
+            return data;
+        }
+
+        function filterData() {
+            if (showOnlyBeeCheckbox.checked) {
+                displayedData = allData.filter(row => row.donViVanChuyen?.toString().toUpperCase() === 'BEE');
+            } else {
+                displayedData = [...allData];
             }
+            renderTable();
+        }
+        
+        function renderTable() {
+            tableBody.innerHTML = '';
             
-            // Hiển thị dữ liệu trong bảng
-            function renderTable() {
-                tableBody.innerHTML = '';
-                
-                if (displayedData.length === 0) {
-                    const tr = document.createElement('tr');
-                    const td = document.createElement('td');
-                    td.colSpan = 20;
-                    td.textContent = 'Không có dữ liệu để hiển thị';
-                    td.style.textAlign = 'center';
-                    tr.appendChild(td);
-                    tableBody.appendChild(tr);
-                    return;
-                }
-                
-                displayedData.forEach(row => {
-                    const tr = document.createElement('tr');
-                    
-                    // Thêm các cột chính
-                    addCell(tr, row.maDonHang);
-                    addCell(tr, formatDate(row.ngayLenDon));
-                    addCell(tr, row.name);
-                    addCell(tr, row.phone);
-                    addCell(tr, row.address);
-                    addCell(tr, row.city);
-                    addCell(tr, row.state);
-                    addCell(tr, row.zipcode);
-                    addCell(tr, row.matHang);
-                    addCell(tr, row.tenMatHang1);
-                    addCell(tr, row.soLuongMatHang1);
-                    addCell(tr, row.giaBan);
-                    addCell(tr, row.loaiTienThanhToan);
-                    addCell(tr, row.tongTienVND ? row.tongTienVND.toLocaleString() : '');
-                    addCell(tr, row.hinhThucThanhToan);
-                    addCell(tr, row.donViVanChuyen);
-                    addCell(tr, row.maTracking);
-                    addCell(tr, row.trangThaiGiaoHang);
-                    addCell(tr, row.thoiGianGiaoDuKien);
-                    addCell(tr, formatDate(row.ngayDoiSoat));
-                    
-                    tableBody.appendChild(tr);
-                });
-            }
-            
-            function addCell(tr, value) {
+            if (displayedData.length === 0) {
+                const tr = document.createElement('tr');
                 const td = document.createElement('td');
-                td.textContent = value !== undefined && value !== null ? value : '';
+                td.colSpan = headers.length;
+                td.textContent = 'Không có dữ liệu để hiển thị';
+                td.style.textAlign = 'center';
+                td.style.padding = '10px';
                 tr.appendChild(td);
+                tableBody.appendChild(tr);
+                return;
             }
             
-            function formatDate(dateString) {
-                if (!dateString) return '';
-                const date = new Date(dateString);
-                return date.toLocaleDateString('vi-VN');
-            }
-        });
+            displayedData.forEach(row => {
+                const tr = document.createElement('tr');
+                // Lưu `maDonHang` vào dataset của thẻ `<tr>` để làm định danh duy nhất
+                tr.dataset.maDonHang = row.maDonHang;
+
+                headers.forEach(header => {
+                    const td = document.createElement('td');
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.name = header.key;
+                    let value = row[header.key];
+                    if ((header.key === 'ngayLenDon' || header.key === 'ngayDoiSoat') && value) {
+                        value = formatDate(value);
+                    }
+                    input.value = value;
+                    td.appendChild(input);
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+        }
+        
+        function setStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return dateString;
+            return date.toLocaleDateString('vi-VN');
+        }
+
+        function setupTableSelectionListeners() {
+            let isSelecting = false;
+            let startCell = null;
+
+            tableBody.addEventListener('mousedown', (e) => {
+                const target = e.target.closest('td');
+                if (!target || e.target.closest('button')) return;
+                isSelecting = true;
+                if (!e.ctrlKey) {
+                    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+                }
+                startCell = target;
+                target.classList.toggle('cell-selected');
+                document.body.addEventListener('mouseup', () => { isSelecting = false; startCell = null; }, { once: true });
+            });
+
+            tableBody.addEventListener('mouseover', (e) => {
+                if (!isSelecting || !startCell) return;
+                const target = e.target.closest('td');
+                if (target) {
+                    const allRows = Array.from(tableBody.rows);
+                    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+                    const startRowIndex = startCell.parentNode.rowIndex -1;
+                    const startCellIndex = startCell.cellIndex;
+                    const endRowIndex = target.parentNode.rowIndex -1;
+                    const endCellIndex = target.cellIndex;
+                    const minRow = Math.min(startRowIndex, endRowIndex);
+                    const maxRow = Math.max(startRowIndex, endRowIndex);
+                    const minCol = Math.min(startCellIndex, endCellIndex);
+                    const maxCol = Math.max(startCellIndex, endCellIndex);
+                    for (let i = minRow; i <= maxRow; i++) {
+                        for (let j = minCol; j <= maxCol; j++) {
+                            allRows[i]?.cells[j]?.classList.add('cell-selected');
+                        }
+                    }
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    const selectedCells = document.querySelectorAll('.cell-selected');
+                    if (selectedCells.length > 0) {
+                        e.preventDefault();
+                        selectedCells.forEach(cell => {
+                            const input = cell.querySelector('input');
+                            if (input) {
+                                input.value = '';
+                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                            }
+                        });
+                    }
+                }
+            });
+
+            tableBody.addEventListener('paste', (e) => {
+                const targetElement = e.target;
+                if (targetElement.tagName !== 'INPUT') return;
+                e.preventDefault();
+                const pastedText = (e.clipboardData || window.clipboardData).getData('text');
+                const rowsOfData = pastedText.trim().split(/\r?\n/).map(row => row.split('\t'));
+                const startCell = targetElement.closest('td');
+                const startRow = targetElement.closest('tr');
+                const allTableRows = Array.from(tableBody.children);
+                const startRowIndex = allTableRows.indexOf(startRow);
+                const startCellIndex = Array.from(startRow.children).indexOf(startCell);
+
+                rowsOfData.forEach((rowData, rowIndex) => {
+                    const targetRow = allTableRows[startRowIndex + rowIndex];
+                    if (!targetRow) return;
+                    rowData.forEach((cellData, cellIndex) => {
+                        const input = targetRow.cells[startCellIndex + cellIndex]?.querySelector('input');
+                        if (input) {
+                            input.value = cellData.trim();
+                            input.dispatchEvent(new Event('input', { bubbles: true }));
+                        }
+                    });
+                });
+            });
+        }
+        
+        initializeApp();
+    });
     </script>
 </body>
 </html>
