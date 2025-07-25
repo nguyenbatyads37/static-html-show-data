@@ -1,156 +1,59 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chỉnh sửa dữ liệu Google Sheet</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        td[contenteditable="true"]:focus {
-            background-color: #e8f0fe;
-            outline: 2px solid #4d90fe;
-        }
-        button {
-            padding: 10px 15px;
-            font-size: 16px;
-            cursor: pointer;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        #message {
-            margin-top: 15px;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Gửi Mã Đơn & Tracking</title>
 </head>
 <body>
+  <h2>Gửi Mã Tracking</h2>
 
-    <h1>Bảng dữ liệu có thể chỉnh sửa</h1>
-    <p>Nhấp vào các ô để chỉnh sửa nội dung, sau đó nhấn nút "Cập nhật" để lưu thay đổi.</p>
+  <label for="orderId">Mã Đơn Hàng:</label><br>
+  <input type="text" id="orderId"><br><br>
 
-    <table id="dataTable">
-        <thead>
-            <!-- Tiêu đề bảng sẽ được tạo tự động -->
-        </thead>
-        <tbody>
-            <!-- Dữ liệu sẽ được tải vào đây -->
-        </tbody>
-    </table>
+  <label for="tracking">Mã Tracking:</label><br>
+  <input type="text" id="tracking"><br><br>
 
-    <button onclick="updateData()">Cập nhật</button>
-    <div id="message"></div>
+  <button onclick="sendData()">GỬI DỮ LIỆU</button>
 
-    <script>
-        const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
-        const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbw8Y06lHN4PncNvfBZOu2h-pTGqlQZwB_-zzOLqxHlUmBKOMUokmTSrkV7jHvHt9-wR/exec';
+  <p id="result"></p>
 
-        // Hàm để lấy và hiển thị dữ liệu khi trang được tải
-        window.onload = function() {
-            fetch(SOURCE_URL)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        const table = document.getElementById('dataTable');
-                        const thead = table.querySelector('thead');
-                        const tbody = table.querySelector('tbody');
+  <script>
+    function sendData() {
+      const orderId = document.getElementById("orderId").value.trim();
+      const tracking = document.getElementById("tracking").value.trim();
 
-                        // Xóa nội dung cũ
-                        thead.innerHTML = '';
-                        tbody.innerHTML = '';
+      if (!orderId || !tracking) {
+        document.getElementById("result").innerText = "Vui lòng nhập đầy đủ thông tin.";
+        return;
+      }
 
-                        // Tạo hàng tiêu đề
-                        const headers = Object.keys(data[0]);
-                        const headerRow = document.createElement('tr');
-                        headers.forEach(headerText => {
-                            const th = document.createElement('th');
-                            th.textContent = headerText;
-                            headerRow.appendChild(th);
-                        });
-                        thead.appendChild(headerRow);
+      const payload = {
+        action: "update",
+        changes: [
+          {
+            "Mã Đơn Hàng": orderId,
+            "Mã Tracking": tracking
+          }
+        ]
+      };
 
-                        // Tạo các hàng dữ liệu
-                        data.forEach(rowData => {
-                            const row = document.createElement('tr');
-                            headers.forEach(header => {
-                                const cell = document.createElement('td');
-                                cell.textContent = rowData[header];
-                                cell.setAttribute('contenteditable', 'true');
-                                row.appendChild(cell);
-                            });
-                            tbody.appendChild(row);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Lỗi khi lấy dữ liệu:', error);
-                    document.getElementById('message').textContent = 'Lỗi khi tải dữ liệu!';
-                    document.getElementById('message').style.color = 'red';
-                });
-        };
-
-        // Hàm để thu thập và gửi dữ liệu đã cập nhật
-        function updateData() {
-            const messageDiv = document.getElementById('message');
-            messageDiv.textContent = 'Đang cập nhật...';
-            messageDiv.style.color = 'orange';
-
-            const table = document.getElementById('dataTable');
-            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-            const rows = table.querySelectorAll('tbody tr');
-            const updatedData = [];
-
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                const rowData = {};
-                cells.forEach((cell, index) => {
-                    rowData[headers[index]] = cell.textContent;
-                });
-                updatedData.push(rowData);
-            });
-
-            // Gửi dữ liệu đã cập nhật đến URL đích
-            fetch(DESTINATION_URL, {
-                method: 'POST',
-                mode: 'no-cors', // Thường cần thiết khi giao tiếp giữa các web app của Apps Script
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updatedData)
-            })
-            .then(response => {
-                 // Do mode 'no-cors', chúng ta không thể đọc phản hồi chi tiết
-                 // nhưng chúng ta có thể giả định thành công nếu không có lỗi mạng.
-                messageDiv.textContent = 'Cập nhật thành công!';
-                messageDiv.style.color = 'green';
-            })
-            .catch(error => {
-                console.error('Lỗi khi cập nhật dữ liệu:', error);
-                messageDiv.textContent = 'Đã xảy ra lỗi khi cập nhật!';
-                messageDiv.style.color = 'red';
-            });
-        }
-    </script>
-
+      fetch("https://script.google.com/macros/s/AKfycbwLiGLgDpumLEwrm_ex8kpVmPId6X03PPVHA5mWrUPabu1at3uPVxHCIfJWDy66xyeG/exec", {
+        method: "POST",
+        mode: "cors",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(response => response.json())
+      .then(data => {
+        document.getElementById("result").innerText = data.message;
+      })
+      .catch(error => {
+        document.getElementById("result").innerText = "Lỗi khi gửi dữ liệu: " + error;
+      });
+    }
+  </script>
 </body>
 </html>
+
