@@ -1,229 +1,266 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Công Cụ Hỗ Trợ Điền Thông Tin Đơn Hàng</title>
+    <title>Order Data Transfer - BEE Shipping</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            height: 100vh;
-            margin: 0;
-            background-color: #f4f4f4;
-        }
-        .container {
-            display: flex;
+        table {
+            border-collapse: collapse;
             width: 100%;
-            height: 100%;
+            margin-top: 20px;
         }
-        .panel {
-            flex: 1;
-            padding: 20px;
-            overflow-y: auto;
-            border-right: 2px solid #ccc;
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
         }
-        .iframe-container {
-            flex: 1;
-            height: 100%;
-        }
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
-        }
-        h1, h2, h3 {
-            color: #333;
-        }
-        textarea {
-            width: 95%;
-            height: 150px;
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+        th {
+            background-color: #f2f2f2;
+            position: sticky;
+            top: 0;
         }
         button {
-            padding: 10px 20px;
-            background-color: #007bff;
+            margin: 10px;
+            padding: 8px 16px;
+            background-color: #4CAF50;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 16px;
         }
         button:hover {
-            background-color: #0056b3;
+            background-color: #45a049;
         }
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 20px;
+        .container {
+            margin: 20px;
         }
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #555;
-        }
-        input[type="text"] {
-            padding: 8px;
-            border: 1px solid #ccc;
+        .status {
+            margin: 10px;
+            padding: 10px;
             border-radius: 4px;
-            background-color: #e9ecef;
-            cursor: text;
         }
-        .instructions {
-            background-color: #fffbe6;
-            border: 1px solid #ffe58f;
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
+        .filter-controls {
+            background-color: #e9f7ef;
             padding: 15px;
-            border-radius: 4px;
+            border-radius: 5px;
             margin-bottom: 20px;
         }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <div class="panel">
-        <h1>Công Cụ Hỗ Trợ Điền Liệu</h1>
-        <div class="instructions">
-            <strong>Hướng dẫn:</strong>
-            <ol>
-                <li>Dán toàn bộ nội dung JSON của đơn hàng vào ô bên dưới.</li>
-                <li>Nhấn nút "Tách và điền dữ liệu".</li>
-                <li>Sao chép (copy) thông tin từ các ô bên dưới và dán (paste) vào biểu mẫu tương ứng ở bên phải.</li>
-            </ol>
+    <div class="container">
+        <h1>Order Data with BEE Shipping</h1>
+        
+        <div class="filter-controls">
+            <button id="fetchData">Fetch Data from Source</button>
+            <button id="transferData" disabled>Transfer to Destination</button>
+            <div>
+                <label>
+                    <input type="checkbox" id="showOnlyBee" checked>
+                    Show only BEE shipping orders
+                </label>
+            </div>
         </div>
-
-        <h2>1. Dữ liệu đơn hàng (JSON)</h2>
-        <textarea id="jsonData" placeholder="Dán nội dung JSON vào đây..."></textarea>
-        <button onclick="processData()">Tách và điền dữ liệu</button>
-
-        <hr style="margin: 30px 0;">
-
-        <h2>2. Thông tin đã được tách</h2>
-        <p>Nhấn vào ô để sao chép nội dung.</p>
-        <div class="form-grid" id="outputForm">
-            <div class="form-group"><label for="outMaDonHang">Mã đơn hàng</label><input type="text" id="outMaDonHang" readonly></div>
-            <div class="form-group"><label for="outNgayLenDon">Ngày lên đơn</label><input type="text" id="outNgayLenDon" readonly></div>
-            <div class="form-group"><label for="outName">Name*</label><input type="text" id="outName" readonly></div>
-            <div class="form-group"><label for="outPhone">Phone*</label><input type="text" id="outPhone" readonly></div>
-            <div class="form-group"><label for="outAdd">Add</label><input type="text" id="outAdd" readonly></div>
-            <div class="form-group"><label for="outCity">City</label><input type="text" id="outCity" readonly></div>
-            <div class="form-group"><label for="outState">State</label><input type="text" id="outState" readonly></div>
-            <div class="form-group"><label for="outZipcode">Zipcode</label><input type="text" id="outZipcode" readonly></div>
-            <div class="form-group"><label for="outMatHang">Mặt hàng</label><input type="text" id="outMatHang" readonly></div>
-            <div class="form-group"><label for="outTenMatHang1">Tên mặt hàng 1</label><input type="text" id="outTenMatHang1" readonly></div>
-            <div class="form-group"><label for="outSoLuongMatHang1">Số lượng mặt hàng 1</label><input type="text" id="outSoLuongMatHang1" readonly></div>
-            <div class="form-group"><label for="outTenMatHang2">Tên mặt hàng 2</label><input type="text" id="outTenMatHang2" readonly></div>
-            <div class="form-group"><label for="outSoLuongMatHang2">Số lượng mặt hàng 2</label><input type="text" id="outSoLuongMatHang2" readonly></div>
-            <div class="form-group"><label for="outQuaTang">Quà tặng</label><input type="text" id="outQuaTang" readonly></div>
-            <div class="form-group"><label for="outSoLuongQuaKem">Số lượng quà kèm</label><input type="text" id="outSoLuongQuaKem" readonly></div>
-            <div class="form-group"><label for="outGiaBan">Giá bán</label><input type="text" id="outGiaBan" readonly></div>
-            <div class="form-group"><label for="outLoaiTienThanhToan">Loại tiền thanh toán</label><input type="text" id="outLoaiTienThanhToan" readonly></div>
-            <div class="form-group"><label for="outTongTienVND">Tổng tiền VNĐ</label><input type="text" id="outTongTienVND" readonly></div>
-            <div class="form-group"><label for="outHinhThucThanhToan">Hình thức thanh toán</label><input type="text" id="outHinhThucThanhToan" readonly></div>
-            <div class="form-group"><label for="outGhiChu">Ghi chú</label><input type="text" id="outGhiChu" readonly></div>
-            <div class="form-group"><label for="outSoWhatsAppViber">Số Whats app/Viber</label><input type="text" id="outSoWhatsAppViber" readonly></div>
-            <div class="form-group"><label for="outGhiChuBee">Ghi chú của BEE</label><input type="text" id="outGhiChuBee" readonly></div>
-            <div class="form-group"><label for="outDanhDau">Đánh dấu</label><input type="text" id="outDanhDau" readonly></div>
-            <div class="form-group"><label for="outNgayDongHang">Ngày đóng hàng</label><input type="text" id="outNgayDongHang" readonly></div>
-            <div class="form-group"><label for="outMaTracking">Mã Tracking</label><input type="text" id="outMaTracking" readonly></div>
-            <div class="form-group"><label for="outTrangThaiGiaoHang">Trạng thái giao hàng</label><input type="text" id="outTrangThaiGiaoHang" readonly></div>
-            <div class="form-group"><label for="outThoiGianGiaoDuKien">Thời gian giao dự kiến</label><input type="text" id="outThoiGianGiaoDuKien" readonly></div>
-            <div class="form-group"><label for="outPhiShipNoiDiaUSD">Phí ship nội địa Mỹ (usd)</label><input type="text" id="outPhiShipNoiDiaUSD" readonly></div>
-            <div class="form-group"><label for="outPhiXuLyDonUSD">Phí xử lý đơn đóng hàng-Lưu kho(usd)</label><input type="text" id="outPhiXuLyDonUSD" readonly></div>
-            <div class="form-group"><label for="outGHI_CHU">GHI CHÚ (Thêm)</label><input type="text" id="outGHI_CHU" readonly></div>
-            <div class="form-group"><label for="outNgayDoiSoat">Ngày đối soát</label><input type="text" id="outNgayDoiSoat" readonly></div>
-        </div>
+        
+        <div id="status" class="status"></div>
+        
+        <table id="dataTable">
+            <thead>
+                <tr>
+                    <th>Mã đơn hàng</th>
+                    <th>Ngày lên đơn</th>
+                    <th>Name*</th>
+                    <th>Phone*</th>
+                    <th>Add</th>
+                    <th>City</th>
+                    <th>State</th>
+                    <th>Zipcode</th>
+                    <th>Mặt hàng</th>
+                    <th>Tên mặt hàng 1</th>
+                    <th>Số lượng mặt hàng 1</th>
+                    <th>Tên mặt hàng 2</th>
+                    <th>Số lượng mặt hàng 2</th>
+                    <th>Quà tặng</th>
+                    <th>Số lượng quà kèm</th>
+                    <th>Giá bán</th>
+                    <th>Loại tiền thanh toán</th>
+                    <th>Tổng tiền VNĐ</th>
+                    <th>Hình thức thanh toán</th>
+                    <th>Ghi chú</th>
+                    <th>Số Whats app/Viber</th>
+                    <th>Ghi chú của BEE</th>
+                    <th>Đánh dấu</th>
+                    <th>Ngày đóng hàng</th>
+                    <th>Mã Tracking</th>
+                    <th>Trạng thái giao hàng</th>
+                    <th>Đơn vị vận chuyển</th>
+                    <th>Thời gian giao dự kiến</th>
+                    <th>Phí ship nội địa Mỹ (usd)</th>
+                    <th>Phí xử lý đơn đóng hàng-Lưu kho(usd)</th>
+                    <th>GHI CHÚ</th>
+                    <th>Ngày đối soát</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- Data will be inserted here -->
+            </tbody>
+        </table>
     </div>
-    <div class="iframe-container">
-        <h3>Biểu mẫu đích để điền thông tin</h3>
-        <iframe src="https://script.google.com/macros/s/AKfycbzo3JdiCq7q62z4YV-KfStgt494Rl4BBVKNSRBCutSLKJfRt-92kU2vcEvKjH3wB7DM/exec"></iframe>
-    </div>
-</div>
 
-<script>
-    function formatDate(dateString) {
-        if (!dateString) return '';
-        try {
-            const date = new Date(dateString);
-            const day = String(date.getDate()).padStart(2, '0');
-            const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
-            return `${day}/${month}/${year}`;
-        } catch (e) {
-            return dateString; // Trả về chuỗi gốc nếu không thể định dạng
-        }
-    }
-
-    function processData() {
-        const jsonInput = document.getElementById('jsonData').value;
-        if (!jsonInput.trim()) {
-            alert('Vui lòng dán dữ liệu JSON vào ô.');
-            return;
-        }
-
-        try {
-            const data = JSON.parse(jsonInput);
-
-            // Mapping data from JSON to form fields
-            document.getElementById('outMaDonHang').value = data.maDonHang || '';
-            document.getElementById('outNgayLenDon').value = formatDate(data.ngayLenDon);
-            document.getElementById('outName').value = data.name || '';
-            document.getElementById('outPhone').value = data.phone || '';
-            document.getElementById('outAdd').value = data.address || '';
-            document.getElementById('outCity').value = data.city || '';
-            document.getElementById('outState').value = data.state || '';
-            document.getElementById('outZipcode').value = data.zipcode || '';
-            document.getElementById('outMatHang').value = data.matHang || '';
-            document.getElementById('outTenMatHang1').value = data.tenMatHang1 || '';
-            document.getElementById('outSoLuongMatHang1').value = data.soLuongMatHang1 || '';
-            document.getElementById('outTenMatHang2').value = data.tenMatHang2 || '';
-            document.getElementById('outSoLuongMatHang2').value = data.soLuongMatHang2 || '';
-            document.getElementById('outQuaTang').value = data.quaTang || '';
-            document.getElementById('outSoLuongQuaKem').value = data.soLuongQuaKem || '';
-            document.getElementById('outGiaBan').value = data.giaBan || '';
-            document.getElementById('outLoaiTienThanhToan').value = data.loaiTienThanhToan || '';
-            document.getElementById('outTongTienVND').value = data.tongTienVND || '';
-            document.getElementById('outHinhThucThanhToan').value = data.hinhThucThanhToan || '';
-            document.getElementById('outGhiChu').value = data.ghiChu || '';
-            document.getElementById('outSoWhatsAppViber').value = data.soWhatsAppViber || '';
-            document.getElementById('outGhiChuBee').value = data.ghiChuBee || '';
-            document.getElementById('outDanhDau').value = data.danhDau || '';
-            document.getElementById('outNgayDongHang').value = formatDate(data.ngayDongHang);
-            document.getElementById('outMaTracking').value = data.maTracking || '';
-            document.getElementById('outTrangThaiGiaoHang').value = data.trangThaiGiaoHang || '';
-            document.getElementById('outThoiGianGiaoDuKien').value = data.thoiGianGiaoDuKien || '';
-            document.getElementById('outPhiShipNoiDiaUSD').value = data.phiShipNoiDiaUSD || '';
-            document.getElementById('outPhiXuLyDonUSD').value = data.phiXuLyDonUSD || '';
-            document.getElementById('outGHI_CHU').value = data.ghiChu2 || '';
-            document.getElementById('outNgayDoiSoat').value = formatDate(data.ngayDoiSoat);
-
-        } catch (error) {
-            alert('Lỗi: Dữ liệu JSON không hợp lệ. Vui lòng kiểm tra lại.\n' + error.message);
-        }
-    }
-
-    // Add click-to-copy functionality to all output inputs
-    document.querySelectorAll('#outputForm input').forEach(input => {
-        input.addEventListener('click', function() {
-            this.select();
-            try {
-                document.execCommand('copy');
-                // Optional: show a small notification that text was copied
-            } catch (err) {
-                console.error('Không thể sao chép văn bản: ', err);
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const fetchBtn = document.getElementById('fetchData');
+            const transferBtn = document.getElementById('transferData');
+            const showOnlyBeeCheckbox = document.getElementById('showOnlyBee');
+            const tableBody = document.getElementById('tableBody');
+            const statusDiv = document.getElementById('status');
+            
+            let fetchedData = [];
+            let filteredData = [];
+            
+            // Fetch data from source
+            fetchBtn.addEventListener('click', function() {
+                statusDiv.textContent = 'Fetching data from source...';
+                statusDiv.className = 'status';
+                
+                const sourceUrl = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
+                
+                fetch(sourceUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Network response was not ok');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        fetchedData = data;
+                        filterData();
+                        transferBtn.disabled = false;
+                        statusDiv.textContent = `Successfully fetched ${data.length} records from source. ${filteredData.length} records match BEE shipping.`;
+                        statusDiv.className = 'status success';
+                    })
+                    .catch(error => {
+                        statusDiv.textContent = 'Error fetching data: ' + error.message;
+                        statusDiv.className = 'status error';
+                        console.error('Error:', error);
+                    });
+            });
+            
+            // Transfer data to destination
+            transferBtn.addEventListener('click', function() {
+                if (filteredData.length === 0) {
+                    statusDiv.textContent = 'No data to transfer. Please fetch data first.';
+                    statusDiv.className = 'status error';
+                    return;
+                }
+                
+                statusDiv.textContent = 'Transferring data to destination...';
+                statusDiv.className = 'status';
+                
+                const destinationUrl = 'https://script.google.com/macros/s/AKfycbzo3JdiCq7q62z4YV-KfStgt494Rl4BBVKNSRBCutSLKJfRt-92kU2vcEvKjH3wB7DM/exec';
+                
+                fetch(destinationUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(filteredData)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    statusDiv.textContent = `Successfully transferred ${filteredData.length} BEE shipping records to destination.`;
+                    statusDiv.className = 'status success';
+                })
+                .catch(error => {
+                    statusDiv.textContent = 'Error transferring data: ' + error.message;
+                    statusDiv.className = 'status error';
+                    console.error('Error:', error);
+                });
+            });
+            
+            // Filter checkbox change handler
+            showOnlyBeeCheckbox.addEventListener('change', function() {
+                if (fetchedData.length > 0) {
+                    filterData();
+                }
+            });
+            
+            // Filter data based on shipping unit
+            function filterData() {
+                if (showOnlyBeeCheckbox.checked) {
+                    filteredData = fetchedData.filter(row => 
+                        row['Đơn vị vận chuyển'] && 
+                        row['Đơn vị vận chuyển'].toString().toUpperCase() === 'BEE'
+                    );
+                } else {
+                    filteredData = [...fetchedData];
+                }
+                renderTable(filteredData);
+            }
+            
+            // Render data in table
+            function renderTable(data) {
+                tableBody.innerHTML = '';
+                
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    
+                    // Add all columns
+                    addCell(tr, row['Mã đơn hàng'] || '');
+                    addCell(tr, row['Ngày lên đơn'] || '');
+                    addCell(tr, row['Name*'] || '');
+                    addCell(tr, row['Phone*'] || '');
+                    addCell(tr, row['Add'] || '');
+                    addCell(tr, row['City'] || '');
+                    addCell(tr, row['State'] || '');
+                    addCell(tr, row['Zipcode'] || '');
+                    addCell(tr, row['Mặt hàng'] || '');
+                    addCell(tr, row['Tên mặt hàng 1'] || '');
+                    addCell(tr, row['Số lượng mặt hàng 1'] || '');
+                    addCell(tr, row['Tên mặt hàng 2'] || '');
+                    addCell(tr, row['Số lượng mặt hàng 2'] || '');
+                    addCell(tr, row['Quà tặng'] || '');
+                    addCell(tr, row['Số lượng quà kèm'] || '');
+                    addCell(tr, row['Giá bán'] || '');
+                    addCell(tr, row['Loại tiền thanh toán'] || '');
+                    addCell(tr, row['Tổng tiền VNĐ'] || '');
+                    addCell(tr, row['Hình thức thanh toán'] || '');
+                    addCell(tr, row['Ghi chú'] || '');
+                    addCell(tr, row['Số Whats app/Viber'] || '');
+                    addCell(tr, row['Ghi chú của BEE'] || '');
+                    addCell(tr, row['Đánh dấu'] || '');
+                    addCell(tr, row['Ngày đóng hàng'] || '');
+                    addCell(tr, row['Mã Tracking'] || '');
+                    addCell(tr, row['Trạng thái giao hàng'] || '');
+                    addCell(tr, row['Đơn vị vận chuyển'] || '');
+                    addCell(tr, row['Thời gian giao dự kiến'] || '');
+                    addCell(tr, row['Phí ship nội địa Mỹ (usd)'] || '');
+                    addCell(tr, row['Phí xử lý đơn đóng hàng-Lưu kho(usd)'] || '');
+                    addCell(tr, row['GHI CHÚ'] || '');
+                    addCell(tr, row['Ngày đối soát'] || '');
+                    
+                    tableBody.appendChild(tr);
+                });
+            }
+            
+            function addCell(tr, value) {
+                const td = document.createElement('td');
+                td.textContent = value;
+                tr.appendChild(td);
             }
         });
-    });
-
-</script>
-
+    </script>
 </body>
 </html>
