@@ -2,7 +2,7 @@
 <html>
 <head>
   <base target="_top">
-  <title>Cập nhật Đơn hàng BEE</title>
+  <title>Cập nhật Đơn hàng</title> <!-- Đã đổi tên tiêu đề -->
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; padding: 20px; font-size: 14px; }
     h1 { color: #333; }
@@ -15,9 +15,8 @@
 
     /* === CSS cho các tính năng chỉnh sửa === */
     .editable-cell { background-color: #e8f0fe; cursor: cell; }
-    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; white-space: normal; overflow: visible; }
+    .editable-cell:focus { outline: 2px solid #4285f4; background-color: #fff; white-space: normal; overflow: visible; z-index: 5; } /* Thêm z-index */
     
-    /* MỚI: Màu nền cho ô đã thay đổi */
     .editable-cell.modified {
       background-color: #fffbe6; /* Màu vàng nhạt */
       font-weight: bold;
@@ -37,7 +36,7 @@
     .status-success { color: #1e8e3e; }
     .status-error { color: #d93025; }
 
-    /* MỚI: CSS cho menu chuột phải (context menu) */
+    /* === CSS cho menu chuột phải (context menu) === */
     #context-menu {
         display: none;
         position: absolute;
@@ -58,7 +57,7 @@
   </style>
 </head>
 <body>
-  <h1>Danh sách đơn hàng vận chuyển bởi "BEE"</h1>
+  <h1>Danh sách toàn bộ đơn hàng</h1> <!-- Đã đổi tiêu đề H1 -->
 
   <div class="controls">
     <button id="send-button">Gửi Dữ Liệu</button>
@@ -75,7 +74,6 @@
     </table>
   </div>
 
-  <!-- MỚI: Menu chuột phải ẩn -->
   <div id="context-menu">
       <div class="context-menu-item" id="revert-action">Hoàn tác thay đổi</div>
   </div>
@@ -83,65 +81,105 @@
 
 <script>
   // ==========================================================
-  // CẤU HÌNH TRUNG TÂM (KHÔNG ĐỔI)
+  // CẤU HÌNH TRUNG TÂM
   // ==========================================================
   const API_URL = "https://script.google.com/macros/s/AKfycbwqkdJyB7KGfY7yOEWzNpouDxJAAotREMtNwtQTN1uZ_22eMthIOHjN4t_OknZdjloS/exec";
+  
+  // Vẫn giữ lại để biết thứ tự cột, nhưng không dùng để hiển thị tên nữa
   const COLUMN_MAPPING = {
     maDonHang: 'Mã Đơn Hàng', ngayLenDon: 'Ngày Lên Đơn', tenKhachHang: 'Tên Khách Hàng', sdtKhach: 'SĐT Khách',
     diaChiGiao: 'Địa Chỉ Giao', tenSanPham: 'Tên Sản Phẩm', maVanDon: 'Mã Vận Đơn', thoiGianGiaoDuKien: 'Thời Gian Giao Dự Kiến',
     ghiChuNB: 'Ghi Chú Nội Bộ', tenSale: 'Tên Sale', nvVanDon: 'NV Vận Đơn', ketQuaCheck: 'Kết Quả Check',
     trangThaiGiaoHangNB: 'Trạng Thái Giao Hàng NB', lyDo: 'Lý Do', donViVanChuyen: 'Đơn Vị Vận Chuyển', tenLenDon: 'Tên Lên Đơn'
   };
-  const HIDDEN_COLUMNS = ['nvVanDon', 'ketQuaCheck', 'trangThaiGiaoHangNB', 'lyDo', 'donViVanChuyen', 'tenLenDon'];
-  const EDITABLE_COLUMNS = ['maVanDon', 'ghiChuNB'];
+  
+  // THAY ĐỔI 3: Để trống mảng này để không ẩn cột nào cả
+  const HIDDEN_COLUMNS = []; 
+  
+  // THAY ĐỔI 3: Không cần mảng này nữa vì tất cả các cột đều có thể chỉnh sửa
+  // const EDITABLE_COLUMNS = ['maVanDon', 'ghiChuNB'];
+  
   const DATE_COLUMNS = ['ngayLenDon', 'thoiGianGiaoDuKien'];
 
   // ==========================================================
   // LOGIC CHÍNH
   // ==========================================================
   
-  function formatDateTime(isoString) { /* ... Giữ nguyên hàm này ... */
+  function formatDateTime(isoString) {
     if (!isoString) return ''; try { const date = new Date(isoString); if (isNaN(date)) return isoString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); const hours = String(date.getHours()).padStart(2, '0'); const minutes = String(date.getMinutes()).padStart(2, '0'); return `${day}/${month}/${year} ${hours}:${minutes}`; } catch (e) { return isoString; }
   }
 
-  // CẬP NHẬT: Thêm logic lưu giá trị gốc
   async function fetchDataAndBuildTable() {
-    // ... Phần đầu hàm giữ nguyên ...
-    const loadingDiv = document.getElementById('loading-message'); const errorDiv = document.getElementById('error-message'); const table = document.getElementById('data-table'); const tableHead = table.querySelector('thead'); const tableBody = table.querySelector('tbody'); try { const response = await fetch(API_URL); if (!response.ok) throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`); const allData = await response.json(); const filteredData = allData.filter(item => item.donViVanChuyen === "BEE"); loadingDiv.style.display = 'none'; if (filteredData.length === 0) { errorDiv.textContent = 'Không tìm thấy đơn hàng nào được vận chuyển bởi "BEE".'; errorDiv.style.display = 'block'; return; } const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); let headerRow = '<tr>'; visibleColumns.forEach(key => { headerRow += `<th>${COLUMN_MAPPING[key]}</th>`; }); headerRow += '</tr>'; tableHead.innerHTML = headerRow; tableBody.innerHTML = '';
-    
-    filteredData.forEach(rowData => {
-      const rowEl = document.createElement('tr');
-      rowEl.dataset.maDonHang = rowData.maDonHang;
-      visibleColumns.forEach(key => {
-        const cellEl = document.createElement('td');
-        let cellValue = rowData[key] ?? '';
-        let displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue;
+    const loadingDiv = document.getElementById('loading-message'); const errorDiv = document.getElementById('error-message'); const table = document.getElementById('data-table'); const tableHead = table.querySelector('thead'); const tableBody = table.querySelector('tbody'); 
+    try { 
+        const response = await fetch(API_URL); 
+        if (!response.ok) throw new Error(`Lỗi HTTP! Trạng thái: ${response.status}`); 
         
-        cellEl.textContent = displayValue;
-        cellEl.dataset.columnKey = key;
+        // THAY ĐỔI 2: Lấy toàn bộ dữ liệu, không lọc theo "BEE" nữa
+        const allData = await response.json(); 
         
-        if (EDITABLE_COLUMNS.includes(key)) {
-          cellEl.classList.add('editable-cell');
-          cellEl.setAttribute('contenteditable', 'true');
-          
-          // MỚI: Lưu giá trị gốc vào data attribute
-          cellEl.dataset.originalValue = displayValue;
-          
-          const dragHandle = document.createElement('div');
-          dragHandle.className = 'drag-handle';
-          cellEl.appendChild(dragHandle);
-        }
-        rowEl.appendChild(cellEl);
-      });
-      tableBody.appendChild(rowEl);
-    });
-    initializeInteractiveFeatures();
+        loadingDiv.style.display = 'none'; 
+        if (allData.length === 0) { 
+            errorDiv.textContent = 'Không có dữ liệu nào được tìm thấy.'; 
+            errorDiv.style.display = 'block'; return; 
+        } 
+        
+        const visibleColumns = Object.keys(COLUMN_MAPPING).filter(key => !HIDDEN_COLUMNS.includes(key)); 
+        let headerRow = '<tr>'; 
+        visibleColumns.forEach(key => { 
+            // THAY ĐỔI 1: Hiển thị tên trường dữ liệu (key) thay vì tên tiếng Việt
+            headerRow += `<th>${key}</th>`; 
+        }); 
+        headerRow += '</tr>'; 
+        tableHead.innerHTML = headerRow; 
+        tableBody.innerHTML = '';
     
-    // ... Phần catch lỗi giữ nguyên ...
-    } catch (error) { loadingDiv.style.display = 'none'; errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message; errorDiv.style.display = 'block'; console.error("Lỗi chi tiết:", error); }
+        allData.forEach(rowData => {
+            const rowEl = document.createElement('tr');
+            // QUAN TRỌNG: Lưu mã đơn hàng làm định danh cho hàng
+            rowEl.dataset.maDonHang = rowData.maDonHang; 
+            
+            visibleColumns.forEach(key => {
+                const cellEl = document.createElement('td');
+                let cellValue = rowData[key] ?? '';
+                let displayValue = DATE_COLUMNS.includes(key) ? formatDateTime(cellValue) : cellValue;
+                
+                cellEl.textContent = displayValue;
+                cellEl.dataset.columnKey = key;
+                
+                // THAY ĐỔI 3: Áp dụng tính năng chỉnh sửa cho TẤT CẢ các ô
+                // Không cần kiểm tra `if (EDITABLE_COLUMNS.includes(key))` nữa
+                cellEl.classList.add('editable-cell');
+                cellEl.setAttribute('contenteditable', 'true');
+                cellEl.dataset.originalValue = displayValue;
+                
+                const dragHandle = document.createElement('div');
+                dragHandle.className = 'drag-handle';
+                cellEl.appendChild(dragHandle);
+
+                // Cảnh báo: Không nên sửa cột khóa chính 'maDonHang'
+                if (key === 'maDonHang') {
+                    cellEl.style.backgroundColor = '#ffebee'; // Màu đỏ nhạt để cảnh báo
+                    cellEl.title = 'Cảnh báo: Không nên thay đổi giá trị ở cột này!';
+                }
+
+                rowEl.appendChild(cellEl);
+            });
+            tableBody.appendChild(rowEl);
+        });
+        initializeInteractiveFeatures();
+    
+    } catch (error) { 
+        loadingDiv.style.display = 'none'; 
+        errorDiv.textContent = 'Đã xảy ra lỗi khi tải dữ liệu: ' + error.message; 
+        errorDiv.style.display = 'block'; 
+        console.error("Lỗi chi tiết:", error); 
+    }
   }
   
-  // CẬP NHẬT: Thêm logic kiểm tra thay đổi và menu chuột phải
+  // Các hàm bên dưới không cần thay đổi lớn, chỉ đảm bảo chúng hoạt động với logic mới
+  // =================================================================================
+  
   function initializeInteractiveFeatures() {
     const tableBody = document.getElementById('data-table').querySelector('tbody');
     const sendButton = document.getElementById('send-button');
@@ -149,14 +187,12 @@
     const revertAction = document.getElementById('revert-action');
     let cellToRevert = null;
 
-    // CẬP NHẬT: Sự kiện input để so sánh giá trị và đánh dấu
     tableBody.addEventListener('input', e => {
       if (e.target.isContentEditable) {
         updateCellModifiedState(e.target);
       }
     });
 
-    // MỚI: Sự kiện chuột phải để hiển thị menu hoàn tác
     tableBody.addEventListener('contextmenu', e => {
         const cell = e.target.closest('.editable-cell.modified');
         if (cell) {
@@ -168,33 +204,44 @@
         }
     });
 
-    // MỚI: Sự kiện click để ẩn menu
     document.addEventListener('click', () => {
         contextMenu.style.display = 'none';
         cellToRevert = null;
     });
 
-    // MỚI: Sự kiện click vào nút hoàn tác
     revertAction.addEventListener('click', () => {
         if (cellToRevert) {
             const originalValue = cellToRevert.dataset.originalValue;
-            // Phải xử lý trường hợp có drag-handle
             const handle = cellToRevert.querySelector('.drag-handle');
             cellToRevert.textContent = originalValue;
             if (handle) cellToRevert.appendChild(handle);
-            
-            updateCellModifiedState(cellToRevert); // Cập nhật lại trạng thái
+            updateCellModifiedState(cellToRevert);
         }
     });
 
-    // Sự kiện cho nút gửi (không đổi)
     sendButton.addEventListener('click', submitChanges);
 
-    // Dán và Kéo để điền (cần cập nhật để đánh dấu 'modified')
-    /* ... Giữ nguyên các hàm mousedown, mouseover, updateDragSelection ... */
-    let isDragging = false; let startCell = null; let fillValue = ''; tableBody.addEventListener('mousedown', (e) => { if (e.target.classList.contains('drag-handle')) { isDragging = true; startCell = e.target.parentElement; fillValue = startCell.childNodes[0].nodeValue || ''; e.preventDefault(); document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); startCell.classList.add('drag-selection'); } }); tableBody.addEventListener('mouseover', (e) => { if (isDragging && e.target.tagName === 'TD') { const endCell = e.target; if (startCell.cellIndex === endCell.cellIndex) { updateDragSelection(startCell, endCell); } } }); 
+    let isDragging = false; let startCell = null; let fillValue = ''; 
+    tableBody.addEventListener('mousedown', (e) => { 
+        if (e.target.classList.contains('drag-handle')) { 
+            isDragging = true; 
+            startCell = e.target.parentElement; 
+            fillValue = startCell.childNodes[0].nodeValue || ''; 
+            e.preventDefault(); 
+            document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); 
+            startCell.classList.add('drag-selection'); 
+        } 
+    }); 
     
-    // CẬP NHẬT: Mouseup và Paste để gọi hàm updateCellModifiedState
+    tableBody.addEventListener('mouseover', (e) => { 
+        if (isDragging && e.target.tagName === 'TD') { 
+            const endCell = e.target; 
+            if (startCell.cellIndex === endCell.cellIndex) { 
+                updateDragSelection(startCell, endCell); 
+            } 
+        } 
+    }); 
+    
     document.addEventListener('mouseup', () => {
       if (isDragging) {
         isDragging = false;
@@ -203,7 +250,7 @@
             const handle = cell.querySelector('.drag-handle');
             cell.textContent = fillValue;
             if(handle) cell.appendChild(handle);
-            updateCellModifiedState(cell); // Cập nhật trạng thái
+            updateCellModifiedState(cell); 
           }
         });
         startCell = null;
@@ -211,33 +258,58 @@
     });
 
     tableBody.addEventListener('paste', e => {
-      const targetCell = e.target; if (!targetCell.classList.contains('editable-cell')) return; e.preventDefault(); const pasteData = (e.clipboardData || window.clipboardData).getData('text'); const lines = pasteData.trim().split(/\r\n|\n|\r/); let currentRow = targetCell.parentElement; const cellIndex = targetCell.cellIndex; lines.forEach((line) => { if (!currentRow) return; const cellToUpdate = currentRow.cells[cellIndex]; if (cellToUpdate && cellToUpdate.classList.contains('editable-cell')) { const handle = cellToUpdate.querySelector('.drag-handle'); cellToUpdate.textContent = line; if(handle) cellToUpdate.appendChild(handle); updateCellModifiedState(cellToUpdate); } currentRow = currentRow.nextElementSibling; });
+      const targetCell = e.target; 
+      if (!targetCell.classList.contains('editable-cell')) return; 
+      e.preventDefault(); 
+      const pasteData = (e.clipboardData || window.clipboardData).getData('text'); 
+      const lines = pasteData.trim().split(/\r\n|\n|\r/); 
+      let currentRow = targetCell.parentElement; 
+      const cellIndex = targetCell.cellIndex; 
+      lines.forEach((line) => { 
+        if (!currentRow) return; 
+        const cellToUpdate = currentRow.cells[cellIndex]; 
+        if (cellToUpdate && cellToUpdate.classList.contains('editable-cell')) { 
+            const handle = cellToUpdate.querySelector('.drag-handle'); 
+            cellToUpdate.textContent = line; 
+            if(handle) cellToUpdate.appendChild(handle); 
+            updateCellModifiedState(cellToUpdate); 
+        } 
+        currentRow = currentRow.nextElementSibling; 
+      });
     });
   }
 
-  // MỚI: Hàm tập trung logic kiểm tra và đánh dấu ô thay đổi
   function updateCellModifiedState(cell) {
     const originalValue = cell.dataset.originalValue;
     const currentValue = cell.textContent;
 
     if (currentValue !== originalValue) {
         cell.classList.add('modified');
-        cell.title = `Giá trị gốc: ${originalValue}`; // Thêm tooltip
+        // Không thêm tooltip cho cột maDonHang để giữ lại cảnh báo gốc
+        if (cell.dataset.columnKey !== 'maDonHang') {
+          cell.title = `Giá trị gốc: ${originalValue}`; 
+        }
     } else {
         cell.classList.remove('modified');
-        cell.title = ''; // Xóa tooltip
+        if (cell.dataset.columnKey !== 'maDonHang') {
+           cell.title = '';
+        }
     }
   }
 
-  // Các hàm còn lại giữ nguyên
-  function updateDragSelection(start, end) { /* ... Giữ nguyên hàm này ... */
-    document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); const tableRows = Array.from(document.getElementById('data-table').rows); const startRowIndex = start.parentElement.rowIndex; const endRowIndex = end.parentElement.rowIndex; const colIndex = start.cellIndex; const minRow = Math.min(startRowIndex, endRowIndex); const maxRow = Math.max(startRowIndex, endRowIndex); for(let i = minRow; i <= maxRow; i++) { tableRows[i].cells[colIndex]?.classList.add('drag-selection'); }
+  function updateDragSelection(start, end) {
+    document.querySelectorAll('.drag-selection').forEach(el => el.classList.remove('drag-selection')); 
+    const tableRows = Array.from(document.getElementById('data-table').rows); 
+    const startRowIndex = start.parentElement.rowIndex; 
+    const endRowIndex = end.parentElement.rowIndex; 
+    const colIndex = start.cellIndex; 
+    const minRow = Math.min(startRowIndex, endRowIndex); 
+    const maxRow = Math.max(startRowIndex, endRowIndex); 
+    for(let i = minRow; i <= maxRow; i++) { 
+        tableRows[i].cells[colIndex]?.classList.add('drag-selection'); 
+    }
   }
-  function submitChanges() { /* ... Giữ nguyên hàm này ... */
-    const sendButton = document.getElementById('send-button'); const statusDiv = document.getElementById('status-message'); const modifiedCells = document.querySelectorAll('.editable-cell.modified'); if (modifiedCells.length === 0) { statusDiv.textContent = 'Không có thay đổi nào để gửi.'; statusDiv.className = 'status-error'; return; } sendButton.disabled = true; statusDiv.textContent = `Đang gửi ${modifiedCells.length} thay đổi...`; statusDiv.className = ''; const changes = Array.from(modifiedCells).map(cell => { return { maDonHang: cell.parentElement.dataset.maDonHang, columnKey: cell.dataset.columnKey, newValue: cell.textContent }; }); google.script.run .withSuccessHandler(response => { sendButton.disabled = false; statusDiv.textContent = response.message; if (response.success) { statusDiv.className = 'status-success'; modifiedCells.forEach(cell => { cell.classList.remove('modified'); cell.title = ''; cell.dataset.originalValue = cell.textContent; }); } else { statusDiv.className = 'status-error'; } }) .withFailureHandler(error => { sendButton.disabled = false; statusDiv.textContent = 'Lỗi: ' + error.message; statusDiv.className = 'status-error'; }) .updateSheetData(changes);
-  }
-
-  // CẬP NHẬT: Hàm submitChanges để cập nhật lại giá trị gốc sau khi gửi thành công
+  
   function submitChanges() {
     const sendButton = document.getElementById('send-button');
     const statusDiv = document.getElementById('status-message');
@@ -247,27 +319,34 @@
       statusDiv.className = 'status-error';
       return;
     }
+    
+    // Kiểm tra xem maDonHang có bị sửa không
+    const isIdModified = Array.from(modifiedCells).some(cell => cell.dataset.columnKey === 'maDonHang');
+    if (isIdModified) {
+        if (!confirm('Cảnh báo: Bạn đang thay đổi "maDonHang". Việc này có thể làm sai lệch dữ liệu. Bạn có chắc chắn muốn tiếp tục?')) {
+            return; // Hủy nếu người dùng không đồng ý
+        }
+    }
+
     sendButton.disabled = true;
     statusDiv.textContent = `Đang gửi ${modifiedCells.length} thay đổi...`;
     statusDiv.className = '';
     const changes = Array.from(modifiedCells).map(cell => ({
-      maDonHang: cell.parentElement.dataset.maDonHang,
+      maDonHang: cell.parentElement.dataset.maDonHang, // Dùng mã đơn hàng GỐC để tìm dòng
       columnKey: cell.dataset.columnKey,
       newValue: cell.textContent
     }));
+    
     google.script.run
       .withSuccessHandler(response => {
         sendButton.disabled = false;
         statusDiv.textContent = response.message;
         if (response.success) {
           statusDiv.className = 'status-success';
-          // CẬP NHẬT LẠI GIÁ TRỊ GỐC SAU KHI LƯU THÀNH CÔNG
-          modifiedCells.forEach(cell => {
-            cell.classList.remove('modified');
-            cell.title = '';
-            // Giá trị hiện tại bây giờ là giá trị "gốc" mới
-            cell.dataset.originalValue = cell.textContent;
-          });
+          // Nếu cập nhật thành công, tải lại toàn bộ bảng để đảm bảo tính nhất quán
+          // Đặc biệt quan trọng nếu maDonHang bị thay đổi
+          alert('Cập nhật thành công! Bảng sẽ được tải lại.');
+          fetchDataAndBuildTable();
         } else {
           statusDiv.className = 'status-error';
         }
