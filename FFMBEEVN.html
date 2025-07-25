@@ -29,6 +29,10 @@
         button:hover {
             background-color: #2980b9;
         }
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -57,6 +61,14 @@
             background-color: #d4edda;
             color: #155724;
         }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
         .filter-option {
             margin-top: 10px;
         }
@@ -66,6 +78,9 @@
     <h1>QUẢN LÝ ĐƠN HÀNG BEE</h1>
     
     <div class="controls">
+        <button id="fetchData">Lấy Dữ Liệu Từ Nguồn</button>
+        <button id="transferData" disabled>Chuyển Dữ Liệu Đích</button>
+        
         <div class="filter-option">
             <label>
                 <input type="checkbox" id="showOnlyBee" checked>
@@ -73,6 +88,8 @@
             </label>
         </div>
     </div>
+    
+    <div id="status" class="status"></div>
     
     <div style="overflow-x: auto;">
         <table id="dataTable">
@@ -84,7 +101,7 @@
                     <th>SĐT</th>
                     <th>Địa chỉ</th>
                     <th>Thành phố</th>
-                    <th>Bang</th>
+                    <th>State</th>
                     <th>Zipcode</th>
                     <th>Mặt hàng</th>
                     <th>Tên mặt hàng 1</th>
@@ -108,106 +125,174 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            const fetchBtn = document.getElementById('fetchData');
+            const transferBtn = document.getElementById('transferData');
             const showOnlyBeeCheckbox = document.getElementById('showOnlyBee');
             const tableBody = document.getElementById('tableBody');
+            const statusDiv = document.getElementById('status');
             
-            // Dữ liệu mẫu
-            const sampleData = [
-                {
-                    "maDonHang": "Kemd9130c72",
-                    "ngayLenDon": "2025-07-16T17:00:00.000Z",
-                    "name": "Ludy flory",
-                    "phone": 9313970500,
-                    "address": "8014 Nc Highway 4",
-                    "city": "Littleton",
-                    "state": "NC",
-                    "zipcode": "27850",
-                    "matHang": "Kem Body",
-                    "tenMatHang1": "Kem Body",
-                    "soLuongMatHang1": 5,
-                    "tenMatHang2": "Kem Body",
-                    "soLuongMatHang2": "",
-                    "quaTang": "",
-                    "soLuongQuaKem": "",
-                    "giaBan": 179,
-                    "loaiTienThanhToan": "USD",
-                    "tongTienVND": 4296000,
-                    "hinhThucThanhToan": "Money Gram",
-                    "ghiChu": "",
-                    "nhanVienSale": "Phạm Thị Lệ",
-                    "nhanVienMarketing": "Nguyễn Thị Như Quỳnh",
-                    "nvVanDon": "Lê Thị Thuý",
-                    "ketQuaCheck": "OK",
-                    "trangThaiGiaoHangNB": "Chưa giao",
-                    "lyDo": "",
-                    "donViVanChuyen": "MGT",
-                    "trangThaiThuTien": "",
-                    "tenLenDon": "Ludy flory",
-                    "khuVuc": "US",
-                    "ngayDongHang": "",
-                    "maTracking": "1ZJ4D0920304687439",
-                    "trangThaiGiaoHang": "223r23r37",
-                    "thoiGianGiaoDuKien": "17/22",
-                    "phiShipNoiDiaUSD": "223r23r37",
-                    "phiXuLyDonUSD": "223r23r37",
-                    "ghiChu2": "223r23r37",
-                    "soWhatsAppViber": null,
-                    "ghiChuBee": "",
-                    "danhDau": "223r23r37",
-                    "ngayDoiSoat": "2025-07-16T17:00:00.000Z"
-                },
-                // Thêm dữ liệu mẫu khác với donViVanChuyen = "BEE"
-                {
-                    "maDonHang": "BEE123456",
-                    "ngayLenDon": "2025-07-17T10:00:00.000Z",
-                    "name": "Nguyễn Văn A",
-                    "phone": 912345678,
-                    "address": "123 Đường ABC",
-                    "city": "Hà Nội",
-                    "state": "HN",
-                    "zipcode": "100000",
-                    "matHang": "Kem Dưỡng",
-                    "tenMatHang1": "Kem Dưỡng Trắng",
-                    "soLuongMatHang1": 2,
-                    "giaBan": 250,
-                    "loaiTienThanhToan": "USD",
-                    "tongTienVND": 6000000,
-                    "hinhThucThanhToan": "Chuyển khoản",
-                    "donViVanChuyen": "BEE",
-                    "maTracking": "BEE123456789",
-                    "trangThaiGiaoHang": "Đang vận chuyển",
-                    "thoiGianGiaoDuKien": "20/07/2025",
-                    "ngayDoiSoat": "2025-07-17T10:00:00.000Z"
+            // Link nguồn dữ liệu
+            const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
+            const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbzo3JdiCq7q62z4YV-KfStgt494Rl4BBVKNSRBCutSLKJfRt-92kU2vcEvKjH3wB7DM/exec';
+            
+            let allData = [];
+            let displayedData = [];
+            
+            // Lấy dữ liệu từ nguồn
+            fetchBtn.addEventListener('click', fetchDataFromSource);
+            
+            // Tự động lấy dữ liệu khi trang load
+            fetchDataFromSource();
+            
+            function fetchDataFromSource() {
+                statusDiv.textContent = 'Đang tải dữ liệu từ nguồn...';
+                statusDiv.className = 'status loading';
+                fetchBtn.disabled = true;
+                
+                fetch(SOURCE_URL)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Không thể kết nối đến nguồn dữ liệu');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        allData = data;
+                        filterData();
+                        transferBtn.disabled = false;
+                        fetchBtn.disabled = false;
+                        
+                        const beeCount = allData.filter(row => 
+                            row.donViVanChuyen && 
+                            row.donViVanChuyen.toString().toUpperCase() === 'BEE'
+                        ).length;
+                        
+                        statusDiv.textContent = `Đã tải thành công ${allData.length} đơn hàng. Trong đó có ${beeCount} đơn BEE.`;
+                        statusDiv.className = 'status success';
+                    })
+                    .catch(error => {
+                        statusDiv.textContent = 'Lỗi khi tải dữ liệu: ' + error.message;
+                        statusDiv.className = 'status error';
+                        fetchBtn.disabled = false;
+                        console.error('Lỗi:', error);
+                        
+                        // Fallback: Sử dụng dữ liệu mẫu nếu không kết nối được
+                        useSampleData();
+                    });
+            }
+            
+            function useSampleData() {
+                allData = [
+                    {
+                        "maDonHang": "Kemd9130c72",
+                        "ngayLenDon": "2025-07-16T17:00:00.000Z",
+                        "name": "Ludy flory",
+                        "phone": 9313970500,
+                        "address": "8014 Nc Highway 4",
+                        "city": "Littleton",
+                        "state": "NC",
+                        "zipcode": "27850",
+                        "matHang": "Kem Body",
+                        "tenMatHang1": "Kem Body",
+                        "soLuongMatHang1": 5,
+                        "giaBan": 179,
+                        "loaiTienThanhToan": "USD",
+                        "tongTienVND": 4296000,
+                        "hinhThucThanhToan": "Money Gram",
+                        "donViVanChuyen": "MGT",
+                        "maTracking": "1ZJ4D0920304687439",
+                        "trangThaiGiaoHang": "Đang xử lý",
+                        "thoiGianGiaoDuKien": "17/22",
+                        "ngayDoiSoat": "2025-07-16T17:00:00.000Z"
+                    },
+                    {
+                        "maDonHang": "BEE123456",
+                        "ngayLenDon": "2025-07-17T10:00:00.000Z",
+                        "name": "Nguyễn Văn A",
+                        "phone": 912345678,
+                        "address": "123 Đường ABC",
+                        "city": "Hà Nội",
+                        "state": "HN",
+                        "zipcode": "100000",
+                        "matHang": "Kem Dưỡng",
+                        "tenMatHang1": "Kem Dưỡng Trắng",
+                        "soLuongMatHang1": 2,
+                        "giaBan": 250,
+                        "loaiTienThanhToan": "USD",
+                        "tongTienVND": 6000000,
+                        "hinhThucThanhToan": "Chuyển khoản",
+                        "donViVanChuyen": "BEE",
+                        "maTracking": "BEE123456789",
+                        "trangThaiGiaoHang": "Đang vận chuyển",
+                        "thoiGianGiaoDuKien": "20/07/2025",
+                        "ngayDoiSoat": "2025-07-17T10:00:00.000Z"
+                    }
+                ];
+                
+                filterData();
+                statusDiv.textContent = 'Đang sử dụng dữ liệu mẫu (không kết nối được tới nguồn)';
+                statusDiv.className = 'status loading';
+            }
+            
+            // Chuyển dữ liệu đến đích
+            transferBtn.addEventListener('click', function() {
+                if (displayedData.length === 0) {
+                    statusDiv.textContent = 'Không có dữ liệu để chuyển. Vui lòng tải dữ liệu trước.';
+                    statusDiv.className = 'status error';
+                    return;
                 }
-            ];
-            
-            // Lọc dữ liệu khi thay đổi checkbox
-            showOnlyBeeCheckbox.addEventListener('change', function() {
-                filterData(sampleData);
+                
+                statusDiv.textContent = 'Đang chuyển dữ liệu đến đích...';
+                statusDiv.className = 'status loading';
+                transferBtn.disabled = true;
+                
+                fetch(DESTINATION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(displayedData)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Không thể kết nối đến máy chủ đích');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    statusDiv.textContent = `Đã chuyển thành công ${displayedData.length} đơn hàng đến đích.`;
+                    statusDiv.className = 'status success';
+                    transferBtn.disabled = false;
+                })
+                .catch(error => {
+                    statusDiv.textContent = 'Lỗi khi chuyển dữ liệu: ' + error.message;
+                    statusDiv.className = 'status error';
+                    transferBtn.disabled = false;
+                    console.error('Lỗi:', error);
+                });
             });
             
-            // Tự động hiển thị dữ liệu khi trang load
-            filterData(sampleData);
+            // Lọc dữ liệu khi thay đổi checkbox
+            showOnlyBeeCheckbox.addEventListener('change', filterData);
             
             // Hàm lọc dữ liệu theo đơn vị vận chuyển
-            function filterData(data) {
-                let filteredData;
+            function filterData() {
                 if (showOnlyBeeCheckbox.checked) {
-                    filteredData = data.filter(row => 
+                    displayedData = allData.filter(row => 
                         row.donViVanChuyen && 
                         row.donViVanChuyen.toString().toUpperCase() === 'BEE'
                     );
                 } else {
-                    filteredData = [...data];
+                    displayedData = [...allData];
                 }
-                renderTable(filteredData);
+                renderTable();
             }
             
             // Hiển thị dữ liệu trong bảng
-            function renderTable(data) {
+            function renderTable() {
                 tableBody.innerHTML = '';
                 
-                if (data.length === 0) {
+                if (displayedData.length === 0) {
                     const tr = document.createElement('tr');
                     const td = document.createElement('td');
                     td.colSpan = 20;
@@ -218,7 +303,7 @@
                     return;
                 }
                 
-                data.forEach(row => {
+                displayedData.forEach(row => {
                     const tr = document.createElement('tr');
                     
                     // Thêm các cột chính
