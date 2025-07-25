@@ -2,446 +2,155 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Quản Lý Đơn Hàng BEE (v3.1 - Đồng bộ hóa tin cậy)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chỉnh sửa dữ liệu Google Sheet</title>
     <style>
-        :root {
-            --primary-color: #3498db;
-            --secondary-color: #2c3e50;
-            --success-color: #2ecc71;
-            --warning-color: #f1c40f;
-            --light-gray: #f8f9fa;
-            --medium-gray: #ddd;
-            --selection-bg-color: #a9d7f9;
-            --changed-bg-color: #fff9c4; /* Màu cho ô đã thay đổi */
-        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: sans-serif;
             margin: 20px;
-            background-color: var(--light-gray);
-        }
-        h1 {
-            color: var(--secondary-color);
-        }
-        .controls {
-            background-color: white;
-            padding: 15px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.07);
-            display: flex;
-            align-items: center;
-        }
-        button {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 10px 18px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin-right: 10px;
-            font-size: 1rem;
-            transition: background-color 0.2s ease;
-        }
-        #syncDataBtn {
-            background-color: var(--success-color);
-        }
-        button:hover {
-            opacity: 0.85;
-        }
-        button:disabled {
-            background-color: #95a5a6;
-            cursor: not-allowed;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
-            user-select: none;
+            margin-bottom: 20px;
         }
         th, td {
-            border: 1px solid var(--medium-gray);
-            padding: 0;
+            border: 1px solid #ddd;
+            padding: 8px;
             text-align: left;
-            white-space: nowrap;
         }
         th {
-            background-color: var(--primary-color);
+            background-color: #f2f2f2;
+        }
+        td[contenteditable="true"]:focus {
+            background-color: #e8f0fe;
+            outline: 2px solid #4d90fe;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
             color: white;
-            position: sticky;
-            top: 0;
-            padding: 10px 8px;
-            z-index: 2;
-        }
-        tr:nth-child(even) { background-color: #f2f2f2; }
-        tr:nth-child(odd) { background-color: #ffffff; }
-
-        td input {
-            width: 100%;
-            height: 100%;
             border: none;
-            background-color: transparent;
-            padding: 10px 8px;
-            font-size: 1rem;
-            box-sizing: border-box;
+            border-radius: 4px;
         }
-        td input:focus {
-            outline: 2px solid var(--primary-color);
-            position: relative;
-            z-index: 1;
+        button:hover {
+            background-color: #45a049;
         }
-        .status {
-            padding: 12px;
-            margin: 10px 0;
-            border-radius: 5px;
-            font-size: 1rem;
-        }
-        .success { background-color: #d4edda; color: #155724; }
-        .error { background-color: #f8d7da; color: #721c24; }
-        .loading { background-color: #fff3cd; color: #856404; }
-        .filter-option { margin-left: 20px; }
-        td.cell-selected, td.cell-selected input {
-            background-color: var(--selection-bg-color) !important;
-        }
-        td.cell-changed, td.cell-changed input {
-            background-color: var(--changed-bg-color) !important;
+        #message {
+            margin-top: 15px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
-    <h1>QUẢN LÝ ĐƠN HÀNG BEE (v3.1)</h1>
-    
-    <div class="controls">
-        <button id="fetchData">Lấy Dữ Liệu Từ Nguồn</button>
-        <button id="syncDataBtn" disabled>Đồng bộ Dữ liệu</button>
-        
-        <div class="filter-option">
-            <label>
-                <input type="checkbox" id="showOnlyBee" checked>
-                Chỉ hiển thị đơn hàng BEE
-            </label>
-        </div>
-    </div>
-    
-    <div id="status" class="status"></div>
-    
-    <div style="overflow-x: auto;">
-        <table id="dataTable">
-            <thead id="tableHead"></thead>
-            <tbody id="tableBody"></tbody>
-        </table>
-    </div>
+
+    <h1>Bảng dữ liệu có thể chỉnh sửa</h1>
+    <p>Nhấp vào các ô để chỉnh sửa nội dung, sau đó nhấn nút "Cập nhật" để lưu thay đổi.</p>
+
+    <table id="dataTable">
+        <thead>
+            <!-- Tiêu đề bảng sẽ được tạo tự động -->
+        </thead>
+        <tbody>
+            <!-- Dữ liệu sẽ được tải vào đây -->
+        </tbody>
+    </table>
+
+    <button onclick="updateData()">Cập nhật</button>
+    <div id="message"></div>
 
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const fetchBtn = document.getElementById('fetchData');
-        const syncBtn = document.getElementById('syncDataBtn');
-        const showOnlyBeeCheckbox = document.getElementById('showOnlyBee');
-        const tableHead = document.getElementById('tableHead');
-        const tableBody = document.getElementById('tableBody');
-        const statusDiv = document.getElementById('status');
-        
-        const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbxoT_AzLCrcsHAuthMw0aL-5GkSnhT9PMUGNsqYbUe_lirE4PH1r9g09ZI_eTzbzW0/exec';
         const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
-        
-        let allData = [];
-        let displayedData = [];
-        let changedRows = new Set(); 
+        const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbw8Y06lHN4PncNvfBZOu2h-pTGqlQZwB_-zzOLqxHlUmBKOMUokmTSrkV7jHvHt9-wR/exec';
 
-        const headers = [
-            { key: 'maDonHang', name: 'Mã đơn hàng' }, { key: 'ngayLenDon', name: 'Ngày lên đơn' },
-            { key: 'name', name: 'Tên KH' }, { key: 'phone', name: 'SĐT' },
-            { key: 'address', name: 'Địa chỉ' }, { key: 'city', name: 'Thành phố' },
-            { key: 'state', name: 'State' }, { key: 'zipcode', name: 'Zipcode' },
-            { key: 'matHang', name: 'Mặt hàng' }, { key: 'tenMatHang1', name: 'Tên mặt hàng 1' },
-            { key: 'soLuongMatHang1', name: 'SL mặt hàng 1' }, { key: 'giaBan', name: 'Giá bán' },
-            { key: 'loaiTienThanhToan', name: 'Loại tiền' }, { key: 'tongTienVND', name: 'Tổng tiền (VNĐ)' },
-            { key: 'hinhThucThanhToan', name: 'Hình thức TT' }, { key: 'donViVanChuyen', name: 'Đơn vị VC' },
-            { key: 'maTracking', name: 'Mã Tracking' }, { key: 'trangThaiGiaoHang', name: 'Trạng thái' },
-            { key: 'thoiGianGiaoDuKien', name: 'TG dự kiến' }, { key: 'ngayDoiSoat', name: 'Ngày đối soát' }
-        ];
-
-        function initializeApp() {
-            renderHeader();
-            fetchDataFromSource();
-            setupEventListeners();
-        }
-
-        function setupEventListeners() {
-            fetchBtn.addEventListener('click', fetchDataFromSource);
-            syncBtn.addEventListener('click', syncDataToDestination);
-            showOnlyBeeCheckbox.addEventListener('change', filterData);
-            
-            tableBody.addEventListener('input', function(e) {
-                if (e.target.tagName === 'INPUT') {
-                    const input = e.target;
-                    const row = input.closest('tr');
-                    const maDonHang = row.dataset.maDonHang;
-                    if (maDonHang) {
-                        changedRows.add(maDonHang);
-                        input.closest('td').classList.add('cell-changed');
-                        syncBtn.disabled = false;
-                    }
-                }
-            });
-
-            setupTableSelectionListeners();
-        }
-
-        function renderHeader() {
-            const tr = document.createElement('tr');
-            headers.forEach(h => {
-                const th = document.createElement('th');
-                th.textContent = h.name;
-                tr.appendChild(th);
-            });
-            tableHead.appendChild(tr);
-        }
-        
-        function fetchDataFromSource() {
-            setStatus('Đang tải dữ liệu từ nguồn...', 'loading');
-            fetchBtn.disabled = true;
-            syncBtn.disabled = true;
-            changedRows.clear();
-            
+        // Hàm để lấy và hiển thị dữ liệu khi trang được tải
+        window.onload = function() {
             fetch(SOURCE_URL)
-                .then(response => {
-                    if (!response.ok) throw new Error(`Không thể kết nối đến nguồn dữ liệu. Status: ${response.status}`);
-                    return response.json();
-                })
+                .then(response => response.json())
                 .then(data => {
-                    allData = data.map(row => {
-                        const newRow = {};
-                        headers.forEach(h => {
-                            newRow[h.key] = row[h.key] !== undefined && row[h.key] !== null ? row[h.key] : '';
+                    if (data && data.length > 0) {
+                        const table = document.getElementById('dataTable');
+                        const thead = table.querySelector('thead');
+                        const tbody = table.querySelector('tbody');
+
+                        // Xóa nội dung cũ
+                        thead.innerHTML = '';
+                        tbody.innerHTML = '';
+
+                        // Tạo hàng tiêu đề
+                        const headers = Object.keys(data[0]);
+                        const headerRow = document.createElement('tr');
+                        headers.forEach(headerText => {
+                            const th = document.createElement('th');
+                            th.textContent = headerText;
+                            headerRow.appendChild(th);
                         });
-                        return newRow;
-                    });
-                    filterData();
-                    fetchBtn.disabled = false;
-                    const beeCount = allData.filter(row => row.donViVanChuyen?.toString().toUpperCase() === 'BEE').length;
-                    setStatus(`Đã tải thành công ${allData.length} đơn hàng. Trong đó có ${beeCount} đơn BEE.`, 'success');
+                        thead.appendChild(headerRow);
+
+                        // Tạo các hàng dữ liệu
+                        data.forEach(rowData => {
+                            const row = document.createElement('tr');
+                            headers.forEach(header => {
+                                const cell = document.createElement('td');
+                                cell.textContent = rowData[header];
+                                cell.setAttribute('contenteditable', 'true');
+                                row.appendChild(cell);
+                            });
+                            tbody.appendChild(row);
+                        });
+                    }
                 })
                 .catch(error => {
-                    setStatus('Lỗi khi tải dữ liệu: ' + error.message, 'error');
-                    fetchBtn.disabled = false;
-                    console.error('Lỗi:', error);
+                    console.error('Lỗi khi lấy dữ liệu:', error);
+                    document.getElementById('message').textContent = 'Lỗi khi tải dữ liệu!';
+                    document.getElementById('message').style.color = 'red';
                 });
-        }
-        
-        // *** HÀM ĐƯỢC CẢI TIẾN ***
-        function syncDataToDestination() {
-            if (changedRows.size === 0) {
-                setStatus('Không có thay đổi nào để đồng bộ.', 'loading');
-                return;
-            }
+        };
 
-            const dataToSync = getChangedData();
-            
-            setStatus(`Đang đồng bộ ${dataToSync.length} đơn hàng đã thay đổi...`, 'loading');
-            syncBtn.disabled = true;
-            
-            const payload = {
-                action: 'update',
-                headers: headers.map(h => h.key), // Gửi kèm thứ tự cột
-                data: dataToSync 
-            };
+        // Hàm để thu thập và gửi dữ liệu đã cập nhật
+        function updateData() {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = 'Đang cập nhật...';
+            messageDiv.style.color = 'orange';
 
+            const table = document.getElementById('dataTable');
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
+            const rows = table.querySelectorAll('tbody tr');
+            const updatedData = [];
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const rowData = {};
+                cells.forEach((cell, index) => {
+                    rowData[headers[index]] = cell.textContent;
+                });
+                updatedData.push(rowData);
+            });
+
+            // Gửi dữ liệu đã cập nhật đến URL đích
             fetch(DESTINATION_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                mode: 'no-cors', // Thường cần thiết khi giao tiếp giữa các web app của Apps Script
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updatedData)
             })
             .then(response => {
-                // Kiểm tra xem phản hồi có ổn không (status code 200-299)
-                if (!response.ok) {
-                    // Nếu không ổn, đọc text lỗi và ném ra để khối .catch xử lý
-                    return response.text().then(text => {
-                        throw new Error(`Lỗi từ máy chủ: ${response.status} ${response.statusText}. Phản hồi: ${text}`);
-                    });
-                }
-                // Nếu ổn, phân tích JSON
-                return response.json();
-            })
-            .then(result => {
-                // Backend nên trả về một object, ví dụ: { success: true } hoặc { success: false, error: '...' }
-                if (result.success) {
-                    setStatus(`Đồng bộ thành công ${result.updatedRows} đơn hàng. Vui lòng kiểm tra sheet đích.`, 'success');
-                    changedRows.clear();
-                    document.querySelectorAll('.cell-changed').forEach(cell => cell.classList.remove('cell-changed'));
-                    // Tải lại dữ liệu sau một khoảng trễ ngắn để đảm bảo sheet đã cập nhật
-                    setTimeout(fetchDataFromSource, 2000); 
-                } else {
-                    // Nếu backend trả về lỗi có cấu trúc
-                    throw new Error(result.error || 'Máy chủ báo cáo có lỗi nhưng không rõ nguyên nhân.');
-                }
+                 // Do mode 'no-cors', chúng ta không thể đọc phản hồi chi tiết
+                 // nhưng chúng ta có thể giả định thành công nếu không có lỗi mạng.
+                messageDiv.textContent = 'Cập nhật thành công!';
+                messageDiv.style.color = 'green';
             })
             .catch(error => {
-                // Bắt tất cả các lỗi (mạng, phân tích cú pháp, lỗi được ném ra)
-                setStatus('Lỗi nghiêm trọng khi đồng bộ: ' + error.message, 'error');
-                console.error('Chi tiết lỗi đồng bộ:', error);
-                syncBtn.disabled = false; // Kích hoạt lại nút để người dùng thử lại
+                console.error('Lỗi khi cập nhật dữ liệu:', error);
+                messageDiv.textContent = 'Đã xảy ra lỗi khi cập nhật!';
+                messageDiv.style.color = 'red';
             });
         }
-
-        function getChangedData() {
-            const data = [];
-            changedRows.forEach(maDonHang => {
-                const rowElement = tableBody.querySelector(`tr[data-ma-don-hang="${maDonHang}"]`);
-                if (rowElement) {
-                    const rowData = {};
-                    const inputs = rowElement.querySelectorAll('input');
-                    inputs.forEach(input => {
-                        rowData[input.name] = input.value;
-                    });
-                    data.push(rowData);
-                }
-            });
-            return data;
-        }
-
-        function filterData() {
-            if (showOnlyBeeCheckbox.checked) {
-                displayedData = allData.filter(row => row.donViVanChuyen?.toString().toUpperCase() === 'BEE');
-            } else {
-                displayedData = [...allData];
-            }
-            renderTable();
-        }
-        
-        function renderTable() {
-            tableBody.innerHTML = '';
-            
-            if (displayedData.length === 0) {
-                const tr = document.createElement('tr');
-                const td = document.createElement('td');
-                td.colSpan = headers.length;
-                td.textContent = 'Không có dữ liệu để hiển thị';
-                td.style.textAlign = 'center';
-                td.style.padding = '10px';
-                tr.appendChild(td);
-                tableBody.appendChild(tr);
-                return;
-            }
-            
-            displayedData.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.dataset.maDonHang = row.maDonHang;
-
-                headers.forEach(header => {
-                    const td = document.createElement('td');
-                    const input = document.createElement('input');
-                    input.type = 'text';
-                    input.name = header.key;
-                    let value = row[header.key];
-                    if ((header.key === 'ngayLenDon' || header.key === 'ngayDoiSoat') && value) {
-                        value = formatDate(value);
-                    }
-                    input.value = value;
-                    td.appendChild(input);
-                    tr.appendChild(td);
-                });
-                tableBody.appendChild(tr);
-            });
-        }
-        
-        function setStatus(message, type) {
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-        }
-        
-        function formatDate(dateString) {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return dateString; // Trả về chuỗi gốc nếu không phải ngày hợp lệ
-            // Chuyển đổi sang ngày/tháng/năm
-            let day = date.getDate().toString().padStart(2, '0');
-            let month = (date.getMonth() + 1).toString().padStart(2, '0');
-            let year = date.getFullYear();
-            return `${day}/${month}/${year}`;
-        }
-
-        function setupTableSelectionListeners() {
-            let isSelecting = false;
-            let startCell = null;
-
-            tableBody.addEventListener('mousedown', (e) => {
-                const target = e.target.closest('td');
-                if (!target || e.target.closest('button')) return;
-                isSelecting = true;
-                if (!e.ctrlKey) {
-                    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
-                }
-                startCell = target;
-                target.classList.toggle('cell-selected');
-                document.body.addEventListener('mouseup', () => { isSelecting = false; startCell = null; }, { once: true });
-            });
-
-            tableBody.addEventListener('mouseover', (e) => {
-                if (!isSelecting || !startCell) return;
-                const target = e.target.closest('td');
-                if (target) {
-                    const allRows = Array.from(tableBody.rows);
-                    document.querySelectorAll('.cell-selected').forEach(c => c.classList.remove('cell-selected'));
-                    const startRowIndex = startCell.parentNode.rowIndex -1;
-                    const startCellIndex = startCell.cellIndex;
-                    const endRowIndex = target.parentNode.rowIndex -1;
-                    const endCellIndex = target.cellIndex;
-                    const minRow = Math.min(startRowIndex, endRowIndex);
-                    const maxRow = Math.max(startRowIndex, endRowIndex);
-                    const minCol = Math.min(startCellIndex, endCellIndex);
-                    const maxCol = Math.max(startCellIndex, endCellIndex);
-                    for (let i = minRow; i <= maxRow; i++) {
-                        for (let j = minCol; j <= maxCol; j++) {
-                            allRows[i]?.cells[j]?.classList.add('cell-selected');
-                        }
-                    }
-                }
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Delete' || e.key === 'Backspace') {
-                    const selectedCells = document.querySelectorAll('.cell-selected');
-                    if (selectedCells.length > 0) {
-                        e.preventDefault();
-                        selectedCells.forEach(cell => {
-                            const input = cell.querySelector('input');
-                            if (input) {
-                                input.value = '';
-                                input.dispatchEvent(new Event('input', { bubbles: true }));
-                            }
-                        });
-                    }
-                }
-            });
-
-            tableBody.addEventListener('paste', (e) => {
-                const targetElement = e.target;
-                if (targetElement.tagName !== 'INPUT') return;
-                e.preventDefault();
-                const pastedText = (e.clipboardData || window.clipboardData).getData('text');
-                const rowsOfData = pastedText.trim().split(/\r?\n/).map(row => row.split('\t'));
-                const startCell = targetElement.closest('td');
-                const startRow = targetElement.closest('tr');
-                const allTableRows = Array.from(tableBody.children);
-                const startRowIndex = allTableRows.indexOf(startRow);
-                const startCellIndex = Array.from(startRow.children).indexOf(startCell);
-
-                rowsOfData.forEach((rowData, rowIndex) => {
-                    const targetRow = allTableRows[startRowIndex + rowIndex];
-                    if (!targetRow) return;
-                    rowData.forEach((cellData, cellIndex) => {
-                        const input = targetRow.cells[startCellIndex + cellIndex]?.querySelector('input');
-                        if (input) {
-                            input.value = cellData.trim();
-                            input.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
-                    });
-                });
-            });
-        }
-        
-        initializeApp();
-    });
     </script>
+
 </body>
 </html>
