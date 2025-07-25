@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Quản Lý Đơn Hàng BEE (v3.0 - Đồng bộ hóa)</title>
+    <title>Quản Lý Đơn Hàng BEE (v3.1 - Đồng bộ hóa tin cậy)</title>
     <style>
         :root {
             --primary-color: #3498db;
@@ -70,6 +70,7 @@
             position: sticky;
             top: 0;
             padding: 10px 8px;
+            z-index: 2;
         }
         tr:nth-child(even) { background-color: #f2f2f2; }
         tr:nth-child(odd) { background-color: #ffffff; }
@@ -107,7 +108,7 @@
     </style>
 </head>
 <body>
-    <h1>QUẢN LÝ ĐƠN HÀNG BEE</h1>
+    <h1>QUẢN LÝ ĐƠN HÀNG BEE (v3.1)</h1>
     
     <div class="controls">
         <button id="fetchData">Lấy Dữ Liệu Từ Nguồn</button>
@@ -139,16 +140,13 @@
         const tableBody = document.getElementById('tableBody');
         const statusDiv = document.getElementById('status');
         
-        // URL đích (nơi nhận dữ liệu để cập nhật)
         const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbwsknBG_qHJBJszXucDexJl4pcNm5fnZ_cXjKfDi5XUvQgmI6FVZICZXKuqp834t53v/exec';
-        // URL nguồn (nơi lấy dữ liệu ban đầu)
         const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
         
         let allData = [];
         let displayedData = [];
-        let changedRows = new Set(); // Dùng Set để lưu trữ `maDonHang` của các hàng đã thay đổi
+        let changedRows = new Set(); 
 
-        // Cấu trúc dữ liệu, đảm bảo `key` khớp với tên thuộc tính trong Apps Script
         const headers = [
             { key: 'maDonHang', name: 'Mã đơn hàng' }, { key: 'ngayLenDon', name: 'Ngày lên đơn' },
             { key: 'name', name: 'Tên KH' }, { key: 'phone', name: 'SĐT' },
@@ -177,10 +175,8 @@
                 if (e.target.tagName === 'INPUT') {
                     const input = e.target;
                     const row = input.closest('tr');
-                    // Lấy `maDonHang` từ `dataset` của hàng
                     const maDonHang = row.dataset.maDonHang;
                     if (maDonHang) {
-                        // Thêm `maDonHang` vào danh sách các hàng cần đồng bộ
                         changedRows.add(maDonHang);
                         input.closest('td').classList.add('cell-changed');
                         syncBtn.disabled = false;
@@ -209,7 +205,7 @@
             
             fetch(SOURCE_URL)
                 .then(response => {
-                    if (!response.ok) throw new Error('Không thể kết nối đến nguồn dữ liệu');
+                    if (!response.ok) throw new Error(`Không thể kết nối đến nguồn dữ liệu. Status: ${response.status}`);
                     return response.json();
                 })
                 .then(data => {
@@ -232,6 +228,7 @@
                 });
         }
         
+        // *** HÀM ĐƯỢC CẢI TIẾN ***
         function syncDataToDestination() {
             if (changedRows.size === 0) {
                 setStatus('Không có thay đổi nào để đồng bộ.', 'loading');
@@ -245,30 +242,47 @@
             
             const payload = {
                 action: 'update',
-                data: dataToSync // `data` là một mảng các object, mỗi object là một hàng
+                headers: headers.map(h => h.key), // Gửi kèm thứ tự cột
+                data: dataToSync 
             };
 
             fetch(DESTINATION_URL, {
                 method: 'POST',
-                mode: 'no-cors',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             })
-            .then(() => {
-                setStatus(`Đã gửi yêu cầu đồng bộ ${dataToSync.length} đơn hàng. Vui lòng kiểm tra sheet đích.`, 'success');
-                changedRows.clear();
-                document.querySelectorAll('.cell-changed').forEach(cell => cell.classList.remove('cell-changed'));
-                setTimeout(fetchDataFromSource, 1500);
+            .then(response => {
+                // Kiểm tra xem phản hồi có ổn không (status code 200-299)
+                if (!response.ok) {
+                    // Nếu không ổn, đọc text lỗi và ném ra để khối .catch xử lý
+                    return response.text().then(text => {
+                        throw new Error(`Lỗi từ máy chủ: ${response.status} ${response.statusText}. Phản hồi: ${text}`);
+                    });
+                }
+                // Nếu ổn, phân tích JSON
+                return response.json();
+            })
+            .then(result => {
+                // Backend nên trả về một object, ví dụ: { success: true } hoặc { success: false, error: '...' }
+                if (result.success) {
+                    setStatus(`Đồng bộ thành công ${result.updatedRows} đơn hàng. Vui lòng kiểm tra sheet đích.`, 'success');
+                    changedRows.clear();
+                    document.querySelectorAll('.cell-changed').forEach(cell => cell.classList.remove('cell-changed'));
+                    // Tải lại dữ liệu sau một khoảng trễ ngắn để đảm bảo sheet đã cập nhật
+                    setTimeout(fetchDataFromSource, 2000); 
+                } else {
+                    // Nếu backend trả về lỗi có cấu trúc
+                    throw new Error(result.error || 'Máy chủ báo cáo có lỗi nhưng không rõ nguyên nhân.');
+                }
             })
             .catch(error => {
-                setStatus('Lỗi khi đồng bộ dữ liệu: ' + error.message, 'error');
-                console.error('Lỗi:', error);
-                syncBtn.disabled = false;
+                // Bắt tất cả các lỗi (mạng, phân tích cú pháp, lỗi được ném ra)
+                setStatus('Lỗi nghiêm trọng khi đồng bộ: ' + error.message, 'error');
+                console.error('Chi tiết lỗi đồng bộ:', error);
+                syncBtn.disabled = false; // Kích hoạt lại nút để người dùng thử lại
             });
         }
 
-        // Hàm này thu thập dữ liệu từ các hàng đã thay đổi.
-        // `maDonHang` được bao gồm trong mỗi object `rowData`.
         function getChangedData() {
             const data = [];
             changedRows.forEach(maDonHang => {
@@ -277,7 +291,6 @@
                     const rowData = {};
                     const inputs = rowElement.querySelectorAll('input');
                     inputs.forEach(input => {
-                        // `input.name` chính là các `key` như 'maDonHang', 'name', 'phone'...
                         rowData[input.name] = input.value;
                     });
                     data.push(rowData);
@@ -312,7 +325,6 @@
             
             displayedData.forEach(row => {
                 const tr = document.createElement('tr');
-                // Lưu `maDonHang` vào dataset của thẻ `<tr>` để làm định danh duy nhất
                 tr.dataset.maDonHang = row.maDonHang;
 
                 headers.forEach(header => {
@@ -340,8 +352,12 @@
         function formatDate(dateString) {
             if (!dateString) return '';
             const date = new Date(dateString);
-            if (isNaN(date.getTime())) return dateString;
-            return date.toLocaleDateString('vi-VN');
+            if (isNaN(date.getTime())) return dateString; // Trả về chuỗi gốc nếu không phải ngày hợp lệ
+            // Chuyển đổi sang ngày/tháng/năm
+            let day = date.getDate().toString().padStart(2, '0');
+            let month = (date.getMonth() + 1).toString().padStart(2, '0');
+            let year = date.getFullYear();
+            return `${day}/${month}/${year}`;
         }
 
         function setupTableSelectionListeners() {
