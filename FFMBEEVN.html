@@ -1,84 +1,156 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>Gửi dữ liệu đơn hàng</title>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
-    label { display: block; margin-top: 10px; font-weight: bold; }
-    input, textarea { width: 100%; padding: 8px; margin-top: 4px; }
-    button { margin-top: 20px; padding: 10px 20px; font-size: 16px; }
-    .success { color: green; margin-top: 10px; }
-    .error { color: red; margin-top: 10px; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chỉnh sửa dữ liệu Google Sheet</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        td[contenteditable="true"]:focus {
+            background-color: #e8f0fe;
+            outline: 2px solid #4d90fe;
+        }
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #message {
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
 
-  <h2>Form nhập đơn hàng</h2>
+    <h1>Bảng dữ liệu có thể chỉnh sửa</h1>
+    <p>Nhấp vào các ô để chỉnh sửa nội dung, sau đó nhấn nút "Cập nhật" để lưu thay đổi.</p>
 
-  <form id="orderForm">
-    <label for="maDonHang">Mã đơn hàng</label>
-    <input type="text" id="maDonHang" name="maDonHang" required>
+    <table id="dataTable">
+        <thead>
+            <!-- Tiêu đề bảng sẽ được tạo tự động -->
+        </thead>
+        <tbody>
+            <!-- Dữ liệu sẽ được tải vào đây -->
+        </tbody>
+    </table>
 
-    <label for="ngayLenDon">Ngày lên đơn</label>
-    <input type="date" id="ngayLenDon" name="ngayLenDon" required>
+    <button onclick="updateData()">Cập nhật</button>
+    <div id="message"></div>
 
-    <label for="name">Tên khách hàng</label>
-    <input type="text" id="name" name="name" required>
+    <script>
+        const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
+        const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbw8Y06lHN4PncNvfBZOu2h-pTGqlQZwB_-zzOLqxHlUmBKOMUokmTSrkV7jHvHt9-wR/exec';
 
-    <label for="phone">Số điện thoại</label>
-    <input type="tel" id="phone" name="phone">
+        // Hàm để lấy và hiển thị dữ liệu khi trang được tải
+        window.onload = function() {
+            fetch(SOURCE_URL)
+                .then(response => response.json())
+                .then(data => {
+                    if (data && data.length > 0) {
+                        const table = document.getElementById('dataTable');
+                        const thead = table.querySelector('thead');
+                        const tbody = table.querySelector('tbody');
 
-    <label for="address">Địa chỉ</label>
-    <textarea id="address" name="address"></textarea>
+                        // Xóa nội dung cũ
+                        thead.innerHTML = '';
+                        tbody.innerHTML = '';
 
-    <!-- Bạn có thể thêm các trường khác ở đây tương ứng với các cột đã liệt kê -->
+                        // Tạo hàng tiêu đề
+                        const headers = Object.keys(data[0]);
+                        const headerRow = document.createElement('tr');
+                        headers.forEach(headerText => {
+                            const th = document.createElement('th');
+                            th.textContent = headerText;
+                            headerRow.appendChild(th);
+                        });
+                        thead.appendChild(headerRow);
 
-    <button type="submit">Gửi</button>
-    <div id="response" class=""></div>
-  </form>
+                        // Tạo các hàng dữ liệu
+                        data.forEach(rowData => {
+                            const row = document.createElement('tr');
+                            headers.forEach(header => {
+                                const cell = document.createElement('td');
+                                cell.textContent = rowData[header];
+                                cell.setAttribute('contenteditable', 'true');
+                                row.appendChild(cell);
+                            });
+                            tbody.appendChild(row);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Lỗi khi lấy dữ liệu:', error);
+                    document.getElementById('message').textContent = 'Lỗi khi tải dữ liệu!';
+                    document.getElementById('message').style.color = 'red';
+                });
+        };
 
-  <script>
-    document.getElementById('orderForm').addEventListener('submit', async function (e) {
-      e.preventDefault();
+        // Hàm để thu thập và gửi dữ liệu đã cập nhật
+        function updateData() {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = 'Đang cập nhật...';
+            messageDiv.style.color = 'orange';
 
-      // Thu thập dữ liệu từ form
-      const formData = new FormData(this);
-      const row = {};
+            const table = document.getElementById('dataTable');
+            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
+            const rows = table.querySelectorAll('tbody tr');
+            const updatedData = [];
 
-      formData.forEach((value, key) => {
-        row[key] = value;
-      });
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('td');
+                const rowData = {};
+                cells.forEach((cell, index) => {
+                    rowData[headers[index]] = cell.textContent;
+                });
+                updatedData.push(rowData);
+            });
 
-      const rows = [row]; // Gửi dạng mảng chứa 1 đối tượng
-
-      const url = "https://script.google.com/macros/s/AKfycby_pezhI6KCBd3VOIb3Qj3cYGCSm_laFm17yhjt09a4hzZ-tec7aoeo0zj1UhACp5jo/exec";
-      const responseDiv = document.getElementById('response');
-      responseDiv.textContent = '⏳ Đang gửi dữ liệu...';
-      responseDiv.className = '';
-
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: `rows=${encodeURIComponent(JSON.stringify(rows))}`
-        });
-
-        const result = await res.json();
-        if (result.error) {
-          responseDiv.textContent = `❌ Lỗi: ${result.error}`;
-          responseDiv.className = 'error';
-        } else {
-          responseDiv.textContent = result.message;
-          responseDiv.className = 'success';
-          document.getElementById('orderForm').reset();
+            // Gửi dữ liệu đã cập nhật đến URL đích
+            fetch(DESTINATION_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Thường cần thiết khi giao tiếp giữa các web app của Apps Script
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(updatedData)
+            })
+            .then(response => {
+                 // Do mode 'no-cors', chúng ta không thể đọc phản hồi chi tiết
+                 // nhưng chúng ta có thể giả định thành công nếu không có lỗi mạng.
+                messageDiv.textContent = 'Cập nhật thành công!';
+                messageDiv.style.color = 'green';
+            })
+            .catch(error => {
+                console.error('Lỗi khi cập nhật dữ liệu:', error);
+                messageDiv.textContent = 'Đã xảy ra lỗi khi cập nhật!';
+                messageDiv.style.color = 'red';
+            });
         }
-      } catch (err) {
-        responseDiv.textContent = `❌ Gửi thất bại: ${err.message}`;
-        responseDiv.className = 'error';
-      }
-    });
-  </script>
+    </script>
 
 </body>
 </html>
