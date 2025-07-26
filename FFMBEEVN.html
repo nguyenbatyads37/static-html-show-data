@@ -2,145 +2,85 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Cập nhật Mã Tracking</title>
+  <title>Gửi dữ liệu đơn hàng</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 480px;
-      margin: 40px auto;
-      padding: 20px;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      background: #f9f9f9;
-    }
-    h1 {
-      font-size: 1.4em;
-      margin-bottom: 0.5em;
-    }
-    label {
-      display: block;
-      margin-top: 1em;
-      font-weight: bold;
-    }
-    input {
-      width: 100%;
-      padding: 0.5em;
-      margin-top: 0.3em;
-      box-sizing: border-box;
-      border: 1px solid #ccc;
-      border-radius: 4px;
-    }
-    button {
-      margin-top: 1.5em;
-      padding: 0.7em;
-      width: 100%;
-      background: #28a745;
-      color: white;
-      border: none;
-      font-size: 1em;
-      cursor: pointer;
-      border-radius: 4px;
-    }
-    button:disabled {
-      background: #94d3a2;
-      cursor: not-allowed;
-    }
-    #result {
-      margin-top: 1em;
-      font-weight: bold;
-      min-height: 1.2em;
-    }
-    .success {
-      color: #28a745;
-    }
-    .error {
-      color: #dc3545;
-    }
+    body { font-family: Arial, sans-serif; padding: 20px; max-width: 800px; margin: auto; }
+    label { display: block; margin-top: 10px; font-weight: bold; }
+    input, textarea { width: 100%; padding: 8px; margin-top: 4px; }
+    button { margin-top: 20px; padding: 10px 20px; font-size: 16px; }
+    .success { color: green; margin-top: 10px; }
+    .error { color: red; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <h1>📝 Cập nhật Mã Tracking</h1>
 
-  <label for="orderId">Mã đơn hàng</label>
-  <input type="text" id="orderId" placeholder="VD: A12345">
+  <h2>Form nhập đơn hàng</h2>
 
-  <label for="tracking">Mã Tracking</label>
-  <input type="text" id="tracking" placeholder="VD: VN000111222">
+  <form id="orderForm">
+    <label for="maDonHang">Mã đơn hàng</label>
+    <input type="text" id="maDonHang" name="maDonHang" required>
 
-  <button id="sendBtn">GỬI</button>
+    <label for="ngayLenDon">Ngày lên đơn</label>
+    <input type="date" id="ngayLenDon" name="ngayLenDon" required>
 
-  <div id="result"></div>
+    <label for="name">Tên khách hàng</label>
+    <input type="text" id="name" name="name" required>
+
+    <label for="phone">Số điện thoại</label>
+    <input type="tel" id="phone" name="phone">
+
+    <label for="address">Địa chỉ</label>
+    <textarea id="address" name="address"></textarea>
+
+    <!-- Bạn có thể thêm các trường khác ở đây tương ứng với các cột đã liệt kê -->
+
+    <button type="submit">Gửi</button>
+    <div id="response" class=""></div>
+  </form>
 
   <script>
-    (function() {
-      const sendBtn = document.getElementById('sendBtn');
-      const resultEl = document.getElementById('result');
-      const orderIdInput = document.getElementById('orderId');
-      const trackingInput = document.getElementById('tracking');
+    document.getElementById('orderForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
 
-      async function sendTracking() {
-        const orderId = orderIdInput.value.trim();
-        const tracking = trackingInput.value.trim();
-        resultEl.textContent = '';
-        resultEl.className = '';
+      // Thu thập dữ liệu từ form
+      const formData = new FormData(this);
+      const row = {};
 
-        if (!orderId || !tracking) {
-          resultEl.textContent = '❗ Vui lòng điền cả Mã đơn hàng và Mã Tracking.';
-          resultEl.className = 'error';
-          return;
+      formData.forEach((value, key) => {
+        row[key] = value;
+      });
+
+      const rows = [row]; // Gửi dạng mảng chứa 1 đối tượng
+
+      const url = "https://script.google.com/macros/s/AKfycby_pezhI6KCBd3VOIb3Qj3cYGCSm_laFm17yhjt09a4hzZ-tec7aoeo0zj1UhACp5jo/exec";
+      const responseDiv = document.getElementById('response');
+      responseDiv.textContent = '⏳ Đang gửi dữ liệu...';
+      responseDiv.className = '';
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `rows=${encodeURIComponent(JSON.stringify(rows))}`
+        });
+
+        const result = await res.json();
+        if (result.error) {
+          responseDiv.textContent = `❌ Lỗi: ${result.error}`;
+          responseDiv.className = 'error';
+        } else {
+          responseDiv.textContent = result.message;
+          responseDiv.className = 'success';
+          document.getElementById('orderForm').reset();
         }
-
-        sendBtn.disabled = true;
-        sendBtn.textContent = 'Đang gửi...';
-
-        const payload = {
-          rows: [
-            { "Mã đơn hàng": orderId, "Mã Tracking": tracking }
-          ]
-        };
-
-        try {
-          const response = await fetch(
-            'https://script.google.com/macros/s/AKfycbxS3A7aGHDXErUT9Le-9HsvXOep30joMJPipIfjfFc4Z5D0q1byRw5xJQ8Kxe_K2Zey/exec',
-            {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload)
-            }
-          );
-          
-          // Thêm kiểm tra response
-          if (response.ok) {
-            resultEl.textContent = '✅ Dữ liệu đã được gửi thành công!';
-            resultEl.className = 'success';
-            trackingInput.value = '';
-            orderIdInput.focus();
-          } else {
-            throw new Error('Lỗi từ server');
-          }
-        } catch (err) {
-          resultEl.textContent = '❌ Lỗi khi gửi dữ liệu: ' + (err.message || 'Không thể kết nối đến server');
-          resultEl.className = 'error';
-          console.error('Lỗi:', err);
-        } finally {
-          sendBtn.disabled = false;
-          sendBtn.textContent = 'GỬI';
-        }
+      } catch (err) {
+        responseDiv.textContent = `❌ Gửi thất bại: ${err.message}`;
+        responseDiv.className = 'error';
       }
-
-      // Thêm sự kiện nhấn Enter
-      function handleKeyPress(e) {
-        if (e.key === 'Enter') {
-          sendTracking();
-        }
-      }
-
-      sendBtn.addEventListener('click', sendTracking);
-      orderIdInput.addEventListener('keypress', handleKeyPress);
-      trackingInput.addEventListener('keypress', handleKeyPress);
-    })();
+    });
   </script>
+
 </body>
 </html>
+
 
