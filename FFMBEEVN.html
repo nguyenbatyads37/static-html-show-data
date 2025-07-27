@@ -163,6 +163,23 @@
             background-color: #3498db;
             color: white;
         }
+        .multi-paste-area {
+            margin-top: 10px;
+            display: none;
+        }
+        .multi-paste-area textarea {
+            width: 100%;
+            min-height: 100px;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-family: monospace;
+        }
+        .multi-paste-buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
         @media (max-width: 768px) {
             .control-panel {
                 flex-direction: column;
@@ -201,6 +218,16 @@
             <div class="action-buttons">
                 <button id="refreshBtn" class="success">Làm mới dữ liệu</button>
                 <button id="saveAllBtn" class="success" style="display: none;">Lưu tất cả thay đổi</button>
+                <button id="multiPasteBtn">Paste nhiều dòng</button>
+            </div>
+        </div>
+        
+        <div class="multi-paste-area" id="multiPasteArea">
+            <p>Nhập danh sách mã Tracking (mỗi mã một dòng, theo thứ tự từ trên xuống):</p>
+            <textarea id="multiPasteTextarea" placeholder="Dán nhiều mã tracking ở đây, mỗi mã một dòng..."></textarea>
+            <div class="multi-paste-buttons">
+                <button id="applyMultiPasteBtn" class="success">Áp dụng</button>
+                <button id="cancelMultiPasteBtn" class="danger">Hủy</button>
             </div>
         </div>
         
@@ -228,6 +255,11 @@
         const refreshBtn = document.getElementById('refreshBtn');
         const saveAllBtn = document.getElementById('saveAllBtn');
         const notification = document.getElementById('notification');
+        const multiPasteBtn = document.getElementById('multiPasteBtn');
+        const multiPasteArea = document.getElementById('multiPasteArea');
+        const multiPasteTextarea = document.getElementById('multiPasteTextarea');
+        const applyMultiPasteBtn = document.getElementById('applyMultiPasteBtn');
+        const cancelMultiPasteBtn = document.getElementById('cancelMultiPasteBtn');
         
         // Danh sách cột cố định sẽ hiển thị
         const DISPLAY_COLUMNS = [
@@ -494,7 +526,7 @@
                 const trackingValue = isChanged ? changedData[item['Mã đơn hàng']] : item['Mã Tracking'];
                 
                 html += `
-                    <tr data-id="${item['Mã đơn hàng'] || index}">
+                    <tr data-id="${item['Mã đơn hàng'] || index}" data-index="${index}">
                         <td class="fixed-column">${index + 1}</td>
                 `;
                 
@@ -673,6 +705,61 @@
             filterDataByTab(currentTab);
         }
         
+        // Hàm xử lý paste nhiều dòng
+        function handleMultiPaste() {
+            multiPasteArea.style.display = 'block';
+            multiPasteTextarea.value = '';
+            multiPasteTextarea.focus();
+        }
+        
+        // Hàm áp dụng paste nhiều dòng
+        function applyMultiPaste() {
+            const trackingList = multiPasteTextarea.value.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            
+            if (trackingList.length === 0) {
+                showNotification('Không có mã tracking nào để áp dụng', true);
+                return;
+            }
+            
+            // Lấy tất cả các dòng trong bảng hiện tại
+            const rows = Array.from(document.querySelectorAll('tbody tr'));
+            
+            // Áp dụng mã tracking theo thứ tự
+            trackingList.forEach((tracking, index) => {
+                if (index < rows.length) {
+                    const row = rows[index];
+                    const maDonHang = row.getAttribute('data-id');
+                    const trackingCell = row.querySelector('[data-field="Mã Tracking"]');
+                    
+                    if (trackingCell) {
+                        trackingCell.textContent = tracking;
+                        
+                        // Đánh dấu là đã thay đổi
+                        if (!changedData[maDonHang]) {
+                            changedData[maDonHang] = {};
+                        }
+                        changedData[maDonHang]['Mã Tracking'] = tracking;
+                        
+                        // Kích hoạt nút lưu
+                        const saveBtn = row.querySelector('.save-btn');
+                        if (saveBtn) saveBtn.disabled = false;
+                    }
+                }
+            });
+            
+            // Hiển thị nút lưu tất cả nếu có thay đổi
+            if (Object.keys(changedData).length > 0) {
+                saveAllBtn.style.display = 'block';
+            }
+            
+            // Ẩn vùng paste nhiều dòng
+            multiPasteArea.style.display = 'none';
+            
+            showNotification(`Đã áp dụng ${trackingList.length} mã tracking`);
+        }
+        
         // Sự kiện
         searchBtn.addEventListener('click', searchData);
         searchInput.addEventListener('keyup', (e) => {
@@ -681,6 +768,11 @@
         
         refreshBtn.addEventListener('click', loadData);
         saveAllBtn.addEventListener('click', saveAllChanges);
+        multiPasteBtn.addEventListener('click', handleMultiPaste);
+        applyMultiPasteBtn.addEventListener('click', applyMultiPaste);
+        cancelMultiPasteBtn.addEventListener('click', () => {
+            multiPasteArea.style.display = 'none';
+        });
         
         // Tải dữ liệu ban đầu
         loadData();
