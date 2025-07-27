@@ -393,6 +393,7 @@
             <thead>
               <tr>
                 <th>STT</th>
+                <th>Chi nhánh</th>
                 <th>Team</th>
                 <th>Sale</th>
                 <th>Số Mess</th>
@@ -486,6 +487,7 @@
                     ...r, 
                     ten: (r.ten || '').trim(), 
                     team: (r.team || '').trim(),
+                    chiNhanh: (r.chi_nhanh || '').trim(), // MODIFIED: Lấy dữ liệu từ biến chi_nhanh
                     soMessCmt: +r.soMess || 0,
                     soDon: +r.donMess || 0,
                     dsChot: +r.doanhSoMess || 0,
@@ -495,19 +497,24 @@
             employeeData = employeeResult;
             const idFromUrl = getUrlParameter('id');
             let restrictedTeamName = null;
+            let restrictedChiNhanh = null;
 
             if (idFromUrl) {
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
                 if (currentUser) {
                     isRestrictedView = true; 
+                    const cleanName = (currentUser.ho_va_ten || '').trim();
+                    restrictedChiNhanh = (currentUser.chi_nhanh || '').trim();
+                    
                     if (currentUser.vi_tri === "Leader") {
-                        restrictedTeamName = currentUser.team;
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${restrictedTeamName}`;
+                        // MODIFIED: Leader xem toàn bộ chi nhánh, không giới hạn team
+                        restrictedTeamName = null; // Bỏ giới hạn team cho leader
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CHI NHÁNH ${restrictedChiNhanh}`;
                         allowedNames = employeeData
-                            .filter(emp => emp.team === restrictedTeamName)
+                            .filter(emp => emp.chi_nhanh === restrictedChiNhanh)
                             .map(emp => (emp.ho_va_ten || '').trim());
                     } else {
-                        const cleanName = (currentUser.ho_va_ten || '').trim();
+                        // Nhân viên bình thường chỉ xem dữ liệu cá nhân
                         document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
                         allowedNames = [cleanName];
                     }
@@ -635,7 +642,14 @@
         data.forEach(r => {
             const name = r.ten;
             if (!summaryData[name]) {
-                summaryData[name] = { team: r.team, mess: 0, don: 0, chot: 0, phanHoi: 0 };
+                summaryData[name] = { 
+                    chiNhanh: r.chiNhanh,
+                    team: r.team, 
+                    mess: 0, 
+                    don: 0, 
+                    chot: 0, 
+                    phanHoi: 0 
+                };
             }
             summaryData[name].mess += r.soMessCmt;
             summaryData[name].don += r.soDon;
@@ -643,19 +657,23 @@
             summaryData[name].phanHoi += r.phanHoi;
         });
 
-        const flatList = Object.keys(summaryData).map(name => ({ name, team: summaryData[name].team, data: summaryData[name] }))
-            .sort((a, b) => {
-                const chotDiff = b.data.chot - a.data.chot;
-                if (chotDiff !== 0) return chotDiff;
-                return a.name.localeCompare(b.name);
-            });
+        const flatList = Object.keys(summaryData).map(name => ({ 
+            name, 
+            chiNhanh: summaryData[name].chiNhanh,
+            team: summaryData[name].team, 
+            data: summaryData[name] 
+        }))
+        .sort((a, b) => {
+            const chotDiff = b.data.chot - a.data.chot;
+            if (chotDiff !== 0) return chotDiff;
+            return a.name.localeCompare(b.name);
+        });
         
         let bodyHtml = flatList.map((item, index) => {
             const s = item.data;
             const rate = s.mess ? s.don / s.mess : 0;
             const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
             
-            // Thêm class top cho 3 người đầu
             let rowClass = '';
             if (index === 0) rowClass = 'top-1';
             else if (index === 1) rowClass = 'top-2';
@@ -663,6 +681,7 @@
             
             return `<tr class="${rowClass}" style="--row-index: ${index}">
                 <td class="text-center">${index + 1}</td>
+                <td class="text-left">${item.chiNhanh}</td>
                 <td class="text-left">${item.team}</td>
                 <td class="text-left">${item.name}</td>
                 <td>${formatNumber(s.mess)}</td>
@@ -684,7 +703,7 @@
         const totalRate = totalSummary.mess ? totalSummary.don / totalSummary.mess : 0;
         
         const footerHtml = `<tr class="total-row">
-                <td class="total-label" colspan="3">TỔNG CỘNG</td>
+                <td class="total-label" colspan="4">TỔNG CỘNG</td>
                 <td class="total-value">${formatNumber(totalSummary.mess)}</td>
                 <td class="total-value">${formatNumber(totalSummary.don)}</td>
                 <td class="total-value">${formatNumber(totalSummary.phanHoi)}</td>
@@ -714,17 +733,13 @@
         sortedDates.forEach(date => {
             let total = { mess: 0, don: 0, chot: 0, phanHoi: 0 };
             
-            // --- ĐÃ THAY ĐỔI TẠI ĐÂY ---
             const sortedDailyData = groupedByDate[date].sort((a, b) => {
-                // Ưu tiên 1: Sắp xếp theo tên (A-Z)
                 const nameCompare = a.ten.localeCompare(b.ten);
                 if (nameCompare !== 0) {
                     return nameCompare;
                 }
-                // Ưu tiên 2: Nếu tên giống nhau, sắp xếp theo DS Chốt giảm dần
                 return b.dsChot - a.dsChot;
             });
-            // --- KẾT THÚC THAY ĐỔI ---
             
             let rowIndex = 0;
             const rowsHtml = sortedDailyData.map(r=>{
@@ -734,6 +749,7 @@
                 total.phanHoi += r.phanHoi;
                 return`<tr style="--row-index: ${rowIndex++}">
                         <td class="text-left">${r.ten}</td>
+                        <td class="text-left">${r.chiNhanh}</td>
                         <td class="text-left">${r.ca}</td>
                         <td class="text-left">${r.sanPham}</td>
                         <td class="text-left">${r.thiTruong}</td>
@@ -745,7 +761,7 @@
             }).join('');
 
             const footHtml=`<tr class='total-row'>
-                            <td colspan='4' class='total-label'>Tổng</td>
+                            <td colspan='5' class='total-label'>Tổng</td>
                             <td class='total-value'>${formatNumber(total.mess)}</td>
                             <td class='total-value'>${formatNumber(total.don)}</td>
                             <td class='total-value'>${formatNumber(total.phanHoi)}</td>
@@ -756,7 +772,16 @@
                                  <table>
                                    <thead>
                                      <tr>
-                                       <th>Tên</th><th>Ca</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Team</th>
+                                       <th>Tên</th>
+                                       <th>Chi nhánh</th>
+                                       <th>Ca</th>
+                                       <th>Sản phẩm</th>
+                                       <th>Thị trường</th>
+                                       <th>Mess</th>
+                                       <th>Đơn</th>
+                                       <th>Phản hồi</th>
+                                       <th>DS Chốt</th>
+                                       <th>Team</th>
                                      </tr>
                                    </thead>
                                    <tbody>${rowsHtml}</tbody>
