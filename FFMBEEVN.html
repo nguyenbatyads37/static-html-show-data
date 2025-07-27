@@ -1,157 +1,741 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Chỉnh sửa dữ liệu Google Sheet</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            margin: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        td[contenteditable="true"]:focus {
-            background-color: #e8f0fe;
-            outline: 2px solid #4d90fe;
-        }
-        button {
-            padding: 10px 15px;
-            font-size: 16px;
-            cursor: pointer;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        #message {
-            margin-top: 15px;
-            font-weight: bold;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Quản lý Mã Tracking</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    
+    h2 {
+      color: #2c3e50;
+      border-bottom: 1px solid #eee;
+      padding-bottom: 10px;
+    }
+    
+    #connection-status {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      padding: 5px 10px;
+      border-radius: 4px;
+      font-weight: bold;
+    }
+    
+    .global-error {
+      background-color: #ffecec;
+      border: 1px solid #f5aca6;
+      border-radius: 5px;
+      padding: 15px;
+      margin-bottom: 20px;
+      color: #d8000c;
+    }
+    
+    .global-error button {
+      margin-right: 10px;
+      margin-top: 10px;
+      padding: 5px 15px;
+      cursor: pointer;
+    }
+    
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    th, td {
+      border: 1px solid #ddd;
+      padding: 12px;
+      text-align: left;
+    }
+    
+    th {
+      background-color: #f8f8f8;
+      font-weight: bold;
+    }
+    
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    
+    input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    
+    button {
+      padding: 8px 16px;
+      background-color: #4285f4;
+      border: none;
+      color: white;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #3367d6;
+    }
+    
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    
+    .status {
+      margin-left: 10px;
+      font-weight: bold;
+    }
+    
+    .success {
+      color: #28a745;
+    }
+    
+    .error {
+      color: #dc3545;
+    }
+    
+    .loading {
+      color: #17a2b8;
+    }
+    
+    .retry-button {
+      background-color: #ffc107;
+      color: #212529;
+    }
+    
+    .retry-button:hover {
+      background-color: #e0a800;
+    }
+    
+    #loading-indicator {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: #6c757d;
+    }
+    
+    .offline-notice {
+      background-color: #fff3cd;
+      border: 1px solid #ffeeba;
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      display: none;
+    }
+    
+    .debug-info {
+      background-color: #e9ecef;
+      border: 1px solid #dee2e6;
+      border-radius: 4px;
+      padding: 10px;
+      margin-top: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      display: none;
+    }
+  </style>
 </head>
 <body>
+  <div id="connection-status">🟢 Đang kiểm tra kết nối...</div>
+  
+  <div class="offline-notice" id="offline-notice">
+    ⚠️ Bạn đang ở chế độ offline. Một số tính năng có thể không khả dụng.
+    <button onclick="location.reload()">Tải lại trang</button>
+  </div>
+  
+  <div id="global-error-container"></div>
+  
+  <h2>Danh sách đơn hàng - Cập nhật mã Tracking</h2>
+  
+  <div>
+    <button onclick="toggleDebug()">Toggle Debug</button>
+    <div id="debug-info" class="debug-info"></div>
+  </div>
+  
+  <div id="loading-indicator">
+    <p>Đang tải dữ liệu...</p>
+    <progress></progress>
+  </div>
+  
+  <table id="data-table">
+    <thead>
+      <tr>
+        <th>Mã đơn hàng</th>
+        <th>Mã Tracking</th>
+        <th>Hành động</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td colspan="3">Vui lòng chờ trong khi hệ thống tải dữ liệu...</td>
+      </tr>
+    </tbody>
+  </table>
 
-    <h1>Bảng dữ liệu có thể chỉnh sửa</h1>
-    <p>Nhấp vào các ô để chỉnh sửa nội dung, sau đó nhấn nút "Cập nhật" để lưu thay đổi.</p>
-
-    <table id="dataTable">
-        <thead>
-            <!-- Tiêu đề bảng sẽ được tạo tự động -->
-        </thead>
-        <tbody>
-            <!-- Dữ liệu sẽ được tải vào đây -->
-        </tbody>
-    </table>
-
-    <button onclick="updateData()">Cập nhật</button>
-    <div id="message"></div>
-
-    <script>
-        const SOURCE_URL = 'https://script.google.com/macros/s/AKfycbxJF7l4_GQWe1g7TaGjbKam2cYJpSrKWCNR9VIEoV7j5VY975h7U5K1P3bfvkjEKT8f/exec';
-        const DESTINATION_URL = 'https://script.google.com/macros/s/AKfycbw8Y06lHN4PncNvfBZOu2h-pTGqlQZwB_-zzOLqxHlUmBKOMUokmTSrkV7jHvHt9-wR/exec';
-
-        // Hàm để lấy và hiển thị dữ liệu khi trang được tải
-        window.onload = function() {
-            fetch(SOURCE_URL)
-                .then(response => response.json())
-                .then(data => {
-                    if (data && data.length > 0) {
-                        const table = document.getElementById('dataTable');
-                        const thead = table.querySelector('thead');
-                        const tbody = table.querySelector('tbody');
-
-                        // Xóa nội dung cũ
-                        thead.innerHTML = '';
-                        tbody.innerHTML = '';
-
-                        // Tạo hàng tiêu đề
-                        const headers = Object.keys(data[0]);
-                        const headerRow = document.createElement('tr');
-                        headers.forEach(headerText => {
-                            const th = document.createElement('th');
-                            th.textContent = headerText;
-                            headerRow.appendChild(th);
-                        });
-                        thead.appendChild(headerRow);
-
-                        // Tạo các hàng dữ liệu
-                        data.forEach(rowData => {
-                            const row = document.createElement('tr');
-                            headers.forEach(header => {
-                                const cell = document.createElement('td');
-                                cell.textContent = rowData[header];
-                                cell.setAttribute('contenteditable', 'true');
-                                row.appendChild(cell);
-                            });
-                            tbody.appendChild(row);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Lỗi khi lấy dữ liệu:', error);
-                    document.getElementById('message').textContent = 'Lỗi khi tải dữ liệu!';
-                    document.getElementById('message').style.color = 'red';
-                });
+  <script>
+    // Cấu hình
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbwTmGvWMWX4R8pdHdOL_dZUyAVWipY5PTtN9GHGfujAJ4GwEDxR-V6TZAXtslm2podvTw/exec";
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000;
+    const CACHE_KEY = 'tracking-data-cache';
+    let debugMode = false;
+    
+    // Debug function
+    function toggleDebug() {
+      debugMode = !debugMode;
+      const debugEl = document.getElementById('debug-info');
+      debugEl.style.display = debugMode ? 'block' : 'none';
+    }
+    
+    function debug(message, data = null) {
+      if (!debugMode) return;
+      const debugEl = document.getElementById('debug-info');
+      const timestamp = new Date().toLocaleTimeString();
+      const logEntry = `[${timestamp}] ${message}`;
+      if (data) {
+        debugEl.innerHTML += logEntry + '\n' + JSON.stringify(data, null, 2) + '\n\n';
+      } else {
+        debugEl.innerHTML += logEntry + '\n\n';
+      }
+      debugEl.scrollTop = debugEl.scrollHeight;
+    }
+    
+    // Khởi tạo ứng dụng - simplified
+    document.addEventListener('DOMContentLoaded', async function() {
+      try {
+        debug("Khởi tạo ứng dụng");
+        
+        // Đơn giản hóa - skip connection check, load data trực tiếp
+        updateConnectionStatus(true);
+        await loadAndRenderData();
+        
+        // Thiết lập monitoring
+        setupConnectionMonitoring();
+        
+      } catch (error) {
+        console.error("Khởi tạo ứng dụng thất bại:", error);
+        debug("Khởi tạo thất bại", error);
+        showErrorToUser("Không thể tải dữ liệu: " + error.message);
+        
+        // Thử load cached data
+        loadCachedData();
+      }
+    });
+    
+    // ========== CÁC HÀM CHÍNH ========== //
+    
+    // Kiểm tra kết nối server đơn giản
+    async function checkServerConnection() {
+      try {
+        debug("Checking server connection with simple fetch...");
+        
+        // Thử fetch đơn giản, bỏ qua CORS error
+        const response = await fetch(GAS_URL, {
+          method: 'GET',
+          cache: 'no-store'
+        });
+        
+        debug(`Response status: ${response.status}`);
+        return response.status === 200;
+        
+      } catch (error) {
+        debug("Fetch failed, but this might be normal due to CORS", error);
+        // Với GAS, CORS error là bình thường, vẫn coi như kết nối OK
+        return true;
+      }
+    }
+    
+    // Load data using JSONP method - fixed version
+    function loadDataViaJSONP() {
+      return new Promise((resolve, reject) => {
+        const callbackName = 'jsonp_callback_' + Math.random().toString(36).substr(2, 9);
+        const script = document.createElement('script');
+        let resolved = false;
+        
+        // Tạo callback function
+        window[callbackName] = function(data) {
+          if (resolved) return;
+          resolved = true;
+          debug("JSONP callback received", data);
+          cleanup();
+          resolve(data);
         };
-
-        // Hàm để thu thập và gửi dữ liệu đã cập nhật
-        function updateData() {
-            const messageDiv = document.getElementById('message');
-            messageDiv.textContent = 'Đang cập nhật...';
-            messageDiv.style.color = 'orange';
-
-            const table = document.getElementById('dataTable');
-            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-            const rows = table.querySelectorAll('tbody tr');
-            const updatedData = [];
-
-            rows.forEach(row => {
-                const cells = row.querySelectorAll('td');
-                const rowData = {};
-                cells.forEach((cell, index) => {
-                    rowData[headers[index]] = cell.textContent;
-                });
-                updatedData.push(rowData);
-            });
-
-            // Gửi dữ liệu đã cập nhật đến URL đích
-            fetch(DESTINATION_URL, {
-                method: 'POST',
-                mode: 'no-cors', // Thường cần thiết khi giao tiếp giữa các web app của Apps Script
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(updatedData)
-            })
-            .then(response => {
-                 // Do mode 'no-cors', chúng ta không thể đọc phản hồi chi tiết
-                 // nhưng chúng ta có thể giả định thành công nếu không có lỗi mạng.
-                messageDiv.textContent = 'Cập nhật thành công!';
-                messageDiv.style.color = 'green';
-            })
-            .catch(error => {
-                console.error('Lỗi khi cập nhật dữ liệu:', error);
-                messageDiv.textContent = 'Đã xảy ra lỗi khi cập nhật!';
-                messageDiv.style.color = 'red';
-            });
+        
+        // Cleanup function
+        function cleanup() {
+          if (window[callbackName]) {
+            delete window[callbackName];
+          }
+          if (script.parentNode) {
+            script.parentNode.removeChild(script);
+          }
         }
-    </script>
-
+        
+        // Error handling
+        script.onerror = function() {
+          if (resolved) return;
+          resolved = true;
+          debug("JSONP script error");
+          cleanup();
+          reject(new Error('JSONP script load error'));
+        };
+        
+        // Timeout
+        const timeout = setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          debug("JSONP timeout");
+          cleanup();
+          reject(new Error('JSONP request timeout'));
+        }, 8000);
+        
+        // Clear timeout when done
+        const originalCallback = window[callbackName];
+        window[callbackName] = function(data) {
+          clearTimeout(timeout);
+          originalCallback(data);
+        };
+        
+        // Tạo URL với callback parameter
+        const url = `${GAS_URL}?callback=${callbackName}&_=${Date.now()}`;
+        debug("Loading JSONP from:", url);
+        
+        script.src = url;
+        document.head.appendChild(script);
+      });
+    }
+    
+    // Cập nhật trạng thái kết nối
+    function updateConnectionStatus(isConnected) {
+      const statusElement = document.getElementById('connection-status');
+      if (statusElement) {
+        statusElement.textContent = isConnected ? "🟢 Đã kết nối" : "🔴 Mất kết nối";
+        statusElement.style.color = isConnected ? "green" : "red";
+      }
+    }
+    
+    // Hiển thị thông báo offline
+    function showOfflineNotice() {
+      const notice = document.getElementById('offline-notice');
+      if (notice) notice.style.display = 'block';
+      updateConnectionStatus(false);
+    }
+    
+    // Tải và hiển thị dữ liệu với cơ chế retry
+    async function loadAndRenderData() {
+      showLoading(true);
+      debug("Bắt đầu tải dữ liệu");
+      
+      try {
+        const data = await fetchWithRetry(GAS_URL, MAX_RETRIES, RETRY_DELAY);
+        debug("Dữ liệu nhận được", data);
+        renderData(data);
+        saveToCache(data);
+      } catch (error) {
+        console.error("Tải dữ liệu thất bại sau nhiều lần thử:", error);
+        debug("Tải dữ liệu thất bại", error);
+        throw error;
+      } finally {
+        showLoading(false);
+      }
+    }
+    
+    // Hàm fetch đơn giản với JSONP
+    async function fetchWithRetry(url, retries, delay) {
+      for (let i = 0; i < retries; i++) {
+        try {
+          debug(`Thử tải dữ liệu lần ${i + 1} với JSONP`);
+          
+          const data = await loadDataViaJSONP();
+          debug("JSONP data loaded successfully", data);
+          
+          // Xử lý response
+          if (Array.isArray(data)) {
+            return data;
+          } else if (data.data && Array.isArray(data.data)) {
+            return data.data;
+          } else if (data.status === "error") {
+            throw new Error(data.message || "Lỗi server");
+          }
+          
+          return data;
+          
+        } catch (error) {
+          debug(`JSONP attempt ${i + 1} failed`, error);
+          
+          // Nếu JSONP thất bại, thử iframe method
+          if (i === retries - 1) {
+            debug("All JSONP attempts failed, trying iframe method");
+            try {
+              return await loadDataViaIframe();
+            } catch (iframeError) {
+              debug("Iframe method also failed", iframeError);
+              throw new Error("Không thể tải dữ liệu từ server");
+            }
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+    
+    // Load data via iframe as fallback
+    function loadDataViaIframe() {
+      return new Promise((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = GAS_URL;
+        
+        let resolved = false;
+        
+        iframe.onload = function() {
+          if (resolved) return;
+          resolved = true;
+          
+          try {
+            const content = iframe.contentDocument.body.textContent;
+            debug("Iframe content received", content);
+            
+            const data = JSON.parse(content);
+            cleanup();
+            resolve(data);
+          } catch (e) {
+            debug("Iframe content parse error", e);
+            cleanup();
+            reject(new Error('Không thể phân tích dữ liệu từ server'));
+          }
+        };
+        
+        iframe.onerror = function() {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          reject(new Error('Không thể tải dữ liệu'));
+        };
+        
+        function cleanup() {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+          }, 100);
+        }
+        
+        document.body.appendChild(iframe);
+        
+        // Timeout
+        setTimeout(() => {
+          if (!resolved) {
+            resolved = true;
+            cleanup();
+            reject(new Error('Hết thời gian chờ'));
+          }
+        }, 10000);
+      });
+    }
+    
+    // Alternative method using form submit for CORS bypass
+    async function fetchViaForm(url) {
+      return new Promise((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
+        
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = url;
+        form.target = iframe.name = 'temp_frame_' + Date.now();
+        
+        iframe.onload = function() {
+          try {
+            const content = iframe.contentDocument.body.textContent;
+            const data = JSON.parse(content);
+            resolve(data);
+          } catch (e) {
+            reject(new Error('Failed to parse response'));
+          } finally {
+            document.body.removeChild(iframe);
+          }
+        };
+        
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
+        
+        // Timeout
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe);
+            reject(new Error('Request timeout'));
+          }
+        }, 15000);
+      });
+    }
+    
+    // Hiển thị dữ liệu lên bảng
+    function renderData(data) {
+      const tbody = document.querySelector("#data-table tbody");
+      debug("Rendering data", data);
+      
+      if (!data || data.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" style="color:gray;">Không có dữ liệu</td></tr>`;
+        return;
+      }
+      
+      tbody.innerHTML = data.map((row, index) => `
+        <tr>
+          <td>${escapeHtml(row.maDonHang || '')}</td>
+          <td><input type="text" value="${escapeHtml(row.maTracking || '')}" id="tracking-${index}"></td>
+          <td>
+            <button onclick="updateRow('${escapeHtml(row.maDonHang || '')}', ${index})" id="btn-${index}">Cập nhật</button>
+            <span class="status" id="status-${index}"></span>
+          </td>
+        </tr>
+      `).join('');
+    }
+    
+    // Cập nhật dòng dữ liệu với form submit
+    async function updateRow(maDonHang, index) {
+      debug(`Cập nhật dòng: ${maDonHang}, index: ${index}`);
+      
+      const maTracking = document.getElementById(`tracking-${index}`).value;
+      const statusEl = document.getElementById(`status-${index}`);
+      const buttonEl = document.getElementById(`btn-${index}`);
+      
+      statusEl.textContent = "Đang gửi...";
+      statusEl.className = "status loading";
+      buttonEl.disabled = true;
+      
+      try {
+        if (!navigator.onLine) {
+          throw new Error("Bạn đang offline. Vui lòng kết nối mạng để cập nhật.");
+        }
+        
+        debug("Sending update", { maDonHang, maTracking });
+        
+        // Sử dụng form submit đơn giản
+        const result = await submitUpdateForm(maDonHang, maTracking);
+        debug("Update result", result);
+        
+        if (result.status === "error") {
+          throw new Error(result.message || "Lỗi từ server");
+        }
+        
+        statusEl.textContent = result.message || "✔ Đã cập nhật thành công";
+        statusEl.className = "status success";
+        
+        // Cập nhật cache
+        updateCache(maDonHang, maTracking);
+        
+      } catch (error) {
+        debug("Update error", error);
+        console.error("Lỗi khi cập nhật:", error);
+        statusEl.textContent = error.message || "Lỗi khi kết nối server";
+        statusEl.className = "status error";
+      } finally {
+        buttonEl.disabled = false;
+      }
+    }
+    
+    // Submit update form
+    function submitUpdateForm(maDonHang, maTracking) {
+      return new Promise((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.name = 'update_frame_' + Date.now();
+        document.body.appendChild(iframe);
+        
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = GAS_URL;
+        form.target = iframe.name;
+        
+        // Tạo input fields
+        const inputMaDonHang = document.createElement('input');
+        inputMaDonHang.type = 'hidden';
+        inputMaDonHang.name = 'maDonHang';
+        inputMaDonHang.value = maDonHang;
+        form.appendChild(inputMaDonHang);
+        
+        const inputMaTracking = document.createElement('input');
+        inputMaTracking.type = 'hidden';
+        inputMaTracking.name = 'maTracking';
+        inputMaTracking.value = maTracking;
+        form.appendChild(inputMaTracking);
+        
+        let responseReceived = false;
+        
+        iframe.onload = function() {
+          if (responseReceived) return;
+          responseReceived = true;
+          
+          try {
+            const content = iframe.contentDocument.body.textContent;
+            debug("Form submit response", content);
+            const result = JSON.parse(content);
+            cleanup();
+            resolve(result);
+          } catch (e) {
+            debug("Form submit parse error", e);
+            cleanup();
+            reject(new Error('Không thể phân tích phản hồi từ server'));
+          }
+        };
+        
+        function cleanup() {
+          setTimeout(() => {
+            if (document.body.contains(iframe)) {
+              document.body.removeChild(iframe);
+            }
+            if (document.body.contains(form)) {
+              document.body.removeChild(form);
+            }
+          }, 100);
+        }
+        
+        // Timeout
+        setTimeout(() => {
+          if (!responseReceived) {
+            responseReceived = true;
+            cleanup();
+            reject(new Error('Hết thời gian chờ'));
+          }
+        }, 15000);
+        
+        document.body.appendChild(form);
+        form.submit();
+      });
+    }
+    
+    // ========== CÁC HÀM HỖ TRỢ ========== //
+    
+    // Escape HTML để phòng chống XSS
+    function escapeHtml(unsafe) {
+      if (typeof unsafe !== 'string') return unsafe;
+      return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+    
+    // Hiển thị loading indicator
+    function showLoading(show) {
+      const loader = document.getElementById('loading-indicator');
+      if (loader) loader.style.display = show ? 'block' : 'none';
+    }
+    
+    // Hiển thị lỗi toàn cục
+    function showErrorToUser(message) {
+      const container = document.getElementById('global-error-container');
+      if (!container) return;
+      
+      container.innerHTML = `
+        <div class="global-error">
+          <p>⚠️ ${escapeHtml(message)}</p>
+          <button onclick="location.reload()">Tải lại trang</button>
+          <button class="retry-button" onclick="retryLoading()">Thử lại</button>
+        </div>
+      `;
+    }
+    
+    // Thử tải lại dữ liệu
+    async function retryLoading() {
+      try {
+        document.getElementById('global-error-container').innerHTML = '';
+        await loadAndRenderData();
+      } catch (error) {
+        showErrorToUser("Vẫn không thể tải dữ liệu. Vui lòng kiểm tra kết nối mạng.");
+      }
+    }
+    
+    // Thiết lập kiểm tra kết nối định kỳ
+    function setupConnectionMonitoring() {
+      // Kiểm tra khi trạng thái mạng thay đổi
+      window.addEventListener('online', handleNetworkChange);
+      window.addEventListener('offline', handleNetworkChange);
+      
+      // Kiểm tra định kỳ mỗi 30s
+      setInterval(async () => {
+        const isConnected = await checkServerConnection();
+        updateConnectionStatus(isConnected);
+      }, 30000);
+    }
+    
+    // Xử lý khi trạng thái mạng thay đổi
+    function handleNetworkChange() {
+      if (navigator.onLine) {
+        document.getElementById('offline-notice').style.display = 'none';
+        checkServerConnection().then(isConnected => {
+          updateConnectionStatus(isConnected);
+          if (isConnected) retryLoading();
+        });
+      } else {
+        showOfflineNotice();
+      }
+    }
+    
+    // ========== CÁC HÀM QUẢN LÝ CACHE ========== //
+    
+    // Lưu dữ liệu vào cache (sử dụng biến thay vì localStorage)
+    let dataCache = null;
+    
+    function saveToCache(data) {
+      try {
+        dataCache = {
+          data: data,
+          timestamp: new Date().getTime()
+        };
+        debug("Data saved to cache", dataCache);
+      } catch (error) {
+        console.error("Lỗi khi lưu cache:", error);
+      }
+    }
+    
+    // Tải dữ liệu từ cache
+    function loadCachedData() {
+      try {
+        if (dataCache && dataCache.data) {
+          renderData(dataCache.data);
+          showErrorToUser("Đang hiển thị dữ liệu từ bộ nhớ tạm. Dữ liệu có thể không cập nhật.");
+          debug("Loaded cached data", dataCache);
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải cache:", error);
+      }
+    }
+    
+    // Cập nhật cache khi thay đổi dữ liệu
+    function updateCache(maDonHang, maTracking) {
+      try {
+        if (dataCache && dataCache.data) {
+          const updatedData = dataCache.data.map(item => {
+            if (item.maDonHang === maDonHang) {
+              return { ...item, maTracking };
+            }
+            return item;
+          });
+          saveToCache(updatedData);
+          debug("Cache updated", { maDonHang, maTracking });
+        }
+      } catch (error) {
+        console.error("Lỗi khi cập nhật cache:", error);
+      }
+    }
+  </script>
 </body>
 </html>
 
