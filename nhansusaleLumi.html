@@ -477,24 +477,42 @@
             fetch(employeeDataUrl).then(res => res.json())
         ])
         .then(([salesResult, employeeResult]) => {
+            employeeData = employeeResult;
+
+            // --- START: LOGIC TRA CỨU MỚI ---
+            // 1. Tạo một bản đồ tra cứu chi nhánh từ dữ liệu nhân viên
+            const employeeBranchMap = {};
+            employeeData.forEach(emp => {
+                const name = (emp.ho_va_ten || '').trim();
+                const branch = (emp.chi_nhanh || '').trim();
+                if (name) {
+                    employeeBranchMap[name] = branch;
+                }
+            });
+
+            // 2. Xử lý dữ liệu bán hàng và gán chi nhánh đã tra cứu
             rawData = salesResult
                 .filter(r => 
                     r.trangThai && String(r.trangThai).trim() !== '' &&
                     r.ten && String(r.ten).trim() !== '' &&       
                     r.team && String(r.team).trim() !== ''      
                 )
-                .map(r => ({
-                    ...r, 
-                    ten: (r.ten || '').trim(), 
-                    team: (r.team || '').trim(),
-                    chiNhanh: (r.chi_nhanh || '').trim(), // Lấy dữ liệu từ biến chi_nhanh
-                    soMessCmt: +r.soMess || 0,
-                    soDon: +r.donMess || 0,
-                    dsChot: +r.doanhSoMess || 0,
-                    phanHoi: +r.phanHoi || 0,
-                }));
-            
-            employeeData = employeeResult;
+                .map(r => {
+                    const saleName = (r.ten || '').trim();
+                    return {
+                        ...r, 
+                        ten: saleName, 
+                        team: (r.team || '').trim(),
+                        // Gán chi nhánh từ bản đồ, nếu không tìm thấy thì để 'Không xác định'
+                        chiNhanh: employeeBranchMap[saleName] || 'Không xác định',
+                        soMessCmt: +r.soMess || 0,
+                        soDon: +r.donMess || 0,
+                        dsChot: +r.doanhSoMess || 0,
+                        phanHoi: +r.phanHoi || 0,
+                    };
+                });
+            // --- END: LOGIC TRA CỨU MỚI ---
+
             const idFromUrl = getUrlParameter('id');
             let restrictedChiNhanh = null;
 
@@ -506,13 +524,11 @@
                     restrictedChiNhanh = (currentUser.chi_nhanh || '').trim();
                     
                     if (currentUser.vi_tri === "Leader") {
-                        // Leader xem toàn bộ nhân viên trong cùng chi nhánh
                         document.getElementById('report-title').textContent = `DỮ LIỆU CHI NHÁNH ${restrictedChiNhanh}`;
                         allowedNames = employeeData
-                            .filter(emp => emp.chi_nhanh === restrictedChiNhanh)
+                            .filter(emp => (emp.chi_nhanh || '').trim() === restrictedChiNhanh)
                             .map(emp => (emp.ho_va_ten || '').trim());
                     } else {
-                        // Nhân viên bình thường chỉ xem dữ liệu cá nhân
                         document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
                         allowedNames = [cleanName];
                     }
@@ -785,6 +801,4 @@
     }
 </script>
 </body>
-</html>```
-
-Bạn vui lòng thử lại các bước trên và cho tôi biết kết quả nhé.
+</html>
