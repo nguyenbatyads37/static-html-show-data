@@ -71,6 +71,13 @@
         button.danger:hover {
             background-color: #c0392b;
         }
+        button.warning {
+            background-color: #e74c3c;
+            font-weight: bold;
+        }
+        button.warning:hover {
+            background-color: #c0392b;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -180,6 +187,9 @@
             display: flex;
             gap: 10px;
         }
+        .hidden-row {
+            display: none;
+        }
         @media (max-width: 768px) {
             .control-panel {
                 flex-direction: column;
@@ -217,7 +227,7 @@
             </div>
             <div class="action-buttons">
                 <button id="refreshBtn" class="success">Làm mới dữ liệu</button>
-                <button id="saveAllBtn" class="success" style="display: none;">Lưu tất cả thay đổi</button>
+                <button id="saveAllBtn" class="warning" style="display: none;">LƯU TẤT CẢ THAY ĐỔI</button>
                 <button id="multiPasteBtn">Paste nhiều dòng</button>
             </div>
         </div>
@@ -525,8 +535,11 @@
                 const isChanged = changedData[item['Mã đơn hàng']] !== undefined;
                 const trackingValue = isChanged ? changedData[item['Mã đơn hàng']] : item['Mã Tracking'];
                 
+                // Thêm class hidden-row nếu đã có tracking
+                const rowClass = hasTracking ? 'hidden-row' : '';
+                
                 html += `
-                    <tr data-id="${item['Mã đơn hàng'] || index}" data-index="${index}">
+                    <tr data-id="${item['Mã đơn hàng'] || index}" data-index="${index}" class="${rowClass}">
                         <td class="fixed-column">${index + 1}</td>
                 `;
                 
@@ -586,6 +599,50 @@
                         }
                     }
                 });
+                
+                // Xử lý khi paste nhiều dòng vào 1 ô
+                cell.addEventListener('paste', function(e) {
+                    e.preventDefault();
+                    const text = (e.clipboardData || window.clipboardData).getData('text');
+                    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+                    
+                    if (lines.length > 1) {
+                        const row = this.closest('tr');
+                        const currentIndex = parseInt(row.getAttribute('data-index'));
+                        const trackingCells = document.querySelectorAll('[data-field="Mã Tracking"]');
+                        
+                        lines.forEach((line, i) => {
+                            const targetIndex = currentIndex + i;
+                            if (targetIndex < trackingCells.length) {
+                                const targetCell = trackingCells[targetIndex];
+                                targetCell.textContent = line;
+                                
+                                // Đánh dấu là đã thay đổi
+                                const targetRow = targetCell.closest('tr');
+                                const maDonHang = targetRow.getAttribute('data-id');
+                                
+                                if (!changedData[maDonHang]) {
+                                    changedData[maDonHang] = {};
+                                }
+                                changedData[maDonHang]['Mã Tracking'] = line;
+                                
+                                // Kích hoạt nút lưu
+                                const saveBtn = targetRow.querySelector('.save-btn');
+                                if (saveBtn) saveBtn.disabled = false;
+                            }
+                        });
+                        
+                        // Hiển thị nút lưu tất cả nếu có thay đổi
+                        if (Object.keys(changedData).length > 0) {
+                            saveAllBtn.style.display = 'block';
+                        }
+                        
+                        showNotification(`Đã điền ${lines.length} mã tracking`);
+                    } else {
+                        // Nếu chỉ paste 1 dòng thì xử lý bình thường
+                        document.execCommand('insertText', false, text);
+                    }
+                });
             });
             
             // Thêm sự kiện cho các nút lưu từng dòng
@@ -637,6 +694,12 @@
                     
                     showNotification('Cập nhật mã tracking thành công!');
                     
+                    // Ẩn dòng đã có mã tracking
+                    const row = document.querySelector(`tr[data-id="${maDonHang}"]`);
+                    if (row && trackingValue.trim() !== '') {
+                        row.classList.add('hidden-row');
+                    }
+                    
                     // Làm mới dữ liệu sau 1 giây
                     setTimeout(loadData, 1000);
                 } else {
@@ -654,7 +717,7 @@
             
             try {
                 saveAllBtn.disabled = true;
-                saveAllBtn.textContent = 'Đang lưu...';
+                saveAllBtn.textContent = 'ĐANG LƯU...';
                 
                 // Tạo mảng promises để gửi tất cả các yêu cầu
                 const promises = Object.keys(changedData).map(maDonHang => {
@@ -686,9 +749,17 @@
                 // Xóa tất cả thay đổi
                 changedData = {};
                 saveAllBtn.style.display = 'none';
-                saveAllBtn.textContent = 'Lưu tất cả thay đổi';
+                saveAllBtn.textContent = 'LƯU TẤT CẢ THAY ĐỔI';
                 
                 showNotification('Đã lưu tất cả thay đổi thành công!');
+                
+                // Ẩn tất cả các dòng đã có mã tracking
+                document.querySelectorAll('tr').forEach(row => {
+                    const trackingCell = row.querySelector('[data-field="Mã Tracking"]');
+                    if (trackingCell && trackingCell.textContent.trim() !== '') {
+                        row.classList.add('hidden-row');
+                    }
+                });
                 
                 // Làm mới dữ liệu sau 1 giây
                 setTimeout(loadData, 1000);
@@ -696,7 +767,7 @@
                 console.error('Lỗi khi lưu tất cả:', error);
                 showNotification(`Lỗi: ${error.message}`, true);
                 saveAllBtn.disabled = false;
-                saveAllBtn.textContent = 'Lưu tất cả thay đổi';
+                saveAllBtn.textContent = 'LƯU TẤT CẢ THAY ĐỔI';
             }
         }
         
@@ -723,8 +794,8 @@
                 return;
             }
             
-            // Lấy tất cả các dòng trong bảng hiện tại
-            const rows = Array.from(document.querySelectorAll('tbody tr'));
+            // Lấy tất cả các dòng trong bảng hiện tại (chỉ những dòng đang hiển thị)
+            const rows = Array.from(document.querySelectorAll('tbody tr:not(.hidden-row)'));
             
             // Áp dụng mã tracking theo thứ tự
             trackingList.forEach((tracking, index) => {
@@ -757,7 +828,7 @@
             // Ẩn vùng paste nhiều dòng
             multiPasteArea.style.display = 'none';
             
-            showNotification(`Đã áp dụng ${trackingList.length} mã tracking`);
+            showNotification(`Đã áp dụng ${Math.min(trackingList.length, rows.length)} mã tracking`);
         }
         
         // Sự kiện
