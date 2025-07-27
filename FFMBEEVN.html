@@ -147,6 +147,22 @@
             background-color: white;
             z-index: 1;
         }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+        .tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #f1f1f1;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab.active {
+            background-color: #3498db;
+            color: white;
+        }
         @media (max-width: 768px) {
             .control-panel {
                 flex-direction: column;
@@ -158,12 +174,24 @@
                 padding: 6px 8px;
                 font-size: 12px;
             }
+            .tabs {
+                overflow-x: auto;
+                flex-wrap: nowrap;
+            }
+            .tab {
+                padding: 8px 12px;
+                font-size: 14px;
+            }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>QUẢN LÝ MÃ TRACKING</h1>
+        
+        <div class="tabs" id="tabsContainer">
+            <!-- Tabs sẽ được tạo động bằng JavaScript -->
+        </div>
         
         <div class="control-panel">
             <div class="search-box">
@@ -186,12 +214,15 @@
     <script>
         // Biến toàn cục
         let allData = [];
+        let filteredData = [];
         let changedData = {};
+        let currentTab = 'all';
         const DATA_URL = 'https://script.google.com/macros/s/AKfycbyDGqwYSX0Sxxlom-q29UhB2CJVGpTttVctWYNOfqMDCv4MkGmmMShtROnrgZYOgn9Opw/exec';
         const UPDATE_URL = 'https://script.google.com/macros/s/AKfycbzs8_0mubkmfnbQkpRjneoRpXYJIvXBzyfWUzbhsH5JZ6MYU6QAqSkoBebjwtbsbOGRTA/exec';
         
         // DOM elements
         const tableContainer = document.getElementById('tableContainer');
+        const tabsContainer = document.getElementById('tabsContainer');
         const searchInput = document.getElementById('searchInput');
         const searchBtn = document.getElementById('searchBtn');
         const refreshBtn = document.getElementById('refreshBtn');
@@ -348,11 +379,77 @@
                     });
                 }
                 
-                renderTable(allData);
+                // Lọc chỉ hiển thị các đơn có Đơn vị vận chuyển là BEE
+                allData = allData.filter(item => item['Đơn vị vận chuyển'] === 'BEE');
+                
+                // Tạo các tab theo Khu vực
+                createTabs();
+                
+                // Hiển thị dữ liệu ban đầu
+                filterDataByTab(currentTab);
             } catch (error) {
                 tableContainer.innerHTML = `<div class="error">Lỗi khi tải dữ liệu: ${error.message}</div>`;
                 console.error('Lỗi:', error);
             }
+        }
+        
+        // Hàm tạo các tab theo Khu vực
+        function createTabs() {
+            tabsContainer.innerHTML = '';
+            
+            // Lấy danh sách các khu vực duy nhất
+            const regions = [...new Set(allData.map(item => item['Khu vực'] || 'Khác'))];
+            
+            // Tạo tab "Tất cả"
+            const allTab = document.createElement('div');
+            allTab.className = 'tab active';
+            allTab.textContent = 'Tất cả';
+            allTab.onclick = () => {
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                allTab.classList.add('active');
+                currentTab = 'all';
+                filterDataByTab('all');
+            };
+            tabsContainer.appendChild(allTab);
+            
+            // Tạo các tab theo khu vực
+            regions.forEach(region => {
+                const tab = document.createElement('div');
+                tab.className = 'tab';
+                tab.textContent = region;
+                tab.onclick = () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentTab = region;
+                    filterDataByTab(region);
+                };
+                tabsContainer.appendChild(tab);
+            });
+        }
+        
+        // Hàm lọc dữ liệu theo tab
+        function filterDataByTab(tab) {
+            if (tab === 'all') {
+                filteredData = [...allData];
+            } else {
+                filteredData = allData.filter(item => item['Khu vực'] === tab);
+            }
+            
+            // Áp dụng tìm kiếm nếu có
+            const keyword = searchInput.value.toLowerCase().trim();
+            if (keyword) {
+                filteredData = filteredData.filter(item => {
+                    return (
+                        (item['Mã đơn hàng'] && item['Mã đơn hàng'].toLowerCase().includes(keyword)) ||
+                        (item['Mã Tracking'] && item['Mã Tracking'].toLowerCase().includes(keyword)) ||
+                        (item['Name*'] && item['Name*'].toLowerCase().includes(keyword)) ||
+                        (item['Phone*'] && item['Phone*'].toLowerCase().includes(keyword)) ||
+                        (item['Nhân viên Sale'] && item['Nhân viên Sale'].toLowerCase().includes(keyword))
+                    );
+                });
+            }
+            
+            renderTable(filteredData);
         }
         
         // Hàm hiển thị bảng
@@ -573,25 +670,7 @@
         
         // Hàm tìm kiếm
         function searchData() {
-            const keyword = searchInput.value.toLowerCase().trim();
-            
-            if (!keyword) {
-                renderTable(allData);
-                return;
-            }
-            
-            const filteredData = allData.filter(item => {
-                // Kiểm tra các trường quan trọng
-                return (
-                    (item['Mã đơn hàng'] && item['Mã đơn hàng'].toLowerCase().includes(keyword)) ||
-                    (item['Mã Tracking'] && item['Mã Tracking'].toLowerCase().includes(keyword)) ||
-                    (item['Name*'] && item['Name*'].toLowerCase().includes(keyword)) ||
-                    (item['Phone*'] && item['Phone*'].toLowerCase().includes(keyword)) ||
-                    (item['Nhân viên Sale'] && item['Nhân viên Sale'].toLowerCase().includes(keyword))
-                );
-            });
-            
-            renderTable(filteredData);
+            filterDataByTab(currentTab);
         }
         
         // Sự kiện
