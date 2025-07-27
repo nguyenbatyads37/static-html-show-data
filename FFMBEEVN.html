@@ -95,6 +95,7 @@
             font-weight: bold;
             position: sticky;
             top: 0;
+            z-index: 2;
         }
         tr:hover {
             background-color: #f5f5f5;
@@ -154,6 +155,12 @@
             background-color: white;
             z-index: 1;
         }
+        tr:hover .fixed-column {
+            background-color: #f5f5f5;
+        }
+        th.fixed-column {
+            background-color: #f2f2f2;
+        }
         .tabs {
             display: flex;
             margin-bottom: 20px;
@@ -190,6 +197,42 @@
         .hidden-row {
             display: none;
         }
+
+        /* === CSS MỚI CHO DROPDOWN === */
+        td.editable-select {
+            padding: 5px;
+            position: relative;
+        }
+        .editable-select select {
+            color: white;
+            font-weight: bold;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            width: 100%;
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            text-align: center;
+            text-align-last: center;
+        }
+        .editable-select select:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px #3498db;
+        }
+        .editable-select::after {
+            content: "▼";
+            font-size: 10px;
+            color: white;
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+        /* === KẾT THÚC CSS MỚI === */
+
         @media (max-width: 768px) {
             .control-panel {
                 flex-direction: column;
@@ -255,7 +298,7 @@
         let changedData = {};
         let currentTab = 'all';
         const DATA_URL = 'https://script.google.com/macros/s/AKfycbyDGqwYSX0Sxxlom-q29UhB2CJVGpTttVctWYNOfqMDCv4MkGmmMShtROnrgZYOgn9Opw/exec';
-        const UPDATE_URL = 'https://script.google.com/macros/s/AKfycbzs8_0mubkmfnbQkpRjneoRpXYJIvXBzyfWUzbhsH5JZ6MYU6QAqSkoBebjwtbsbOGRTA/exec';
+        const UPDATE_URL = 'https://script.google.com/macros/s/AKfycbzfMKOzujWHLNGrhTzvPJOKeN0uA_Ccfv92zS6iGWCc1ct4p6R4eIRtqigaUwcNBUs6MA/exec';
         
         // DOM elements
         const tableContainer = document.getElementById('tableContainer');
@@ -271,9 +314,10 @@
         const applyMultiPasteBtn = document.getElementById('applyMultiPasteBtn');
         const cancelMultiPasteBtn = document.getElementById('cancelMultiPasteBtn');
         
-        // Danh sách cột cố định sẽ hiển thị
+        // Danh sách cột cố định sẽ hiển thị - ĐÃ CẬP NHẬT THỨ TỰ
         const DISPLAY_COLUMNS = [
             'Mã đơn hàng',
+            'Kết quả Check', // ĐÃ DI CHUYỂN LÊN ĐÂY
             'Mã Tracking',
             'Ngày lên đơn',
             'Name*',
@@ -297,7 +341,7 @@
             'Nhân viên Sale',
             'Nhân viên Marketing',
             'NV Vận đơn',
-            'Kết quả Check',
+            //'Kết quả Check', // ĐÃ BỎ Ở ĐÂY
             'Trạng thái giao hàng NB',
             'Lý do',
             'Đơn vị vận chuyển',
@@ -377,6 +421,18 @@
             'maDonHang'
         ];
         
+        // Các cột có thể chỉnh sửa - ĐÃ CẬP NHẬT
+        const EDITABLE_COLUMNS = ['Mã Tracking', 'Name*', 'Kết quả Check'];
+        
+        // MỚI: Định nghĩa màu sắc cho các giá trị trong "Kết quả Check"
+        const CHECK_RESULT_COLORS = {
+            'OK': '#2ecc71',         // Xanh lá
+            'Không OK': '#e74c3c',    // Đỏ
+            'Chưa check': '#f39c12', // Cam
+            '': '#bdc3c7'            // Xám cho giá trị rỗng
+        };
+        const CHECK_RESULT_OPTIONS = ['Chưa check', 'OK', 'Không OK'];
+
         // Hàm hiển thị thông báo
         function showNotification(message, isError = false) {
             notification.textContent = message;
@@ -402,12 +458,10 @@
                 
                 const result = await response.json();
                 
-                // Kiểm tra cấu trúc dữ liệu trả về
                 if (!result || typeof result !== 'object') {
                     throw new Error('Dữ liệu không hợp lệ từ server');
                 }
                 
-                // Chuyển đổi dữ liệu thành mảng
                 if (Array.isArray(result)) {
                     allData = result;
                 } else if (result.data && Array.isArray(result.data)) {
@@ -415,19 +469,12 @@
                 } else if (result.records && Array.isArray(result.records)) {
                     allData = result.records;
                 } else {
-                    // Nếu không phải mảng, chuyển đổi thành mảng
-                    allData = Object.keys(result).map(key => {
-                        return { ...result[key], id: key };
-                    });
+                    allData = Object.keys(result).map(key => ({ ...result[key], id: key }));
                 }
                 
-                // Lọc chỉ hiển thị các đơn có Đơn vị vận chuyển là BEE
                 allData = allData.filter(item => item['Đơn vị vận chuyển'] === 'BEE');
                 
-                // Tạo các tab theo Khu vực
                 createTabs();
-                
-                // Hiển thị dữ liệu ban đầu
                 filterDataByTab(currentTab);
             } catch (error) {
                 tableContainer.innerHTML = `<div class="error">Lỗi khi tải dữ liệu: ${error.message}</div>`;
@@ -439,10 +486,8 @@
         function createTabs() {
             tabsContainer.innerHTML = '';
             
-            // Lấy danh sách các khu vực duy nhất
             const regions = [...new Set(allData.map(item => item['Khu vực'] || 'Khác'))];
             
-            // Tạo tab "Tất cả"
             const allTab = document.createElement('div');
             allTab.className = 'tab active';
             allTab.textContent = 'Tất cả';
@@ -454,7 +499,6 @@
             };
             tabsContainer.appendChild(allTab);
             
-            // Tạo các tab theo khu vực
             regions.forEach(region => {
                 const tab = document.createElement('div');
                 tab.className = 'tab';
@@ -474,27 +518,22 @@
             if (tab === 'all') {
                 filteredData = [...allData];
             } else {
-                filteredData = allData.filter(item => item['Khu vực'] === tab);
+                filteredData = allData.filter(item => (item['Khu vực'] || 'Khác') === tab);
             }
             
-            // Áp dụng tìm kiếm nếu có
             const keyword = searchInput.value.toLowerCase().trim();
             if (keyword) {
-                filteredData = filteredData.filter(item => {
-                    return (
-                        (item['Mã đơn hàng'] && item['Mã đơn hàng'].toLowerCase().includes(keyword)) ||
-                        (item['Mã Tracking'] && item['Mã Tracking'].toLowerCase().includes(keyword)) ||
-                        (item['Name*'] && item['Name*'].toLowerCase().includes(keyword)) ||
-                        (item['Phone*'] && item['Phone*'].toLowerCase().includes(keyword)) ||
-                        (item['Nhân viên Sale'] && item['Nhân viên Sale'].toLowerCase().includes(keyword))
-                    );
-                });
+                filteredData = filteredData.filter(item => 
+                    Object.values(item).some(val => 
+                        String(val).toLowerCase().includes(keyword)
+                    )
+                );
             }
             
             renderTable(filteredData);
         }
         
-        // Hàm hiển thị bảng
+        // Hàm hiển thị bảng - ĐÃ CẬP NHẬT
         function renderTable(data) {
             if (!Array.isArray(data)) {
                 tableContainer.innerHTML = '<div class="error">Dữ liệu không hợp lệ: không phải mảng</div>';
@@ -511,141 +550,102 @@
                     <table>
                         <thead>
                             <tr>
-                                <th class="fixed-column">STT</th>
-            `;
+                                <th class="fixed-column">STT</th>`;
             
-            // Tạo header từ danh sách cột cố định
             DISPLAY_COLUMNS.forEach(column => {
                 html += `<th>${column}</th>`;
             });
             
-            html += `
-                                <th class="fixed-column">Thao Tác</th>
-                            </tr>
+            html += `<th class="fixed-column">Thao Tác</th></tr>
                         </thead>
-                        <tbody>
-            `;
+                        <tbody>`;
             
             data.forEach((item, index) => {
                 const hasTracking = item['Mã Tracking'] && item['Mã Tracking'].trim() !== '';
-                const statusClass = hasTracking ? 'status-completed' : 'status-pending';
-                const statusText = hasTracking ? 'Đã có tracking' : 'Chưa có tracking';
-                
-                // Kiểm tra xem có thay đổi nào chưa lưu không
-                const isChanged = changedData[item['Mã đơn hàng']] !== undefined;
-                const trackingValue = isChanged ? changedData[item['Mã đơn hàng']] : item['Mã Tracking'];
-                
-                // Thêm class hidden-row nếu đã có tracking
+                const isChanged = changedData[item['maDonHang']] !== undefined;
                 const rowClass = hasTracking ? 'hidden-row' : '';
                 
-                html += `
-                    <tr data-id="${item['Mã đơn hàng'] || index}" data-index="${index}" class="${rowClass}">
-                        <td class="fixed-column">${index + 1}</td>
-                `;
+                html += `<tr data-id="${item['maDonHang'] || index}" data-index="${index}" class="${rowClass}">
+                            <td class="fixed-column">${index + 1}</td>`;
                 
-                // Thêm các ô dữ liệu theo danh sách cột cố định
                 DISPLAY_COLUMNS.forEach(column => {
-                    if (column === 'Mã Tracking') {
-                        html += `<td class="editable" contenteditable="true" data-field="${column}">${item[column] || ''}</td>`;
+                    const originalValue = item[column] || '';
+                    let displayValue = originalValue;
+                    if (isChanged && changedData[item['maDonHang']][column] !== undefined) {
+                        displayValue = changedData[item['maDonHang']][column];
+                    }
+
+                    if (column === 'Kết quả Check') {
+                        const color = CHECK_RESULT_COLORS[displayValue] || CHECK_RESULT_COLORS[''];
+                        let optionsHtml = '';
+                        CHECK_RESULT_OPTIONS.forEach(opt => {
+                            optionsHtml += `<option value="${opt}" ${displayValue === opt ? 'selected' : ''}>${opt}</option>`;
+                        });
+
+                        html += `<td class="editable-select" data-field="${column}">
+                                    <select style="background-color: ${color};">
+                                        ${optionsHtml}
+                                    </select>
+                                 </td>`;
+                    } else if (EDITABLE_COLUMNS.includes(column)) {
+                        html += `<td class="editable" contenteditable="true" data-field="${column}">${displayValue}</td>`;
                     } else {
-                        html += `<td>${item[column] || ''}</td>`;
+                        html += `<td>${originalValue}</td>`;
                     }
                 });
                 
-                html += `
-                        <td class="fixed-column">
-                            <button class="save-btn" data-id="${item['Mã đơn hàng'] || index}" ${!isChanged ? 'disabled' : ''}>
-                                Lưu
-                            </button>
-                        </td>
-                    </tr>
-                `;
+                html += `<td class="fixed-column">
+                            <button class="save-btn" data-id="${item['maDonHang'] || index}" ${!isChanged ? 'disabled' : ''}>Lưu</button>
+                         </td></tr>`;
             });
             
-            html += `
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            
+            html += `</tbody></table></div>`;
             tableContainer.innerHTML = html;
             
-            // Thêm sự kiện cho các ô có thể chỉnh sửa
-            document.querySelectorAll('[contenteditable="true"]').forEach(cell => {
-                cell.addEventListener('focus', function() {
-                    this.dataset.original = this.textContent;
-                });
-                
-                cell.addEventListener('blur', function() {
-                    const newValue = this.textContent.trim();
-                    const originalValue = this.dataset.original || '';
+            // Thêm sự kiện cho các ô và dropdown có thể chỉnh sửa
+            addCellEventListeners();
+        }
+
+        // Hàm thêm các trình xử lý sự kiện vào các ô - ĐÃ CẬP NHẬT
+        function addCellEventListeners() {
+            // Sự kiện cho các ô văn bản có thể chỉnh sửa
+            document.querySelectorAll('td.editable[contenteditable="true"]').forEach(cell => {
+                cell.addEventListener('input', function() {
                     const row = this.closest('tr');
                     const maDonHang = row.getAttribute('data-id');
                     const field = this.getAttribute('data-field');
+                    const newValue = this.textContent.trim();
                     
-                    if (newValue !== originalValue) {
-                        if (!changedData[maDonHang]) {
-                            changedData[maDonHang] = {};
-                        }
-                        changedData[maDonHang][field] = newValue;
-                        
-                        // Kích hoạt nút lưu
-                        const saveBtn = row.querySelector('.save-btn');
-                        if (saveBtn) saveBtn.disabled = false;
-                        
-                        // Hiển thị nút lưu tất cả nếu có thay đổi
-                        if (Object.keys(changedData).length > 0) {
-                            saveAllBtn.style.display = 'block';
-                        }
+                    if (!changedData[maDonHang]) {
+                        changedData[maDonHang] = {};
                     }
+                    changedData[maDonHang][field] = newValue;
+                    
+                    row.querySelector('.save-btn').disabled = false;
+                    saveAllBtn.style.display = 'block';
                 });
-                
-                // Xử lý khi paste nhiều dòng vào 1 ô
-                cell.addEventListener('paste', function(e) {
-                    e.preventDefault();
-                    const text = (e.clipboardData || window.clipboardData).getData('text');
-                    const lines = text.split('\n').map(line => line.trim()).filter(line => line);
+            });
+
+            // Sự kiện cho dropdown "Kết quả Check"
+            document.querySelectorAll('.editable-select select').forEach(select => {
+                select.addEventListener('change', function() {
+                    const newValue = this.value;
+                    const row = this.closest('tr');
+                    const maDonHang = row.getAttribute('data-id');
+                    const field = this.closest('td').getAttribute('data-field');
                     
-                    if (lines.length > 1) {
-                        const row = this.closest('tr');
-                        const currentIndex = parseInt(row.getAttribute('data-index'));
-                        const trackingCells = document.querySelectorAll('[data-field="Mã Tracking"]');
-                        
-                        lines.forEach((line, i) => {
-                            const targetIndex = currentIndex + i;
-                            if (targetIndex < trackingCells.length) {
-                                const targetCell = trackingCells[targetIndex];
-                                targetCell.textContent = line;
-                                
-                                // Đánh dấu là đã thay đổi
-                                const targetRow = targetCell.closest('tr');
-                                const maDonHang = targetRow.getAttribute('data-id');
-                                
-                                if (!changedData[maDonHang]) {
-                                    changedData[maDonHang] = {};
-                                }
-                                changedData[maDonHang]['Mã Tracking'] = line;
-                                
-                                // Kích hoạt nút lưu
-                                const saveBtn = targetRow.querySelector('.save-btn');
-                                if (saveBtn) saveBtn.disabled = false;
-                            }
-                        });
-                        
-                        // Hiển thị nút lưu tất cả nếu có thay đổi
-                        if (Object.keys(changedData).length > 0) {
-                            saveAllBtn.style.display = 'block';
-                        }
-                        
-                        showNotification(`Đã điền ${lines.length} mã tracking`);
-                    } else {
-                        // Nếu chỉ paste 1 dòng thì xử lý bình thường
-                        document.execCommand('insertText', false, text);
+                    this.style.backgroundColor = CHECK_RESULT_COLORS[newValue] || CHECK_RESULT_COLORS[''];
+                    
+                    if (!changedData[maDonHang]) {
+                        changedData[maDonHang] = {};
                     }
+                    changedData[maDonHang][field] = newValue;
+                    
+                    row.querySelector('.save-btn').disabled = false;
+                    saveAllBtn.style.display = 'block';
                 });
             });
             
-            // Thêm sự kiện cho các nút lưu từng dòng
             document.querySelectorAll('.save-btn').forEach(btn => {
                 btn.addEventListener('click', async function() {
                     const maDonHang = this.getAttribute('data-id');
@@ -659,49 +659,48 @@
             if (!changedData[maDonHang]) return;
             
             try {
-                const trackingValue = changedData[maDonHang]['Mã Tracking'] || '';
-                
                 const formData = new URLSearchParams();
                 formData.append('maDonHang', maDonHang);
-                formData.append('maTracking', trackingValue);
+                
+                for (const [field, value] of Object.entries(changedData[maDonHang])) {
+                    formData.append(field, value);
+                }
                 
                 const response = await fetch(UPDATE_URL, {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
                 });
                 
-                if (!response.ok) {
-                    throw new Error('Lỗi kết nối khi lưu dữ liệu');
-                }
+                if (!response.ok) throw new Error('Lỗi kết nối khi lưu dữ liệu');
                 
                 const result = await response.json();
                 
                 if (result.status === 'ok') {
-                    // Xóa khỏi danh sách thay đổi
                     delete changedData[maDonHang];
                     
-                    // Cập nhật UI
                     const saveBtn = document.querySelector(`.save-btn[data-id="${maDonHang}"]`);
                     if (saveBtn) saveBtn.disabled = true;
                     
-                    // Ẩn nút lưu tất cả nếu không còn thay đổi
                     if (Object.keys(changedData).length === 0) {
                         saveAllBtn.style.display = 'none';
                     }
                     
-                    showNotification('Cập nhật mã tracking thành công!');
+                    showNotification('Cập nhật dữ liệu thành công!');
                     
-                    // Ẩn dòng đã có mã tracking
+                    // Cập nhật dữ liệu gốc sau khi lưu thành công
+                    const dataIndex = allData.findIndex(item => item.maDonHang === maDonHang);
+                    if (dataIndex > -1) {
+                        Object.assign(allData[dataIndex], result.updatedData); // Giả sử server trả về dữ liệu đã cập nhật
+                    }
+
+                    // Ẩn dòng nếu có mã tracking
                     const row = document.querySelector(`tr[data-id="${maDonHang}"]`);
-                    if (row && trackingValue.trim() !== '') {
+                    const trackingCell = row.querySelector('[data-field="Mã Tracking"]');
+                    if (row && trackingCell && trackingCell.textContent.trim() !== '') {
                         row.classList.add('hidden-row');
                     }
-                    
-                    // Làm mới dữ liệu sau 1 giây
-                    setTimeout(loadData, 1000);
+
                 } else {
                     throw new Error(result.message || 'Lỗi khi cập nhật dữ liệu');
                 }
@@ -713,61 +712,66 @@
         
         // Hàm lưu tất cả thay đổi
         async function saveAllChanges() {
-            if (Object.keys(changedData).length === 0) return;
-            
+             if (Object.keys(changedData).length === 0) return;
+
+            const buttonText = 'LƯU TẤT CẢ THAY ĐỔI';
+            saveAllBtn.disabled = true;
+            saveAllBtn.textContent = 'ĐANG LƯU...';
+
+            const updatesToProcess = { ...changedData };
+            const promises = Object.keys(updatesToProcess).map(maDonHang => saveChangePromise(maDonHang, updatesToProcess[maDonHang]));
+
             try {
-                saveAllBtn.disabled = true;
-                saveAllBtn.textContent = 'ĐANG LƯU...';
-                
-                // Tạo mảng promises để gửi tất cả các yêu cầu
-                const promises = Object.keys(changedData).map(maDonHang => {
-                    const trackingValue = changedData[maDonHang]['Mã Tracking'] || '';
-                    
-                    const formData = new URLSearchParams();
-                    formData.append('maDonHang', maDonHang);
-                    formData.append('maTracking', trackingValue);
-                    
-                    return fetch(UPDATE_URL, {
-                        method: 'POST',
-                        body: formData,
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded'
-                        }
-                    });
-                });
-                
-                // Gửi tất cả yêu cầu cùng lúc
-                const responses = await Promise.all(promises);
-                
-                // Kiểm tra kết quả
-                for (const response of responses) {
-                    if (!response.ok) {
-                        throw new Error('Một số cập nhật không thành công');
-                    }
+                const results = await Promise.all(promises);
+                const successfulUpdates = results.filter(r => r.success).length;
+                const failedUpdates = results.length - successfulUpdates;
+
+                if (failedUpdates > 0) {
+                    showNotification(`${successfulUpdates} lưu thành công, ${failedUpdates} thất bại.`, true);
+                } else {
+                    showNotification('Đã lưu tất cả thay đổi thành công!');
                 }
-                
-                // Xóa tất cả thay đổi
-                changedData = {};
-                saveAllBtn.style.display = 'none';
-                saveAllBtn.textContent = 'LƯU TẤT CẢ THAY ĐỔI';
-                
-                showNotification('Đã lưu tất cả thay đổi thành công!');
-                
-                // Ẩn tất cả các dòng đã có mã tracking
-                document.querySelectorAll('tr').forEach(row => {
-                    const trackingCell = row.querySelector('[data-field="Mã Tracking"]');
-                    if (trackingCell && trackingCell.textContent.trim() !== '') {
-                        row.classList.add('hidden-row');
-                    }
-                });
-                
-                // Làm mới dữ liệu sau 1 giây
-                setTimeout(loadData, 1000);
+
+                // Làm mới lại toàn bộ dữ liệu để đảm bảo đồng bộ
+                await loadData();
+
             } catch (error) {
                 console.error('Lỗi khi lưu tất cả:', error);
-                showNotification(`Lỗi: ${error.message}`, true);
+                showNotification(`Lỗi nghiêm trọng: ${error.message}`, true);
+            } finally {
                 saveAllBtn.disabled = false;
-                saveAllBtn.textContent = 'LƯU TẤT CẢ THAY ĐỔI';
+                saveAllBtn.textContent = buttonText;
+                if (Object.keys(changedData).length === 0) {
+                    saveAllBtn.style.display = 'none';
+                }
+            }
+        }
+        
+        // Hàm trợ giúp cho saveAllChanges
+        async function saveChangePromise(maDonHang, changes) {
+            try {
+                const formData = new URLSearchParams();
+                formData.append('maDonHang', maDonHang);
+                for (const [field, value] of Object.entries(changes)) {
+                    formData.append(field, value);
+                }
+
+                const response = await fetch(UPDATE_URL, {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+                });
+
+                if (!response.ok) throw new Error(`Lỗi HTTP ${response.status}`);
+                const result = await response.json();
+                if (result.status !== 'ok') throw new Error(result.message || 'Server báo lỗi');
+
+                // Xóa khỏi danh sách thay đổi nếu thành công
+                delete changedData[maDonHang];
+                return { success: true, maDonHang };
+            } catch (error) {
+                console.error(`Lỗi khi lưu mã đơn hàng ${maDonHang}:`, error);
+                return { success: false, maDonHang, error: error.message };
             }
         }
         
@@ -790,45 +794,37 @@
                 .filter(line => line.length > 0);
             
             if (trackingList.length === 0) {
-                showNotification('Không có mã tracking nào để áp dụng', true);
+                showNotification('Không có dữ liệu nào để áp dụng', true);
                 return;
             }
             
-            // Lấy tất cả các dòng trong bảng hiện tại (chỉ những dòng đang hiển thị)
             const rows = Array.from(document.querySelectorAll('tbody tr:not(.hidden-row)'));
+            let appliedCount = 0;
             
-            // Áp dụng mã tracking theo thứ tự
-            trackingList.forEach((tracking, index) => {
+            trackingList.forEach((value, index) => {
                 if (index < rows.length) {
                     const row = rows[index];
                     const maDonHang = row.getAttribute('data-id');
                     const trackingCell = row.querySelector('[data-field="Mã Tracking"]');
                     
                     if (trackingCell) {
-                        trackingCell.textContent = tracking;
+                        trackingCell.textContent = value;
+                        if (!changedData[maDonHang]) changedData[maDonHang] = {};
+                        changedData[maDonHang]['Mã Tracking'] = value;
                         
-                        // Đánh dấu là đã thay đổi
-                        if (!changedData[maDonHang]) {
-                            changedData[maDonHang] = {};
-                        }
-                        changedData[maDonHang]['Mã Tracking'] = tracking;
-                        
-                        // Kích hoạt nút lưu
                         const saveBtn = row.querySelector('.save-btn');
                         if (saveBtn) saveBtn.disabled = false;
+                        appliedCount++;
                     }
                 }
             });
             
-            // Hiển thị nút lưu tất cả nếu có thay đổi
             if (Object.keys(changedData).length > 0) {
                 saveAllBtn.style.display = 'block';
             }
             
-            // Ẩn vùng paste nhiều dòng
             multiPasteArea.style.display = 'none';
-            
-            showNotification(`Đã áp dụng ${Math.min(trackingList.length, rows.length)} mã tracking`);
+            showNotification(`Đã áp dụng ${appliedCount} giá trị`);
         }
         
         // Sự kiện
@@ -850,3 +846,4 @@
     </script>
 </body>
 </html>
+
