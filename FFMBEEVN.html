@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quản lý Mã Tracking</title>
+    <title>Quản lý Mã Tracking - BEE</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -38,7 +38,7 @@
             display: flex;
             gap: 10px;
         }
-        input, button {
+        input, button, select {
             padding: 10px 15px;
             border-radius: 4px;
             border: 1px solid #ddd;
@@ -165,6 +165,7 @@
             display: flex;
             margin-bottom: 20px;
             border-bottom: 1px solid #ddd;
+            overflow-x: auto;
         }
         .tab {
             padding: 10px 20px;
@@ -172,6 +173,7 @@
             background-color: #f1f1f1;
             margin-right: 5px;
             border-radius: 5px 5px 0 0;
+            white-space: nowrap;
         }
         .tab.active {
             background-color: #3498db;
@@ -197,9 +199,7 @@
         .hidden-row {
             display: none;
         }
-
-        /* === CSS MỚI CHO DROPDOWN === */
-        td.editable-select {
+        .editable-select {
             padding: 5px;
             position: relative;
         }
@@ -231,8 +231,6 @@
             transform: translateY(-50%);
             pointer-events: none;
         }
-        /* === KẾT THÚC CSS MỚI === */
-
         @media (max-width: 768px) {
             .control-panel {
                 flex-direction: column;
@@ -244,23 +242,15 @@
                 padding: 6px 8px;
                 font-size: 12px;
             }
-            .tabs {
-                overflow-x: auto;
-                flex-wrap: nowrap;
-            }
-            .tab {
-                padding: 8px 12px;
-                font-size: 14px;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>QUẢN LÝ MÃ TRACKING</h1>
+        <h1>QUẢN LÝ MÃ TRACKING - BEE</h1>
         
         <div class="tabs" id="tabsContainer">
-            <!-- Tabs sẽ được tạo động bằng JavaScript -->
+            <!-- Tabs will be dynamically created -->
         </div>
         
         <div class="control-panel">
@@ -272,6 +262,13 @@
                 <button id="refreshBtn" class="success">Làm mới dữ liệu</button>
                 <button id="saveAllBtn" class="warning" style="display: none;">LƯU TẤT CẢ THAY ĐỔI</button>
                 <button id="multiPasteBtn">Paste nhiều dòng</button>
+                <select id="rowsPerPage">
+                    <option value="50">50 dòng/trang</option>
+                    <option value="100" selected>100 dòng/trang</option>
+                    <option value="200">200 dòng/trang</option>
+                    <option value="500">500 dòng/trang</option>
+                    <option value="1000">1000 dòng/trang</option>
+                </select>
             </div>
         </div>
         
@@ -287,16 +284,24 @@
         <div id="tableContainer">
             <div class="loading">Đang tải dữ liệu...</div>
         </div>
+        
+        <div class="pagination-controls" style="display: none;">
+            <button id="prevPageBtn">Trang trước</button>
+            <span id="pageInfo">Trang 1</span>
+            <button id="nextPageBtn">Trang sau</button>
+        </div>
     </div>
     
     <div id="notification" class="notification"></div>
 
     <script>
-        // Biến toàn cục
+        // Global variables
         let allData = [];
         let filteredData = [];
         let changedData = {};
         let currentTab = 'all';
+        let currentPage = 1;
+        let rowsPerPage = 100;
         const DATA_URL = 'https://script.google.com/macros/s/AKfycbz31dbvw_51z47Nwt4KjJF1UvnLj34u2gKT4XaKTtMsDCK07l2uBlDj21XiXamgJPRA/exec';
         const UPDATE_URL = 'https://script.google.com/macros/s/AKfycbz31dbvw_51z47Nwt4KjJF1UvnLj34u2gKT4XaKTtMsDCK07l2uBlDj21XiXamgJPRA/exec';
         
@@ -313,11 +318,16 @@
         const multiPasteTextarea = document.getElementById('multiPasteTextarea');
         const applyMultiPasteBtn = document.getElementById('applyMultiPasteBtn');
         const cancelMultiPasteBtn = document.getElementById('cancelMultiPasteBtn');
+        const rowsPerPageSelect = document.getElementById('rowsPerPage');
+        const prevPageBtn = document.getElementById('prevPageBtn');
+        const nextPageBtn = document.getElementById('nextPageBtn');
+        const pageInfo = document.getElementById('pageInfo');
+        const paginationControls = document.querySelector('.pagination-controls');
         
-        // Danh sách cột cố định sẽ hiển thị - ĐÃ CẬP NHẬT THỨ TỰ
+        // Columns to display (in order)
         const DISPLAY_COLUMNS = [
             'Mã đơn hàng',
-            'Kết quả Check', // ĐÃ DI CHUYỂN LÊN ĐÂY
+            'Kết quả Check',
             'Mã Tracking',
             'Ngày lên đơn',
             'Name*',
@@ -341,7 +351,6 @@
             'Nhân viên Sale',
             'Nhân viên Marketing',
             'NV Vận đơn',
-            //'Kết quả Check', // ĐÃ BỎ Ở ĐÂY
             'Trạng thái giao hàng NB',
             'Lý do',
             'Đơn vị vận chuyển',
@@ -421,19 +430,19 @@
             'maDonHang'
         ];
         
-        // Các cột có thể chỉnh sửa - ĐÃ CẬP NHẬT
+        // Editable columns
         const EDITABLE_COLUMNS = ['Mã Tracking', 'Name*', 'Kết quả Check'];
         
-        // MỚI: Định nghĩa màu sắc cho các giá trị trong "Kết quả Check"
+        // Colors for "Kết quả Check" dropdown
         const CHECK_RESULT_COLORS = {
-            'OK': '#2ecc71',         // Xanh lá
-            'Không OK': '#e74c3c',    // Đỏ
-            'Chưa check': '#f39c12', // Cam
-            '': '#bdc3c7'            // Xám cho giá trị rỗng
+            'OK': '#2ecc71',
+            'Không OK': '#e74c3c',
+            'Chưa check': '#f39c12',
+            '': '#bdc3c7'
         };
         const CHECK_RESULT_OPTIONS = ['Chưa check', 'OK', 'Không OK'];
 
-        // Hàm hiển thị thông báo
+        // Show notification
         function showNotification(message, isError = false) {
             notification.textContent = message;
             notification.className = isError ? 'notification error' : 'notification';
@@ -444,12 +453,13 @@
             }, 3000);
         }
         
-        // Hàm tải dữ liệu
+        // Load data from server
         async function loadData() {
             try {
                 tableContainer.innerHTML = '<div class="loading">Đang tải dữ liệu...</div>';
                 saveAllBtn.style.display = 'none';
                 changedData = {};
+                currentPage = 1;
                 
                 const response = await fetch(DATA_URL);
                 if (!response.ok) {
@@ -472,17 +482,19 @@
                     allData = Object.keys(result).map(key => ({ ...result[key], id: key }));
                 }
                 
+                // Filter for BEE shipping only
                 allData = allData.filter(item => item['Đơn vị vận chuyển'] === 'BEE');
                 
                 createTabs();
                 filterDataByTab(currentTab);
+                updatePaginationControls();
             } catch (error) {
                 tableContainer.innerHTML = `<div class="error">Lỗi khi tải dữ liệu: ${error.message}</div>`;
                 console.error('Lỗi:', error);
             }
         }
         
-        // Hàm tạo các tab theo Khu vực
+        // Create region tabs
         function createTabs() {
             tabsContainer.innerHTML = '';
             
@@ -495,7 +507,9 @@
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 allTab.classList.add('active');
                 currentTab = 'all';
+                currentPage = 1;
                 filterDataByTab('all');
+                updatePaginationControls();
             };
             tabsContainer.appendChild(allTab);
             
@@ -507,13 +521,15 @@
                     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                     tab.classList.add('active');
                     currentTab = region;
+                    currentPage = 1;
                     filterDataByTab(region);
+                    updatePaginationControls();
                 };
                 tabsContainer.appendChild(tab);
             });
         }
         
-        // Hàm lọc dữ liệu theo tab
+        // Filter data by selected tab
         function filterDataByTab(tab) {
             if (tab === 'all') {
                 filteredData = [...allData];
@@ -530,10 +546,31 @@
                 );
             }
             
-            renderTable(filteredData);
+            renderTable(getPaginatedData());
         }
         
-        // Hàm hiển thị bảng - ĐÃ CẬP NHẬT
+        // Get data for current page
+        function getPaginatedData() {
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = startIndex + rowsPerPage;
+            return filteredData.slice(startIndex, endIndex);
+        }
+        
+        // Update pagination controls
+        function updatePaginationControls() {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            
+            if (totalPages > 1) {
+                paginationControls.style.display = 'flex';
+                pageInfo.textContent = `Trang ${currentPage}/${totalPages}`;
+                prevPageBtn.disabled = currentPage === 1;
+                nextPageBtn.disabled = currentPage === totalPages;
+            } else {
+                paginationControls.style.display = 'none';
+            }
+        }
+        
+        // Render table with data
         function renderTable(data) {
             if (!Array.isArray(data)) {
                 tableContainer.innerHTML = '<div class="error">Dữ liệu không hợp lệ: không phải mảng</div>';
@@ -561,12 +598,13 @@
                         <tbody>`;
             
             data.forEach((item, index) => {
+                const globalIndex = (currentPage - 1) * rowsPerPage + index;
                 const hasTracking = item['Mã Tracking'] && item['Mã Tracking'].trim() !== '';
                 const isChanged = changedData[item['maDonHang']] !== undefined;
                 const rowClass = hasTracking ? 'hidden-row' : '';
                 
-                html += `<tr data-id="${item['maDonHang'] || index}" data-index="${index}" class="${rowClass}">
-                            <td class="fixed-column">${index + 1}</td>`;
+                html += `<tr data-id="${item['maDonHang'] || globalIndex}" data-index="${globalIndex}" class="${rowClass}">
+                            <td class="fixed-column">${globalIndex + 1}</td>`;
                 
                 DISPLAY_COLUMNS.forEach(column => {
                     const originalValue = item[column] || '';
@@ -595,20 +633,19 @@
                 });
                 
                 html += `<td class="fixed-column">
-                            <button class="save-btn" data-id="${item['maDonHang'] || index}" ${!isChanged ? 'disabled' : ''}>Lưu</button>
+                            <button class="save-btn" data-id="${item['maDonHang'] || globalIndex}" ${!isChanged ? 'disabled' : ''}>Lưu</button>
                          </td></tr>`;
             });
             
             html += `</tbody></table></div>`;
             tableContainer.innerHTML = html;
             
-            // Thêm sự kiện cho các ô và dropdown có thể chỉnh sửa
             addCellEventListeners();
         }
 
-        // Hàm thêm các trình xử lý sự kiện vào các ô - ĐÃ CẬP NHẬT
+        // Add event listeners to editable cells
         function addCellEventListeners() {
-            // Sự kiện cho các ô văn bản có thể chỉnh sửa
+            // For editable text cells
             document.querySelectorAll('td.editable[contenteditable="true"]').forEach(cell => {
                 cell.addEventListener('input', function() {
                     const row = this.closest('tr');
@@ -626,7 +663,7 @@
                 });
             });
 
-            // Sự kiện cho dropdown "Kết quả Check"
+            // For dropdown cells
             document.querySelectorAll('.editable-select select').forEach(select => {
                 select.addEventListener('change', function() {
                     const newValue = this.value;
@@ -646,6 +683,7 @@
                 });
             });
             
+            // For save buttons
             document.querySelectorAll('.save-btn').forEach(btn => {
                 btn.addEventListener('click', async function() {
                     const maDonHang = this.getAttribute('data-id');
@@ -654,7 +692,7 @@
             });
         }
         
-        // Hàm lưu thay đổi
+        // Save changes for a single row
         async function saveChanges(maDonHang) {
             if (!changedData[maDonHang]) return;
             
@@ -688,13 +726,13 @@
                     
                     showNotification('Cập nhật dữ liệu thành công!');
                     
-                    // Cập nhật dữ liệu gốc sau khi lưu thành công
+                    // Update original data
                     const dataIndex = allData.findIndex(item => item.maDonHang === maDonHang);
                     if (dataIndex > -1) {
-                        Object.assign(allData[dataIndex], result.updatedData); // Giả sử server trả về dữ liệu đã cập nhật
+                        Object.assign(allData[dataIndex], result.updatedData);
                     }
 
-                    // Ẩn dòng nếu có mã tracking
+                    // Hide row if tracking exists
                     const row = document.querySelector(`tr[data-id="${maDonHang}"]`);
                     const trackingCell = row.querySelector('[data-field="Mã Tracking"]');
                     if (row && trackingCell && trackingCell.textContent.trim() !== '') {
@@ -710,16 +748,18 @@
             }
         }
         
-        // Hàm lưu tất cả thay đổi
+        // Save all changes
         async function saveAllChanges() {
-             if (Object.keys(changedData).length === 0) return;
+            if (Object.keys(changedData).length === 0) return;
 
-            const buttonText = 'LƯU TẤT CẢ THAY ĐỔI';
+            const buttonText = saveAllBtn.textContent;
             saveAllBtn.disabled = true;
             saveAllBtn.textContent = 'ĐANG LƯU...';
 
             const updatesToProcess = { ...changedData };
-            const promises = Object.keys(updatesToProcess).map(maDonHang => saveChangePromise(maDonHang, updatesToProcess[maDonHang]));
+            const promises = Object.keys(updatesToProcess).map(maDonHang => 
+                saveChangePromise(maDonHang, updatesToProcess[maDonHang])
+            );
 
             try {
                 const results = await Promise.all(promises);
@@ -732,7 +772,6 @@
                     showNotification('Đã lưu tất cả thay đổi thành công!');
                 }
 
-                // Làm mới lại toàn bộ dữ liệu để đảm bảo đồng bộ
                 await loadData();
 
             } catch (error) {
@@ -747,7 +786,7 @@
             }
         }
         
-        // Hàm trợ giúp cho saveAllChanges
+        // Helper function for saving a single change
         async function saveChangePromise(maDonHang, changes) {
             try {
                 const formData = new URLSearchParams();
@@ -766,7 +805,6 @@
                 const result = await response.json();
                 if (result.status !== 'ok') throw new Error(result.message || 'Server báo lỗi');
 
-                // Xóa khỏi danh sách thay đổi nếu thành công
                 delete changedData[maDonHang];
                 return { success: true, maDonHang };
             } catch (error) {
@@ -775,19 +813,21 @@
             }
         }
         
-        // Hàm tìm kiếm
+        // Search function
         function searchData() {
+            currentPage = 1;
             filterDataByTab(currentTab);
+            updatePaginationControls();
         }
         
-        // Hàm xử lý paste nhiều dòng
+        // Handle multi-line paste
         function handleMultiPaste() {
             multiPasteArea.style.display = 'block';
             multiPasteTextarea.value = '';
             multiPasteTextarea.focus();
         }
         
-        // Hàm áp dụng paste nhiều dòng
+        // Apply multi-line paste
         function applyMultiPaste() {
             const trackingList = multiPasteTextarea.value.split('\n')
                 .map(line => line.trim())
@@ -827,7 +867,7 @@
             showNotification(`Đã áp dụng ${appliedCount} giá trị`);
         }
         
-        // Sự kiện
+        // Event listeners
         searchBtn.addEventListener('click', searchData);
         searchInput.addEventListener('keyup', (e) => {
             if (e.key === 'Enter') searchData();
@@ -841,9 +881,32 @@
             multiPasteArea.style.display = 'none';
         });
         
-        // Tải dữ liệu ban đầu
+        rowsPerPageSelect.addEventListener('change', () => {
+            rowsPerPage = parseInt(rowsPerPageSelect.value);
+            currentPage = 1;
+            filterDataByTab(currentTab);
+            updatePaginationControls();
+        });
+        
+        prevPageBtn.addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                renderTable(getPaginatedData());
+                updatePaginationControls();
+            }
+        });
+        
+        nextPageBtn.addEventListener('click', () => {
+            const totalPages = Math.ceil(filteredData.length / rowsPerPage);
+            if (currentPage < totalPages) {
+                currentPage++;
+                renderTable(getPaginatedData());
+                updatePaginationControls();
+            }
+        });
+        
+        // Initial load
         loadData();
     </script>
 </body>
 </html>
-
