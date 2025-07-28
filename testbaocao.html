@@ -7,239 +7,380 @@
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            line-height: 1.6;
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 20px;
         }
         table {
             border-collapse: collapse;
             width: 100%;
-            margin-bottom: 20px;
-            font-size: 14px;
+            background-color: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 8px;
+            padding: 12px 15px;
             text-align: left;
+            min-width: 120px;
         }
         th {
-            background-color: #f2f2f2;
+            background-color: #3498db;
+            color: white;
             position: sticky;
             top: 0;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f1f1f1;
         }
         .editable {
-            background-color: #ffffcc;
+            background-color: #fffde7;
+        }
+        [contenteditable="true"]:focus {
+            outline: 2px solid #3498db;
+            background-color: #fff9c4;
         }
         .notification {
             position: fixed;
             top: 20px;
             right: 20px;
-            padding: 15px;
+            padding: 15px 25px;
             border-radius: 5px;
             color: white;
             z-index: 1000;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
             opacity: 0;
-            transition: opacity 0.5s;
+            transition: opacity 0.5s, transform 0.5s;
+            transform: translateX(100%);
+        }
+        .notification.show {
+            opacity: 1;
+            transform: translateX(0);
         }
         .success {
-            background-color: #4CAF50;
+            background-color: #27ae60;
         }
         .error {
-            background-color: #f44336;
-        }
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+            background-color: #e74c3c;
         }
         button {
-            padding: 6px 12px;
-            background-color: #4CAF50;
+            padding: 8px 16px;
+            background-color: #2ecc71;
             color: white;
             border: none;
             border-radius: 4px;
             cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+            margin: 2px;
         }
         button:hover {
-            background-color: #45a049;
+            background-color: #27ae60;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
         button:disabled {
-            background-color: #cccccc;
+            background-color: #95a5a6;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .action-buttons {
+            white-space: nowrap;
+        }
+        .refresh-btn {
+            background-color: #3498db;
+            margin-bottom: 15px;
+        }
+        .refresh-btn:hover {
+            background-color: #2980b9;
         }
     </style>
 </head>
 <body>
-    <h1>Quản Lý Đơn Hàng</h1>
-    <div id="notification" class="notification" style="display: none;"></div>
-    
-    <table id="ordersTable">
-        <!-- Dữ liệu sẽ được thêm vào bằng JS -->
-    </table>
+    <div class="container">
+        <h1>Quản Lý Đơn Hàng</h1>
+        <button class="refresh-btn" onclick="fetchOrders()">
+            <span class="loading" id="refresh-loading" style="display:none;"></span>
+            Làm mới dữ liệu
+        </button>
+        <div id="notification" class="notification"></div>
+        
+        <table id="ordersTable">
+            <thead>
+                <!-- Header sẽ được tạo động bằng JavaScript -->
+            </thead>
+            <tbody>
+                <!-- Dữ liệu sẽ được thêm bằng JavaScript -->
+            </tbody>
+        </table>
+    </div>
 
     <script>
-        // ĐÃ CẬP NHẬT URL MỚI CỦA BẠN
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbwMSGRIxZfRA9Y8mWtDn0VJmGI8jA9dCst8dl-m61nwC5dQgt8N_vfGSIAK10WakXoeEA/exec";
+        // URL Google Apps Script MỚI của bạn
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbybXy8ihHJzlEzwVSvxLQkZuN9hW1hy-FE6owZC8xqmFmyjmFk_yY8EmeUoYKybGHAP3A/exec";
         let ordersData = [];
+        let allHeaders = [];
 
         // Hiển thị thông báo
-        function showNotification(message, isSuccess) {
+        function showNotification(message, isSuccess = true) {
             const notification = document.getElementById('notification');
             notification.textContent = message;
             notification.className = `notification ${isSuccess ? 'success' : 'error'}`;
-            notification.style.display = 'block';
-            notification.style.opacity = '1';
+            notification.classList.add('show');
             
             setTimeout(() => {
-                notification.style.opacity = '0';
-                setTimeout(() => {
-                    notification.style.display = 'none';
-                }, 500);
+                notification.classList.remove('show');
             }, 3000);
         }
 
-        // Hiển thị loading
-        function showLoading(button) {
-            const loading = document.createElement('span');
-            loading.className = 'loading';
-            button.innerHTML = '';
-            button.appendChild(loading);
-            button.disabled = true;
-            return button;
-        }
-
-        // Reset button về trạng thái ban đầu
-        function resetButton(button, originalText) {
-            button.innerHTML = originalText;
-            button.disabled = false;
-        }
-
+        // Tải dữ liệu đơn hàng
         async function fetchOrders() {
             try {
-                const response = await axios.get(GAS_URL);
-                ordersData = response.data;
-                renderOrders(ordersData);
+                const refreshLoading = document.getElementById('refresh-loading');
+                refreshLoading.style.display = 'inline-block';
+                showNotification("Đang tải dữ liệu...", true);
+                
+                const response = await axios.get(GAS_URL, {
+                    timeout: 15000,  // Tăng thời gian chờ lên 15 giây
+                    headers: { 'Content-Type': 'application/json' },
+                    params: {
+                        timestamp: new Date().getTime()  // Tránh cache
+                    }
+                });
+
+                // Debug dữ liệu nhận được
+                console.log("Dữ liệu từ API:", response.data);
+
+                // Kiểm tra dữ liệu nhận được
+                if (!response.data) {
+                    throw new Error("Không nhận được dữ liệu từ server");
+                }
+
+                // Xác định tất cả các cột có trong dữ liệu
+                if (Array.isArray(response.data) && response.data.length > 0) {
+                    allHeaders = Object.keys(response.data[0]);
+                } else if (typeof response.data === 'object' && response.data !== null) {
+                    allHeaders = Object.keys(response.data);
+                    response.data = [response.data]; // Chuyển thành mảng
+                } else {
+                    throw new Error("Định dạng dữ liệu không hợp lệ");
+                }
+
+                // Chuẩn hóa dữ liệu
+                ordersData = Array.isArray(response.data) ? response.data : [];
+                
+                if (ordersData.length === 0) {
+                    showNotification("Không có dữ liệu đơn hàng", false);
+                } else {
+                    showNotification(`Đã tải ${ordersData.length} đơn hàng với ${allHeaders.length} cột dữ liệu`, true);
+                }
+                
+                renderOrders();
+                
             } catch (error) {
-                console.error('Lỗi khi tải dữ liệu:', error);
-                showNotification('Lỗi khi tải dữ liệu: ' + error.message, false);
+                console.error("Lỗi khi tải dữ liệu:", {
+                    error: error.message,
+                    response: error.response?.data,
+                    config: error.config
+                });
+                
+                let errorMsg = "Lỗi tải dữ liệu";
+                if (error.code === "ECONNABORTED") {
+                    errorMsg = "Quá thời gian chờ kết nối (15 giây)";
+                } else if (error.response?.status === 403) {
+                    errorMsg = "Lỗi quyền truy cập. Vui lòng kiểm tra lại cài đặt chia sẻ Google Apps Script";
+                } else if (error.response?.status === 404) {
+                    errorMsg = "Không tìm thấy API";
+                }
+                
+                showNotification(`${errorMsg}: ${error.message}`, false);
+                ordersData = [];
+                allHeaders = [];
+                renderOrders();
+            } finally {
+                document.getElementById('refresh-loading').style.display = 'none';
             }
         }
 
-        function renderOrders(orders) {
-            const table = document.getElementById('ordersTable');
-            table.innerHTML = '';
+        // Hiển thị dữ liệu
+        function renderOrders() {
+            const thead = document.querySelector('#ordersTable thead');
+            const tbody = document.querySelector('#ordersTable tbody');
             
-            if (!orders || orders.length === 0) {
-                table.innerHTML = '<tr><td colspan="100">Không có dữ liệu đơn hàng</td></tr>';
-                return;
-            }
-
+            if (!thead || !tbody) return;
+            
+            // Xóa nội dung cũ
+            thead.innerHTML = '';
+            tbody.innerHTML = '';
+            
             // Tạo header
-            const headers = Object.keys(orders[0]);
             const headerRow = document.createElement('tr');
-            headers.forEach(header => {
+            allHeaders.forEach(header => {
                 const th = document.createElement('th');
                 th.textContent = header;
                 headerRow.appendChild(th);
             });
-            // Thêm cột hành động
-            const actionTh = document.createElement('th');
-            actionTh.textContent = 'Hành động';
-            headerRow.appendChild(actionTh);
-            table.appendChild(headerRow);
-
-            // Thêm dữ liệu
-            orders.forEach((order, index) => {
+            
+            // Thêm cột hành động nếu có dữ liệu
+            if (ordersData.length > 0) {
+                const actionTh = document.createElement('th');
+                actionTh.textContent = 'Hành động';
+                headerRow.appendChild(actionTh);
+            }
+            
+            thead.appendChild(headerRow);
+            
+            // Hiển thị thông báo nếu không có dữ liệu
+            if (ordersData.length === 0) {
                 const row = document.createElement('tr');
-                row.dataset.orderCode = order['Mã đơn hàng'];
+                const cell = document.createElement('td');
+                cell.colSpan = (allHeaders.length || 1) + 1;
+                cell.textContent = 'Không có dữ liệu đơn hàng';
+                cell.style.textAlign = 'center';
+                cell.style.color = '#e74c3c';
+                cell.style.padding = '20px';
+                row.appendChild(cell);
+                tbody.appendChild(row);
+                return;
+            }
+
+            // Tạo các dòng dữ liệu
+            ordersData.forEach((order, index) => {
+                const row = document.createElement('tr');
                 
-                headers.forEach(header => {
-                    const td = document.createElement('td');
+                // Thêm dữ liệu cho từng cột
+                allHeaders.forEach(header => {
+                    const cell = document.createElement('td');
                     
-                    // Cho phép chỉnh sửa Tracking và Ngày giao hàng
-                    if (header === 'Mã Tracking' || header === 'Ngày giao hàng') {
-                        td.className = 'editable';
-                        td.contentEditable = true;
-                        td.dataset.column = header;
+                    // Cho phép chỉnh sửa các cột quan trọng
+                    if (header.includes('Tracking') || header.includes('Ngày') || header.includes('Trạng thái')) {
+                        cell.classList.add('editable');
+                        cell.contentEditable = true;
                     }
                     
-                    td.textContent = order[header] || '';
-                    row.appendChild(td);
+                    // Format ngày tháng nếu là trường ngày
+                    if (header.includes('Ngày') && order[header]) {
+                        try {
+                            const date = new Date(order[header]);
+                            if (!isNaN(date)) {
+                                cell.textContent = date.toLocaleDateString('vi-VN');
+                                cell.title = order[header]; // Hiển thị đầy đủ khi hover
+                                return;
+                            }
+                        } catch (e) {
+                            console.error("Lỗi format ngày:", e);
+                        }
+                    }
+                    
+                    cell.textContent = order[header] || '';
+                    row.appendChild(cell);
                 });
                 
                 // Thêm nút cập nhật
-                const actionTd = document.createElement('td');
-                const updateBtn = document.createElement('button');
-                updateBtn.textContent = 'Cập nhật';
-                updateBtn.dataset.originalText = 'Cập nhật';
-                updateBtn.onclick = () => updateOrder(row, updateBtn);
-                actionTd.appendChild(updateBtn);
-                row.appendChild(actionTd);
+                if (ordersData.length > 0) {
+                    const actionCell = document.createElement('td');
+                    actionCell.className = 'action-buttons';
+                    
+                    const updateBtn = document.createElement('button');
+                    updateBtn.textContent = 'Cập nhật';
+                    updateBtn.onclick = () => updateOrder(row);
+                    
+                    actionCell.appendChild(updateBtn);
+                    row.appendChild(actionCell);
+                }
                 
-                table.appendChild(row);
+                tbody.appendChild(row);
             });
         }
 
-        async function updateOrder(row, button) {
-            const orderCode = row.dataset.orderCode;
-            const originalButtonText = button.dataset.originalText;
-            showLoading(button);
+        // Cập nhật đơn hàng
+        async function updateOrder(row) {
+            const updateBtn = row.querySelector('button');
+            if (!updateBtn) return;
             
-            // Lấy dữ liệu đã chỉnh sửa
-            const updatedData = {
-                "Mã đơn hàng": orderCode,
-                "Mã Tracking": row.querySelector('[data-column="Mã Tracking"]').textContent,
-                "Ngày giao hàng": row.querySelector('[data-column="Ngày giao hàng"]').textContent
-            };
+            const originalText = updateBtn.innerHTML;
             
             try {
-                // Thêm timestamp để tránh cache
-                const apiUrl = `${GAS_URL}?timestamp=${new Date().getTime()}`;
+                // Hiển thị trạng thái loading
+                updateBtn.innerHTML = '<span class="loading"></span> Đang xử lý...';
+                updateBtn.disabled = true;
                 
-                const response = await axios.post(apiUrl, updatedData, {
-                    headers: {
-                        'Content-Type': 'application/json'
+                // Thu thập dữ liệu từ các ô
+                const updatedData = {};
+                const cells = row.querySelectorAll('td:not(.action-buttons)');
+                
+                cells.forEach((cell, index) => {
+                    if (index < allHeaders.length) {
+                        const header = allHeaders[index];
+                        updatedData[header] = cell.textContent;
                     }
                 });
                 
-                console.log("Response:", response.data);
-                
-                if (response.data.success) {
-                    showNotification('Đã cập nhật thành công đơn hàng ' + orderCode, true);
-                    // Highlight dòng vừa cập nhật
-                    row.style.backgroundColor = '#e6ffe6';
-                    setTimeout(() => {
-                        row.style.backgroundColor = '';
-                        fetchOrders(); // Làm mới dữ liệu
-                    }, 2000);
-                } else {
-                    showNotification('Lỗi: ' + (response.data.error || 'Không rõ lỗi'), false);
-                    console.error("Server error:", response.data);
+                // Gửi dữ liệu cập nhật
+                const response = await axios.post(GAS_URL, {
+                    action: "updateOrder",
+                    ...updatedData
+                }, {
+                    timeout: 10000,
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!response.data?.success) {
+                    throw new Error(response.data?.error || "Cập nhật thất bại");
                 }
+                
+                showNotification("Cập nhật thành công!", true);
+                setTimeout(fetchOrders, 1000); // Làm mới dữ liệu sau 1 giây
+                
             } catch (error) {
-                console.error('Lỗi khi cập nhật:', error);
-                let errorMsg = error.message;
-                
-                if (error.response) {
-                    errorMsg = error.response.data.error || JSON.stringify(error.response.data);
-                }
-                
-                showNotification('Lỗi khi cập nhật: ' + errorMsg, false);
+                console.error("Lỗi khi cập nhật:", {
+                    error: error.message,
+                    response: error.response?.data
+                });
+                showNotification(`Lỗi: ${error.message}`, false);
             } finally {
-                resetButton(button, originalButtonText);
+                if (updateBtn) {
+                    updateBtn.innerHTML = originalText;
+                    updateBtn.disabled = false;
+                }
             }
         }
 
-        // Tải dữ liệu khi trang được mở
-        document.addEventListener('DOMContentLoaded', fetchOrders);
+        // Khởi động
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchOrders();
+            
+            // Tự động làm mới mỗi 1 phút
+            setInterval(fetchOrders, 60000);
+        });
     </script>
 </body>
 </html>
