@@ -36,6 +36,21 @@
     .submit-btn { background-color: var(--danger-color); margin-top: 1.5rem; }
     .status { background: #e9ecef; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 14px; }
     
+    .error-cell {
+        position: relative;
+        background-color: #fff5f5 !important;
+    }
+
+    .error-cell::after {
+        content: "⚠";
+        position: absolute;
+        right: 5px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--danger-color);
+        font-size: 1.2em;
+    }
+
     .error-cell input, .error-cell select {
         border: 2px solid var(--danger-color) !important;
         background-color: #f8d7da !important;
@@ -123,7 +138,7 @@
   <script>
     let allPagesData = [];
     const productList = ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Kẹo Táo", "Serum Sâm"];
-    const marketList = [...new Set(["Canada", "US", "Úc", "EU", "Nhật Bản", "Hàn Quốc", "UK"])];
+    const marketList = ["Canada", "US", "Úc", "EU", "Nhật Bản", "Hàn Quốc", "UK"];
     const shiftList = ["Hết ca", "Giữa ca", "Ca Chiều"];
     
     const tableBody = document.getElementById('tableBody');
@@ -133,6 +148,10 @@
     const form = document.getElementById('dataForm');
     const responseMessageDiv = document.getElementById('responseMessage');
     
+    function isValueInList(value, list) {
+        return list.includes(value.trim());
+    }
+
     function createOptions(list, selectedValue = '') {
         return list.map(item => `<option value="${item}" ${item === selectedValue ? 'selected' : ''}>${item}</option>`).join('');
     }
@@ -369,9 +388,7 @@
         }
     });
 
-    // <!-- KHÔI PHỤC -->: Bắt đầu phần khôi phục tính năng đọc dữ liệu từ URL
     function parseUrlData(dataString) {
-        // Ánh xạ các key từ URL sang name của các trường trong form
         const urlKeyMap = {
             'Tên': 'Tên MKT',
             'Page': 'Tên Page',
@@ -397,7 +414,6 @@
                 for (let i = 0; i < parts.length; i += 2) {
                     const urlKey = parts[i];
                     let value = (parts[i + 1] || '').trim();
-                    // URL generator dùng '__' cho các trường rỗng, cần chuyển thành chuỗi rỗng
                     if (value === '__') {
                         value = '';
                     }
@@ -423,17 +439,16 @@
             const parsedData = parseUrlData(dataParam);
 
             if (parsedData && parsedData.length > 0) {
-                tableBody.innerHTML = ''; // Xóa dòng trống mặc định
+                tableBody.innerHTML = '';
                 parsedData.forEach(rowData => {
                     addNewRow(rowData);
                 });
                 statusDiv.textContent = `Đã tải thành công ${parsedData.length} dòng từ URL. Hệ thống đã sẵn sàng.`;
-                return true; // Báo hiệu đã tải dữ liệu thành công
+                return true;
             }
         }
-        return false; // Không có dữ liệu từ URL hoặc dữ liệu không hợp lệ
+        return false;
     }
-    // <!-- KHÔI PHỤC -->: Kết thúc phần khôi phục
     
     async function handleSubmit(e) {
         e.preventDefault();
@@ -441,25 +456,49 @@
         responseMessageDiv.textContent = '';
         responseMessageDiv.style.color = 'var(--danger-color)';
         document.querySelectorAll('#dataTable .error-cell').forEach(cell => cell.classList.remove('error-cell'));
+        
         const rowsToProcess = Array.from(tableBody.querySelectorAll('tr'));
         if (rowsToProcess.length === 0) {
             responseMessageDiv.textContent = 'Không có dữ liệu để gửi. Vui lòng thêm ít nhất một dòng.';
             return;
         }
+
         const requiredFields = ['Tên MKT', 'Tên Page', 'TKQC', 'Ngày', 'Ca', 'CPQC', 'Số Mess+Cmt'];
+        const validationErrors = [];
+        
         rowsToProcess.forEach((row, index) => {
             requiredFields.forEach(fieldName => {
                 const input = row.querySelector(`[name="${fieldName}"]`);
                 if (input && !input.value.trim()) {
                     isValid = false;
                     input.closest('td').classList.add('error-cell');
+                    validationErrors.push(`Dòng ${index + 1}: Thiếu trường "${fieldName}"`);
                 }
             });
+
+            const productInput = row.querySelector('[name="Sản phẩm"]');
+            if (productInput && productInput.value.trim() && !isValueInList(productInput.value, productList)) {
+                isValid = false;
+                productInput.closest('td').classList.add('error-cell');
+                validationErrors.push(`Dòng ${index + 1}: "Sản phẩm" không hợp lệ. Vui lòng chọn từ danh sách.`);
+            }
+
+            const marketInput = row.querySelector('[name="Thị trường"]');
+            if (marketInput && marketInput.value.trim() && !isValueInList(marketInput.value, marketList)) {
+                isValid = false;
+                marketInput.closest('td').classList.add('error-cell');
+                validationErrors.push(`Dòng ${index + 1}: "Thị trường" không hợp lệ. Vui lòng chọn từ danh sách.`);
+            }
         });
+
         if (!isValid) {
-            responseMessageDiv.textContent = 'Lỗi: Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ.';
+            const errorMessage = validationErrors.length > 0 
+                ? validationErrors.join('<br>') 
+                : 'Lỗi: Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ.';
+            responseMessageDiv.innerHTML = errorMessage;
             return;
         }
+
         submitBtn.disabled = true;
         submitBtn.textContent = 'Đang gửi...';
         const keyMap = {
@@ -522,7 +561,6 @@
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
 
-            // <!-- KHÔI PHỤC -->: Gọi hàm loadDataFromUrl. Nếu nó không tải dữ liệu, thì mới thêm dòng mới.
             if (!loadDataFromUrl()) {
                 addNewRow();
                 statusDiv.textContent = `Tải thành công dữ liệu. Hệ thống đã sẵn sàng.`;
