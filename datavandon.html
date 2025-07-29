@@ -223,7 +223,7 @@
       "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", 
       "Hình thức thanh toán", "Ghi chú", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", 
       "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", 
-      "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển" // Đã thêm "Đơn vị vận chuyển" để dễ lọc
+      "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"
     ];
     
     let allData = [];
@@ -263,13 +263,6 @@
     function showError(message) {
       const container = document.getElementById('tableBody');
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">${message}</td></tr>`;
-    }
-
-    // dd/mm/yyyy -> Date object
-    function parseDate(dateString) {
-        if (!dateString || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) return null;
-        const parts = dateString.split('/');
-        return new Date(parts[2], parts[1] - 1, parts[0]);
     }
 
     function formatDate(dateString) {
@@ -317,33 +310,23 @@
       }
     }
 
-    // ---------- START: LOGIC ĐÃ ĐƯỢC CHỈNH SỬA ----------
     function filterDataByStaff() {
       if (!currentStaff) return;
       staffFilteredData = allData.filter(row => {
-        // Chỉ lấy tên nhân viên vận đơn để lọc theo trách nhiệm
         const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || '';
-        
-        // ĐÃ BỎ logic lọc theo "BEE" và "Mã Tracking rỗng".
-        // Giờ đây, việc lọc chỉ dựa trên vai trò của nhân viên.
-        
         if (currentStaff.vi_tri === "Leader") {
-          // Nếu là Leader, hiển thị tất cả đơn hàng của các thành viên trong team.
           return teamMembers.includes(deliveryStaff);
         } else {
-          // Nếu là Nhân viên, chỉ hiển thị đơn hàng được gán cho chính họ.
           return deliveryStaff === currentStaff.ho_va_ten;
         }
       });
     }
-    // ---------- END: LOGIC ĐÃ ĐƯỢC CHỈNH SỬA ----------
 
     function applyAllFilters() {
         let dataToFilter = [...staffFilteredData];
         const tableHead = document.getElementById('tableHead');
-        if (!tableHead.querySelector('tr')) return; // Header chưa render
+        if (!tableHead.querySelector('tr')) return;
 
-        // 1. Date Range Filter
         const startDate = document.getElementById('startDateFilter').value;
         const endDate = document.getElementById('endDateFilter').value;
         if (startDate || endDate) {
@@ -357,20 +340,17 @@
                 if (!orderDateStr) return false;
                 const orderDate = new Date(orderDateStr.includes('Z') ? orderDateStr : orderDateStr + 'Z');
                  if (isNaN(orderDate.getTime())) return false;
-
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
                 return true;
             });
         }
 
-        // 2. Column-specific filters
         const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
         filters.forEach(filter => {
             const value = filter.value.toLowerCase().trim();
             if (value === '') return;
             const colName = filter.dataset.column;
-
             dataToFilter = dataToFilter.filter(row => {
                  let cellValue = row[colName] !== undefined ? row[colName] : row[colName.replace(/ /g, '_')] || '';
                  return cellValue.toString().toLowerCase().includes(value);
@@ -385,12 +365,10 @@
         const header = document.getElementById('tableHead');
         header.innerHTML = '';
         const tr = document.createElement('tr');
-
         displayColumns.forEach(colName => {
             const th = document.createElement('th');
             th.textContent = colName;
             if (colName === "Mã đơn hàng") th.classList.add('fixed-column');
-
             let filterElement;
             if (dropdownCols[colName]) {
                 filterElement = document.createElement('select');
@@ -422,13 +400,12 @@
       container.innerHTML = '';
 
       if (data.length === 0) {
-        let message = `Không có đơn hàng nào khớp với bộ lọc.`;
-        showError(message);
+        showError(`Không có đơn hàng nào khớp với bộ lọc.`);
         return;
       }
 
       data.forEach((row, rowIndex) => {
-        const originalRowIndex = staffFilteredData.indexOf(row); // Giữ index gốc để cập nhật
+        const originalRowIndex = staffFilteredData.indexOf(row);
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = originalRowIndex;
         
@@ -436,7 +413,7 @@
           const td = document.createElement('td');
           let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] || '';
           
-          if (col === "Ngày lên đơn" || col === "Ngày đóng hàng" || col === "Ngày hẹn đẩy đơn") {
+          if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"].includes(col)) {
             value = formatDate(value);
           }
           
@@ -514,6 +491,7 @@
       document.body.appendChild(script);
     }
 
+    // ---------- START: LOGIC GHI ĐÈ AN TOÀN ĐÃ ĐƯỢC CẬP NHẬT ----------
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -533,10 +511,12 @@
         if (!originalData) return;
         
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
-        if(!tr) return; // Row is not currently visible due to filtering
+        if(!tr) return;
 
-        const updatedRow = { "Mã đơn hàng": originalData["Mã đơn hàng"] }; // Key to find the row
+        // Bắt đầu bằng cách sao chép TOÀN BỘ dữ liệu gốc của hàng đó.
+        const updatedRow = { ...originalData }; 
         
+        // Ghi đè các giá trị đã được chỉnh sửa lên bản sao này.
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
@@ -551,6 +531,7 @@
         });
         rowsToSend.push(updatedRow);
       });
+      // ---------- END: LOGIC GHI ĐÈ AN TOÀN ĐÃ ĐƯỢC CẬP NHẬT ----------
 
       if (rowsToSend.length === 0) {
         statusEl.textContent = 'Không có dòng nào để gửi.';
@@ -569,7 +550,6 @@
         if (json.message) {
           statusEl.textContent = `Thành công: ${json.message}`;
           changedRows.clear();
-          // Remove highlight from sent rows
           rowsToSend.forEach(sentRow => {
               const trToClear = Array.from(tableBody.rows).find(r => r.cells[0].textContent === sentRow["Mã đơn hàng"]);
               if(trToClear) {
