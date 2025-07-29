@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+.<!DOCTYPE html>
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
@@ -72,7 +72,7 @@
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 1600px; /* Tăng chiều rộng tối thiểu để chứa cột mới */
+      min-width: 1600px;
       font-size: 14px;
     }
     thead {
@@ -91,12 +91,12 @@
       background-color: #3498db;
       color: white;
       position: sticky;
-      top: var(--filter-row-height); /* Dính bên dưới hàng bộ lọc */
+      top: var(--filter-row-height);
       z-index: 20;
       font-weight: 500;
     }
     #filterRow th {
-        top: 0; /* Hàng bộ lọc dính trên cùng */
+        top: 0;
         background-color: #f2f6fa;
         padding: 4px 8px;
     }
@@ -160,7 +160,7 @@
       background-color: #3498db;
     }
     #filterRow th.fixed-column {
-        z-index: 40; /* Phải cao hơn các th khác */
+        z-index: 40;
         background-color: #f2f6fa;
     }
     .date-input {
@@ -169,15 +169,14 @@
       width: 100%;
       font-family: inherit;
       font-size: inherit;
+      color: inherit;
     }
   </style>
 </head>
 <body>
   <h2>QUẢN LÝ ĐƠN HÀNG MGT</h2>
 
-  <div id="tabContainer" class="tab-container">
-    <!-- Các tab theo Khu vực sẽ được tạo ở đây -->
-  </div>
+  <div id="tabContainer" class="tab-container"></div>
   
   <div class="controls">
     <div>
@@ -191,9 +190,7 @@
   <div class="table-wrapper" id="tableContainer">
     <table>
       <thead>
-        <tr id="filterRow">
-            <!-- Các ô lọc sẽ được tạo ở đây -->
-        </tr>
+        <tr id="filterRow"></tr>
         <tr>
           <th class="fixed-column">Mã đơn hàng</th>
           <th>Ngày lên đơn</th>
@@ -225,16 +222,13 @@
           <th>GHI CHÚ</th>
         </tr>
       </thead>
-      <tbody id="tableBody">
-        <!-- Dữ liệu sẽ được thêm vào đây -->
-      </tbody>
+      <tbody id="tableBody"></tbody>
     </table>
   </div>
 
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
     
-    // *** THAY ĐỔI 1: Thêm "Khu vực" vào danh sách hiển thị ***
     const displayColumns = [
       "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", 
       "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
@@ -253,32 +247,41 @@
     let initialFilteredData = []; 
     let filteredData = []; 
     let changedRows = new Set();
-    let activeRegion = 'all'; // *** THAY ĐỔI 2: Đổi tên biến từ activeState sang activeRegion ***
+    let activeRegion = 'all';
     let filterValues = {}; 
 
+    /**
+     * Cải tiến: Định dạng bất kỳ chuỗi ngày tháng nào thành dd/mm/yyyy.
+     * Sử dụng getUTC... để tránh các vấn đề về múi giờ của trình duyệt.
+     * Điều này đảm bảo ngày tháng được hiển thị nhất quán.
+     */
     function formatDate(dateString) {
       if (!dateString) return '';
       try {
-        const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z');
+        const date = new Date(dateString);
         if (isNaN(date.getTime())) return dateString;
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
+        const day = String(date.getUTCDate()).padStart(2, '0');
+        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+        const year = date.getUTCFullYear();
         return `${day}/${month}/${year}`;
       } catch (e) {
         return dateString;
       }
     }
 
+    /**
+     * Cải tiến: Chuyển đổi chuỗi dd/mm/yyyy thành định dạng ISO 8601 đầy đủ (UTC).
+     * Sử dụng Date.UTC để tạo ngày ở múi giờ UTC, đảm bảo toISOString() trả về giá trị chính xác.
+     */
     function parseDateToISO(dateString) {
       if (!dateString) return '';
       const parts = dateString.split('/');
-      if (parts.length !== 3) return dateString;
+      if (parts.length !== 3) return dateString; 
       try {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
-        const date = new Date(year, month, day);
+        const date = new Date(Date.UTC(year, month, day));
         if (isNaN(date.getTime())) return dateString;
         return date.toISOString();
       } catch (e) {
@@ -313,7 +316,6 @@
         initialFilteredData = allData.filter(row => {
             const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
             const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
-            // *** THAY ĐỔI TỪ "BEE" THÀNH "MGT" ***
             return carrier && carrier.toString().toUpperCase() === "MGT" && (!trackingCode || trackingCode.toString().trim() === '');
         });
     }
@@ -322,19 +324,18 @@
         const tabContainer = document.getElementById('tabContainer');
         tabContainer.innerHTML = '';
         
-        // *** THAY ĐỔI 3: Lấy dữ liệu từ cột "Khu vực" để tạo tab ***
         const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort();
 
         const createTab = (name, value) => {
             const button = document.createElement('button');
             button.className = 'tab-btn';
             button.textContent = name;
-            button.dataset.region = value; // Thay đổi dataset
+            button.dataset.region = value;
             if (value === activeRegion) {
                 button.classList.add('active');
             }
             button.addEventListener('click', () => {
-                activeRegion = value; // Cập nhật activeRegion
+                activeRegion = value;
                 document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 applyAllFilters();
@@ -353,9 +354,8 @@
 
         displayColumns.forEach((col, index) => {
             const th = document.createElement('th');
-            if (index === 0) {
-                th.classList.add('fixed-column');
-            }
+            if (index === 0) th.classList.add('fixed-column');
+            
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'filter-input';
@@ -375,7 +375,6 @@
     function applyAllFilters() {
         let dataToRender = [...initialFilteredData];
 
-        // *** THAY ĐỔI 4: Lọc theo Tab (Khu vực) ***
         if (activeRegion !== 'all') {
             dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion);
         }
@@ -386,8 +385,7 @@
             dataToRender = dataToRender.filter(row => {
                 return activeFilters.every(([col, filterValue]) => {
                     const cellValue = row[col] !== undefined ? row[col] :
-                                      row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] :
-                                      '';
+                                      row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : '';
                     return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
                 });
             });
@@ -411,17 +409,24 @@
         
         displayColumns.forEach(col => {
           const td = document.createElement('td');
-          let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : '';
+          const colKey = col.replace(/ /g, '_');
+          let value = row[col] !== undefined ? row[col] : (row[colKey] !== undefined ? row[colKey] : '');
           
-          if (col === "Ngày lên đơn" || col === "Ngày đóng hàng") {
+          const isDateColumn = col.toLowerCase().includes('ngày') || col.toLowerCase().includes('thời gian');
+
+          // Cải tiến: Luôn định dạng các cột ngày tháng khi hiển thị
+          if (isDateColumn) {
             value = formatDate(value);
           }
-          td.textContent = value !== null && value !== undefined ? value : '';
           
+          td.textContent = value;
           if (col === "Mã đơn hàng") td.classList.add('fixed-column');
           
           if (editableCols.includes(col)) {
-            if (col === "Ngày đóng hàng") {
+            td.classList.add('editable');
+            
+            // Cải tiến: Sử dụng input chuyên dụng cho tất cả các cột ngày tháng có thể sửa
+            if (isDateColumn) {
               const input = document.createElement('input');
               input.type = 'text';
               input.className = 'date-input';
@@ -444,15 +449,11 @@
               td.appendChild(input);
             } else {
               td.contentEditable = 'true';
-            }
-            
-            td.classList.add('editable');
-            td.addEventListener('input', () => {
-              if (col !== "Ngày đóng hàng") {
+              td.addEventListener('input', () => {
                 td.classList.add('highlight');
                 changedRows.add(rowIndex);
-              }
-            });
+              });
+            }
           }
           tr.appendChild(td);
         });
@@ -469,7 +470,7 @@
     function refreshData() {
       const btn = document.getElementById('refreshData');
       btn.innerHTML = '<span class="loading"></span> Đang tải...';
-      activeRegion = 'all'; // Reset tab về "Tất cả"
+      activeRegion = 'all';
       filterValues = {};
       document.getElementById('tabContainer').innerHTML = '';
       document.getElementById('filterRow').innerHTML = '';
@@ -481,7 +482,7 @@
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center; padding: 20px;">Đang tải dữ liệu...</td></tr>`;
       
       const script = document.createElement('script');
-      script.src = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData&rand=' + Math.random();
+      script.src = `${POST_URL}?callback=handleData&rand=${Math.random()}`;
       
       const oldScript = document.querySelector('script[src^="https://script.google.com"]');
       if (oldScript) document.body.removeChild(oldScript);
@@ -514,13 +515,17 @@
         if (!domRow) return;
 
         const updatedRowData = { ...originalRowData };
+        
         displayColumns.forEach((col, colIndex) => {
             if (editableCols.includes(col)) {
                  const cell = domRow.cells[colIndex];
                  let value;
-                 if (col === "Ngày đóng hàng" && cell.querySelector('input')) {
+                 const isDateColumn = col.toLowerCase().includes('ngày') || col.toLowerCase().includes('thời gian');
+
+                 // Cải tiến: Lấy và chuyển đổi dữ liệu từ các ô nhập ngày tháng
+                 if (isDateColumn && cell.querySelector('input')) {
                      value = cell.querySelector('input').value.trim();
-                     value = parseDateToISO(value);
+                     if (value) value = parseDateToISO(value); // Chuyển sang ISO UTC
                  } else {
                      value = cell.textContent.trim();
                  }
@@ -528,11 +533,7 @@
             }
         });
         rowsToSend.push(updatedRowData);
-        Array.from(domRow.cells).forEach(cell => {
-             if (cell.classList.contains('highlight')) {
-                cell.classList.remove('highlight');
-             }
-        });
+        Array.from(domRow.cells).forEach(cell => cell.classList.remove('highlight'));
       });
       
       fetch(POST_URL, {
@@ -573,27 +574,28 @@
         const tableBody = document.querySelector('tbody');
         if (!tableBody) return;
 
-        let startRow = Array.from(tableBody.rows).findIndex(row => 
-          Array.from(row.cells).some(cell => cell === activeElement || cell.contains(activeElement))
-        );
-        let startCol = -1;
-        if (startRow >= 0) {
-          const cells = Array.from(tableBody.rows[startRow].cells);
-          startCol = cells.findIndex(cell => cell === activeElement || cell.contains(activeElement));
+        let startCell = activeElement;
+        if (activeElement.tagName === 'INPUT') {
+            startCell = activeElement.parentElement;
         }
-        if (startRow < 0 || startCol < 0) return;
+
+        const startRowIndex = startCell.parentElement.rowIndex - 2; // -2 để bù cho 2 hàng thead
+        const startColIndex = startCell.cellIndex;
 
         for (let i = 0; i < rows.length; i++) {
-          const rowIndex = startRow + i;
+          const rowIndex = startRowIndex + i;
           if (rowIndex >= tableBody.rows.length) break;
           const rowData = rows[i];
+
           for (let j = 0; j < rowData.length; j++) {
-            const colIndex = startCol + j;
+            const colIndex = startColIndex + j;
             if (colIndex >= tableBody.rows[rowIndex].cells.length) break;
             const cell = tableBody.rows[rowIndex].cells[colIndex];
+
             if (cell.classList.contains('editable')) {
-              if (displayColumns[colIndex] === "Ngày đóng hàng" && cell.querySelector('input')) {
-                cell.querySelector('input').value = rowData[j];
+              const input = cell.querySelector('input.date-input');
+              if (input) {
+                input.value = rowData[j];
               } else {
                 cell.textContent = rowData[j];
               }
@@ -610,4 +612,4 @@
 
   <script src="https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData"></script>
 </body>
-</html>
+</html>```
