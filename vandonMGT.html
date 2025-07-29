@@ -5,7 +5,7 @@
   <title>Quản lý đơn hàng MGT</title>
   <style>
     :root {
-      --filter-row-height: 38px; /* Chiều cao của hàng bộ lọc */
+      --filter-row-height: 38px;
     }
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -132,7 +132,7 @@
       color: #e74c3c;
     }
     .highlight {
-      background-color: #ffeb3b;
+      background-color: #ffeb3b !important;
     }
     .no-data {
       text-align: center;
@@ -250,11 +250,6 @@
     let activeRegion = 'all';
     let filterValues = {}; 
 
-    /**
-     * Cải tiến: Định dạng bất kỳ chuỗi ngày tháng nào thành dd/mm/yyyy.
-     * Sử dụng getUTC... để tránh các vấn đề về múi giờ của trình duyệt.
-     * Điều này đảm bảo ngày tháng được hiển thị nhất quán.
-     */
     function formatDate(dateString) {
       if (!dateString) return '';
       try {
@@ -269,10 +264,6 @@
       }
     }
 
-    /**
-     * Cải tiến: Chuyển đổi chuỗi dd/mm/yyyy thành định dạng ISO 8601 đầy đủ (UTC).
-     * Sử dụng Date.UTC để tạo ngày ở múi giờ UTC, đảm bảo toISOString() trả về giá trị chính xác.
-     */
     function parseDateToISO(dateString) {
       if (!dateString) return '';
       const parts = dateString.split('/');
@@ -414,7 +405,6 @@
           
           const isDateColumn = col.toLowerCase().includes('ngày') || col.toLowerCase().includes('thời gian');
 
-          // Cải tiến: Luôn định dạng các cột ngày tháng khi hiển thị
           if (isDateColumn) {
             value = formatDate(value);
           }
@@ -425,7 +415,6 @@
           if (editableCols.includes(col)) {
             td.classList.add('editable');
             
-            // Cải tiến: Sử dụng input chuyên dụng cho tất cả các cột ngày tháng có thể sửa
             if (isDateColumn) {
               const input = document.createElement('input');
               input.type = 'text';
@@ -503,6 +492,10 @@
       sendRows(Array.from(changedRows), statusEl);
     }
 
+    /**
+     * CẢI TIẾN: Chỉ gửi các trường đã thực sự thay đổi (được highlight).
+     * Điều này ngăn việc ghi đè dữ liệu không cần thiết lên các cột khác.
+     */
     function sendRows(rowIndexes, statusEl) {
       statusEl.innerHTML = '<span class="loading"></span> Đang gửi...';
       const rowsToSend = [];
@@ -514,27 +507,48 @@
         const domRow = tableBody.rows[rowIndex];
         if (!domRow) return;
 
-        const updatedRowData = { ...originalRowData };
-        
-        displayColumns.forEach((col, colIndex) => {
-            if (editableCols.includes(col)) {
-                 const cell = domRow.cells[colIndex];
-                 let value;
-                 const isDateColumn = col.toLowerCase().includes('ngày') || col.toLowerCase().includes('thời gian');
+        // Bắt đầu với một payload chỉ chứa mã định danh.
+        const payloadForRow = {
+            "Mã đơn hàng": originalRowData["Mã đơn hàng"]
+        };
+        let hasActualChanges = false;
 
-                 // Cải tiến: Lấy và chuyển đổi dữ liệu từ các ô nhập ngày tháng
-                 if (isDateColumn && cell.querySelector('input')) {
-                     value = cell.querySelector('input').value.trim();
-                     if (value) value = parseDateToISO(value); // Chuyển sang ISO UTC
-                 } else {
-                     value = cell.textContent.trim();
-                 }
-                 updatedRowData[col] = value;
+        // Lặp qua các ô trong hàng để tìm các ô đã được thay đổi (có class 'highlight').
+        Array.from(domRow.cells).forEach((cell, colIndex) => {
+            if (cell.classList.contains('highlight')) {
+                const colName = displayColumns[colIndex];
+                let value;
+                const isDateColumn = colName.toLowerCase().includes('ngày') || colName.toLowerCase().includes('thời gian');
+
+                if (isDateColumn && cell.querySelector('input')) {
+                    value = cell.querySelector('input').value.trim();
+                    // Chỉ chuyển đổi nếu có giá trị, nếu không gửi chuỗi rỗng.
+                    value = value ? parseDateToISO(value) : '';
+                } else {
+                    value = cell.textContent.trim();
+                }
+
+                // Chỉ thêm trường đã thay đổi vào payload.
+                payloadForRow[colName] = value;
+                hasActualChanges = true;
             }
         });
-        rowsToSend.push(updatedRowData);
-        Array.from(domRow.cells).forEach(cell => cell.classList.remove('highlight'));
+
+        // Chỉ thêm vào danh sách gửi nếu có ít nhất một thay đổi thực sự.
+        if (hasActualChanges) {
+            rowsToSend.push(payloadForRow);
+        }
       });
+
+      // Nếu không có thay đổi thực tế nào (ví dụ: người dùng sửa rồi xóa), không gửi request.
+      if (rowsToSend.length === 0) {
+        statusEl.textContent = 'Không có thay đổi để gửi.';
+        setTimeout(() => { statusEl.remove(); }, 3000);
+        // Xóa highlight khỏi giao diện và xóa tập hợp hàng đã thay đổi.
+        document.querySelectorAll('td.highlight').forEach(td => td.classList.remove('highlight'));
+        changedRows.clear();
+        return;
+      }
       
       fetch(POST_URL, {
         method: 'POST', 
@@ -546,7 +560,14 @@
       .then(json => {
         if (json.message) {
           statusEl.textContent = `Thành công: ${json.message}`;
-          changedRows.clear();
+          // Xóa highlight khỏi các hàng đã được cập nhật thành công.
+          rowIndexes.forEach(rowIndex => {
+              const domRow = tableBody.rows[rowIndex];
+              if (domRow) {
+                  domRow.querySelectorAll('.highlight').forEach(cell => cell.classList.remove('highlight'));
+              }
+          });
+          changedRows.clear(); // Xóa tất cả sau khi gửi thành công.
         } else {
           statusEl.textContent = json.error || 'Cập nhật không thành công';
           statusEl.classList.add('error-status');
@@ -579,7 +600,8 @@
             startCell = activeElement.parentElement;
         }
 
-        const startRowIndex = startCell.parentElement.rowIndex - 2; // -2 để bù cho 2 hàng thead
+        // rowIndex trong tbody, không tính thead.
+        const startRowIndex = Array.from(tableBody.rows).findIndex(row => row.contains(startCell));
         const startColIndex = startCell.cellIndex;
 
         for (let i = 0; i < rows.length; i++) {
