@@ -1,217 +1,198 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Tracking Information</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            color: #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        input[type="text"] {
-            width: 100%;
-            padding: 6px;
-            box-sizing: border-box;
-        }
-        .button-container {
-            text-align: center;
-            margin-top: 20px;
-        }
-        button {
-            padding: 10px 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        button:hover {
-            background-color: #45a049;
-        }
-        #addRow {
-            background-color: #2196F3;
-            margin-right: 10px;
-        }
-        #addRow:hover {
-            background-color: #0b7dda;
-        }
-        .status {
-            text-align: center;
-            margin-top: 20px;
-            padding: 10px;
-            border-radius: 4px;
-            display: none;
-        }
-        .success {
-            background-color: #dff0d8;
-            color: #3c763d;
-        }
-        .error {
-            background-color: #f2dede;
-            color: #a94442;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Danh sách đơn & Gửi Tracking</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    h2 { text-align: center; margin-bottom: 20px; }
+    .scroll-sync-top { overflow-x: auto; overflow-y: hidden; height: 16px; }
+    .scroll-sync-top .inner { height: 1px; }
+    .table-container { overflow-x: auto; overflow-y: scroll; max-height: 70vh; }
+    table { border-collapse: collapse; width: 100%; min-width: 3000px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; white-space: nowrap; }
+    th { background-color: #f2f2f0; position: sticky; top: 0; z-index: 1; }
+    td.editable { background-color: #fffbe8; }
+    button { padding: 4px 10px; cursor: pointer; }
+    .status { font-size: 0.9em; margin-left: 8px; }
+    .highlight { background-color: #ffeb3b; }
+  </style>
 </head>
 <body>
-    <h1>Order Tracking Information</h1>
+  <h2>Danh sách Đơn hàng (JSONP)</h2>
+  <div class="scroll-sync-top" id="syncScroll"><div class="inner"></div></div>
+  <div class="table-container" id="tableContainer">Đang tải dữ liệu…</div>
+
+  <script>
+    // URL để gửi dữ liệu cập nhật
+    const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
     
-    <table id="orderTable">
-        <thead>
-            <tr>
-                <th>Mã đơn hàng</th>
-                <th>Mã Tracking</th>
-                <th>Name*</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            <tr>
-                <td><input type="text" name="orderId" required></td>
-                <td><input type="text" name="trackingCode" required></td>
-                <td><input type="text" name="customerName" required></td>
-                <td><button type="button" class="removeRow">Xóa</button></td>
-            </tr>
-        </tbody>
-    </table>
+    // Danh sách các cột có thể chỉnh sửa
+    const editableCols = [
+      'Mã đơn hàng', 'Mã Tracking', 'Name*', 'Phone*', 'Add', 'City', 'State', 'Zipcode', 
+      'Mặt hàng', 'Tên mặt hàng 1', 'Số lượng mặt hàng 1', 'Tên mặt hàng 2', 
+      'Số lượng mặt hàng 2', 'Quà tặng', 'Số lượng quà kèm', 'Giá bán', 
+      'Ghi chú', 'Trạng thái giao hàng', 'Ghi chú của VĐ', 'Trạng thái dvvc'
+    ];
     
-    <div class="button-container">
-        <button type="button" id="addRow">Thêm dòng</button>
-        <button type="button" id="submitData">Gửi</button>
-    </div>
-    
-    <div id="statusMessage" class="status"></div>
-    
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // Add new row
-            document.getElementById('addRow').addEventListener('click', function() {
-                const tbody = document.querySelector('#orderTable tbody');
-                const newRow = document.createElement('tr');
-                newRow.innerHTML = `
-                    <td><input type="text" name="orderId" required></td>
-                    <td><input type="text" name="trackingCode" required></td>
-                    <td><input type="text" name="customerName" required></td>
-                    <td><button type="button" class="removeRow">Xóa</button></td>
-                `;
-                tbody.appendChild(newRow);
-            });
+    // Danh sách cột cố định
+    const fixedColumns = [
+      "Mã đơn hàng", "Mã Tracking", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Zipcode", 
+      "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
+      "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", 
+      "Hình thức thanh toán", "Ghi chú", "Nhân viên Sale", "Nhân viên Marketing", "NV Vận đơn", 
+      "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Đơn vị vận chuyển", "Trạng thái thu tiền", 
+      "Ngày hẹn đẩy đơn", "Số tiền thực thu", "Ngày Up bill", "Ảnh bill", "Ngày chuyển khoản", 
+      "Loại thanh toán", "Tên người chuyển khoản", "Tài khoản nhận", "Số tiền đã nhận", "Tỷ giá cước", 
+      "Đơn vị tiền đối soát", "Ngày đối soát cước", "Tiền ship", "Tỷ giá", "Đơn vị tiền tệ tính cước", 
+      "Thời gian lên đơn", "Ghi chú của FFM", "FFM thanh toán", "Ngày đối soát bill", 
+      "Ngày Kế toán đối soát với FFM lần 1", "Số tiền về TK Cty từ FFM lần 1", 
+      "Ngày Kế toán đối soát với FFM lần 2", "Tiền Việt đã đối soát", 
+      "Ngày Kế toán đối soát với FFM lần 3", "Ca", "Tổng số tiền từ FFM", "Số tiền về TK Cty ngoài FFM", 
+      "Số tiền của đơn hàng đã về TK Cty", "Kế toán xác nhận thu tiền về", "Thông tin đơn", 
+      "Thông tin khách hàng", "Thông tin nhân sự", "Phản hồi tích cực", "Phản hồi tiêu cực", "count", 
+      "Phân loại KH", "Xác nhận đơn", "Diễn giải", "Tên page", "Giá gốc", "Màu backlist", "Trạng thái đơn", 
+      "Tiền chiết khấu", "Phí ship", "Tiền sau ship", "Tên lên đơn", "Tạo bản in", "in", 
+      "Cảnh báo Blacklist, Trùng đơn", "Khu vực", "Phí lưu kho", "Team", "Mã check", "Ghi chú của BEE", 
+      "Đánh dấu", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", 
+      "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Ngày đối soát", 
+      "Time kế toán xác nhận", "Ghi chú của VĐ", "Đơn vị thanh toán", "Tài khoản thanh toán", "Update", 
+      "Trạng thái dvvc", "Nhập kho", "Tổng phí vc", "Tiền cước", "Số tiền đối soát"
+    ];
+
+    // Hàm callback sẽ được gọi khi dữ liệu JSONP được tải
+    function handleData(response) {
+      const container = document.getElementById('tableContainer');
+      
+      if (response.error) {
+        container.textContent = 'Lỗi: ' + response.error;
+        return;
+      }
+      
+      const data = response.rows || response.data || response;
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        container.textContent = 'Không có dữ liệu.';
+        return;
+      }
+      
+      renderTable(data);
+    }
+
+    // Hàm hiển thị bảng
+    function renderTable(data) {
+      const container = document.getElementById('tableContainer');
+      container.innerHTML = '';
+
+      const table = document.createElement('table');
+      const thead = document.createElement('thead');
+      const trHead = document.createElement('tr');
+      
+      fixedColumns.forEach(col => {
+        const th = document.createElement('th'); 
+        th.textContent = col;
+        trHead.appendChild(th);
+      });
+      
+      const thAct = document.createElement('th'); 
+      thAct.textContent = 'Thao tác';
+      trHead.appendChild(thAct);
+      thead.appendChild(trHead);
+      table.appendChild(thead);
+
+      const tbody = document.createElement('tbody');
+      data.forEach(row => {
+        const tr = document.createElement('tr');
+        
+        fixedColumns.forEach(col => {
+          const td = document.createElement('td');
+          // Xử lý dữ liệu với cả tên cột có dấu cách và không dấu cách
+          const value = row[col] !== undefined ? row[col] : 
+                       row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : 
+                       '';
+          td.textContent = value !== null && value !== undefined ? value : '';
+          
+          if (editableCols.includes(col)) {
+            td.contentEditable = 'true';
+            td.classList.add('editable');
             
-            // Remove row
-            document.addEventListener('click', function(e) {
-                if (e.target.classList.contains('removeRow')) {
-                    const row = e.target.closest('tr');
-                    if (document.querySelectorAll('#orderTable tbody tr').length > 1) {
-                        row.remove();
-                    } else {
-                        // Clear inputs if it's the last row
-                        const inputs = row.querySelectorAll('input');
-                        inputs.forEach(input => input.value = '');
-                    }
-                }
+            td.addEventListener('input', () => {
+              td.classList.add('highlight');
             });
-            
-            // Submit data
-            document.getElementById('submitData').addEventListener('click', function() {
-                const rows = document.querySelectorAll('#orderTable tbody tr');
-                const data = [];
-                let isValid = true;
-                
-                rows.forEach(row => {
-                    const inputs = row.querySelectorAll('input');
-                    const rowData = {
-                        orderId: inputs[0].value.trim(),
-                        trackingCode: inputs[1].value.trim(),
-                        customerName: inputs[2].value.trim()
-                    };
-                    
-                    // Validate required fields
-                    if (!rowData.orderId || !rowData.trackingCode || !rowData.customerName) {
-                        isValid = false;
-                        return;
-                    }
-                    
-                    data.push(rowData);
-                });
-                
-                if (!isValid) {
-                    showStatus('Vui lòng điền đầy đủ thông tin cho tất cả các trường', 'error');
-                    return;
-                }
-                
-                if (data.length === 0) {
-                    showStatus('Không có dữ liệu để gửi', 'error');
-                    return;
-                }
-                
-                // Send data to Google Apps Script
-                const scriptUrl = 'https://script.google.com/macros/s/AKfycbxBaxcnoYIxB-rB67obyUT6SQz19UCYN0Th5ftnuNs7ibodwfI0_yN3U6xgzfTY0T3ghQ/exec';
-                
-                fetch(scriptUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(data)
-                })
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('Network response was not ok');
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    showStatus('Dữ liệu đã được gửi thành công!', 'success');
-                    // Clear form after successful submission
-                    document.querySelectorAll('#orderTable tbody tr').forEach((row, index) => {
-                        if (index === 0) {
-                            // Keep first row but clear inputs
-                            const inputs = row.querySelectorAll('input');
-                            inputs.forEach(input => input.value = '');
-                        } else {
-                            // Remove additional rows
-                            row.remove();
-                        }
-                    });
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    showStatus('Có lỗi xảy ra khi gửi dữ liệu: ' + error.message, 'error');
-                });
-            });
-            
-            function showStatus(message, type) {
-                const statusDiv = document.getElementById('statusMessage');
-                statusDiv.textContent = message;
-                statusDiv.className = 'status ' + type;
-                statusDiv.style.display = 'block';
-                
-                // Hide status after 5 seconds
-                setTimeout(() => {
-                    statusDiv.style.display = 'none';
-                }, 5000);
-            }
+          }
+          
+          tr.appendChild(td);
         });
-    </script>
+        
+        const tdAct = document.createElement('td');
+        const btn = document.createElement('button'); 
+        btn.textContent = 'Cập nhật';
+        const statusSpan = document.createElement('span'); 
+        statusSpan.className = 'status';
+        
+        btn.addEventListener('click', () => sendRow(tr, statusSpan));
+        tdAct.appendChild(btn); 
+        tdAct.appendChild(statusSpan);
+        tr.appendChild(tdAct);
+        tbody.appendChild(tr);
+      });
+      
+      table.appendChild(tbody);
+      container.appendChild(table);
+
+      // Đồng bộ thanh cuộn ngang
+      setupScrollSync();
+    }
+
+    // Hàm thiết lập đồng bộ thanh cuộn
+    function setupScrollSync() {
+      const sync = document.getElementById('syncScroll');
+      const container = document.getElementById('tableContainer');
+      const table = container.querySelector('table');
+      const inner = sync.querySelector('.inner');
+      
+      inner.style.width = table.scrollWidth + 'px';
+      sync.addEventListener('scroll', () => container.scrollLeft = sync.scrollLeft);
+      container.addEventListener('scroll', () => sync.scrollLeft = container.scrollLeft);
+    }
+
+    // Hàm gửi dữ liệu cập nhật
+    function sendRow(tr, statusEl) {
+      statusEl.textContent = 'Đang gửi…';
+      const rowData = {};
+      
+      fixedColumns.forEach((col, idx) => {
+        const cell = tr.cells[idx];
+        rowData[col] = cell.textContent.trim();
+        
+        if (cell.classList.contains('highlight')) {
+          cell.classList.remove('highlight');
+        }
+      });
+      
+      fetch(POST_URL, {
+        method: 'POST', 
+        mode: 'cors', 
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ rows: JSON.stringify([rowData]) })
+      })
+      .then(r => r.json())
+      .then(json => {
+        statusEl.textContent = json.message || json.error || 'Cập nhật thành công';
+        setTimeout(() => statusEl.textContent = '', 3000);
+      })
+      .catch(e => {
+        statusEl.textContent = 'Lỗi: ' + e;
+        fixedColumns.forEach((col, idx) => {
+          if (editableCols.includes(col) && tr.cells[idx].textContent.trim() !== (rowData[col] || '')) {
+            tr.cells[idx].classList.add('highlight');
+          }
+        });
+      });
+    }
+  </script>
+
+  <!-- Nhúng JSONP request -->
+  <script src="https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData"></script>
 </body>
 </html>
