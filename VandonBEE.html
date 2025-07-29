@@ -72,7 +72,7 @@
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 1500px;
+      min-width: 1600px; /* Tăng chiều rộng tối thiểu để chứa cột mới */
       font-size: 14px;
     }
     thead {
@@ -176,7 +176,7 @@
   <h2>QUẢN LÝ ĐƠN HÀNG BEE</h2>
 
   <div id="tabContainer" class="tab-container">
-    <!-- Các tab sẽ được tạo ở đây -->
+    <!-- Các tab theo Khu vực sẽ được tạo ở đây -->
   </div>
   
   <div class="controls">
@@ -202,6 +202,7 @@
           <th>Add</th>
           <th>City</th>
           <th>State</th>
+          <th>Khu vực</th>
           <th>Zipcode</th>
           <th>Mặt hàng</th>
           <th>Tên mặt hàng 1</th>
@@ -233,8 +234,9 @@
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
     
+    // *** THAY ĐỔI 1: Thêm "Khu vực" vào danh sách hiển thị ***
     const displayColumns = [
-      "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Zipcode", 
+      "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", 
       "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
       "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", 
       "Hình thức thanh toán", "Ghi chú", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", 
@@ -248,11 +250,11 @@
     ];
     
     let allData = [];
-    let initialFilteredData = []; // Dữ liệu sau khi lọc BEE & tracking trống
-    let filteredData = []; // Dữ liệu hiển thị cuối cùng
+    let initialFilteredData = []; 
+    let filteredData = []; 
     let changedRows = new Set();
-    let activeState = 'all'; // Tab đang hoạt động
-    let filterValues = {}; // Lưu giá trị của các ô lọc
+    let activeRegion = 'all'; // *** THAY ĐỔI 2: Đổi tên biến từ activeState sang activeRegion ***
+    let filterValues = {}; 
 
     function formatDate(dateString) {
       if (!dateString) return '';
@@ -319,18 +321,19 @@
         const tabContainer = document.getElementById('tabContainer');
         tabContainer.innerHTML = '';
         
-        const states = [...new Set(data.map(row => row.State).filter(Boolean))].sort();
+        // *** THAY ĐỔI 3: Lấy dữ liệu từ cột "Khu vực" để tạo tab ***
+        const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort();
 
         const createTab = (name, value) => {
             const button = document.createElement('button');
             button.className = 'tab-btn';
             button.textContent = name;
-            button.dataset.state = value;
-            if (value === activeState) {
+            button.dataset.region = value; // Thay đổi dataset
+            if (value === activeRegion) {
                 button.classList.add('active');
             }
             button.addEventListener('click', () => {
-                activeState = value;
+                activeRegion = value; // Cập nhật activeRegion
                 document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 applyAllFilters();
@@ -339,7 +342,7 @@
         };
 
         tabContainer.appendChild(createTab('Tất cả', 'all'));
-        states.forEach(state => tabContainer.appendChild(createTab(state, state)));
+        regions.forEach(region => tabContainer.appendChild(createTab(region, region)));
     }
     
     function setupColumnFilters() {
@@ -371,12 +374,11 @@
     function applyAllFilters() {
         let dataToRender = [...initialFilteredData];
 
-        // 1. Lọc theo Tab (Khu vực)
-        if (activeState !== 'all') {
-            dataToRender = dataToRender.filter(row => row.State === activeState);
+        // *** THAY ĐỔI 4: Lọc theo Tab (Khu vực) ***
+        if (activeRegion !== 'all') {
+            dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion);
         }
 
-        // 2. Lọc theo các cột
         const activeFilters = Object.entries(filterValues).filter(([col, val]) => val.trim() !== '');
         
         if (activeFilters.length > 0) {
@@ -390,7 +392,7 @@
             });
         }
         
-        filteredData = dataToRender; // Cập nhật dữ liệu đã lọc để dùng cho việc update
+        filteredData = dataToRender;
         renderTable(filteredData);
     }
 
@@ -466,8 +468,7 @@
     function refreshData() {
       const btn = document.getElementById('refreshData');
       btn.innerHTML = '<span class="loading"></span> Đang tải...';
-      // Reset bộ lọc và tab
-      activeState = 'all';
+      activeRegion = 'all'; // Reset tab về "Tất cả"
       filterValues = {};
       document.getElementById('tabContainer').innerHTML = '';
       document.getElementById('filterRow').innerHTML = '';
@@ -506,23 +507,19 @@
       const tableBody = document.querySelector('tbody');
       
       rowIndexes.forEach(rowIndex => {
-        // Lấy dữ liệu từ mảng `filteredData` thay vì từ DOM để đảm bảo tính toàn vẹn
         const originalRowData = filteredData[rowIndex];
         if (!originalRowData) return;
-
         const domRow = tableBody.rows[rowIndex];
         if (!domRow) return;
 
-        // Bắt đầu với bản sao của dữ liệu gốc để giữ lại các cột không hiển thị
         const updatedRowData = { ...originalRowData };
-
         displayColumns.forEach((col, colIndex) => {
             if (editableCols.includes(col)) {
                  const cell = domRow.cells[colIndex];
                  let value;
                  if (col === "Ngày đóng hàng" && cell.querySelector('input')) {
                      value = cell.querySelector('input').value.trim();
-                     value = parseDateToISO(value); // Chuyển đổi ngày
+                     value = parseDateToISO(value);
                  } else {
                      value = cell.textContent.trim();
                  }
@@ -530,8 +527,6 @@
             }
         });
         rowsToSend.push(updatedRowData);
-
-        // Xóa highlight trên DOM
         Array.from(domRow.cells).forEach(cell => {
              if (cell.classList.contains('highlight')) {
                 cell.classList.remove('highlight');
@@ -549,7 +544,7 @@
       .then(json => {
         if (json.message) {
           statusEl.textContent = `Thành công: ${json.message}`;
-          changedRows.clear(); // Xóa tất cả thay đổi sau khi gửi thành công
+          changedRows.clear();
         } else {
           statusEl.textContent = json.error || 'Cập nhật không thành công';
           statusEl.classList.add('error-status');
