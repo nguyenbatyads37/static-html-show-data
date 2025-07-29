@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <title>Quản lý đơn hàng BEE</title>
   <style>
+    :root {
+      --filter-row-height: 38px; /* Chiều cao của hàng bộ lọc */
+    }
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       padding: 20px;
@@ -15,6 +18,35 @@
       text-align: center;
       margin-bottom: 20px;
       color: #2c3e50;
+    }
+    .tab-container {
+      margin-bottom: 15px;
+      padding: 5px;
+      background: #fff;
+      border-radius: 5px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tab-btn {
+      padding: 8px 15px;
+      cursor: pointer;
+      background-color: #ecf0f1;
+      color: #2c3e50;
+      border: 1px solid #bdc3c7;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: all 0.3s;
+    }
+    .tab-btn:hover {
+      background-color: #dfe6e9;
+    }
+    .tab-btn.active {
+      background-color: #3498db;
+      color: white;
+      border-color: #2980b9;
+      font-weight: bold;
     }
     .controls {
       display: flex;
@@ -59,9 +91,21 @@
       background-color: #3498db;
       color: white;
       position: sticky;
-      top: 0;
+      top: var(--filter-row-height); /* Dính bên dưới hàng bộ lọc */
       z-index: 20;
       font-weight: 500;
+    }
+    #filterRow th {
+        top: 0; /* Hàng bộ lọc dính trên cùng */
+        background-color: #f2f6fa;
+        padding: 4px 8px;
+    }
+    .filter-input {
+      width: 100%;
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 13px;
     }
     td.editable {
       background-color: #fffbe8;
@@ -115,6 +159,10 @@
       z-index: 30;
       background-color: #3498db;
     }
+    #filterRow th.fixed-column {
+        z-index: 40; /* Phải cao hơn các th khác */
+        background-color: #f2f6fa;
+    }
     .date-input {
       border: none;
       background: transparent;
@@ -126,6 +174,10 @@
 </head>
 <body>
   <h2>QUẢN LÝ ĐƠN HÀNG BEE</h2>
+
+  <div id="tabContainer" class="tab-container">
+    <!-- Các tab sẽ được tạo ở đây -->
+  </div>
   
   <div class="controls">
     <div>
@@ -139,6 +191,9 @@
   <div class="table-wrapper" id="tableContainer">
     <table>
       <thead>
+        <tr id="filterRow">
+            <!-- Các ô lọc sẽ được tạo ở đây -->
+        </tr>
         <tr>
           <th class="fixed-column">Mã đơn hàng</th>
           <th>Ngày lên đơn</th>
@@ -176,10 +231,8 @@
   </div>
 
   <script>
-    // URL để gửi dữ liệu cập nhật
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
     
-    // Danh sách các cột sẽ hiển thị
     const displayColumns = [
       "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Zipcode", 
       "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
@@ -188,113 +241,165 @@
       "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"
     ];
     
-    // Danh sách các cột có thể chỉnh sửa
     const editableCols = [
       "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", 
       "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", 
       "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"
     ];
     
-    // Biến lưu trữ dữ liệu
     let allData = [];
-    let filteredData = [];
+    let initialFilteredData = []; // Dữ liệu sau khi lọc BEE & tracking trống
+    let filteredData = []; // Dữ liệu hiển thị cuối cùng
     let changedRows = new Set();
+    let activeState = 'all'; // Tab đang hoạt động
+    let filterValues = {}; // Lưu giá trị của các ô lọc
 
-    // Hàm định dạng ngày từ chuỗi ISO (xử lý Z)
     function formatDate(dateString) {
       if (!dateString) return '';
-      
       try {
-        // Xử lý cả trường hợp có Z và không có Z
         const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z');
-        
-        // Kiểm tra nếu ngày không hợp lệ
         if (isNaN(date.getTime())) return dateString;
-        
-        // Định dạng thành dd/mm/yyyy
         const day = String(date.getDate()).padStart(2, '0');
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const year = date.getFullYear();
-        
         return `${day}/${month}/${year}`;
       } catch (e) {
-        console.error('Lỗi định dạng ngày:', e);
         return dateString;
       }
     }
 
-    // Hàm chuyển đổi ngày từ dd/mm/yyyy sang ISO string
     function parseDateToISO(dateString) {
       if (!dateString) return '';
-      
       const parts = dateString.split('/');
       if (parts.length !== 3) return dateString;
-      
       try {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
-        
         const date = new Date(year, month, day);
         if (isNaN(date.getTime())) return dateString;
-        
-        // Trả về chuỗi ISO với timezone hiện tại
         return date.toISOString();
       } catch (e) {
-        console.error('Lỗi phân tích ngày:', e);
         return dateString;
       }
     }
 
-    // Hàm callback sẽ được gọi khi dữ liệu JSONP được tải
     function handleData(response) {
-      const refreshBtn = document.getElementById('refreshData');
-      refreshBtn.innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
-      
-      // Reset các biến dữ liệu
+      document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
       allData = [];
-      filteredData = [];
       changedRows = new Set();
       
-      const container = document.getElementById('tableBody');
-      
       if (response.error) {
-        container.innerHTML = '<tr><td colspan="27" class="error-status">Lỗi: ' + response.error + '</td></tr>';
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="${displayColumns.length}" class="error-status">Lỗi: ${response.error}</td></tr>`;
         return;
       }
       
       const data = response.rows || response.data || response;
-      
       if (!Array.isArray(data) || data.length === 0) {
-        container.innerHTML = '<tr><td colspan="27" class="no-data">Không có dữ liệu đơn hàng nào</td></tr>';
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">Không có dữ liệu đơn hàng nào</td></tr>`;
         return;
       }
       
       allData = data;
-      filterBeeOrdersWithEmptyTracking();
+      filterInitialData();
+      createTabs(initialFilteredData);
+      setupColumnFilters();
+      applyAllFilters();
+    }
+    
+    function filterInitialData() {
+        initialFilteredData = allData.filter(row => {
+            const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
+            const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
+            return carrier && carrier.toString().toUpperCase() === "BEE" && (!trackingCode || trackingCode.toString().trim() === '');
+        });
     }
 
-    // Lọc chỉ hiển thị đơn hàng BEE có Mã Tracking trống
-    function filterBeeOrdersWithEmptyTracking() {
-      filteredData = allData.filter(row => {
-        const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
-        const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
+    function createTabs(data) {
+        const tabContainer = document.getElementById('tabContainer');
+        tabContainer.innerHTML = '';
         
-        return carrier && 
-               carrier.toString().toUpperCase() === "BEE" && 
-               (!trackingCode || trackingCode.toString().trim() === '');
-      });
-      
-      renderTable(filteredData);
+        const states = [...new Set(data.map(row => row.State).filter(Boolean))].sort();
+
+        const createTab = (name, value) => {
+            const button = document.createElement('button');
+            button.className = 'tab-btn';
+            button.textContent = name;
+            button.dataset.state = value;
+            if (value === activeState) {
+                button.classList.add('active');
+            }
+            button.addEventListener('click', () => {
+                activeState = value;
+                document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                applyAllFilters();
+            });
+            return button;
+        };
+
+        tabContainer.appendChild(createTab('Tất cả', 'all'));
+        states.forEach(state => tabContainer.appendChild(createTab(state, state)));
+    }
+    
+    function setupColumnFilters() {
+        const filterRow = document.getElementById('filterRow');
+        filterRow.innerHTML = '';
+        filterValues = {};
+
+        displayColumns.forEach((col, index) => {
+            const th = document.createElement('th');
+            if (index === 0) {
+                th.classList.add('fixed-column');
+            }
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'filter-input';
+            input.placeholder = `Lọc ${col}`;
+            input.dataset.column = col;
+            
+            input.addEventListener('input', () => {
+                filterValues[col] = input.value;
+                applyAllFilters();
+            });
+
+            th.appendChild(input);
+            filterRow.appendChild(th);
+        });
     }
 
-    // Hàm hiển thị bảng
+    function applyAllFilters() {
+        let dataToRender = [...initialFilteredData];
+
+        // 1. Lọc theo Tab (Khu vực)
+        if (activeState !== 'all') {
+            dataToRender = dataToRender.filter(row => row.State === activeState);
+        }
+
+        // 2. Lọc theo các cột
+        const activeFilters = Object.entries(filterValues).filter(([col, val]) => val.trim() !== '');
+        
+        if (activeFilters.length > 0) {
+            dataToRender = dataToRender.filter(row => {
+                return activeFilters.every(([col, filterValue]) => {
+                    const cellValue = row[col] !== undefined ? row[col] :
+                                      row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] :
+                                      '';
+                    return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
+                });
+            });
+        }
+        
+        filteredData = dataToRender; // Cập nhật dữ liệu đã lọc để dùng cho việc update
+        renderTable(filteredData);
+    }
+
     function renderTable(data) {
       const container = document.getElementById('tableBody');
       container.innerHTML = '';
 
       if (data.length === 0) {
-        container.innerHTML = '<tr><td colspan="27" class="no-data">Không có đơn hàng BEE nào thiếu Mã Tracking</td></tr>';
+        container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">Không có dữ liệu phù hợp với bộ lọc</td></tr>`;
         return;
       }
 
@@ -303,26 +408,17 @@
         
         displayColumns.forEach(col => {
           const td = document.createElement('td');
-          // Xử lý dữ liệu với cả tên cột có dấu cách và không dấu cách
-          let value = row[col] !== undefined ? row[col] : 
-                     row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : 
-                     '';
+          let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : '';
           
-          // Định dạng ngày cho các cột ngày
           if (col === "Ngày lên đơn" || col === "Ngày đóng hàng") {
             value = formatDate(value);
           }
-          
           td.textContent = value !== null && value !== undefined ? value : '';
           
-          // Cố định cột đầu tiên
-          if (col === "Mã đơn hàng") {
-            td.classList.add('fixed-column');
-          }
+          if (col === "Mã đơn hàng") td.classList.add('fixed-column');
           
           if (editableCols.includes(col)) {
             if (col === "Ngày đóng hàng") {
-              // Tạo input date cho cột ngày đóng hàng
               const input = document.createElement('input');
               input.type = 'text';
               input.className = 'date-input';
@@ -335,9 +431,7 @@
               });
               
               input.addEventListener('blur', () => {
-                // Validate định dạng ngày
-                const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
-                if (!dateRegex.test(input.value) && input.value !== '') {
+                if (!/^\d{2}\/\d{2}\/\d{4}$/.test(input.value) && input.value !== '') {
                   alert('Vui lòng nhập ngày theo định dạng dd/mm/yyyy');
                   input.focus();
                 }
@@ -350,7 +444,6 @@
             }
             
             td.classList.add('editable');
-            
             td.addEventListener('input', () => {
               if (col !== "Ngày đóng hàng") {
                 td.classList.add('highlight');
@@ -358,49 +451,42 @@
               }
             });
           }
-          
           tr.appendChild(td);
         });
-        
         container.appendChild(tr);
       });
-      
-      // Thêm sự kiện paste
       setupPasteHandler();
     }
 
-    // Thiết lập các sự kiện điều khiển
     function setupControls() {
       document.getElementById('refreshData').addEventListener('click', refreshData);
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
     }
 
-    // Hàm load dữ liệu
     function refreshData() {
       const btn = document.getElementById('refreshData');
       btn.innerHTML = '<span class="loading"></span> Đang tải...';
+      // Reset bộ lọc và tab
+      activeState = 'all';
+      filterValues = {};
+      document.getElementById('tabContainer').innerHTML = '';
+      document.getElementById('filterRow').innerHTML = '';
       loadData();
     }
 
-    // Tải dữ liệu từ server
     function loadData() {
       const container = document.getElementById('tableBody');
-      container.innerHTML = '<tr><td colspan="27" style="text-align: center; padding: 20px;">Đang tải dữ liệu...</td></tr>';
+      container.innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center; padding: 20px;">Đang tải dữ liệu...</td></tr>`;
       
-      // Tạo một thẻ script mới để tải lại dữ liệu JSONP
       const script = document.createElement('script');
       script.src = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData&rand=' + Math.random();
       
-      // Xóa thẻ script cũ nếu có
       const oldScript = document.querySelector('script[src^="https://script.google.com"]');
-      if (oldScript) {
-        document.body.removeChild(oldScript);
-      }
+      if (oldScript) document.body.removeChild(oldScript);
       
       document.body.appendChild(script);
     }
 
-    // Cập nhật tất cả các dòng có thay đổi
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -409,44 +495,48 @@
       
       const statusEl = document.createElement('span');
       statusEl.className = 'status';
-      statusEl.textContent = 'Đang xử lý...';
       document.getElementById('updateAll').appendChild(statusEl);
       
       sendRows(Array.from(changedRows), statusEl);
     }
 
-    // Hàm gửi nhiều dòng dữ liệu
     function sendRows(rowIndexes, statusEl) {
       statusEl.innerHTML = '<span class="loading"></span> Đang gửi...';
       const rowsToSend = [];
-      const table = document.querySelector('table tbody');
+      const tableBody = document.querySelector('tbody');
       
-      rowIndexes.forEach(rowId => {
-        const tr = table.rows[rowId];
-        if (!tr) return;
-        
-        const rowData = {};
-        displayColumns.forEach((col, idx) => {
-          const cell = tr.cells[idx];
-          let value = cell.textContent.trim();
-          
-          // Nếu là ô input date
-          if (col === "Ngày đóng hàng" && cell.querySelector('input')) {
-            value = cell.querySelector('input').value.trim();
-          }
-          
-          // Chuyển đổi ngày về ISO format trước khi gửi
-          if (col === "Ngày đóng hàng") {
-            value = parseDateToISO(value);
-          }
-          
-          rowData[col] = value;
-          
-          if (cell.classList.contains('highlight')) {
-            cell.classList.remove('highlight');
-          }
+      rowIndexes.forEach(rowIndex => {
+        // Lấy dữ liệu từ mảng `filteredData` thay vì từ DOM để đảm bảo tính toàn vẹn
+        const originalRowData = filteredData[rowIndex];
+        if (!originalRowData) return;
+
+        const domRow = tableBody.rows[rowIndex];
+        if (!domRow) return;
+
+        // Bắt đầu với bản sao của dữ liệu gốc để giữ lại các cột không hiển thị
+        const updatedRowData = { ...originalRowData };
+
+        displayColumns.forEach((col, colIndex) => {
+            if (editableCols.includes(col)) {
+                 const cell = domRow.cells[colIndex];
+                 let value;
+                 if (col === "Ngày đóng hàng" && cell.querySelector('input')) {
+                     value = cell.querySelector('input').value.trim();
+                     value = parseDateToISO(value); // Chuyển đổi ngày
+                 } else {
+                     value = cell.textContent.trim();
+                 }
+                 updatedRowData[col] = value;
+            }
         });
-        rowsToSend.push(rowData);
+        rowsToSend.push(updatedRowData);
+
+        // Xóa highlight trên DOM
+        Array.from(domRow.cells).forEach(cell => {
+             if (cell.classList.contains('highlight')) {
+                cell.classList.remove('highlight');
+             }
+        });
       });
       
       fetch(POST_URL, {
@@ -459,96 +549,69 @@
       .then(json => {
         if (json.message) {
           statusEl.textContent = `Thành công: ${json.message}`;
-          // Xóa các dòng đã gửi khỏi danh sách thay đổi
-          rowIndexes.forEach(rowId => changedRows.delete(rowId));
+          changedRows.clear(); // Xóa tất cả thay đổi sau khi gửi thành công
         } else {
-          statusEl.textContent = json.error || 'Cập nhật thành công';
+          statusEl.textContent = json.error || 'Cập nhật không thành công';
           statusEl.classList.add('error-status');
         }
-        setTimeout(() => {
-          statusEl.textContent = '';
-          statusEl.className = 'status';
-        }, 3000);
+        setTimeout(() => { statusEl.remove(); }, 4000);
       })
       .catch(e => {
         statusEl.textContent = 'Lỗi: ' + e.message;
         statusEl.classList.add('error-status');
-        setTimeout(() => {
-          statusEl.textContent = '';
-          statusEl.className = 'status';
-        }, 3000);
+        setTimeout(() => { statusEl.remove(); }, 4000);
       });
     }
 
-    // Thiết lập sự kiện paste
     function setupPasteHandler() {
       document.addEventListener('paste', (e) => {
         const activeElement = document.activeElement;
-        const isEditableCell = activeElement.classList.contains('editable') || 
-                              (activeElement.tagName === 'INPUT' && activeElement.parentElement.classList.contains('editable'));
-        
-        if (!isEditableCell) {
-          return;
-        }
+        const isEditableCell = activeElement.classList.contains('editable') || (activeElement.tagName === 'INPUT' && activeElement.parentElement.classList.contains('editable'));
+        if (!isEditableCell) return;
 
         e.preventDefault();
         const pasteData = e.clipboardData.getData('text/plain');
         if (!pasteData) return;
 
         const rows = pasteData.split('\n').map(row => row.split('\t'));
-        if (rows.length === 0) return;
+        const tableBody = document.querySelector('tbody');
+        if (!tableBody) return;
 
-        const table = document.querySelector('table tbody');
-        if (!table) return;
-
-        // Tìm vị trí ô đang được chọn
-        let startRow = Array.from(table.rows).findIndex(row => 
+        let startRow = Array.from(tableBody.rows).findIndex(row => 
           Array.from(row.cells).some(cell => cell === activeElement || cell.contains(activeElement))
         );
-        
         let startCol = -1;
         if (startRow >= 0) {
-          const cells = Array.from(table.rows[startRow].cells);
+          const cells = Array.from(tableBody.rows[startRow].cells);
           startCol = cells.findIndex(cell => cell === activeElement || cell.contains(activeElement));
         }
-
         if (startRow < 0 || startCol < 0) return;
 
-        // Áp dụng dữ liệu vào bảng
         for (let i = 0; i < rows.length; i++) {
           const rowIndex = startRow + i;
-          if (rowIndex >= table.rows.length) break;
-
+          if (rowIndex >= tableBody.rows.length) break;
           const rowData = rows[i];
           for (let j = 0; j < rowData.length; j++) {
             const colIndex = startCol + j;
-            if (colIndex >= table.rows[rowIndex].cells.length) break;
-
-            const cell = table.rows[rowIndex].cells[colIndex];
+            if (colIndex >= tableBody.rows[rowIndex].cells.length) break;
+            const cell = tableBody.rows[rowIndex].cells[colIndex];
             if (cell.classList.contains('editable')) {
               if (displayColumns[colIndex] === "Ngày đóng hàng" && cell.querySelector('input')) {
-                // Xử lý paste vào ô ngày
-                const input = cell.querySelector('input');
-                input.value = rowData[j];
-                cell.classList.add('highlight');
-                changedRows.add(rowIndex);
-              } else if (displayColumns[colIndex] !== "Ngày đóng hàng") {
-                // Xử lý paste vào ô thường
+                cell.querySelector('input').value = rowData[j];
+              } else {
                 cell.textContent = rowData[j];
-                cell.classList.add('highlight');
-                changedRows.add(rowIndex);
               }
+              cell.classList.add('highlight');
+              changedRows.add(rowIndex);
             }
           }
         }
       });
     }
 
-    // Khởi tạo
     setupControls();
   </script>
 
-  <!-- Nhúng JSONP request -->
   <script src="https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData"></script>
 </body>
 </html>
