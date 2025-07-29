@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Quản lý đơn hàng BEE</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 20px;
+      background-color: #f5f5f5;
+      color: #333;
+      margin: 0;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #2c3e50;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 15px;
+      align-items: center;
+      background: #fff;
+      padding: 10px 15px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .table-wrapper {
+      position: relative;
+      overflow: auto;
+      max-height: 70vh;
+      background: white;
+      border-radius: 0 0 5px 5px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 1500px;
+      font-size: 14px;
+    }
+    thead {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    th, td {
+      border: 1px solid #e0e0e0;
+      padding: 8px 12px;
+      text-align: left;
+      white-space: nowrap;
+      background-color: white;
+    }
+    th {
+      background-color: #3498db;
+      color: white;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      font-weight: 500;
+    }
+    td.editable {
+      background-color: #fffbe8;
+    }
+    button {
+      padding: 6px 12px;
+      cursor: pointer;
+      background-color: #3498db;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #2980b9;
+    }
+    .status {
+      font-size: 0.85em;
+      margin-left: 8px;
+      color: #27ae60;
+    }
+    .error-status {
+      color: #e74c3c;
+    }
+    .highlight {
+      background-color: #ffeb3b;
+    }
+    .no-data {
+      text-align: center;
+      padding: 20px;
+      color: #7f8c8d;
+      font-style: italic;
+    }
+    .refresh-btn {
+      background-color: #2ecc71;
+    }
+    .refresh-btn:hover {
+      background-color: #27ae60;
+    }
+    .refresh-icon {
+      margin-right: 5px;
+    }
+    .fixed-column {
+      position: sticky;
+      left: 0;
+      z-index: 5;
+      background-color: white;
+    }
+    th.fixed-column {
+      z-index: 30;
+      background-color: #3498db;
+    }
+    #userInfo {
+      font-weight: bold;
+      margin-right: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h2>QUẢN LÝ ĐƠN HÀNG BEE</h2>
+  
+  <div class="controls">
+    <div>
+      <span id="userInfo"></span>
+      <button id="refreshData" class="refresh-btn">
+        <span class="refresh-icon">↻</span> Load dữ liệu
+      </button>
+      <button id="updateAll">Cập nhật tất cả thay đổi</button>
+    </div>
+  </div>
+  
+  <div class="table-wrapper" id="tableContainer">
+    <table>
+      <thead>
+        <tr>
+          <th class="fixed-column">Mã đơn hàng</th>
+          <th>Ngày lên đơn</th>
+          <th>Name*</th>
+          <th>Phone*</th>
+          <th>Add</th>
+          <th>City</th>
+          <th>State</th>
+          <th>Zipcode</th>
+          <th>Mặt hàng</th>
+          <th>Tên mặt hàng 1</th>
+          <th>Số lượng mặt hàng 1</th>
+          <th>Tên mặt hàng 2</th>
+          <th>Số lượng mặt hàng 2</th>
+          <th>Quà tặng</th>
+          <th>Số lượng quà kèm</th>
+          <th>Giá bán</th>
+          <th>Loại tiền thanh toán</th>
+          <th>Tổng tiền VNĐ</th>
+          <th>Hình thức thanh toán</th>
+          <th>Ghi chú</th>
+          <th>Mã Tracking</th>
+          <th>Ngày đóng hàng</th>
+          <th>Trạng thái giao hàng</th>
+          <th>Thời gian giao dự kiến</th>
+          <th>Phí ship nội địa Mỹ (usd)</th>
+          <th>Phí xử lý đơn đóng hàng-Lưu kho(usd)</th>
+          <th>GHI CHÚ</th>
+          <th>Nhân viên Sale</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody">
+        <!-- Dữ liệu sẽ được thêm vào đây -->
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    // URL để gửi dữ liệu cập nhật
+    const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
+    
+    // Danh sách các cột sẽ hiển thị
+    const displayColumns = [
+      "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Zipcode", 
+      "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
+      "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", 
+      "Hình thức thanh toán", "Ghi chú", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", 
+      "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ",
+      "Nhân viên Sale"
+    ];
+    
+    // Danh sách các cột có thể chỉnh sửa
+    const editableCols = [
+      "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", 
+      "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", 
+      "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"
+    ];
+    
+    // Biến lưu trữ dữ liệu
+    let allData = [];
+    let filteredData = [];
+    let changedRows = new Set();
+    let currentStaffName = '';
+
+    // Lấy tham số id từ URL
+    function getUrlParameter(name) {
+      name = name.replace(/[\[\]]/g, '\\$&');
+      const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
+      const results = regex.exec(window.location.href);
+      if (!results) return null;
+      if (!results[2]) return '';
+      return decodeURIComponent(results[2].replace(/\+/g, ' '));
+    }
+
+    // Lấy tên nhân viên từ API
+    async function fetchStaffName(idns) {
+      try {
+        const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
+        const response = await fetch(staffApiUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên');
+        const data = await response.json();
+        const staffMember = data.find(staff => String(staff.idnv) === idns);
+        if (!staffMember) throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`);
+        document.getElementById('userInfo').textContent = `Nhân viên: ${staffMember.ho_va_ten}`;
+        return staffMember.ho_va_ten;
+      } catch (error) { 
+        showError(error.message); 
+        throw error; 
+      }
+    }
+
+    // Hiển thị lỗi
+    function showError(message) {
+      const container = document.getElementById('tableBody');
+      container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="error-status">${message}</td></tr>`;
+    }
+
+    // Hàm callback sẽ được gọi khi dữ liệu JSONP được tải
+    async function handleData(response) {
+      const refreshBtn = document.getElementById('refreshData');
+      refreshBtn.innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
+      
+      // Reset các biến dữ liệu
+      allData = [];
+      filteredData = [];
+      changedRows = new Set();
+      
+      const container = document.getElementById('tableBody');
+      
+      if (response.error) {
+        showError('Lỗi: ' + response.error);
+        return;
+      }
+      
+      const data = response.rows || response.data || response;
+      
+      if (!Array.isArray(data) || data.length === 0) {
+        showError('Không có dữ liệu đơn hàng nào');
+        return;
+      }
+      
+      allData = data;
+      
+      // Lấy ID nhân viên từ URL
+      const staffId = getUrlParameter('id');
+      if (!staffId) {
+        showError('Thiếu tham số ID nhân viên trong URL');
+        return;
+      }
+      
+      try {
+        // Lấy tên nhân viên
+        currentStaffName = await fetchStaffName(staffId);
+        // Lọc dữ liệu theo nhân viên
+        filterDataByStaff();
+      } catch (error) {
+        showError(error.message);
+      }
+    }
+
+    // Lọc dữ liệu theo nhân viên sale
+    function filterDataByStaff() {
+      if (!currentStaffName) {
+        showError('Không có thông tin nhân viên');
+        return;
+      }
+      
+      filteredData = allData.filter(row => {
+        const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
+        const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
+        const saleStaff = row["Nhân viên Sale"] || row["Nhân_viên_Sale"] || '';
+        
+        return carrier && 
+               carrier.toString().toUpperCase() === "BEE" && 
+               (!trackingCode || trackingCode.toString().trim() === '') &&
+               saleStaff.toString().trim() === currentStaffName;
+      });
+      
+      renderTable(filteredData);
+    }
+
+    // Hàm hiển thị bảng
+    function renderTable(data) {
+      const container = document.getElementById('tableBody');
+      container.innerHTML = '';
+
+      if (data.length === 0) {
+        showError(`Không có đơn hàng BEE nào thiếu Mã Tracking cho nhân viên ${currentStaffName}`);
+        return;
+      }
+
+      data.forEach((row, rowIndex) => {
+        const tr = document.createElement('tr');
+        
+        displayColumns.forEach(col => {
+          const td = document.createElement('td');
+          // Xử lý dữ liệu với cả tên cột có dấu cách và không dấu cách
+          let value = row[col] !== undefined ? row[col] : 
+                     row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : 
+                     '';
+          
+          td.textContent = value !== null && value !== undefined ? value : '';
+          
+          // Cố định cột đầu tiên
+          if (col === "Mã đơn hàng") {
+            td.classList.add('fixed-column');
+          }
+          
+          if (editableCols.includes(col)) {
+            td.contentEditable = 'true';
+            td.classList.add('editable');
+            
+            td.addEventListener('input', () => {
+              td.classList.add('highlight');
+              changedRows.add(rowIndex);
+            });
+          }
+          
+          tr.appendChild(td);
+        });
+        
+        container.appendChild(tr);
+      });
+    }
+
+    // Thiết lập các sự kiện điều khiển
+    function setupControls() {
+      document.getElementById('refreshData').addEventListener('click', refreshData);
+      document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
+    }
+
+    // Hàm load dữ liệu
+    function refreshData() {
+      const btn = document.getElementById('refreshData');
+      btn.innerHTML = '<span class="loading"></span> Đang tải...';
+      loadData();
+    }
+
+    // Tải dữ liệu từ server
+    function loadData() {
+      const container = document.getElementById('tableBody');
+      container.innerHTML = '<tr><td colspan="' + displayColumns.length + '" style="text-align: center; padding: 20px;">Đang tải dữ liệu...</td></tr>';
+      
+      // Tạo một thẻ script mới để tải lại dữ liệu JSONP
+      const script = document.createElement('script');
+      script.src = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData&rand=' + Math.random();
+      
+      // Xóa thẻ script cũ nếu có
+      const oldScript = document.querySelector('script[src^="https://script.google.com"]');
+      if (oldScript) {
+        document.body.removeChild(oldScript);
+      }
+      
+      document.body.appendChild(script);
+    }
+
+    // Cập nhật tất cả các dòng có thay đổi
+    function updateAllChangedRows() {
+      if (changedRows.size === 0) {
+        alert('Không có thay đổi nào để cập nhật');
+        return;
+      }
+      
+      const statusEl = document.createElement('span');
+      statusEl.className = 'status';
+      statusEl.textContent = 'Đang xử lý...';
+      document.getElementById('updateAll').appendChild(statusEl);
+      
+      sendRows(Array.from(changedRows), statusEl);
+    }
+
+    // Hàm gửi nhiều dòng dữ liệu
+    function sendRows(rowIndexes, statusEl) {
+      statusEl.innerHTML = '<span class="loading"></span> Đang gửi...';
+      const rowsToSend = [];
+      const table = document.querySelector('table tbody');
+      
+      rowIndexes.forEach(rowId => {
+        const tr = table.rows[rowId];
+        if (!tr) return;
+        
+        const rowData = {};
+        displayColumns.forEach((col, idx) => {
+          const cell = tr.cells[idx];
+          rowData[col] = cell.textContent.trim();
+          
+          if (cell.classList.contains('highlight')) {
+            cell.classList.remove('highlight');
+          }
+        });
+        rowsToSend.push(rowData);
+      });
+      
+      fetch(POST_URL, {
+        method: 'POST', 
+        mode: 'cors', 
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
+      })
+      .then(r => r.json())
+      .then(json => {
+        if (json.message) {
+          statusEl.textContent = `Thành công: ${json.message}`;
+          // Xóa các dòng đã gửi khỏi danh sách thay đổi
+          rowIndexes.forEach(rowId => changedRows.delete(rowId));
+        } else {
+          statusEl.textContent = json.error || 'Cập nhật thành công';
+          statusEl.classList.add('error-status');
+        }
+        setTimeout(() => {
+          statusEl.textContent = '';
+          statusEl.className = 'status';
+        }, 3000);
+      })
+      .catch(e => {
+        statusEl.textContent = 'Lỗi: ' + e.message;
+        statusEl.classList.add('error-status');
+        setTimeout(() => {
+          statusEl.textContent = '';
+          statusEl.className = 'status';
+        }, 3000);
+      });
+    }
+
+    // Khởi tạo
+    setupControls();
+  </script>
+
+  <!-- Nhúng JSONP request -->
+  <script src="https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData"></script>
+</body>
+</html>
