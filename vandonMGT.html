@@ -5,7 +5,7 @@
   <title>Quản lý đơn hàng MGT</title>
   <style>
     :root {
-      --filter-row-height: 38px;
+      --filter-row-height: 38px; /* Chiều cao của hàng bộ lọc */
     }
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -72,7 +72,7 @@
     table {
       border-collapse: collapse;
       width: 100%;
-      min-width: 1600px;
+      min-width: 1600px; /* Tăng chiều rộng tối thiểu để chứa cột mới */
       font-size: 14px;
     }
     thead {
@@ -91,12 +91,12 @@
       background-color: #3498db;
       color: white;
       position: sticky;
-      top: var(--filter-row-height);
+      top: var(--filter-row-height); /* Dính bên dưới hàng bộ lọc */
       z-index: 20;
       font-weight: 500;
     }
     #filterRow th {
-        top: 0;
+        top: 0; /* Hàng bộ lọc dính trên cùng */
         background-color: #f2f6fa;
         padding: 4px 8px;
     }
@@ -132,7 +132,7 @@
       color: #e74c3c;
     }
     .highlight {
-      background-color: #ffeb3b !important;
+      background-color: #ffeb3b;
     }
     .no-data {
       text-align: center;
@@ -160,7 +160,7 @@
       background-color: #3498db;
     }
     #filterRow th.fixed-column {
-        z-index: 40;
+        z-index: 40; /* Phải cao hơn các th khác */
         background-color: #f2f6fa;
     }
     .date-input {
@@ -169,14 +169,15 @@
       width: 100%;
       font-family: inherit;
       font-size: inherit;
-      color: inherit;
     }
   </style>
 </head>
 <body>
   <h2>QUẢN LÝ ĐƠN HÀNG MGT</h2>
 
-  <div id="tabContainer" class="tab-container"></div>
+  <div id="tabContainer" class="tab-container">
+    <!-- Các tab theo Khu vực sẽ được tạo ở đây -->
+  </div>
   
   <div class="controls">
     <div>
@@ -190,7 +191,9 @@
   <div class="table-wrapper" id="tableContainer">
     <table>
       <thead>
-        <tr id="filterRow"></tr>
+        <tr id="filterRow">
+            <!-- Các ô lọc sẽ được tạo ở đây -->
+        </tr>
         <tr>
           <th class="fixed-column">Mã đơn hàng</th>
           <th>Ngày lên đơn</th>
@@ -222,13 +225,16 @@
           <th>GHI CHÚ</th>
         </tr>
       </thead>
-      <tbody id="tableBody"></tbody>
+      <tbody id="tableBody">
+        <!-- Dữ liệu sẽ được thêm vào đây -->
+      </tbody>
     </table>
   </div>
 
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
     
+    // *** THAY ĐỔI 1: Thêm "Khu vực" vào danh sách hiển thị ***
     const displayColumns = [
       "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", 
       "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
@@ -247,17 +253,17 @@
     let initialFilteredData = []; 
     let filteredData = []; 
     let changedRows = new Set();
-    let activeRegion = 'all';
+    let activeRegion = 'all'; // *** THAY ĐỔI 2: Đổi tên biến từ activeState sang activeRegion ***
     let filterValues = {}; 
 
     function formatDate(dateString) {
       if (!dateString) return '';
       try {
-        const date = new Date(dateString);
+        const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z');
         if (isNaN(date.getTime())) return dateString;
-        const day = String(date.getUTCDate()).padStart(2, '0');
-        const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const year = date.getUTCFullYear();
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
         return `${day}/${month}/${year}`;
       } catch (e) {
         return dateString;
@@ -267,12 +273,12 @@
     function parseDateToISO(dateString) {
       if (!dateString) return '';
       const parts = dateString.split('/');
-      if (parts.length !== 3) return dateString; 
+      if (parts.length !== 3) return dateString;
       try {
         const day = parseInt(parts[0], 10);
         const month = parseInt(parts[1], 10) - 1;
         const year = parseInt(parts[2], 10);
-        const date = new Date(Date.UTC(year, month, day));
+        const date = new Date(year, month, day);
         if (isNaN(date.getTime())) return dateString;
         return date.toISOString();
       } catch (e) {
@@ -307,6 +313,7 @@
         initialFilteredData = allData.filter(row => {
             const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
             const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
+            // *** THAY ĐỔI TỪ "BEE" THÀNH "MGT" ***
             return carrier && carrier.toString().toUpperCase() === "MGT" && (!trackingCode || trackingCode.toString().trim() === '');
         });
     }
@@ -315,18 +322,19 @@
         const tabContainer = document.getElementById('tabContainer');
         tabContainer.innerHTML = '';
         
+        // *** THAY ĐỔI 3: Lấy dữ liệu từ cột "Khu vực" để tạo tab ***
         const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort();
 
         const createTab = (name, value) => {
             const button = document.createElement('button');
             button.className = 'tab-btn';
             button.textContent = name;
-            button.dataset.region = value;
+            button.dataset.region = value; // Thay đổi dataset
             if (value === activeRegion) {
                 button.classList.add('active');
             }
             button.addEventListener('click', () => {
-                activeRegion = value;
+                activeRegion = value; // Cập nhật activeRegion
                 document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 applyAllFilters();
@@ -345,8 +353,9 @@
 
         displayColumns.forEach((col, index) => {
             const th = document.createElement('th');
-            if (index === 0) th.classList.add('fixed-column');
-            
+            if (index === 0) {
+                th.classList.add('fixed-column');
+            }
             const input = document.createElement('input');
             input.type = 'text';
             input.className = 'filter-input';
@@ -366,6 +375,7 @@
     function applyAllFilters() {
         let dataToRender = [...initialFilteredData];
 
+        // *** THAY ĐỔI 4: Lọc theo Tab (Khu vực) ***
         if (activeRegion !== 'all') {
             dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion);
         }
@@ -376,7 +386,8 @@
             dataToRender = dataToRender.filter(row => {
                 return activeFilters.every(([col, filterValue]) => {
                     const cellValue = row[col] !== undefined ? row[col] :
-                                      row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : '';
+                                      row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] :
+                                      '';
                     return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
                 });
             });
@@ -400,22 +411,17 @@
         
         displayColumns.forEach(col => {
           const td = document.createElement('td');
-          const colKey = col.replace(/ /g, '_');
-          let value = row[col] !== undefined ? row[col] : (row[colKey] !== undefined ? row[colKey] : '');
+          let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] !== undefined ? row[col.replace(/ /g, '_')] : '';
           
-          const isDateColumn = col.toLowerCase().includes('ngày') || col.toLowerCase().includes('thời gian');
-
-          if (isDateColumn) {
+          if (col === "Ngày lên đơn" || col === "Ngày đóng hàng") {
             value = formatDate(value);
           }
+          td.textContent = value !== null && value !== undefined ? value : '';
           
-          td.textContent = value;
           if (col === "Mã đơn hàng") td.classList.add('fixed-column');
           
           if (editableCols.includes(col)) {
-            td.classList.add('editable');
-            
-            if (isDateColumn) {
+            if (col === "Ngày đóng hàng") {
               const input = document.createElement('input');
               input.type = 'text';
               input.className = 'date-input';
@@ -438,11 +444,15 @@
               td.appendChild(input);
             } else {
               td.contentEditable = 'true';
-              td.addEventListener('input', () => {
+            }
+            
+            td.classList.add('editable');
+            td.addEventListener('input', () => {
+              if (col !== "Ngày đóng hàng") {
                 td.classList.add('highlight');
                 changedRows.add(rowIndex);
-              });
-            }
+              }
+            });
           }
           tr.appendChild(td);
         });
@@ -459,7 +469,7 @@
     function refreshData() {
       const btn = document.getElementById('refreshData');
       btn.innerHTML = '<span class="loading"></span> Đang tải...';
-      activeRegion = 'all';
+      activeRegion = 'all'; // Reset tab về "Tất cả"
       filterValues = {};
       document.getElementById('tabContainer').innerHTML = '';
       document.getElementById('filterRow').innerHTML = '';
@@ -471,7 +481,7 @@
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center; padding: 20px;">Đang tải dữ liệu...</td></tr>`;
       
       const script = document.createElement('script');
-      script.src = `${POST_URL}?callback=handleData&rand=${Math.random()}`;
+      script.src = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec?callback=handleData&rand=' + Math.random();
       
       const oldScript = document.querySelector('script[src^="https://script.google.com"]');
       if (oldScript) document.body.removeChild(oldScript);
@@ -492,100 +502,61 @@
       sendRows(Array.from(changedRows), statusEl);
     }
 
-    /**
-     * CẢI TIẾN: Gửi một payload hoàn chỉnh cho TẤT CẢ các trường có thể sửa được.
-     * - Nếu trường được sửa đổi (highlight), gửi giá trị MỚI.
-     * - Nếu trường không được sửa đổi, gửi giá trị GỐC.
-     * Điều này đảm bảo các trường không bị xóa một cách vô ý.
-     */
     function sendRows(rowIndexes, statusEl) {
-        statusEl.innerHTML = '<span class="loading"></span> Đang gửi...';
-        const rowsToSend = [];
-        const tableBody = document.querySelector('tbody');
+      statusEl.innerHTML = '<span class="loading"></span> Đang gửi...';
+      const rowsToSend = [];
+      const tableBody = document.querySelector('tbody');
+      
+      rowIndexes.forEach(rowIndex => {
+        const originalRowData = filteredData[rowIndex];
+        if (!originalRowData) return;
+        const domRow = tableBody.rows[rowIndex];
+        if (!domRow) return;
 
-        rowIndexes.forEach(rowIndex => {
-            const domRow = tableBody.rows[rowIndex];
-            if (!domRow) return;
-
-            // Chỉ xử lý những hàng có thay đổi thực sự.
-            if (!domRow.querySelector('.highlight')) {
-                return; 
+        const updatedRowData = { ...originalRowData };
+        displayColumns.forEach((col, colIndex) => {
+            if (editableCols.includes(col)) {
+                 const cell = domRow.cells[colIndex];
+                 let value;
+                 if (col === "Ngày đóng hàng" && cell.querySelector('input')) {
+                     value = cell.querySelector('input').value.trim();
+                     value = parseDateToISO(value);
+                 } else {
+                     value = cell.textContent.trim();
+                 }
+                 updatedRowData[col] = value;
             }
-            
-            const originalRowData = filteredData[rowIndex];
-            if (!originalRowData) return;
-            
-            // Bắt đầu payload với khóa chính để nhận dạng hàng.
-            const payloadForRow = {
-                "Mã đơn hàng": originalRowData["Mã đơn hàng"]
-            };
-
-            // Lặp qua tất cả các cột có thể chỉnh sửa để xây dựng một payload hoàn chỉnh.
-            editableCols.forEach(colName => {
-                const colIndex = displayColumns.indexOf(colName);
-                if (colIndex === -1) return; 
-                
-                const cell = domRow.cells[colIndex];
-                let finalValue;
-
-                // Nếu ô này đã được thay đổi, lấy giá trị mới từ giao diện.
-                if (cell.classList.contains('highlight')) {
-                    const isDateColumn = colName.toLowerCase().includes('ngày') || colName.toLowerCase().includes('thời gian');
-                    if (isDateColumn && cell.querySelector('input')) {
-                        const rawValue = cell.querySelector('input').value.trim();
-                        finalValue = rawValue ? parseDateToISO(rawValue) : '';
-                    } else {
-                        finalValue = cell.textContent.trim();
-                    }
-                } else {
-                    // Nếu không, lấy giá trị gốc từ dữ liệu ban đầu.
-                    const colKey = colName.replace(/ /g, '_');
-                    finalValue = originalRowData[colName] !== undefined ? originalRowData[colName] : originalRowData[colKey];
-                }
-                
-                // Thêm giá trị (mới hoặc gốc) vào payload.
-                payloadForRow[colName] = finalValue;
-            });
-
-            rowsToSend.push(payloadForRow);
         });
-        
-        if (rowsToSend.length === 0) {
-            statusEl.textContent = 'Không có thay đổi thực tế nào để gửi.';
-            setTimeout(() => statusEl.remove(), 3000);
-            changedRows.clear();
-            return;
+        rowsToSend.push(updatedRowData);
+        Array.from(domRow.cells).forEach(cell => {
+             if (cell.classList.contains('highlight')) {
+                cell.classList.remove('highlight');
+             }
+        });
+      });
+      
+      fetch(POST_URL, {
+        method: 'POST', 
+        mode: 'cors', 
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
+      })
+      .then(r => r.json())
+      .then(json => {
+        if (json.message) {
+          statusEl.textContent = `Thành công: ${json.message}`;
+          changedRows.clear();
+        } else {
+          statusEl.textContent = json.error || 'Cập nhật không thành công';
+          statusEl.classList.add('error-status');
         }
-
-        fetch(POST_URL, {
-            method: 'POST',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
-        })
-        .then(r => r.json())
-        .then(json => {
-            if (json.message) {
-                statusEl.textContent = `Thành công: ${json.message}`;
-                // Chỉ xóa highlight và xóa khỏi set sau khi gửi thành công.
-                rowIndexes.forEach(rIndex => {
-                    const domRow = tableBody.rows[rIndex];
-                    if (domRow) {
-                        domRow.querySelectorAll('.highlight').forEach(cell => cell.classList.remove('highlight'));
-                    }
-                });
-                changedRows.clear();
-            } else {
-                statusEl.textContent = json.error || 'Cập nhật không thành công';
-                statusEl.classList.add('error-status');
-            }
-            setTimeout(() => statusEl.remove(), 4000);
-        })
-        .catch(e => {
-            statusEl.textContent = 'Lỗi: ' + e.message;
-            statusEl.classList.add('error-status');
-            setTimeout(() => statusEl.remove(), 4000);
-        });
+        setTimeout(() => { statusEl.remove(); }, 4000);
+      })
+      .catch(e => {
+        statusEl.textContent = 'Lỗi: ' + e.message;
+        statusEl.classList.add('error-status');
+        setTimeout(() => { statusEl.remove(); }, 4000);
+      });
     }
 
     function setupPasteHandler() {
@@ -602,28 +573,27 @@
         const tableBody = document.querySelector('tbody');
         if (!tableBody) return;
 
-        let startCell = activeElement;
-        if (activeElement.tagName === 'INPUT') {
-            startCell = activeElement.parentElement;
+        let startRow = Array.from(tableBody.rows).findIndex(row => 
+          Array.from(row.cells).some(cell => cell === activeElement || cell.contains(activeElement))
+        );
+        let startCol = -1;
+        if (startRow >= 0) {
+          const cells = Array.from(tableBody.rows[startRow].cells);
+          startCol = cells.findIndex(cell => cell === activeElement || cell.contains(activeElement));
         }
-
-        const startRowIndex = Array.from(tableBody.rows).findIndex(row => row.contains(startCell));
-        const startColIndex = startCell.cellIndex;
+        if (startRow < 0 || startCol < 0) return;
 
         for (let i = 0; i < rows.length; i++) {
-          const rowIndex = startRowIndex + i;
+          const rowIndex = startRow + i;
           if (rowIndex >= tableBody.rows.length) break;
           const rowData = rows[i];
-
           for (let j = 0; j < rowData.length; j++) {
-            const colIndex = startColIndex + j;
+            const colIndex = startCol + j;
             if (colIndex >= tableBody.rows[rowIndex].cells.length) break;
             const cell = tableBody.rows[rowIndex].cells[colIndex];
-
             if (cell.classList.contains('editable')) {
-              const input = cell.querySelector('input.date-input');
-              if (input) {
-                input.value = rowData[j];
+              if (displayColumns[colIndex] === "Ngày đóng hàng" && cell.querySelector('input')) {
+                cell.querySelector('input').value = rowData[j];
               } else {
                 cell.textContent = rowData[j];
               }
