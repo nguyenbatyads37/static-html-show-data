@@ -199,31 +199,24 @@
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx2sX3QXh2ltziVv2jXwjN4VnQxBGhLNALK2QjT6PSuq7RSuwzWa2MuHsbOe6dd9DnW/exec';
     
-    // Danh sách các cột có thể chỉnh sửa
     const editableCols = [
         "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền",
         "Ngày hẹn đẩy đơn", "Loại thanh toán", "Tên người chuyển khoản"
     ];
 
-    // Cấu hình các cột dropdown
     const dropdownCols = {
         "Kết quả Check": ["", "OK", "Huỷ", "Treo", "Vận đơn XL", "Đợi hàng", "Khách hẹn"],
         "Trạng thái giao hàng NB": ["", "Giao Thành Công", "Đang Giao", "Chưa Giao", "Hủy", "Hoàn", "chờ check", "Giao không thành công", "Bom_Thất Lạc"],
         "Trạng thái thu tiền": ["", "Có bill", "Có bill 1 phần", "Bom_bùng_chặn", "Hẹn Thanh Toán", "Hoàn Hàng", "Khó Đòi", "Không nhận được hàng", "Không PH dưới 3N", "Thanh toán phí hoàn", "KPH nhiều ngày"]
     };
 
-    // Danh sách các cột sẽ hiển thị THEO THỨ TỰ
     const displayColumns = [
-      "Mã đơn hàng",
-      // Các cột chỉnh sửa được đưa lên đầu
-      ...editableCols,
-      // Các cột còn lại
-      "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Zipcode", "Mặt hàng", 
-      "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
-      "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", 
-      "Hình thức thanh toán", "Ghi chú", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", 
-      "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", 
-      "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"
+      "Mã đơn hàng", ...editableCols, "Ngày lên đơn", "Name*", "Phone*", "Add", "City", 
+      "State", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", 
+      "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", 
+      "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Mã Tracking", "Ngày đóng hàng", 
+      "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", 
+      "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"
     ];
     
     let allData = [];
@@ -265,21 +258,37 @@
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">${message}</td></tr>`;
     }
 
+    // ---------- START: HÀM ĐỊNH DẠNG NGÀY ĐÃ ĐƯỢC TỐI ƯU ----------
     function formatDate(dateString) {
-      if (!dateString) return '';
-      try {
-        const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z');
-        if (isNaN(date.getTime())) return dateString;
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-      } catch (e) {
-        return dateString;
-      }
-    }
+        // Nếu không có chuỗi ngày tháng, trả về rỗng
+        if (!dateString) return '';
+        
+        try {
+            // Tạo đối tượng Date. new Date() xử lý tốt các chuỗi ISO (có chữ 'Z').
+            const date = new Date(dateString);
 
-    //--- DATA HANDLING & FILTERING ---
+            // Kiểm tra xem ngày có hợp lệ không.
+            if (isNaN(date.getTime())) {
+                // Nếu không hợp lệ, trả về chuỗi gốc nhưng cố gắng loại bỏ phần giờ.
+                // Ví dụ: "2023-10-27T10:20:30.123Z" -> "2023-10-27"
+                return String(dateString).split('T')[0];
+            }
+
+            // Dùng các hàm getUTC... để lấy ngày/tháng/năm theo giờ UTC.
+            // Việc này tránh trình duyệt tự động cộng/trừ giờ theo múi giờ của người dùng.
+            const day = String(date.getUTCDate()).padStart(2, '0');
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // getUTCMonth() bắt đầu từ 0
+            const year = date.getUTCFullYear();
+            
+            // Trả về định dạng dd/mm/yyyy sạch sẽ.
+            return `${day}/${month}/${year}`;
+        } catch (e) {
+            // Nếu có lỗi bất ngờ, trả về chuỗi gốc để không làm mất dữ liệu.
+            return String(dateString);
+        }
+    }
+    // ---------- END: HÀM ĐỊNH DẠNG NGÀY ĐÃ ĐƯỢC TỐI ƯU ----------
+
     async function handleData(response) {
       document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
       allData = []; staffFilteredData = []; changedRows = new Set();
@@ -338,7 +347,7 @@
             dataToFilter = dataToFilter.filter(row => {
                 const orderDateStr = row["Ngày lên đơn"];
                 if (!orderDateStr) return false;
-                const orderDate = new Date(orderDateStr.includes('Z') ? orderDateStr : orderDateStr + 'Z');
+                const orderDate = new Date(orderDateStr);
                  if (isNaN(orderDate.getTime())) return false;
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
@@ -360,7 +369,6 @@
         renderTableBody(dataToFilter);
     }
     
-    //--- RENDERING ---
     function renderHeader() {
         const header = document.getElementById('tableHead');
         header.innerHTML = '';
@@ -398,13 +406,11 @@
     function renderTableBody(data) {
       const container = document.getElementById('tableBody');
       container.innerHTML = '';
-
       if (data.length === 0) {
         showError(`Không có đơn hàng nào khớp với bộ lọc.`);
         return;
       }
-
-      data.forEach((row, rowIndex) => {
+      data.forEach((row) => {
         const originalRowIndex = staffFilteredData.indexOf(row);
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = originalRowIndex;
@@ -423,10 +429,7 @@
             td.classList.add('editable');
             if (dropdownCols[col]) {
               const select = document.createElement('select');
-              dropdownCols[col].forEach(opt => {
-                const option = new Option(opt, opt);
-                select.add(option);
-              });
+              dropdownCols[col].forEach(opt => select.add(new Option(opt, opt)));
               select.value = value;
               select.addEventListener('change', () => {
                 td.classList.add('highlight');
@@ -461,7 +464,6 @@
       });
     }
 
-    //--- CONTROLS & EVENTS ---
     function setupControls() {
       document.getElementById('refreshData').addEventListener('click', refreshData);
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
@@ -476,8 +478,7 @@
     }
 
     function refreshData() {
-      const btn = document.getElementById('refreshData');
-      btn.innerHTML = '<span class="loading"></span> Đang tải...';
+      document.getElementById('refreshData').innerHTML = '<span class="loading"></span> Đang tải...';
       loadData();
     }
 
@@ -491,7 +492,6 @@
       document.body.appendChild(script);
     }
 
-    // ---------- START: LOGIC GHI ĐÈ AN TOÀN ĐÃ ĐƯỢC CẬP NHẬT ----------
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -505,7 +505,6 @@
       
       const rowsToSend = [];
       const tableBody = document.getElementById('tableBody');
-
       changedRows.forEach(rowIndex => {
         const originalData = staffFilteredData[rowIndex];
         if (!originalData) return;
@@ -513,16 +512,14 @@
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
 
-        // Bắt đầu bằng cách sao chép TOÀN BỘ dữ liệu gốc của hàng đó.
         const updatedRow = { ...originalData }; 
         
-        // Ghi đè các giá trị đã được chỉnh sửa lên bản sao này.
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
             let value;
             const input = cell.querySelector('select, input');
-            if(input){
+            if(input) {
                 value = input.value;
             } else {
                 value = cell.textContent.trim();
@@ -531,7 +528,6 @@
         });
         rowsToSend.push(updatedRow);
       });
-      // ---------- END: LOGIC GHI ĐÈ AN TOÀN ĐÃ ĐƯỢC CẬP NHẬT ----------
 
       if (rowsToSend.length === 0) {
         statusEl.textContent = 'Không có dòng nào để gửi.';
@@ -569,7 +565,6 @@
       });
     }
 
-    // Khởi tạo
     setupControls();
     loadData();
   </script>
