@@ -258,36 +258,21 @@
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">${message}</td></tr>`;
     }
 
-    // ---------- START: HÀM ĐỊNH DẠNG NGÀY ĐÃ ĐƯỢC TỐI ƯU ----------
     function formatDate(dateString) {
-        // Nếu không có chuỗi ngày tháng, trả về rỗng
         if (!dateString) return '';
-        
         try {
-            // Tạo đối tượng Date. new Date() xử lý tốt các chuỗi ISO (có chữ 'Z').
             const date = new Date(dateString);
-
-            // Kiểm tra xem ngày có hợp lệ không.
             if (isNaN(date.getTime())) {
-                // Nếu không hợp lệ, trả về chuỗi gốc nhưng cố gắng loại bỏ phần giờ.
-                // Ví dụ: "2023-10-27T10:20:30.123Z" -> "2023-10-27"
                 return String(dateString).split('T')[0];
             }
-
-            // Dùng các hàm getUTC... để lấy ngày/tháng/năm theo giờ UTC.
-            // Việc này tránh trình duyệt tự động cộng/trừ giờ theo múi giờ của người dùng.
             const day = String(date.getUTCDate()).padStart(2, '0');
-            const month = String(date.getUTCMonth() + 1).padStart(2, '0'); // getUTCMonth() bắt đầu từ 0
+            const month = String(date.getUTCMonth() + 1).padStart(2, '0');
             const year = date.getUTCFullYear();
-            
-            // Trả về định dạng dd/mm/yyyy sạch sẽ.
             return `${day}/${month}/${year}`;
         } catch (e) {
-            // Nếu có lỗi bất ngờ, trả về chuỗi gốc để không làm mất dữ liệu.
             return String(dateString);
         }
     }
-    // ---------- END: HÀM ĐỊNH DẠNG NGÀY ĐÃ ĐƯỢC TỐI ƯU ----------
 
     async function handleData(response) {
       document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
@@ -491,6 +476,23 @@
       if (oldScript) oldScript.remove();
       document.body.appendChild(script);
     }
+    
+    // ---------- START: HÀM HỖ TRỢ XỬ LÝ NGÀY TRƯỚC KHI GỬI ĐI ----------
+    /**
+     * Chuyển đổi chuỗi ngày từ dd/mm/yyyy sang yyyy-mm-dd.
+     * @param {string} dateString Chuỗi ngày định dạng dd/mm/yyyy.
+     * @returns {string} Chuỗi ngày định dạng yyyy-mm-dd hoặc chuỗi gốc nếu không hợp lệ.
+     */
+    function reformatDateForSheet(dateString) {
+      if (typeof dateString !== 'string' || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+        // Nếu không phải là chuỗi dd/mm/yyyy hợp lệ, trả về nguyên bản.
+        return dateString;
+      }
+      const parts = dateString.split('/'); // Tách thành ["dd", "mm", "yyyy"]
+      return `${parts[2]}-${parts[1]}-${parts[0]}`; // Trả về "yyyy-mm-dd"
+    }
+    // ---------- END: HÀM HỖ TRỢ XỬ LÝ NGÀY TRƯỚC KHI GỬI ĐI ----------
+
 
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
@@ -524,6 +526,14 @@
             } else {
                 value = cell.textContent.trim();
             }
+
+            // ---------- START: ÁP DỤNG LOGIC CHUYỂN ĐỔI NGÀY ----------
+            // Chỉ xử lý cột "Ngày hẹn đẩy đơn" trước khi gửi đi.
+            if (colName === "Ngày hẹn đẩy đơn") {
+                value = reformatDateForSheet(value);
+            }
+            // ---------- END: ÁP DỤNG LOGIC CHUYỂN ĐỔI NGÀY ----------
+            
             updatedRow[colName] = value;
         });
         rowsToSend.push(updatedRow);
