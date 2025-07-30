@@ -378,7 +378,7 @@
     }
     
     function reformatDateForSheet(dateString) {
-      if (typeof dateString !== 'string' || dateString.trim() === '') return ''; // Trả về rỗng nếu không có gì
+      if (typeof dateString !== 'string' || dateString.trim() === '') return ''; 
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
         const parts = dateString.split('/');
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
@@ -386,10 +386,10 @@
       if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
         return dateString.substring(0, 10);
       }
-      return dateString; // Trả về giá trị gốc nếu định dạng không khớp
+      return dateString;
     }
 
-    // ✅ FINAL FIX: Cập nhật hàm để gửi đầy đủ các cột có thể sửa, giữ nguyên giá trị gốc nếu không đổi
+    // ✅ FINAL SOLUTION: Cập nhật hàm để đảm bảo an toàn dữ liệu tuyệt đối
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -406,35 +406,36 @@
       const tableBody = document.getElementById('tableBody');
       
       changedRows.forEach(rowIndex => {
+        // 1. Lấy dữ liệu gốc của hàng làm nền tảng (source of truth).
         const originalData = staffFilteredData[rowIndex];
         if (!originalData) return;
 
+        // 2. Lấy thẻ <tr> tương ứng trên giao diện để đọc các giá trị người dùng đã thay đổi.
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
 
-        // Bắt đầu payload với Mã đơn hàng để định danh
-        const rowUpdatePayload = {
-            "Mã đơn hàng": originalData["Mã đơn hàng"]
-        };
+        // 3. Tạo một BẢN SAO của dữ liệu gốc. Mọi thay đổi sẽ được áp dụng trên bản sao này.
+        // Điều này đảm bảo tất cả các cột không được sửa sẽ giữ nguyên giá trị gốc.
+        const updatedRowData = { ...originalData };
 
-        // Lặp qua TẤT CẢ các cột có thể chỉnh sửa
+        // 4. Lặp qua các cột CÓ THỂ CHỈNH SỬA và cập nhật giá trị từ giao diện vào BẢN SAO.
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
             
-            // Lấy giá trị HIỆN TẠI từ ô trên giao diện (dù đã sửa hay chưa)
-            let value = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
+            // Lấy giá trị hiện tại từ ô trên giao diện (select, input, hoặc ô có thể sửa).
+            let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
             
-            // Xử lý đặc biệt cho cột ngày tháng để gửi về đúng định dạng
-            if (colName === "Ngày hẹn đẩy đơn") {
-                value = reformatDateForSheet(value);
-            }
-
-            // Thêm cột và giá trị vào payload
-            rowUpdatePayload[colName] = value;
+            // Cập nhật giá trị vào bản sao.
+            updatedRowData[colName] = valueFromDOM;
         });
 
-        rowsToSend.push(rowUpdatePayload);
+        // 5. Chuẩn hóa lại định dạng ngày tháng trên BẢN SAO trước khi gửi.
+        updatedRowData["Ngày hẹn đẩy đơn"] = reformatDateForSheet(updatedRowData["Ngày hẹn đẩy đơn"]);
+
+        // 6. Thêm BẢN SAO đã hoàn thiện vào danh sách gửi đi.
+        // Payload này chứa đầy đủ các cột, đảm bảo không có gì bị xóa nhầm.
+        rowsToSend.push(updatedRowData);
       });
 
       if (rowsToSend.length === 0) {
