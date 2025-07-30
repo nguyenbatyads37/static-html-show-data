@@ -27,6 +27,11 @@
       background: white; border-radius: 0 0 5px 5px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
+    .main-table-wrapper {
+      overflow-x: auto;
+      overflow-y: auto;
+      max-height: 60vh;
+    }
     table {
       border-collapse: collapse; width: 100%; min-width: 2000px; font-size: 14px;
     }
@@ -74,11 +79,9 @@
       background: #e3f2fd; padding: 8px 15px; border-radius: 4px;
       margin-left: 10px; font-weight: bold;
     }
-    tr.selected {
+    .cell-selected {
       background-color: #e3f2fd !important;
-    }
-    tr.selected td {
-      background-color: #e3f2fd !important;
+      outline: 2px solid #3498db;
     }
     .summary-table {
       width: 100%;
@@ -103,6 +106,16 @@
     .negative {
       color: #e74c3c;
       font-weight: bold;
+    }
+    /* Always show horizontal scrollbar */
+    ::-webkit-scrollbar {
+      -webkit-appearance: none;
+      height: 10px;
+      width: 10px;
+    }
+    ::-webkit-scrollbar-thumb {
+      border-radius: 5px;
+      background-color: rgba(0,0,0,.2);
     }
   </style>
 </head>
@@ -134,6 +147,7 @@
       <thead>
         <tr>
           <th rowspan="2">Tên vận đơn</th>
+          <th rowspan="2">Đơn vị vận chuyển</th>
           <th colspan="2">Đã Thanh Toán (có bill)</th>
           <th rowspan="2">Bill 1 phần</th>
           <th rowspan="2">Tổng đơn lên nội bộ</th>
@@ -161,7 +175,7 @@
   </div>
 
   <!-- Main Data Table -->
-  <div class="table-wrapper" id="tableContainer">
+  <div class="main-table-wrapper" id="tableContainer">
     <table>
       <thead id="tableHead"></thead>
       <tbody id="tableBody"></tbody>
@@ -198,7 +212,9 @@
     let changedRows = new Set();
     let currentStaff = null;
     let teamMembers = [];
-    let selectedRows = new Set();
+    let selectedCells = new Set();
+    let isMouseDown = false;
+    let startCell = null;
     
     function getUrlParameter(name) {
       name = name.replace(/[\[\]]/g, '\\$&');
@@ -288,21 +304,29 @@
     }
 
     function updateDetailedSummaryTable(filteredData) {
-      const summaryData = {
-        "Đã Thanh Toán (có bill)": { count: 0, amount: 0 },
-        "Bill 1 phần": { count: 0, amount: 0 },
-        "Tổng đơn lên nội bộ": { count: 0, amount: 0 },
-        "Tổng đơn đủ đkien đẩy vh": { count: 0, amount: 0 },
-        "Tổng đơn lên vận hành": { count: 0, amount: 0 },
-        "Giao Thành Công": { count: 0, amount: 0 },
-        "Đang Giao": { count: 0, amount: 0 },
-        "Chưa Giao": { count: 0, amount: 0 },
-        "Hoàn": { count: 0, amount: 0 },
-        "chờ check": { count: 0, amount: 0 },
-        "Trống trạng thái": { count: 0, amount: 0 }
-      };
-
+      // Group by shipping company
+      const shippingCompanies = {};
+      
       filteredData.forEach(row => {
+        const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định";
+        
+        if (!shippingCompanies[shippingCompany]) {
+          shippingCompanies[shippingCompany] = {
+            "Đã Thanh Toán (có bill)": { count: 0, amount: 0 },
+            "Bill 1 phần": { count: 0, amount: 0 },
+            "Tổng đơn lên nội bộ": { count: 0, amount: 0 },
+            "Tổng đơn đủ đkien đẩy vh": { count: 0, amount: 0 },
+            "Tổng đơn lên vận hành": { count: 0, amount: 0 },
+            "Giao Thành Công": { count: 0, amount: 0 },
+            "Đang Giao": { count: 0, amount: 0 },
+            "Chưa Giao": { count: 0, amount: 0 },
+            "Hoàn": { count: 0, amount: 0 },
+            "chờ check": { count: 0, amount: 0 },
+            "Trống trạng thái": { count: 0, amount: 0 }
+          };
+        }
+        
+        const companyData = shippingCompanies[shippingCompany];
         const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0;
         let numericAmount = 0;
         
@@ -315,139 +339,385 @@
         // Check payment status
         const paymentStatus = row["Trạng thái thu tiền"] || "";
         if (paymentStatus.includes("Có bill")) {
-          summaryData["Đã Thanh Toán (có bill)"].count++;
-          summaryData["Đã Thanh Toán (có bill)"].amount += numericAmount;
+          companyData["Đã Thanh Toán (có bill)"].count++;
+          companyData["Đã Thanh Toán (có bill)"].amount += numericAmount;
         } else if (paymentStatus.includes("Có bill 1 phần")) {
-          summaryData["Bill 1 phần"].count++;
-          summaryData["Bill 1 phần"].amount += numericAmount;
+          companyData["Bill 1 phần"].count++;
+          companyData["Bill 1 phần"].amount += numericAmount;
         }
 
         // Check delivery status
         const deliveryStatus = row["Trạng thái giao hàng NB"] || "";
         if (deliveryStatus.includes("Giao Thành Công")) {
-          summaryData["Giao Thành Công"].count++;
-          summaryData["Giao Thành Công"].amount += numericAmount;
+          companyData["Giao Thành Công"].count++;
+          companyData["Giao Thành Công"].amount += numericAmount;
         } else if (deliveryStatus.includes("Đang Giao")) {
-          summaryData["Đang Giao"].count++;
-          summaryData["Đang Giao"].amount += numericAmount;
+          companyData["Đang Giao"].count++;
+          companyData["Đang Giao"].amount += numericAmount;
         } else if (deliveryStatus.includes("Chưa Giao")) {
-          summaryData["Chưa Giao"].count++;
-          summaryData["Chưa Giao"].amount += numericAmount;
+          companyData["Chưa Giao"].count++;
+          companyData["Chưa Giao"].amount += numericAmount;
         } else if (deliveryStatus.includes("Hoàn")) {
-          summaryData["Hoàn"].count++;
-          summaryData["Hoàn"].amount += numericAmount;
+          companyData["Hoàn"].count++;
+          companyData["Hoàn"].amount += numericAmount;
         } else if (deliveryStatus.includes("chờ check")) {
-          summaryData["chờ check"].count++;
-          summaryData["chờ check"].amount += numericAmount;
+          companyData["chờ check"].count++;
+          companyData["chờ check"].amount += numericAmount;
         } else if (deliveryStatus === "") {
-          summaryData["Trống trạng thái"].count++;
-          summaryData["Trống trạng thái"].amount += numericAmount;
+          companyData["Trống trạng thái"].count++;
+          companyData["Trống trạng thái"].amount += numericAmount;
         }
 
         // Count all orders
-        summaryData["Tổng đơn lên nội bộ"].count++;
-        summaryData["Tổng đơn lên nội bộ"].amount += numericAmount;
+        companyData["Tổng đơn lên nội bộ"].count++;
+        companyData["Tổng đơn lên nội bộ"].amount += numericAmount;
 
         // Count orders eligible for shipping (example condition)
         if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) {
-          summaryData["Tổng đơn đủ đkien đẩy vh"].count++;
-          summaryData["Tổng đơn đủ đkien đẩy vh"].amount += numericAmount;
+          companyData["Tổng đơn đủ đkien đẩy vh"].count++;
+          companyData["Tổng đơn đủ đkien đẩy vh"].amount += numericAmount;
         }
 
         // Count orders actually shipped (example condition)
         if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) {
-          summaryData["Tổng đơn lên vận hành"].count++;
-          summaryData["Tổng đơn lên vận hành"].amount += numericAmount;
+          companyData["Tổng đơn lên vận hành"].count++;
+          companyData["Tổng đơn lên vận hành"].amount += numericAmount;
         }
       });
-
-      // Calculate ratios
-      const shippingSuccessRate = summaryData["Tổng đơn lên vận hành"].count > 0 ? 
-        (summaryData["Giao Thành Công"].count / summaryData["Tổng đơn lên vận hành"].count * 100).toFixed(2) + '%' : '0%';
-      
-      const paymentSuccessRate = summaryData["Giao Thành Công"].count > 0 ? 
-        (summaryData["Đã Thanh Toán (có bill)"].count / summaryData["Giao Thành Công"].count * 100).toFixed(2) + '%' : '0%';
-      
-      const shippingFeeRate = summaryData["Tổng đơn lên nội bộ"].count > 0 ? 
-        (summaryData["Tổng đơn lên vận hành"].count / summaryData["Tổng đơn lên nội bộ"].count * 100).toFixed(2) + '%' : '0%';
 
       // Update the summary table
       const summaryTableBody = document.getElementById('summaryTableBody');
       summaryTableBody.innerHTML = '';
 
-      // Create a row for each staff member (or just one row for all if not grouped by staff)
-      const tr = document.createElement('tr');
-      
-      // Staff name
-      const staffNameTd = document.createElement('td');
-      staffNameTd.textContent = currentStaff ? currentStaff.ho_va_ten : 'Tất cả';
-      tr.appendChild(staffNameTd);
+      // Create rows for each shipping company
+      Object.entries(shippingCompanies).forEach(([company, companyData]) => {
+        const tr = document.createElement('tr');
+        
+        // Staff name
+        const staffNameTd = document.createElement('td');
+        staffNameTd.textContent = currentStaff ? currentStaff.ho_va_ten : 'Tất cả';
+        tr.appendChild(staffNameTd);
 
-      // Paid bills
-      const paidCountTd = document.createElement('td');
-      paidCountTd.textContent = summaryData["Đã Thanh Toán (có bill)"].count;
-      tr.appendChild(paidCountTd);
-      
-      const paidAmountTd = document.createElement('td');
-      paidAmountTd.textContent = new Intl.NumberFormat('vi-VN', { 
-        style: 'currency', 
-        currency: 'VND' 
-      }).format(summaryData["Đã Thanh Toán (có bill)"].amount);
-      tr.appendChild(paidAmountTd);
+        // Shipping company
+        const companyTd = document.createElement('td');
+        companyTd.textContent = company;
+        tr.appendChild(companyTd);
 
-      // Partial bills
-      const partialTd = document.createElement('td');
-      partialTd.textContent = summaryData["Bill 1 phần"].count;
-      tr.appendChild(partialTd);
+        // Paid bills
+        const paidCountTd = document.createElement('td');
+        paidCountTd.textContent = companyData["Đã Thanh Toán (có bill)"].count;
+        tr.appendChild(paidCountTd);
+        
+        const paidAmountTd = document.createElement('td');
+        paidAmountTd.textContent = new Intl.NumberFormat('vi-VN', { 
+          style: 'currency', 
+          currency: 'VND' 
+        }).format(companyData["Đã Thanh Toán (có bill)"].amount);
+        tr.appendChild(paidAmountTd);
 
-      // Total internal orders
-      const totalInternalTd = document.createElement('td');
-      totalInternalTd.textContent = summaryData["Tổng đơn lên nội bộ"].count;
-      tr.appendChild(totalInternalTd);
+        // Partial bills
+        const partialTd = document.createElement('td');
+        partialTd.textContent = companyData["Bill 1 phần"].count;
+        tr.appendChild(partialTd);
 
-      // Eligible for shipping
-      const eligibleTd = document.createElement('td');
-      eligibleTd.textContent = summaryData["Tổng đơn đủ đkien đẩy vh"].count;
-      tr.appendChild(eligibleTd);
+        // Total internal orders
+        const totalInternalTd = document.createElement('td');
+        totalInternalTd.textContent = companyData["Tổng đơn lên nội bộ"].count;
+        tr.appendChild(totalInternalTd);
 
-      // Actually shipped
-      const shippedTd = document.createElement('td');
-      shippedTd.textContent = summaryData["Tổng đơn lên vận hành"].count;
-      tr.appendChild(shippedTd);
+        // Eligible for shipping
+        const eligibleTd = document.createElement('td');
+        eligibleTd.textContent = companyData["Tổng đơn đủ đkien đẩy vh"].count;
+        tr.appendChild(eligibleTd);
 
-      // Shipping rate
-      const shippingRateTd = document.createElement('td');
-      shippingRateTd.textContent = shippingFeeRate;
-      shippingRateTd.className = parseFloat(shippingFeeRate) > 50 ? 'positive' : 'negative';
-      tr.appendChild(shippingRateTd);
+        // Actually shipped
+        const shippedTd = document.createElement('td');
+        shippedTd.textContent = companyData["Tổng đơn lên vận hành"].count;
+        tr.appendChild(shippedTd);
 
-      // Delivery status counts
-      tr.appendChild(createTd(summaryData["Giao Thành Công"].count));
-      tr.appendChild(createTd(summaryData["Đang Giao"].count));
-      tr.appendChild(createTd(summaryData["Chưa Giao"].count));
-      tr.appendChild(createTd(summaryData["Hoàn"].count));
-      tr.appendChild(createTd(summaryData["chờ check"].count));
-      tr.appendChild(createTd(summaryData["Trống trạng thái"].count));
+        // Shipping rate
+        const shippingRate = companyData["Tổng đơn lên nội bộ"].count > 0 ? 
+          (companyData["Tổng đơn lên vận hành"].count / companyData["Tổng đơn lên nội bộ"].count * 100).toFixed(2) + '%' : '0%';
+        
+        const shippingRateTd = document.createElement('td');
+        shippingRateTd.textContent = shippingRate;
+        shippingRateTd.className = parseFloat(shippingRate) > 50 ? 'positive' : 'negative';
+        tr.appendChild(shippingRateTd);
 
-      // Payment success rate
-      const paymentRateTd = document.createElement('td');
-      paymentRateTd.textContent = paymentSuccessRate;
-      paymentRateTd.className = parseFloat(paymentSuccessRate) > 50 ? 'positive' : 'negative';
-      tr.appendChild(paymentRateTd);
+        // Delivery status counts
+        tr.appendChild(createTd(companyData["Giao Thành Công"].count));
+        tr.appendChild(createTd(companyData["Đang Giao"].count));
+        tr.appendChild(createTd(companyData["Chưa Giao"].count));
+        tr.appendChild(createTd(companyData["Hoàn"].count));
+        tr.appendChild(createTd(companyData["chờ check"].count));
+        tr.appendChild(createTd(companyData["Trống trạng thái"].count));
 
-      // Shipping fee rate
-      const feeRateTd = document.createElement('td');
-      feeRateTd.textContent = shippingSuccessRate;
-      feeRateTd.className = parseFloat(shippingSuccessRate) > 50 ? 'positive' : 'negative';
-      tr.appendChild(feeRateTd);
+        // Payment success rate
+        const paymentSuccessRate = companyData["Giao Thành Công"].count > 0 ? 
+          (companyData["Đã Thanh Toán (có bill)"].count / companyData["Giao Thành Công"].count * 100).toFixed(2) + '%' : '0%';
+        
+        const paymentRateTd = document.createElement('td');
+        paymentRateTd.textContent = paymentSuccessRate;
+        paymentRateTd.className = parseFloat(paymentSuccessRate) > 50 ? 'positive' : 'negative';
+        tr.appendChild(paymentRateTd);
 
-      summaryTableBody.appendChild(tr);
+        // Shipping success rate
+        const shippingSuccessRate = companyData["Tổng đơn lên vận hành"].count > 0 ? 
+          (companyData["Giao Thành Công"].count / companyData["Tổng đơn lên vận hành"].count * 100).toFixed(2) + '%' : '0%';
+        
+        const feeRateTd = document.createElement('td');
+        feeRateTd.textContent = shippingSuccessRate;
+        feeRateTd.className = parseFloat(shippingSuccessRate) > 50 ? 'positive' : 'negative';
+        tr.appendChild(feeRateTd);
+
+        summaryTableBody.appendChild(tr);
+      });
+
+      // Add total row if multiple companies
+      if (Object.keys(shippingCompanies).length > 1) {
+        const totalData = {
+          "Đã Thanh Toán (có bill)": { count: 0, amount: 0 },
+          "Bill 1 phần": { count: 0, amount: 0 },
+          "Tổng đơn lên nội bộ": { count: 0, amount: 0 },
+          "Tổng đơn đủ đkien đẩy vh": { count: 0, amount: 0 },
+          "Tổng đơn lên vận hành": { count: 0, amount: 0 },
+          "Giao Thành Công": { count: 0, amount: 0 },
+          "Đang Giao": { count: 0, amount: 0 },
+          "Chưa Giao": { count: 0, amount: 0 },
+          "Hoàn": { count: 0, amount: 0 },
+          "chờ check": { count: 0, amount: 0 },
+          "Trống trạng thái": { count: 0, amount: 0 }
+        };
+
+        Object.values(shippingCompanies).forEach(companyData => {
+          Object.keys(totalData).forEach(key => {
+            totalData[key].count += companyData[key].count;
+            totalData[key].amount += companyData[key].amount;
+          });
+        });
+
+        const tr = document.createElement('tr');
+        tr.style.fontWeight = 'bold';
+        tr.style.backgroundColor = '#f5f5f5';
+        
+        // Staff name
+        const staffNameTd = document.createElement('td');
+        staffNameTd.textContent = 'Tổng cộng';
+        tr.appendChild(staffNameTd);
+
+        // Shipping company
+        const companyTd = document.createElement('td');
+        companyTd.textContent = 'Tất cả';
+        tr.appendChild(companyTd);
+
+        // Paid bills
+        const paidCountTd = document.createElement('td');
+        paidCountTd.textContent = totalData["Đã Thanh Toán (có bill)"].count;
+        tr.appendChild(paidCountTd);
+        
+        const paidAmountTd = document.createElement('td');
+        paidAmountTd.textContent = new Intl.NumberFormat('vi-VN', { 
+          style: 'currency', 
+          currency: 'VND' 
+        }).format(totalData["Đã Thanh Toán (có bill)"].amount);
+        tr.appendChild(paidAmountTd);
+
+        // Partial bills
+        const partialTd = document.createElement('td');
+        partialTd.textContent = totalData["Bill 1 phần"].count;
+        tr.appendChild(partialTd);
+
+        // Total internal orders
+        const totalInternalTd = document.createElement('td');
+        totalInternalTd.textContent = totalData["Tổng đơn lên nội bộ"].count;
+        tr.appendChild(totalInternalTd);
+
+        // Eligible for shipping
+        const eligibleTd = document.createElement('td');
+        eligibleTd.textContent = totalData["Tổng đơn đủ đkien đẩy vh"].count;
+        tr.appendChild(eligibleTd);
+
+        // Actually shipped
+        const shippedTd = document.createElement('td');
+        shippedTd.textContent = totalData["Tổng đơn lên vận hành"].count;
+        tr.appendChild(shippedTd);
+
+        // Shipping rate
+        const shippingRate = totalData["Tổng đơn lên nội bộ"].count > 0 ? 
+          (totalData["Tổng đơn lên vận hành"].count / totalData["Tổng đơn lên nội bộ"].count * 100).toFixed(2) + '%' : '0%';
+        
+        const shippingRateTd = document.createElement('td');
+        shippingRateTd.textContent = shippingRate;
+        shippingRateTd.className = parseFloat(shippingRate) > 50 ? 'positive' : 'negative';
+        tr.appendChild(shippingRateTd);
+
+        // Delivery status counts
+        tr.appendChild(createTd(totalData["Giao Thành Công"].count));
+        tr.appendChild(createTd(totalData["Đang Giao"].count));
+        tr.appendChild(createTd(totalData["Chưa Giao"].count));
+        tr.appendChild(createTd(totalData["Hoàn"].count));
+        tr.appendChild(createTd(totalData["chờ check"].count));
+        tr.appendChild(createTd(totalData["Trống trạng thái"].count));
+
+        // Payment success rate
+        const paymentSuccessRate = totalData["Giao Thành Công"].count > 0 ? 
+          (totalData["Đã Thanh Toán (có bill)"].count / totalData["Giao Thành Công"].count * 100).toFixed(2) + '%' : '0%';
+        
+        const paymentRateTd = document.createElement('td');
+        paymentRateTd.textContent = paymentSuccessRate;
+        paymentRateTd.className = parseFloat(paymentSuccessRate) > 50 ? 'positive' : 'negative';
+        tr.appendChild(paymentRateTd);
+
+        // Shipping success rate
+        const shippingSuccessRate = totalData["Tổng đơn lên vận hành"].count > 0 ? 
+          (totalData["Giao Thành Công"].count / totalData["Tổng đơn lên vận hành"].count * 100).toFixed(2) + '%' : '0%';
+        
+        const feeRateTd = document.createElement('td');
+        feeRateTd.textContent = shippingSuccessRate;
+        feeRateTd.className = parseFloat(shippingSuccessRate) > 50 ? 'positive' : 'negative';
+        tr.appendChild(feeRateTd);
+
+        summaryTableBody.appendChild(tr);
+      }
     }
 
     function createTd(content) {
       const td = document.createElement('td');
       td.textContent = content;
       return td;
+    }
+
+    function handleCellSelection(cell, addToSelection = true) {
+      if (addToSelection) {
+        cell.classList.add('cell-selected');
+        selectedCells.add(cell);
+      } else {
+        cell.classList.remove('cell-selected');
+        selectedCells.delete(cell);
+      }
+    }
+
+    function handleCellRangeSelection(startCell, endCell) {
+      const startRow = startCell.parentNode.rowIndex;
+      const startCol = startCell.cellIndex;
+      const endRow = endCell.parentNode.rowIndex;
+      const endCol = endCell.cellIndex;
+
+      const minRow = Math.min(startRow, endRow);
+      const maxRow = Math.max(startRow, endRow);
+      const minCol = Math.min(startCol, endCol);
+      const maxCol = Math.max(startCol, endCol);
+
+      const table = document.getElementById('tableBody');
+      const rows = table.rows;
+
+      // Clear all selections first
+      selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
+      selectedCells.clear();
+
+      // Select cells in the range
+      for (let i = minRow; i <= maxRow; i++) {
+        for (let j = minCol; j <= maxCol; j++) {
+          const cell = rows[i].cells[j];
+          cell.classList.add('cell-selected');
+          selectedCells.add(cell);
+        }
+      }
+    }
+
+    function setupCellSelection() {
+      const tableBody = document.getElementById('tableBody');
+
+      tableBody.addEventListener('mousedown', (e) => {
+        if (e.target.tagName === 'TD') {
+          isMouseDown = true;
+          startCell = e.target;
+          
+          // Clear previous selections if not holding Ctrl
+          if (!e.ctrlKey && !e.metaKey) {
+            selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
+            selectedCells.clear();
+          }
+          
+          handleCellSelection(e.target, !e.target.classList.contains('cell-selected'));
+          e.preventDefault(); // Prevent text selection
+        }
+      });
+
+      tableBody.addEventListener('mouseover', (e) => {
+        if (isMouseDown && e.target.tagName === 'TD' && startCell !== e.target) {
+          handleCellRangeSelection(startCell, e.target);
+        }
+      });
+
+      document.addEventListener('mouseup', () => {
+        isMouseDown = false;
+        startCell = null;
+      });
+
+      // Handle Ctrl+C for copying selected cells
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCells.size > 0) {
+          e.preventDefault();
+          copySelectedCells();
+        }
+      });
+    }
+
+    function copySelectedCells() {
+      if (selectedCells.size === 0) return;
+
+      // Find the bounding rectangle of the selection
+      let minRow = Infinity, maxRow = -Infinity;
+      let minCol = Infinity, maxCol = -Infinity;
+
+      selectedCells.forEach(cell => {
+        const row = cell.parentNode.rowIndex;
+        const col = cell.cellIndex;
+        
+        minRow = Math.min(minRow, row);
+        maxRow = Math.max(maxRow, row);
+        minCol = Math.min(minCol, col);
+        maxCol = Math.max(maxCol, col);
+      });
+
+      // Create a grid to hold the data
+      const rows = maxRow - minRow + 1;
+      const cols = maxCol - minCol + 1;
+      const grid = Array(rows).fill().map(() => Array(cols).fill(''));
+
+      // Populate the grid with cell values
+      selectedCells.forEach(cell => {
+        const row = cell.parentNode.rowIndex - minRow;
+        const col = cell.cellIndex - minCol;
+        
+        if (row >= 0 && row < rows && col >= 0 && col < cols) {
+          grid[row][col] = cell.textContent.trim();
+        }
+      });
+
+      // Convert grid to tab-separated values
+      const tsv = grid.map(row => row.join('\t')).join('\n');
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(tsv)
+        .then(() => {
+          const tempMsg = document.createElement('div');
+          tempMsg.textContent = `Đã sao chép ${selectedCells.size} ô vào clipboard`;
+          tempMsg.style.position = 'fixed';
+          tempMsg.style.bottom = '20px';
+          tempMsg.style.right = '20px';
+          tempMsg.style.backgroundColor = '#2ecc71';
+          tempMsg.style.color = 'white';
+          tempMsg.style.padding = '10px';
+          tempMsg.style.borderRadius = '4px';
+          tempMsg.style.zIndex = '1000';
+          document.body.appendChild(tempMsg);
+          setTimeout(() => tempMsg.remove(), 2000);
+        })
+        .catch(err => {
+          console.error('Failed to copy:', err);
+        });
     }
 
     async function handleData(response) {
@@ -475,6 +745,7 @@
         filterDataByStaff();
         renderHeader();
         applyAllFilters();
+        setupCellSelection();
       } catch (error) {
         showError(error.message);
       }
@@ -581,22 +852,6 @@
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = originalRowIndex;
 
-        tr.addEventListener('click', (e) => {
-          if (e.ctrlKey || e.metaKey) {
-            tr.classList.toggle('selected');
-            if (tr.classList.contains('selected')) {
-              selectedRows.add(originalRowIndex);
-            } else {
-              selectedRows.delete(originalRowIndex);
-            }
-          } else {
-            document.querySelectorAll('#tableBody tr.selected').forEach(r => r.classList.remove('selected'));
-            selectedRows.clear();
-            tr.classList.add('selected');
-            selectedRows.add(originalRowIndex);
-          }
-        });
-
         displayColumns.forEach(col => {
           const td = document.createElement('td');
           const unifiedColName = col === "Ngày lên đơn" ? "Ngày lên đơn" : col;
@@ -650,41 +905,6 @@
       });
     }
 
-    function copySelectedRows() {
-      const rows = [];
-      const headers = displayColumns;
-      
-      rows.push(headers.join('\t'));
-      
-      selectedRows.forEach(rowIndex => {
-        const rowData = staffFilteredData[rowIndex];
-        const rowValues = headers.map(header => {
-          const value = rowData[header] || rowData[header.replace(/ /g, '_')] || '';
-          return typeof value === 'string' ? value.replace(/\t|\n/g, ' ') : value;
-        });
-        rows.push(rowValues.join('\t'));
-      });
-      
-      navigator.clipboard.writeText(rows.join('\n'))
-        .then(() => {
-          const tempMsg = document.createElement('div');
-          tempMsg.textContent = `Đã sao chép ${selectedRows.size} dòng vào clipboard`;
-          tempMsg.style.position = 'fixed';
-          tempMsg.style.bottom = '20px';
-          tempMsg.style.right = '20px';
-          tempMsg.style.backgroundColor = '#2ecc71';
-          tempMsg.style.color = 'white';
-          tempMsg.style.padding = '10px';
-          tempMsg.style.borderRadius = '4px';
-          tempMsg.style.zIndex = '1000';
-          document.body.appendChild(tempMsg);
-          setTimeout(() => tempMsg.remove(), 2000);
-        })
-        .catch(err => {
-          console.error('Failed to copy:', err);
-        });
-    }
-
     function setupControls() {
       document.getElementById('refreshData').addEventListener('click', refreshData);
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
@@ -695,13 +915,6 @@
           document.getElementById('endDateFilter').value = '';
           document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => f.value = '');
           applyAllFilters();
-      });
-
-      document.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedRows.size > 0) {
-          e.preventDefault();
-          copySelectedRows();
-        }
       });
     }
 
