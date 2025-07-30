@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>DANH SÁCH ĐƠN HÀNG</title>
   <style>
-    /* ... Toàn bộ CSS từ trước giữ nguyên ... */
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       padding: 20px;
@@ -70,7 +69,6 @@
     td select, td input.date-input {
       width: 100%; padding: 6px; border: none;
       background: transparent; font-family: inherit; font-size: inherit;
-      /* Thêm con trỏ để người dùng biết là có thể click */
       cursor: pointer;
     }
     button {
@@ -134,8 +132,36 @@
 </head>
 <body>
   <h2>QUẢN LÝ VẬN ĐƠN</h2>
-  <div class="controls"><!--...--></div>
-  <div class="summary-dashboard"><!--...--></div>
+  <div class="controls">
+    <div class="left-controls">
+      <span id="userInfo"></span>
+      <button id="refreshData" class="refresh-btn">
+        <span class="refresh-icon">↻</span> Load dữ liệu
+      </button>
+      <button id="updateAll">Cập nhật tất cả</button>
+    </div>
+    <div class="right-controls">
+      <div class="date-filter">
+        <span>Lọc từ ngày:</span>
+        <input type="date" id="startDateFilter" />
+        <span>Đến ngày:</span>
+        <input type="date" id="endDateFilter" />
+      </div>
+      <button id="clearFilters" class="clear-filter-btn">Xóa bộ lọc</button>
+    </div>
+  </div>
+
+  <div class="summary-dashboard">
+    <div class="summary-item">
+      <span class="summary-label">Tổng số đơn:</span>
+      <span class="summary-value" id="totalOrders">0</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Tổng doanh số (VNĐ):</span>
+      <span class="summary-value" id="totalRevenue">0</span>
+    </div>
+  </div>
+  
   <div class="table-wrapper" id="tableContainer">
     <table>
       <thead id="tableHead"></thead>
@@ -146,7 +172,6 @@
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbywmvvC_1x5rIS6keNkADH2yPbxNLCqshCwyx_-gP2yFYpyygfS1l-Z5i1EAlXrIfzL/exec';
 
-    // ✅ KIỂM TRA LẠI MẢNG NÀY! Đảm bảo tên cột bạn muốn sửa nằm trong đây và gõ chính xác.
     const editableCols = [
         "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền",
         "Ngày hẹn đẩy đơn", "Loại thanh toán", "Tên người chuyển khoản"
@@ -167,7 +192,6 @@
       "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"
     ];
     
-    // ✅ ĐỊNH NGHĨA MÀU SẮC VÀ KIỂU CHỮ CHO CÁC TRẠNG THÁI
     const statusStyles = {
       // Kết quả Check
       'OK': { color: '#27ae60', fontWeight: 'bold' },
@@ -184,10 +208,8 @@
       'Khó Đòi': { color: '#e74c3c', fontWeight: 'bold' },
     };
 
-    // ✅ HÀM TRỢ GIÚP ĐỂ ÁP DỤNG STYLE
     function applySelectStyles(selectElement) {
         const selectedValue = selectElement.value;
-        // Lấy style từ đối tượng statusStyles, nếu không có thì dùng style mặc định
         const style = statusStyles[selectedValue] || { color: 'inherit', fontWeight: 'inherit' };
         selectElement.style.color = style.color;
         selectElement.style.fontWeight = style.fontWeight;
@@ -199,13 +221,53 @@
     let currentStaff = null;
     let teamMembers = [];
 
-    // ... (Các hàm getUrlParameter, fetchStaffInfo, showError, formatDate không đổi)
+    function getUrlParameter(name) { name = name.replace(/[\[\]]/g, '\\$&'); const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'); const results = regex.exec(window.location.href); if (!results) return null; if (!results[2]) return ''; return decodeURIComponent(results[2].replace(/\+/g, ' ')); }
+    async function fetchStaffInfo(idns) { try { const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; const response = await fetch(staffApiUrl, { cache: "no-store" }); if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên'); const data = await response.json(); const staffMember = data.find(staff => String(staff.idnv) === idns); if (!staffMember) throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`); if (staffMember.vi_tri === "Leader") { const teamName = staffMember.team; teamMembers = data.filter(member => member.team === teamName).map(member => member.ho_va_ten); } return staffMember; } catch (error) { showError(error.message); throw error; } }
+    function showError(message) { const container = document.getElementById('tableBody'); const colCount = displayColumns.length > 0 ? displayColumns.length : 10; container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`; }
+    function formatDate(dateString) { if (!dateString || typeof dateString !== 'string') return ''; const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/); if (match) { const year = match[1]; const month = match[2]; const day = match[3]; return `${day}/${month}/${year}`; } return dateString; }
+    async function handleData(response) { document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; allData = []; staffFilteredData = []; changedRows = new Set(); if (response.error || !Array.isArray(response.rows)) { showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng')); return; } allData = response.rows; const staffId = getUrlParameter('id'); if (!staffId) { showError('Thiếu tham số ID nhân viên trong URL'); return; } try { currentStaff = await fetchStaffInfo(staffId); let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`; staffInfo += (currentStaff.vi_tri === "Leader") ? ` (Leader - Team ${currentStaff.team})` : ` (Nhân viên)`; document.getElementById('userInfo').textContent = staffInfo; filterDataByStaff(); renderHeader(); applyAllFilters(); } catch (error) { showError(error.message); } }
+    function filterDataByStaff() { if (!currentStaff) return; staffFilteredData = allData.filter(row => { const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''; if (currentStaff.vi_tri === "Leader") { return teamMembers.includes(deliveryStaff); } else { return deliveryStaff === currentStaff.ho_va_ten; } }); }
     
-    async function handleData(response) { /* ... */ }
-    function filterDataByStaff() { /* ... */ }
-    function applyAllFilters() { /* ... */ }
-
-    // ✅ HÀM RENDER HEADER ĐÃ KHÔI PHỤC LẠI BỘ LỌC TEXT CHO NGÀY LÊN ĐƠN
+    function applyAllFilters() {
+        let dataToFilter = [...staffFilteredData];
+        
+        const startDateStr = document.getElementById('startDateFilter').value;
+        const endDateStr = document.getElementById('endDateFilter').value;
+        const startNum = startDateStr ? parseInt(startDateStr.replace(/-/g, ''), 10) : null;
+        const endNum = endDateStr ? parseInt(endDateStr.replace(/-/g, ''), 10) : null;
+        if (startNum || endNum) {
+            dataToFilter = dataToFilter.filter(row => {
+                const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
+                if (!orderDateStr) return false;
+                const orderDateNum = parseInt(orderDateStr.substring(0, 10).replace(/-/g, ''), 10);
+                if (isNaN(orderDateNum)) return false;
+                if (startNum && orderDateNum < startNum) return false;
+                if (endNum && orderDateNum > endNum) return false;
+                return true;
+            });
+        }
+        
+        const tableHead = document.getElementById('tableHead');
+        if (tableHead.querySelector('tr')) {
+            const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
+            filters.forEach(filter => {
+                const value = filter.value.toLowerCase().trim();
+                if (value === '') return;
+                const colName = filter.dataset.column;
+                dataToFilter = dataToFilter.filter(row => {
+                    let cellValue = row[colName] !== undefined ? row[colName] : row[colName.replace(/ /g, '_')] || '';
+                    if (colName === "Ngày lên đơn") {
+                        cellValue = formatDate(cellValue); // So sánh với định dạng dd/mm/yyyy đã hiển thị
+                    }
+                    return cellValue.toString().toLowerCase().includes(value);
+                });
+            });
+        }
+        
+        updateSummary(dataToFilter);
+        renderTableBody(dataToFilter);
+    }
+    
     function renderHeader() {
         const header = document.getElementById('tableHead');
         header.innerHTML = '';
@@ -214,7 +276,6 @@
             const th = document.createElement('th');
             th.textContent = colName;
             if (colName === "Mã đơn hàng") th.classList.add('fixed-column');
-
             th.appendChild(document.createElement('br'));
             
             let filterElement;
@@ -227,7 +288,6 @@
                 });
                 filterElement.addEventListener('change', applyAllFilters);
             } else {
-                // Tất cả các cột khác, bao gồm "Ngày lên đơn", sẽ có bộ lọc text
                 filterElement = document.createElement('input');
                 filterElement.type = 'text';
                 filterElement.className = 'filter-input';
@@ -240,8 +300,7 @@
         });
         header.appendChild(tr);
     }
-
-    // ✅ HÀM RENDER BODY ĐÃ ĐƯỢC CẬP NHẬT HOÀN TOÀN
+    
     function renderTableBody(data) {
       const container = document.getElementById('tableBody');
       container.innerHTML = '';
@@ -262,22 +321,16 @@
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
               value = formatDate(dateSource);
           }
-
           if (col === "Mã đơn hàng") td.classList.add('fixed-column');
 
-          // Logic render ô có thể chỉnh sửa
           if (editableCols.includes(col)) {
             td.classList.add('editable');
-
-            if (dropdownCols[col]) { // Nếu là menu thả xuống
+            if (dropdownCols[col]) {
               const select = document.createElement('select');
-              
               dropdownCols[col].forEach(optText => {
                 const option = document.createElement('option');
                 option.value = optText;
                 option.textContent = optText || '(Trống)';
-                
-                // Áp dụng style cho từng option trong danh sách
                 const style = statusStyles[optText];
                 if (style) {
                     option.style.color = style.color;
@@ -285,20 +338,15 @@
                 }
                 select.appendChild(option);
               });
-
               select.value = value;
-              
-              // Áp dụng style cho thẻ select lúc ban đầu
               applySelectStyles(select);
-
               select.addEventListener('change', function() {
                 td.classList.add('highlight');
                 changedRows.add(originalRowIndex);
-                // Áp dụng style cho thẻ select mỗi khi thay đổi
                 applySelectStyles(this);
               });
               td.appendChild(select);
-            } else if (col === "Ngày hẹn đẩy đơn") { // Nếu là ô nhập ngày
+            } else if (col === "Ngày hẹn đẩy đơn") {
                 const input = document.createElement('input');
                 input.type = 'text';
                 input.className = 'date-input';
@@ -309,7 +357,7 @@
                     changedRows.add(originalRowIndex);
                 });
                 td.appendChild(input);
-            } else { // Các ô chỉnh sửa văn bản thông thường
+            } else {
               td.contentEditable = 'true';
               td.textContent = value;
               td.addEventListener('input', () => {
@@ -317,7 +365,7 @@
                 changedRows.add(originalRowIndex);
               });
             }
-          } else { // Các ô không thể chỉnh sửa
+          } else {
             td.textContent = value;
           }
           tr.appendChild(td);
@@ -325,33 +373,7 @@
         container.appendChild(tr);
       });
     }
-
-    // ... (Tất cả các hàm còn lại giữ nguyên như phiên bản trước)
-    function updateSummary(data) { /* ... */ }
-    function setupControls() { /* ... */ }
-    function refreshData() { /* ... */ }
-    function reformatDateForSheet(dateString) { /* ... */ }
-    function updateAllChangedRows() { /* ... */ }
-    function loadData() { /* ... */ }
-    let isMouseDown = false; /* ... */
-    function getCellValue(cell) { /* ... */ }
-    function updateSelection(start, end) { /* ... */ }
-    function handleCopy(e) { /* ... */ }
-    function setupSelectionEvents() { /* ... */ }
     
-    // Gọi các hàm khởi tạo
-    setupControls();
-    setupSelectionEvents();
-    loadData();
-
-    // Dán lại các hàm đã ẩn ở trên vào đây
-    function getUrlParameter(name) { name = name.replace(/[\[\]]/g, '\\$&'); const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'); const results = regex.exec(window.location.href); if (!results) return null; if (!results[2]) return ''; return decodeURIComponent(results[2].replace(/\+/g, ' ')); }
-    async function fetchStaffInfo(idns) { try { const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; const response = await fetch(staffApiUrl, { cache: "no-store" }); if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên'); const data = await response.json(); const staffMember = data.find(staff => String(staff.idnv) === idns); if (!staffMember) throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`); if (staffMember.vi_tri === "Leader") { const teamName = staffMember.team; teamMembers = data.filter(member => member.team === teamName).map(member => member.ho_va_ten); } return staffMember; } catch (error) { showError(error.message); throw error; } }
-    function showError(message) { const container = document.getElementById('tableBody'); const colCount = displayColumns.length > 0 ? displayColumns.length : 10; container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`; }
-    function formatDate(dateString) { if (!dateString || typeof dateString !== 'string') return ''; const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/); if (match) { const year = match[1]; const month = match[2]; const day = match[3]; return `${day}/${month}/${year}`; } return dateString; }
-    async function handleData(response) { document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; allData = []; staffFilteredData = []; changedRows = new Set(); if (response.error || !Array.isArray(response.rows)) { showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng')); return; } allData = response.rows; const staffId = getUrlParameter('id'); if (!staffId) { showError('Thiếu tham số ID nhân viên trong URL'); return; } try { currentStaff = await fetchStaffInfo(staffId); let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`; staffInfo += (currentStaff.vi_tri === "Leader") ? ` (Leader - Team ${currentStaff.team})` : ` (Nhân viên)`; document.getElementById('userInfo').textContent = staffInfo; filterDataByStaff(); renderHeader(); applyAllFilters(); } catch (error) { showError(error.message); } }
-    function filterDataByStaff() { if (!currentStaff) return; staffFilteredData = allData.filter(row => { const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''; if (currentStaff.vi_tri === "Leader") { return teamMembers.includes(deliveryStaff); } else { return deliveryStaff === currentStaff.ho_va_ten; } }); }
-    function applyAllFilters() { let dataToFilter = [...staffFilteredData]; const startNum = document.getElementById('startDateFilter').value ? parseInt(document.getElementById('startDateFilter').value.replace(/-/g, ''), 10) : null; const endNum = document.getElementById('endDateFilter').value ? parseInt(document.getElementById('endDateFilter').value.replace(/-/g, ''), 10) : null; if (startNum || endNum) { dataToFilter = dataToFilter.filter(row => { const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"]; if (!orderDateStr) return false; const orderDateNum = parseInt(orderDateStr.substring(0, 10).replace(/-/g, ''), 10); if (isNaN(orderDateNum)) return false; if (startNum && orderDateNum < startNum) return false; if (endNum && orderDateNum > endNum) return false; return true; }); } const tableHead = document.getElementById('tableHead'); if (tableHead.querySelector('tr')) { const filters = tableHead.querySelectorAll('.filter-input, .filter-select'); filters.forEach(filter => { const value = filter.value.toLowerCase().trim(); if (value === '') return; const colName = filter.dataset.column; dataToFilter = dataToFilter.filter(row => { let cellValue = row[colName] !== undefined ? row[colName] : row[colName.replace(/ /g, '_')] || ''; return cellValue.toString().toLowerCase().includes(value); }); }); } updateSummary(dataToFilter); renderTableBody(dataToFilter); }
     function updateSummary(data) { const totalOrdersEl = document.getElementById('totalOrders'); const totalRevenueEl = document.getElementById('totalRevenue'); if (!data || data.length === 0) { totalOrdersEl.textContent = '0'; totalRevenueEl.textContent = '0'; return; } const totalOrders = data.length; const totalRevenue = data.reduce((sum, row) => { const revenueString = row["Tổng tiền VNĐ"] || '0'; const revenueNumber = parseFloat(String(revenueString).replace(/[^0-9.-]+/g,"")); return sum + (isNaN(revenueNumber) ? 0 : revenueNumber); }, 0); totalOrdersEl.textContent = totalOrders.toLocaleString('vi-VN'); totalRevenueEl.textContent = totalRevenue.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }); }
     function setupControls() { document.getElementById('refreshData').addEventListener('click', refreshData); document.getElementById('updateAll').addEventListener('click', updateAllChangedRows); document.getElementById('startDateFilter').addEventListener('change', applyAllFilters); document.getElementById('endDateFilter').addEventListener('change', applyAllFilters); document.getElementById('clearFilters').addEventListener('click', () => { document.getElementById('startDateFilter').value = ''; document.getElementById('endDateFilter').value = ''; document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => { f.value = ''; }); applyAllFilters(); }); }
     function refreshData() { document.getElementById('refreshData').innerHTML = '<span class="loading"></span> Đang tải...'; document.getElementById('updateAll').disabled = true; loadData(); setTimeout(() => { document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; document.getElementById('updateAll').disabled = false; }, 5000); }
@@ -361,6 +383,10 @@
     let isMouseDown = false; let startCell = null; let endCell = null; function getCellValue(cell) { if (!cell) return ''; const input = cell.querySelector('input, select'); if (input) { return input.value; } return cell.textContent.trim(); } function updateSelection(start, end) { document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected')); if (!start || !end) return; const table = document.querySelector('#tableBody'); const startRowIndex = start.parentElement.rowIndex; const startColIndex = start.cellIndex; const endRowIndex = end.parentElement.rowIndex; const endColIndex = end.cellIndex; const minRow = Math.min(startRowIndex, endRowIndex); const maxRow = Math.max(startRowIndex, endRowIndex); const minCol = Math.min(startColIndex, endColIndex); const maxCol = Math.max(startColIndex, endColIndex); const firstRowAbsIndex = table.rows[0].rowIndex; for (let i = minRow; i <= maxRow; i++) { const row = table.rows[i - firstRowAbsIndex]; if (!row) continue; for (let j = minCol; j <= maxCol; j++) { const cell = row.cells[j]; if (cell) cell.classList.add('cell-selected'); } } }
     function handleCopy(e) { const selectedCells = document.querySelectorAll('td.cell-selected'); if (selectedCells.length === 0) return; e.preventDefault(); const dataGrid = {}; selectedCells.forEach(cell => { const rowIndex = cell.parentElement.rowIndex; const colIndex = cell.cellIndex; if (!dataGrid[rowIndex]) dataGrid[rowIndex] = {}; dataGrid[rowIndex][colIndex] = getCellValue(cell); }); let clipboardData = ''; const sortedRows = Object.keys(dataGrid).sort((a, b) => a - b); sortedRows.forEach(rowIndex => { const rowData = dataGrid[rowIndex]; const sortedCols = Object.keys(rowData).sort((a, b) => a - b); clipboardData += sortedCols.map(colIndex => rowData[colIndex]).join('\t') + '\n'; }); navigator.clipboard.writeText(clipboardData).then(() => { const tableBody = document.getElementById('tableBody'); tableBody.classList.add('copy-flash'); setTimeout(() => tableBody.classList.remove('copy-flash'), 500); }); }
     function setupSelectionEvents() { const tableBody = document.getElementById('tableBody'); tableBody.addEventListener('mousedown', e => { if (e.target.tagName === 'TD') { isMouseDown = true; startCell = e.target; endCell = e.target; updateSelection(startCell, endCell); e.preventDefault(); } }); tableBody.addEventListener('mouseover', e => { if (isMouseDown && e.target.tagName === 'TD') { endCell = e.target; updateSelection(startCell, endCell); } }); document.addEventListener('mouseup', () => { isMouseDown = false; }); document.addEventListener('copy', handleCopy); }
+
+    setupControls();
+    setupSelectionEvents();
+    loadData();
   </script>
 </body>
 </html>
