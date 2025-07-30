@@ -121,8 +121,7 @@
       "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)",
       "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"
     ];
-
-    // ✅ Thêm một danh sách các cột ngày tháng để xử lý tập trung
+    
     const allDateColumns = ["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"];
 
     let allData = [];
@@ -130,7 +129,9 @@
     let changedRows = new Set();
     let currentStaff = null;
     let teamMembers = [];
-
+    
+    // All other functions (getUrlParameter, fetchStaffInfo, showError, handleData, etc.) remain the same...
+    
     function getUrlParameter(name) {
       name = name.replace(/[\[\]]/g, '\\$&');
       const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
@@ -309,12 +310,10 @@
 
         displayColumns.forEach(col => {
           const td = document.createElement('td');
-          // ✅ Thay thế key dự phòng "Thời gian lên đơn" bằng "Ngày lên đơn" để thống nhất
           const unifiedColName = col === "Ngày lên đơn" ? "Ngày lên đơn" : col;
           let value = row[unifiedColName] || row[unifiedColName.replace(/ /g, '_')] || '';
           
           if (allDateColumns.includes(col)) {
-              // Hợp nhất nguồn dữ liệu ngày tháng
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
               value = formatDate(dateSource);
           }
@@ -383,20 +382,36 @@
       }, 5000);
     }
     
-    function reformatDateForSheet(dateString) {
-      if (typeof dateString !== 'string' || dateString.trim() === '') return ''; 
-      // Xử lý định dạng YYYY-MM-DD... (từ sheet)
-      const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (match) {
-        return match[0]; // Trả về YYYY-MM-DD
+    // ✅ NEW VERSION: Hàm reformatDateForSheet mới, mạnh mẽ và an toàn hơn
+    function reformatDateForSheet(value) {
+      // 1. Trả về chuỗi rỗng nếu giá trị là null, undefined, hoặc chuỗi trống
+      if (!value) return '';
+      
+      // 2. Xử lý nếu giá trị là một đối tượng Date hợp lệ
+      if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
+        const yyyy = value.getFullYear();
+        const mm = String(value.getMonth() + 1).padStart(2, '0');
+        const dd = String(value.getDate()).padStart(2, '0');
+        return `${yyyy}-${mm}-${dd}`;
       }
-      // Xử lý định dạng DD/MM/YYYY (từ người dùng nhập)
-      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
-        const parts = dateString.split('/');
-        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+
+      // 3. Xử lý nếu giá trị là một chuỗi
+      if (typeof value === 'string') {
+        // Nếu đã đúng định dạng YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+            return value.substring(0, 10);
+        }
+        // Nếu là định dạng DD/MM/YYYY
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+          const [dd, mm, yyyy] = value.split('/');
+          return `${yyyy}-${mm}-${dd}`;
+        }
       }
-      return dateString;
+
+      // 4. Trả về chuỗi rỗng cho tất cả các trường hợp không hợp lệ khác
+      return '';
     }
+
 
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
@@ -420,8 +435,10 @@
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
         
+        // Bắt đầu với một bản sao hoàn chỉnh của dữ liệu gốc.
         const updatedRowData = { ...originalData };
 
+        // Cập nhật giá trị từ các ô có thể sửa vào bản sao.
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
@@ -429,21 +446,30 @@
             updatedRowData[colName] = valueFromDOM;
         });
 
-        // ✅ FINAL FIX: Chuẩn hóa TẤT CẢ các cột ngày tháng trước khi gửi đi
-        // Điều này đảm bảo các cột không sửa như "Ngày lên đơn" vẫn giữ nguyên giá trị gốc
-        // hoặc được định dạng đúng, tránh bị lỗi thành 1/1/1970.
+        // ✅ FINAL FIX: Chuẩn hóa lại TẤT CẢ các cột ngày tháng trong payload cuối cùng
+        // để đảm bảo định dạng đúng và an toàn.
         allDateColumns.forEach(colName => {
-            // Đặc biệt xử lý cho "Ngày lên đơn" vì có thể có key dự phòng
-            if (colName === "Ngày lên đơn") {
-                const dateSource = updatedRowData["Ngày lên đơn"] || updatedRowData["Thời gian lên đơn"];
-                updatedRowData["Ngày lên đơn"] = reformatDateForSheet(dateSource);
-                // Xóa key dự phòng để payload sạch sẽ
-                delete updatedRowData["Thời gian lên đơn"]; 
-            } else if (updatedRowData.hasOwnProperty(colName)) {
-                updatedRowData[colName] = reformatDateForSheet(updatedRowData[colName]);
-            }
-        });
+            let valueToFormat;
 
+            // Nếu cột là cột có thể sửa (ví dụ: Ngày hẹn đẩy đơn), giá trị đã được cập nhật
+            // từ giao diện vào `updatedRowData`.
+            if (editableCols.includes(colName)) {
+                valueToFormat = updatedRowData[colName];
+            } 
+            // Nếu là cột không thể sửa (ví dụ: Ngày lên đơn, Ngày đóng hàng), ta phải
+            // lấy nguồn từ `originalData` để đảm bảo an toàn tuyệt đối.
+            else {
+                valueToFormat = (colName === "Ngày lên đơn") 
+                    ? (originalData["Ngày lên đơn"] || originalData["Thời gian lên đơn"])
+                    : originalData[colName];
+            }
+            
+            // Áp dụng hàm reformat an toàn cho tất cả.
+            updatedRowData[colName] = reformatDateForSheet(valueToFormat);
+        });
+        
+        // Dọn dẹp key dự phòng để payload gửi đi được sạch sẽ.
+        delete updatedRowData["Thời gian lên đơn"]; 
         rowsToSend.push(updatedRowData);
       });
 
