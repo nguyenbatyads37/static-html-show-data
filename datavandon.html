@@ -258,21 +258,14 @@
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">${message}</td></tr>`;
     }
 
-    // ---------- START: HÀM ĐỊNH DẠNG NGÀY ĐÚNG NHẤT ----------
     function formatDate(dateString) {
         if (!dateString) return '';
         const str = String(dateString);
-
-        // Ưu tiên xử lý chuỗi YYYY-MM-DD trước để tránh bẫy timezone
         if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
             const datePart = str.substring(0, 10);
             const [year, month, day] = datePart.split('-');
-            if (day && month && year) {
-                return `${day}/${month}/${year}`;
-            }
+            if (day && month && year) return `${day}/${month}/${year}`;
         }
-        
-        // Phương án dự phòng cho các định dạng khác (ví dụ: có chữ Z)
         try {
             const date = new Date(str);
             if (isNaN(date.getTime())) return str;
@@ -284,7 +277,6 @@
             return str;
         }
     }
-    // ---------- END: HÀM ĐỊNH DẠNG NGÀY ĐÚNG NHẤT ----------
 
     async function handleData(response) {
       document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
@@ -490,11 +482,26 @@
     }
     
     function reformatDateForSheet(dateString) {
-      if (typeof dateString !== 'string' || !/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
-        return dateString;
+      if (typeof dateString !== 'string') return dateString;
+      
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
+        const parts = dateString.split('/');
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
-      const parts = dateString.split('/');
-      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      
+      // Nếu đã ở định dạng YYYY-MM-DD thì trả về luôn
+      if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+        return dateString.substring(0, 10);
+      }
+      
+      // Nếu là định dạng khác, cố gắng chuyển đổi
+      const formatted = formatDate(dateString); // Chuyển về dd/mm/yyyy
+      if (/^\d{2}\/\d{2}\/\d{4}$/.test(formatted)) {
+        const parts = formatted.split('/');
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+
+      return dateString; // Trả về gốc nếu không thể xử lý
     }
 
     function updateAllChangedRows() {
@@ -522,20 +529,19 @@
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
-            let value;
-            const input = cell.querySelector('select, input');
-            if(input) {
-                value = input.value;
-            } else {
-                value = cell.textContent.trim();
-            }
-            
-            if (colName === "Ngày hẹn đẩy đơn") {
-                value = reformatDateForSheet(value);
-            }
-            
+            let value = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
             updatedRow[colName] = value;
         });
+
+        // ---------- START: CHUẨN HÓA TẤT CẢ CÁC CỘT NGÀY TRƯỚC KHI GỬI ----------
+        const dateColumnsToNormalize = ["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"];
+        dateColumnsToNormalize.forEach(col => {
+            if (updatedRow[col]) {
+                updatedRow[col] = reformatDateForSheet(updatedRow[col]);
+            }
+        });
+        // ---------- END: CHUẨN HÓA TẤT CẢ CÁC CỘT NGÀY TRƯỚC KHI GỬI ----------
+
         rowsToSend.push(updatedRow);
       });
 
