@@ -162,22 +162,18 @@
       container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`;
     }
 
-    // ✅ FIX: Cải thiện hàm format ngày tháng, tránh lỗi timezone
     function formatDate(dateString) {
       if (!dateString || typeof dateString !== 'string') {
         return '';
       }
-      // Tìm định dạng YYYY-MM-DD ở đầu chuỗi (thường từ Google Sheet)
       const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (match) {
         const [, year, month, day] = match;
         return `${day}/${month}/${year}`;
       }
-      // Nếu là định dạng DD/MM/YYYY rồi thì giữ nguyên
       if (/^\d{2}\/\d{2}\/\d{4}/.test(dateString)) {
         return dateString;
       }
-      // Trả về chuỗi gốc nếu không khớp để tránh lỗi
       return dateString;
     }
 
@@ -239,7 +235,6 @@
             dataToFilter = dataToFilter.filter(row => {
                 const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
                 if (!orderDateStr) return false;
-                // Tạo Date object từ chuỗi YYYY-MM-DD để so sánh an toàn
                 const orderDate = new Date(orderDateStr.substring(0, 10));
                 if (isNaN(orderDate.getTime())) return false;
 
@@ -314,7 +309,6 @@
           let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] || '';
           
           if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"].includes(col)) {
-              // ✅ FIX: Luôn dùng hàm formatDate đã được cải thiện
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
               value = formatDate(dateSource);
           }
@@ -334,7 +328,7 @@
               td.appendChild(select);
             } else if (col === "Ngày hẹn đẩy đơn") {
                 const input = document.createElement('input');
-                input.type = 'text'; // Giữ là text để người dùng nhập dd/mm/yyyy
+                input.type = 'text';
                 input.className = 'date-input';
                 input.placeholder = 'dd/mm/yyyy';
                 input.value = value;
@@ -383,24 +377,19 @@
       }, 5000);
     }
     
-    // ✅ FIX: Hàm chuyển đổi ngày tháng từ DD/MM/YYYY sang YYYY-MM-DD an toàn
     function reformatDateForSheet(dateString) {
-      if (typeof dateString !== 'string' || dateString.trim() === '') return dateString;
-      // Nếu người dùng nhập DD/MM/YYYY
+      if (typeof dateString !== 'string' || dateString.trim() === '') return ''; // Trả về rỗng nếu không có gì
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
         const parts = dateString.split('/');
-        // parts[0] is day, parts[1] is month, parts[2] is year
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
-      // Nếu đã ở định dạng YYYY-MM-DD thì trả về luôn
       if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
         return dateString.substring(0, 10);
       }
-      // Trả về giá trị gốc nếu không đúng định dạng mong muốn
-      return dateString;
+      return dateString; // Trả về giá trị gốc nếu định dạng không khớp
     }
-    
-    // ✅ FIX: Hoàn toàn viết lại hàm cập nhật để chỉ gửi các cột được phép sửa
+
+    // ✅ FINAL FIX: Cập nhật hàm để gửi đầy đủ các cột có thể sửa, giữ nguyên giá trị gốc nếu không đổi
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -423,23 +412,25 @@
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
 
-        // Bắt đầu với một object rỗng, chỉ chứa Mã đơn hàng để định danh
+        // Bắt đầu payload với Mã đơn hàng để định danh
         const rowUpdatePayload = {
             "Mã đơn hàng": originalData["Mã đơn hàng"]
         };
 
-        // Chỉ lặp qua các cột có thể chỉnh sửa
+        // Lặp qua TẤT CẢ các cột có thể chỉnh sửa
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
+            
+            // Lấy giá trị HIỆN TẠI từ ô trên giao diện (dù đã sửa hay chưa)
             let value = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
             
-            // Xử lý đặc biệt cho cột ngày tháng có thể sửa
+            // Xử lý đặc biệt cho cột ngày tháng để gửi về đúng định dạng
             if (colName === "Ngày hẹn đẩy đơn") {
                 value = reformatDateForSheet(value);
             }
 
-            // Thêm cột và giá trị mới vào payload
+            // Thêm cột và giá trị vào payload
             rowUpdatePayload[colName] = value;
         });
 
@@ -457,7 +448,7 @@
 
       fetch(POST_URL, {
         method: 'POST',
-        mode: 'no-cors', // no-cors vẫn được sử dụng vì Google Script thường phản hồi như vậy
+        mode: 'no-cors',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
       })
