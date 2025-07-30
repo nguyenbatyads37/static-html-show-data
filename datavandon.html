@@ -130,8 +130,6 @@
     let currentStaff = null;
     let teamMembers = [];
     
-    // All other functions (getUrlParameter, fetchStaffInfo, showError, handleData, etc.) remain the same...
-    
     function getUrlParameter(name) {
       name = name.replace(/[\[\]]/g, '\\$&');
       const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
@@ -382,37 +380,25 @@
       }, 5000);
     }
     
-    // ✅ NEW VERSION: Hàm reformatDateForSheet mới, mạnh mẽ và an toàn hơn
     function reformatDateForSheet(value) {
-      // 1. Trả về chuỗi rỗng nếu giá trị là null, undefined, hoặc chuỗi trống
       if (!value) return '';
-      
-      // 2. Xử lý nếu giá trị là một đối tượng Date hợp lệ
       if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
         const yyyy = value.getFullYear();
         const mm = String(value.getMonth() + 1).padStart(2, '0');
         const dd = String(value.getDate()).padStart(2, '0');
         return `${yyyy}-${mm}-${dd}`;
       }
-
-      // 3. Xử lý nếu giá trị là một chuỗi
       if (typeof value === 'string') {
-        // Nếu đã đúng định dạng YYYY-MM-DD
-        if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-            return value.substring(0, 10);
-        }
-        // Nếu là định dạng DD/MM/YYYY
+        if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.substring(0, 10);
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
           const [dd, mm, yyyy] = value.split('/');
           return `${yyyy}-${mm}-${dd}`;
         }
       }
-
-      // 4. Trả về chuỗi rỗng cho tất cả các trường hợp không hợp lệ khác
       return '';
     }
 
-
+    // ✅ FINAL VERSION: Logic đơn giản, an toàn và chính xác nhất.
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -435,41 +421,35 @@
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
         
-        // Bắt đầu với một bản sao hoàn chỉnh của dữ liệu gốc.
+        // 1. Bắt đầu với một bản sao hoàn chỉnh của dữ liệu gốc.
+        //    Tất cả các cột không được sửa (bao gồm "Ngày lên đơn") sẽ được bảo toàn 100%.
         const updatedRowData = { ...originalData };
 
-        // Cập nhật giá trị từ các ô có thể sửa vào bản sao.
+        // 2. CHỈ lặp qua các cột được phép sửa (`editableCols`).
         editableCols.forEach(colName => {
-            const colIndex = displayColumns.indexOf(colName);
-            const cell = tr.cells[colIndex];
-            let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
-            updatedRowData[colName] = valueFromDOM;
-        });
+          const colIndex = displayColumns.indexOf(colName);
+          const cell = tr.cells[colIndex];
+          let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
 
-        // ✅ FINAL FIX: Chuẩn hóa lại TẤT CẢ các cột ngày tháng trong payload cuối cùng
-        // để đảm bảo định dạng đúng và an toàn.
-        allDateColumns.forEach(colName => {
-            let valueToFormat;
-
-            // Nếu cột là cột có thể sửa (ví dụ: Ngày hẹn đẩy đơn), giá trị đã được cập nhật
-            // từ giao diện vào `updatedRowData`.
-            if (editableCols.includes(colName)) {
-                valueToFormat = updatedRowData[colName];
-            } 
-            // Nếu là cột không thể sửa (ví dụ: Ngày lên đơn, Ngày đóng hàng), ta phải
-            // lấy nguồn từ `originalData` để đảm bảo an toàn tuyệt đối.
-            else {
-                valueToFormat = (colName === "Ngày lên đơn") 
-                    ? (originalData["Ngày lên đơn"] || originalData["Thời gian lên đơn"])
-                    : originalData[colName];
-            }
-            
-            // Áp dụng hàm reformat an toàn cho tất cả.
-            updatedRowData[colName] = reformatDateForSheet(valueToFormat);
+          // 3. Nếu cột đang sửa là cột ngày tháng ("Ngày hẹn đẩy đơn"), 
+          //    thì định dạng lại nó.
+          if (colName === "Ngày hẹn đẩy đơn") {
+            valueFromDOM = reformatDateForSheet(valueFromDOM);
+          }
+          
+          // 4. Cập nhật giá trị đã lấy từ giao diện vào bản sao.
+          updatedRowData[colName] = valueFromDOM;
         });
         
-        // Dọn dẹp key dự phòng để payload gửi đi được sạch sẽ.
-        delete updatedRowData["Thời gian lên đơn"]; 
+        // 5. Dọn dẹp key dự phòng "Thời gian lên đơn" nếu có, để payload gửi đi được sạch sẽ.
+        //    Logic này không còn thực sự cần thiết với cách làm mới, nhưng giữ lại để phòng vệ.
+        if (updatedRowData.hasOwnProperty("Thời gian lên đơn")) {
+             delete updatedRowData["Thời gian lên đơn"];
+        }
+
+        // 6. Thêm payload đã hoàn thiện vào danh sách gửi đi.
+        //    Payload này chứa tất cả các cột, nhưng chỉ các cột có thể sửa là đã được cập nhật.
+        //    Các cột khác giữ nguyên giá trị gốc.
         rowsToSend.push(updatedRowData);
       });
 
