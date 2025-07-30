@@ -258,35 +258,33 @@
       container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">${message}</td></tr>`;
     }
 
-    // ---------- START: HÀM ĐỊNH DẠNG NGÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN CHỈNH ----------
+    // ---------- START: HÀM ĐỊNH DẠNG NGÀY ĐÚNG NHẤT ----------
     function formatDate(dateString) {
         if (!dateString) return '';
+        const str = String(dateString);
+
+        // Ưu tiên xử lý chuỗi YYYY-MM-DD trước để tránh bẫy timezone
+        if (/^\d{4}-\d{2}-\d{2}/.test(str)) {
+            const datePart = str.substring(0, 10);
+            const [year, month, day] = datePart.split('-');
+            if (day && month && year) {
+                return `${day}/${month}/${year}`;
+            }
+        }
+        
+        // Phương án dự phòng cho các định dạng khác (ví dụ: có chữ Z)
         try {
-            let date;
-            // Nếu chuỗi có dạng YYYY-MM-DD (có thể có hoặc không có phần giờ),
-            // ta thêm 'T00:00:00.000Z' để ép nó thành giờ UTC, tránh trình duyệt tự hiểu thành giờ địa phương.
-            if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateString)) {
-                date = new Date(dateString.slice(0, 10) + 'T00:00:00.000Z');
-            } else {
-                // Với các định dạng khác, để new Date() tự xử lý
-                date = new Date(dateString);
-            }
-
-            if (isNaN(date.getTime())) {
-                return String(dateString).split('T')[0];
-            }
-
-            // LUÔN LUÔN dùng getUTC... để lấy ngày/tháng/năm.
-            // Điều này đảm bảo ta đang đọc ngày tháng theo đúng giờ UTC, không bị lệch múi giờ.
+            const date = new Date(str);
+            if (isNaN(date.getTime())) return str;
             const day = String(date.getUTCDate()).padStart(2, '0');
             const month = String(date.getUTCMonth() + 1).padStart(2, '0');
             const year = date.getUTCFullYear();
             return `${day}/${month}/${year}`;
         } catch (e) {
-            return String(dateString);
+            return str;
         }
     }
-    // ---------- END: HÀM ĐỊNH DẠNG NGÀY ĐÃ ĐƯỢC CẬP NHẬT HOÀN CHỈNH ----------
+    // ---------- END: HÀM ĐỊNH DẠNG NGÀY ĐÚNG NHẤT ----------
 
     async function handleData(response) {
       document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
@@ -550,7 +548,7 @@
       fetch(POST_URL, {
         method: 'POST', 
         mode: 'cors', 
-        headers: { 'Content-Type': 'application/x-urlencoded' },
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
       })
       .then(r => r.json())
