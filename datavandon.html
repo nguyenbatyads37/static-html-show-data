@@ -23,7 +23,7 @@
       padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
     }
     .table-wrapper {
-      position: relative; overflow: auto; max-height: 70vh; /* Giảm chiều cao một chút để có không gian cho bảng đếm */
+      position: relative; overflow: auto; max-height: 70vh;
       background: white; border-radius: 0 0 5px 5px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
@@ -42,6 +42,7 @@
     th .filter-input, th .filter-select {
       width: 100%; margin-top: 5px; padding: 4px;
       font-size: 12px; border: 1px solid #ccc; border-radius: 3px;
+      box-sizing: border-box;
     }
     td.editable { background-color: #fffbe8; }
     td select, td input.date-input {
@@ -84,7 +85,6 @@
         background-color: #f0f0f0;
     }
 
-    /* ✅ CSS CHO BẢNG ĐẾM */
     .summary-dashboard {
       display: flex;
       gap: 20px;
@@ -124,7 +124,7 @@
     </div>
     <div class="right-controls">
       <div class="date-filter">
-        <span>Lọc ngày lên đơn từ:</span>
+        <span>Lọc khoảng ngày:</span>
         <input type="date" id="startDateFilter" />
         <span>Đến:</span>
         <input type="date" id="endDateFilter" />
@@ -133,7 +133,6 @@
     </div>
   </div>
 
-  <!-- ✅ BẢNG TÓM TẮT -->
   <div class="summary-dashboard">
     <div class="summary-item">
       <span class="summary-label">Tổng số đơn:</span>
@@ -153,6 +152,7 @@
   </div>
 
   <script>
+    // ... (toàn bộ các hằng số và biến khởi tạo giữ nguyên) ...
     const POST_URL = 'https://script.google.com/macros/s/AKfycbywmvvC_1x5rIS6keNkADH2yPbxNLCqshCwyx_-gP2yFYpyygfS1l-Z5i1EAlXrIfzL/exec';
 
     const editableCols = [
@@ -181,6 +181,7 @@
     let currentStaff = null;
     let teamMembers = [];
 
+    // ... (các hàm getUrlParameter, fetchStaffInfo, showError, formatDate, handleData, filterDataByStaff giữ nguyên) ...
     function getUrlParameter(name) {
       name = name.replace(/[\[\]]/g, '\\$&');
       const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
@@ -269,6 +270,8 @@
       });
     }
 
+
+    // ✅ HÀM ĐÃ CẬP NHẬT
     function applyAllFilters() {
         let dataToFilter = [...staffFilteredData];
         const tableHead = document.getElementById('tableHead');
@@ -278,6 +281,7 @@
             return;
         };
 
+        // 1. Lọc theo khoảng ngày (trên cùng)
         const startDate = document.getElementById('startDateFilter').value;
         const endDate = document.getElementById('endDateFilter').value;
         if (startDate || endDate) {
@@ -288,18 +292,32 @@
             dataToFilter = dataToFilter.filter(row => {
                 const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
                 if (!orderDateStr) return false;
-                
                 const orderDate = new Date(orderDateStr);
                 if (isNaN(orderDate.getTime())) return false;
-
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
                 return true;
             });
         }
+        
+        // 2. Lọc theo ngày cụ thể trong cột
+        const columnDateFilter = document.getElementById('ngayLenDonColumnFilter');
+        const columnDateValue = columnDateFilter ? columnDateFilter.value : null;
+        if (columnDateValue) {
+            dataToFilter = dataToFilter.filter(row => {
+                const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
+                if (!orderDateStr) return false;
+                // So sánh chuỗi YYYY-MM-DD từ dữ liệu với giá trị của bộ lọc
+                return orderDateStr.startsWith(columnDateValue);
+            });
+        }
 
+        // 3. Lọc theo các cột còn lại
         const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
         filters.forEach(filter => {
+            // Bỏ qua bộ lọc ngày trong cột vì đã xử lý ở trên
+            if (filter.id === 'ngayLenDonColumnFilter') return;
+
             const value = filter.value.toLowerCase().trim();
             if (value === '') return;
             const colName = filter.dataset.column;
@@ -309,12 +327,11 @@
             });
         });
         
-        // ✅ CẬP NHẬT BẢNG ĐẾM
         updateSummary(dataToFilter);
-
         renderTableBody(dataToFilter);
     }
 
+    // ✅ HÀM ĐÃ CẬP NHẬT
     function renderHeader() {
         const header = document.getElementById('tableHead');
         header.innerHTML = '';
@@ -324,31 +341,36 @@
             th.textContent = colName;
             if (colName === "Mã đơn hàng") th.classList.add('fixed-column');
             
-            if (colName === "Ngày lên đơn") {
-                tr.appendChild(th);
-                return;
-            }
-
+            th.appendChild(document.createElement('br')); // Tạo khoảng trống cho bộ lọc
+            
             let filterElement;
-            if (dropdownCols[colName]) {
+
+            if (colName === "Ngày lên đơn") {
+                // Tạo bộ lọc ngày riêng cho cột này
+                filterElement = document.createElement('input');
+                filterElement.type = 'date';
+                filterElement.id = 'ngayLenDonColumnFilter'; // ID để xác định
+                filterElement.className = 'filter-input';
+                filterElement.addEventListener('change', applyAllFilters);
+            } else if (dropdownCols[colName]) {
+                // Tạo bộ lọc dropdown
                 filterElement = document.createElement('select');
                 filterElement.className = 'filter-select';
+                filterElement.add(new Option('(Tất cả)', ''));
                 dropdownCols[colName].forEach(opt => {
-                    const option = document.createElement('option');
-                    option.value = opt;
-                    option.textContent = opt || '(Tất cả)';
-                    filterElement.appendChild(option);
+                    if(opt) filterElement.add(new Option(opt, opt));
                 });
                 filterElement.addEventListener('change', applyAllFilters);
             } else {
+                // Tạo bộ lọc văn bản
                 filterElement = document.createElement('input');
                 filterElement.type = 'text';
                 filterElement.className = 'filter-input';
                 filterElement.placeholder = `Lọc ${colName}...`;
                 filterElement.addEventListener('input', applyAllFilters);
             }
+            
             filterElement.dataset.column = colName;
-            th.appendChild(document.createElement('br'));
             th.appendChild(filterElement);
             tr.appendChild(th);
         });
@@ -360,7 +382,6 @@
       container.innerHTML = '';
       if (data.length === 0) {
         showError(`Không có đơn hàng nào khớp với bộ lọc.`);
-        // ✅ RESET BẢNG ĐẾM KHI KHÔNG CÓ DỮ LIỆU
         updateSummary([]); 
         return;
       }
@@ -418,8 +439,7 @@
         container.appendChild(tr);
       });
     }
-
-    // ✅ HÀM MỚI ĐỂ CẬP NHẬT BẢNG ĐẾM
+    
     function updateSummary(data) {
       const totalOrdersEl = document.getElementById('totalOrders');
       const totalRevenueEl = document.getElementById('totalRevenue');
@@ -441,19 +461,28 @@
       totalRevenueEl.textContent = totalRevenue.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
     }
 
+    // ✅ HÀM ĐÃ CẬP NHẬT
     function setupControls() {
       document.getElementById('refreshData').addEventListener('click', refreshData);
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
       document.getElementById('startDateFilter').addEventListener('change', applyAllFilters);
       document.getElementById('endDateFilter').addEventListener('change', applyAllFilters);
       document.getElementById('clearFilters').addEventListener('click', () => {
+          // Xóa bộ lọc khoảng ngày
           document.getElementById('startDateFilter').value = '';
           document.getElementById('endDateFilter').value = '';
-          document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => f.value = '');
+          // Xóa bộ lọc ngày trong cột
+          const columnDateFilter = document.getElementById('ngayLenDonColumnFilter');
+          if (columnDateFilter) columnDateFilter.value = '';
+          // Xóa các bộ lọc khác
+          document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => {
+            if (f.id !== 'ngayLenDonColumnFilter') f.value = '';
+          });
           applyAllFilters();
       });
     }
 
+    // ... (các hàm refreshData, reformatDateForSheet, updateAllChangedRows, loadData giữ nguyên) ...
     function refreshData() {
       document.getElementById('refreshData').innerHTML = '<span class="loading"></span> Đang tải...';
       document.getElementById('updateAll').disabled = true;
