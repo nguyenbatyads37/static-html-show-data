@@ -162,22 +162,22 @@
       container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`;
     }
 
-    // ✅ HÀM ĐÃ ĐƯỢC CẬP NHẬT ĐỂ SỬA LỖI MÚI GIỜ
+    // ✅ FIX: Cải thiện hàm format ngày tháng, tránh lỗi timezone
     function formatDate(dateString) {
-      // 1. Trả về rỗng nếu không có dữ liệu
       if (!dateString || typeof dateString !== 'string') {
         return '';
       }
-      // 2. Tìm kiếm định dạng YYYY-MM-DD ở đầu chuỗi.
+      // Tìm định dạng YYYY-MM-DD ở đầu chuỗi (thường từ Google Sheet)
       const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      // 3. Nếu tìm thấy, chỉ cần sắp xếp lại các phần tử
       if (match) {
-        const year = match[1];
-        const month = match[2];
-        const day = match[3];
+        const [, year, month, day] = match;
         return `${day}/${month}/${year}`;
       }
-      // 4. Nếu không khớp, trả về chuỗi gốc để tránh lỗi
+      // Nếu là định dạng DD/MM/YYYY rồi thì giữ nguyên
+      if (/^\d{2}\/\d{2}\/\d{4}/.test(dateString)) {
+        return dateString;
+      }
+      // Trả về chuỗi gốc nếu không khớp để tránh lỗi
       return dateString;
     }
 
@@ -239,8 +239,9 @@
             dataToFilter = dataToFilter.filter(row => {
                 const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
                 if (!orderDateStr) return false;
-                const orderDate = new Date(orderDateStr);
-                 if (isNaN(orderDate.getTime())) return false;
+                // Tạo Date object từ chuỗi YYYY-MM-DD để so sánh an toàn
+                const orderDate = new Date(orderDateStr.substring(0, 10));
+                if (isNaN(orderDate.getTime())) return false;
 
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
@@ -312,8 +313,8 @@
           const td = document.createElement('td');
           let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] || '';
           
-          // Sử dụng hàm formatDate cho tất cả các cột ngày tháng
           if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"].includes(col)) {
+              // ✅ FIX: Luôn dùng hàm formatDate đã được cải thiện
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
               value = formatDate(dateSource);
           }
@@ -333,7 +334,7 @@
               td.appendChild(select);
             } else if (col === "Ngày hẹn đẩy đơn") {
                 const input = document.createElement('input');
-                input.type = 'text';
+                input.type = 'text'; // Giữ là text để người dùng nhập dd/mm/yyyy
                 input.className = 'date-input';
                 input.placeholder = 'dd/mm/yyyy';
                 input.value = value;
@@ -382,18 +383,24 @@
       }, 5000);
     }
     
+    // ✅ FIX: Hàm chuyển đổi ngày tháng từ DD/MM/YYYY sang YYYY-MM-DD an toàn
     function reformatDateForSheet(dateString) {
       if (typeof dateString !== 'string' || dateString.trim() === '') return dateString;
+      // Nếu người dùng nhập DD/MM/YYYY
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
         const parts = dateString.split('/');
+        // parts[0] is day, parts[1] is month, parts[2] is year
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
+      // Nếu đã ở định dạng YYYY-MM-DD thì trả về luôn
       if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
         return dateString.substring(0, 10);
       }
+      // Trả về giá trị gốc nếu không đúng định dạng mong muốn
       return dateString;
     }
-
+    
+    // ✅ FIX: Hoàn toàn viết lại hàm cập nhật để chỉ gửi các cột được phép sửa
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -408,6 +415,7 @@
 
       const rowsToSend = [];
       const tableBody = document.getElementById('tableBody');
+      
       changedRows.forEach(rowIndex => {
         const originalData = staffFilteredData[rowIndex];
         if (!originalData) return;
@@ -415,31 +423,33 @@
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
 
-        const updatedRow = { ...originalData };
+        // Bắt đầu với một object rỗng, chỉ chứa Mã đơn hàng để định danh
+        const rowUpdatePayload = {
+            "Mã đơn hàng": originalData["Mã đơn hàng"]
+        };
 
+        // Chỉ lặp qua các cột có thể chỉnh sửa
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
             let value = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
-            updatedRow[colName] = value;
+            
+            // Xử lý đặc biệt cho cột ngày tháng có thể sửa
+            if (colName === "Ngày hẹn đẩy đơn") {
+                value = reformatDateForSheet(value);
+            }
+
+            // Thêm cột và giá trị mới vào payload
+            rowUpdatePayload[colName] = value;
         });
-        
-        updatedRow["Ngày hẹn đẩy đơn"] = reformatDateForSheet(updatedRow["Ngày hẹn đẩy đơn"]);
 
-        const orderDateSource = updatedRow["Thời gian lên đơn"] || updatedRow["Ngày lên đơn"];
-        if (orderDateSource) {
-            const formattedDate = reformatDateForSheet(orderDateSource);
-            updatedRow["Ngày lên đơn"] = formattedDate;
-            updatedRow["Thời gian lên đơn"] = formattedDate;
-        }
-
-        rowsToSend.push(updatedRow);
+        rowsToSend.push(rowUpdatePayload);
       });
 
       if (rowsToSend.length === 0) {
-        statusEl.textContent = 'Không có dòng nào để gửi.';
+        statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.';
         setTimeout(() => {
-            updateBtn.removeChild(statusEl);
+            if(statusEl.parentElement) updateBtn.removeChild(statusEl);
             updateBtn.disabled = false;
         }, 3000);
         return;
@@ -447,7 +457,7 @@
 
       fetch(POST_URL, {
         method: 'POST',
-        mode: 'no-cors',
+        mode: 'no-cors', // no-cors vẫn được sử dụng vì Google Script thường phản hồi như vậy
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
       })
@@ -457,7 +467,7 @@
               alert(`Cập nhật thành công ${rowsToSend.length} dòng. Vui lòng nhấn "Load dữ liệu" để xem thay đổi.`);
               changedRows.clear();
               document.querySelectorAll('.highlight').forEach(cell => cell.classList.remove('highlight'));
-              updateBtn.removeChild(statusEl);
+              if(statusEl.parentElement) updateBtn.removeChild(statusEl);
               updateBtn.disabled = false;
           }, 2000);
       })
@@ -465,7 +475,7 @@
         statusEl.textContent = 'Lỗi mạng: ' + e.message;
         statusEl.classList.add('error-status');
         setTimeout(() => {
-            updateBtn.removeChild(statusEl);
+            if(statusEl.parentElement) updateBtn.removeChild(statusEl);
             updateBtn.disabled = false;
         }, 4000);
       });
