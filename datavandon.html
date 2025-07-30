@@ -23,7 +23,7 @@
       padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
     }
     .table-wrapper {
-      position: relative; overflow: auto; max-height: 75vh;
+      position: relative; overflow: auto; max-height: 70vh; /* Giảm chiều cao một chút để có không gian cho bảng đếm */
       background: white; border-radius: 0 0 5px 5px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
@@ -70,6 +70,46 @@
     th.fixed-column { z-index: 30; background-color: #3498db; }
     td.fixed-column { background-color: #f9f9f9; }
     #userInfo { font-weight: bold; margin-right: 15px; }
+    
+    td {
+      transition: background-color 0.2s ease-in-out;
+    }
+    tbody tr:hover td {
+      background-color: #fdf5d4;
+    }
+    tbody tr:hover td.highlight {
+      background-color: #ffeb3b !important;
+    }
+    tbody tr:hover td.fixed-column {
+        background-color: #f0f0f0;
+    }
+
+    /* ✅ CSS CHO BẢNG ĐẾM */
+    .summary-dashboard {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 15px;
+      background-color: #ffffff;
+      padding: 15px 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    .summary-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .summary-label {
+      font-size: 14px;
+      color: #7f8c8d;
+      margin-bottom: 5px;
+    }
+    .summary-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #2c3e50;
+      transition: color 0.3s ease;
+    }
   </style>
 </head>
 <body>
@@ -84,14 +124,27 @@
     </div>
     <div class="right-controls">
       <div class="date-filter">
-        <span>Lọc từ ngày:</span>
+        <span>Lọc ngày lên đơn từ:</span>
         <input type="date" id="startDateFilter" />
-        <span>Đến ngày:</span>
+        <span>Đến:</span>
         <input type="date" id="endDateFilter" />
       </div>
       <button id="clearFilters" class="clear-filter-btn">Xóa bộ lọc</button>
     </div>
   </div>
+
+  <!-- ✅ BẢNG TÓM TẮT -->
+  <div class="summary-dashboard">
+    <div class="summary-item">
+      <span class="summary-label">Tổng số đơn:</span>
+      <span class="summary-value" id="totalOrders">0</span>
+    </div>
+    <div class="summary-item">
+      <span class="summary-label">Tổng doanh số (VNĐ):</span>
+      <span class="summary-value" id="totalRevenue">0</span>
+    </div>
+  </div>
+  
   <div class="table-wrapper" id="tableContainer">
     <table>
       <thead id="tableHead"></thead>
@@ -162,22 +215,15 @@
       container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`;
     }
 
-    // ✅ HÀM ĐÃ ĐƯỢC CẬP NHẬT ĐỂ SỬA LỖI MÚI GIỜ
     function formatDate(dateString) {
-      // 1. Trả về rỗng nếu không có dữ liệu
-      if (!dateString || typeof dateString !== 'string') {
-        return '';
-      }
-      // 2. Tìm kiếm định dạng YYYY-MM-DD ở đầu chuỗi.
+      if (!dateString || typeof dateString !== 'string') return '';
       const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      // 3. Nếu tìm thấy, chỉ cần sắp xếp lại các phần tử
       if (match) {
         const year = match[1];
         const month = match[2];
         const day = match[3];
         return `${day}/${month}/${year}`;
       }
-      // 4. Nếu không khớp, trả về chuỗi gốc để tránh lỗi
       return dateString;
     }
 
@@ -226,21 +272,25 @@
     function applyAllFilters() {
         let dataToFilter = [...staffFilteredData];
         const tableHead = document.getElementById('tableHead');
-        if (!tableHead.querySelector('tr')) return;
+        if (!tableHead.querySelector('tr')) {
+            updateSummary(dataToFilter);
+            renderTableBody(dataToFilter);
+            return;
+        };
 
         const startDate = document.getElementById('startDateFilter').value;
         const endDate = document.getElementById('endDateFilter').value;
         if (startDate || endDate) {
             const start = startDate ? new Date(startDate) : null;
             const end = endDate ? new Date(endDate) : null;
-            if(start) start.setHours(0,0,0,0);
-            if(end) end.setHours(23,59,59,999);
+            if(end) end.setHours(23, 59, 59, 999);
 
             dataToFilter = dataToFilter.filter(row => {
                 const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
                 if (!orderDateStr) return false;
+                
                 const orderDate = new Date(orderDateStr);
-                 if (isNaN(orderDate.getTime())) return false;
+                if (isNaN(orderDate.getTime())) return false;
 
                 if (start && orderDate < start) return false;
                 if (end && orderDate > end) return false;
@@ -258,6 +308,10 @@
                  return cellValue.toString().toLowerCase().includes(value);
             });
         });
+        
+        // ✅ CẬP NHẬT BẢNG ĐẾM
+        updateSummary(dataToFilter);
+
         renderTableBody(dataToFilter);
     }
 
@@ -270,6 +324,11 @@
             th.textContent = colName;
             if (colName === "Mã đơn hàng") th.classList.add('fixed-column');
             
+            if (colName === "Ngày lên đơn") {
+                tr.appendChild(th);
+                return;
+            }
+
             let filterElement;
             if (dropdownCols[colName]) {
                 filterElement = document.createElement('select');
@@ -301,6 +360,8 @@
       container.innerHTML = '';
       if (data.length === 0) {
         showError(`Không có đơn hàng nào khớp với bộ lọc.`);
+        // ✅ RESET BẢNG ĐẾM KHI KHÔNG CÓ DỮ LIỆU
+        updateSummary([]); 
         return;
       }
       data.forEach((row) => {
@@ -312,7 +373,6 @@
           const td = document.createElement('td');
           let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] || '';
           
-          // Sử dụng hàm formatDate cho tất cả các cột ngày tháng
           if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"].includes(col)) {
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
               value = formatDate(dateSource);
@@ -357,6 +417,28 @@
         });
         container.appendChild(tr);
       });
+    }
+
+    // ✅ HÀM MỚI ĐỂ CẬP NHẬT BẢNG ĐẾM
+    function updateSummary(data) {
+      const totalOrdersEl = document.getElementById('totalOrders');
+      const totalRevenueEl = document.getElementById('totalRevenue');
+
+      if (!data || data.length === 0) {
+        totalOrdersEl.textContent = '0';
+        totalRevenueEl.textContent = '0';
+        return;
+      }
+
+      const totalOrders = data.length;
+      const totalRevenue = data.reduce((sum, row) => {
+        const revenueString = row["Tổng tiền VNĐ"] || '0';
+        const revenueNumber = parseFloat(String(revenueString).replace(/[^0-9.-]+/g,""));
+        return sum + (isNaN(revenueNumber) ? 0 : revenueNumber);
+      }, 0);
+
+      totalOrdersEl.textContent = totalOrders.toLocaleString('vi-VN');
+      totalRevenueEl.textContent = totalRevenue.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
     }
 
     function setupControls() {
