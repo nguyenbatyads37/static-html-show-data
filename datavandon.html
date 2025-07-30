@@ -122,6 +122,9 @@
       "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"
     ];
 
+    // ✅ Thêm một danh sách các cột ngày tháng để xử lý tập trung
+    const allDateColumns = ["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"];
+
     let allData = [];
     let staffFilteredData = [];
     let changedRows = new Set();
@@ -306,9 +309,12 @@
 
         displayColumns.forEach(col => {
           const td = document.createElement('td');
-          let value = row[col] !== undefined ? row[col] : row[col.replace(/ /g, '_')] || '';
+          // ✅ Thay thế key dự phòng "Thời gian lên đơn" bằng "Ngày lên đơn" để thống nhất
+          const unifiedColName = col === "Ngày lên đơn" ? "Ngày lên đơn" : col;
+          let value = row[unifiedColName] || row[unifiedColName.replace(/ /g, '_')] || '';
           
-          if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"].includes(col)) {
+          if (allDateColumns.includes(col)) {
+              // Hợp nhất nguồn dữ liệu ngày tháng
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
               value = formatDate(dateSource);
           }
@@ -379,17 +385,19 @@
     
     function reformatDateForSheet(dateString) {
       if (typeof dateString !== 'string' || dateString.trim() === '') return ''; 
+      // Xử lý định dạng YYYY-MM-DD... (từ sheet)
+      const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return match[0]; // Trả về YYYY-MM-DD
+      }
+      // Xử lý định dạng DD/MM/YYYY (từ người dùng nhập)
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateString)) {
         const parts = dateString.split('/');
         return `${parts[2]}-${parts[1]}-${parts[0]}`;
       }
-      if (/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
-        return dateString.substring(0, 10);
-      }
       return dateString;
     }
 
-    // ✅ FINAL SOLUTION: Cập nhật hàm để đảm bảo an toàn dữ liệu tuyệt đối
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -406,50 +414,47 @@
       const tableBody = document.getElementById('tableBody');
       
       changedRows.forEach(rowIndex => {
-        // 1. Lấy dữ liệu gốc của hàng làm nền tảng (source of truth).
         const originalData = staffFilteredData[rowIndex];
         if (!originalData) return;
 
-        // 2. Lấy thẻ <tr> tương ứng trên giao diện để đọc các giá trị người dùng đã thay đổi.
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
-
-        // 3. Tạo một BẢN SAO của dữ liệu gốc. Mọi thay đổi sẽ được áp dụng trên bản sao này.
-        // Điều này đảm bảo tất cả các cột không được sửa sẽ giữ nguyên giá trị gốc.
+        
         const updatedRowData = { ...originalData };
 
-        // 4. Lặp qua các cột CÓ THỂ CHỈNH SỬA và cập nhật giá trị từ giao diện vào BẢN SAO.
         editableCols.forEach(colName => {
             const colIndex = displayColumns.indexOf(colName);
             const cell = tr.cells[colIndex];
-            
-            // Lấy giá trị hiện tại từ ô trên giao diện (select, input, hoặc ô có thể sửa).
             let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
-            
-            // Cập nhật giá trị vào bản sao.
             updatedRowData[colName] = valueFromDOM;
         });
 
-        // 5. Chuẩn hóa lại định dạng ngày tháng trên BẢN SAO trước khi gửi.
-        updatedRowData["Ngày hẹn đẩy đơn"] = reformatDateForSheet(updatedRowData["Ngày hẹn đẩy đơn"]);
+        // ✅ FINAL FIX: Chuẩn hóa TẤT CẢ các cột ngày tháng trước khi gửi đi
+        // Điều này đảm bảo các cột không sửa như "Ngày lên đơn" vẫn giữ nguyên giá trị gốc
+        // hoặc được định dạng đúng, tránh bị lỗi thành 1/1/1970.
+        allDateColumns.forEach(colName => {
+            // Đặc biệt xử lý cho "Ngày lên đơn" vì có thể có key dự phòng
+            if (colName === "Ngày lên đơn") {
+                const dateSource = updatedRowData["Ngày lên đơn"] || updatedRowData["Thời gian lên đơn"];
+                updatedRowData["Ngày lên đơn"] = reformatDateForSheet(dateSource);
+                // Xóa key dự phòng để payload sạch sẽ
+                delete updatedRowData["Thời gian lên đơn"]; 
+            } else if (updatedRowData.hasOwnProperty(colName)) {
+                updatedRowData[colName] = reformatDateForSheet(updatedRowData[colName]);
+            }
+        });
 
-        // 6. Thêm BẢN SAO đã hoàn thiện vào danh sách gửi đi.
-        // Payload này chứa đầy đủ các cột, đảm bảo không có gì bị xóa nhầm.
         rowsToSend.push(updatedRowData);
       });
 
       if (rowsToSend.length === 0) {
         statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.';
-        setTimeout(() => {
-            if(statusEl.parentElement) updateBtn.removeChild(statusEl);
-            updateBtn.disabled = false;
-        }, 3000);
+        setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000);
         return;
       }
 
       fetch(POST_URL, {
-        method: 'POST',
-        mode: 'no-cors',
+        method: 'POST', mode: 'no-cors',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) })
       })
@@ -466,10 +471,7 @@
       .catch(e => {
         statusEl.textContent = 'Lỗi mạng: ' + e.message;
         statusEl.classList.add('error-status');
-        setTimeout(() => {
-            if(statusEl.parentElement) updateBtn.removeChild(statusEl);
-            updateBtn.disabled = false;
-        }, 4000);
+        setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000);
       });
     }
 
