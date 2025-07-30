@@ -166,34 +166,32 @@
 
     function formatDate(dateString) {
       if (!dateString || typeof dateString !== 'string') {
-        return '';
+        return { display: '', original: '' };
       }
       
-      // Xử lý chuỗi có 'Z' ở cuối (ISO 8601)
+      // Lưu giá trị gốc
+      const originalValue = dateString;
+      
+      // Xử lý hiển thị
+      let displayValue = dateString;
       if (dateString.endsWith('Z')) {
         try {
           const dateObj = new Date(dateString);
-          if (isNaN(dateObj.getTime())) return dateString;
-          
-          const day = String(dateObj.getDate()).padStart(2, '0');
-          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-          const year = dateObj.getFullYear();
-          return `${day}/${month}/${year}`;
+          if (!isNaN(dateObj.getTime())) {
+            const day = String(dateObj.getDate()).padStart(2, '0');
+            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const year = dateObj.getFullYear();
+            displayValue = `${day}/${month}/${year}`;
+          }
         } catch (e) {
-          return dateString;
+          // Giữ nguyên giá trị gốc nếu có lỗi
         }
+      } else if (/^(\d{4})-(\d{2})-(\d{2})/.test(dateString)) {
+        const [, year, month, day] = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        displayValue = `${day}/${month}/${year}`;
       }
       
-      // Xử lý các định dạng khác
-      const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
-      if (match) {
-        const [, year, month, day] = match;
-        return `${day}/${month}/${year}`;
-      }
-      if (/^\d{2}\/\d{2}\/\d{4}/.test(dateString)) {
-        return dateString;
-      }
-      return dateString;
+      return { display: displayValue, original: originalValue };
     }
 
     async function handleData(response) {
@@ -255,7 +253,6 @@
                 const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
                 if (!orderDateStr) return false;
                 
-                // Xử lý chuỗi có 'Z'
                 const dateStr = orderDateStr.endsWith('Z') ? orderDateStr.split('T')[0] : orderDateStr;
                 const orderDate = new Date(dateStr);
                 if (isNaN(orderDate.getTime())) return false;
@@ -333,7 +330,9 @@
           
           if (allDateColumns.includes(col)) {
               const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
-              value = formatDate(dateSource);
+              const formattedDate = formatDate(dateSource);
+              value = formattedDate.display;
+              td.dataset.originalValue = formattedDate.original;
           }
 
           if (col === "Mã đơn hàng") td.classList.add('fixed-column');
@@ -399,28 +398,6 @@
           document.getElementById('updateAll').disabled = false;
       }, 5000);
     }
-    
-    function reformatDateForSheet(value) {
-      if (!value) return '';
-      
-      // Nếu là định dạng dd/mm/yyyy thì chuyển thành yyyy-mm-dd
-      if (typeof value === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
-        const [dd, mm, yyyy] = value.split('/');
-        return `${yyyy}-${mm}-${dd}`;
-      }
-      
-      // Nếu là chuỗi có 'Z' (ISO 8601) thì giữ nguyên
-      if (typeof value === 'string' && value.endsWith('Z')) {
-        return value.split('T')[0]; // Lấy phần ngày trước chữ T
-      }
-      
-      // Nếu là định dạng yyyy-mm-dd thì giữ nguyên
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
-        return value;
-      }
-      
-      return ''; // Trường hợp không nhận dạng được
-    }
 
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
@@ -451,11 +428,21 @@
           const cell = tr.cells[colIndex];
           let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
           
-          if (colName === "Ngày hẹn đẩy đơn" || colName === "Ngày lên đơn") {
-            valueFromDOM = reformatDateForSheet(valueFromDOM);
+          // Đối với cột ngày, lấy giá trị gốc từ dataset
+          if (colName === "Ngày hẹn đẩy đơn") {
+            valueFromDOM = cell.querySelector('input')?.value || '';
           }
           
           updatedRowData[colName] = valueFromDOM;
+        });
+
+        // Giữ nguyên giá trị gốc của các cột ngày
+        allDateColumns.forEach(colName => {
+          if (colName !== "Ngày hẹn đẩy đơn") { // Trừ cột ngày có thể chỉnh sửa
+            const colIndex = displayColumns.indexOf(colName);
+            const cell = tr.cells[colIndex];
+            updatedRowData[colName] = cell.dataset.originalValue || '';
+          }
         });
         
         // Chỉ xóa cột dự phòng nếu có
