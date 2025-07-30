@@ -70,6 +70,16 @@
     th.fixed-column { z-index: 30; background-color: #3498db; }
     td.fixed-column { background-color: #f9f9f9; }
     #userInfo { font-weight: bold; margin-right: 15px; }
+    .summary-info {
+      background: #e3f2fd; padding: 8px 15px; border-radius: 4px;
+      margin-left: 10px; font-weight: bold;
+    }
+    tr.selected {
+      background-color: #e3f2fd !important;
+    }
+    tr.selected td {
+      background-color: #e3f2fd !important;
+    }
   </style>
 </head>
 <body>
@@ -81,6 +91,7 @@
         <span class="refresh-icon">↻</span> Load dữ liệu
       </button>
       <button id="updateAll">Cập nhật tất cả</button>
+      <div id="summaryInfo" class="summary-info"></div>
     </div>
     <div class="right-controls">
       <div class="date-filter">
@@ -104,7 +115,7 @@
 
     const editableCols = [
         "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền",
-        "Ngày hẹn đẩy đơn", "Loại thanh toán", "Tên người chuyển khoản"
+        "Ngày hẹn đẩy đơn" /* Removed "Loại thanh toán", "Tên người chuyển khoản" */
     ];
 
     const dropdownCols = {
@@ -129,6 +140,7 @@
     let changedRows = new Set();
     let currentStaff = null;
     let teamMembers = [];
+    let selectedRows = new Set();
     
     function getUrlParameter(name) {
       name = name.replace(/[\[\]]/g, '\\$&');
@@ -236,6 +248,25 @@
       });
     }
 
+    function updateSummaryInfo(filteredData) {
+      const totalOrders = filteredData.length;
+      const totalAmount = filteredData.reduce((sum, row) => {
+        const amountStr = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || '0';
+        const amount = parseFloat(amountStr.replace(/[^\d.-]/g, '')) || 0;
+        return sum + amount;
+      }, 0);
+      
+      const formattedAmount = new Intl.NumberFormat('vi-VN', { 
+        style: 'currency', 
+        currency: 'VND' 
+      }).format(totalAmount);
+      
+      document.getElementById('summaryInfo').innerHTML = `
+        Tổng đơn: <span style="color: #e74c3c;">${totalOrders}</span> | 
+        Tổng tiền: <span style="color: #27ae60;">${formattedAmount}</span>
+      `;
+    }
+
     function applyAllFilters() {
         let dataToFilter = [...staffFilteredData];
         const tableHead = document.getElementById('tableHead');
@@ -273,6 +304,8 @@
                  return cellValue.toString().toLowerCase().includes(value);
             });
         });
+        
+        updateSummaryInfo(dataToFilter);
         renderTableBody(dataToFilter);
     }
 
@@ -322,6 +355,25 @@
         const originalRowIndex = staffFilteredData.indexOf(row);
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = originalRowIndex;
+
+        // Add row selection handler
+        tr.addEventListener('click', (e) => {
+          if (e.ctrlKey || e.metaKey) {
+            // Ctrl+Click to select multiple rows
+            tr.classList.toggle('selected');
+            if (tr.classList.contains('selected')) {
+              selectedRows.add(originalRowIndex);
+            } else {
+              selectedRows.delete(originalRowIndex);
+            }
+          } else {
+            // Regular click - clear all selections and select this row
+            document.querySelectorAll('#tableBody tr.selected').forEach(r => r.classList.remove('selected'));
+            selectedRows.clear();
+            tr.classList.add('selected');
+            selectedRows.add(originalRowIndex);
+          }
+        });
 
         displayColumns.forEach(col => {
           const td = document.createElement('td');
@@ -387,6 +439,52 @@
           document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => f.value = '');
           applyAllFilters();
       });
+
+      // Add Ctrl+C copy support
+      document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedRows.size > 0) {
+          e.preventDefault();
+          copySelectedRows();
+        }
+      });
+    }
+
+    function copySelectedRows() {
+      const rows = [];
+      const headers = displayColumns;
+      
+      // Add headers as first row
+      rows.push(headers.join('\t'));
+      
+      // Add selected rows data
+      selectedRows.forEach(rowIndex => {
+        const rowData = staffFilteredData[rowIndex];
+        const rowValues = headers.map(header => {
+          const value = rowData[header] || rowData[header.replace(/ /g, '_')] || '';
+          return typeof value === 'string' ? value.replace(/\t|\n/g, ' ') : value;
+        });
+        rows.push(rowValues.join('\t'));
+      });
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(rows.join('\n'))
+        .then(() => {
+          const tempMsg = document.createElement('div');
+          tempMsg.textContent = `Đã sao chép ${selectedRows.size} dòng vào clipboard`;
+          tempMsg.style.position = 'fixed';
+          tempMsg.style.bottom = '20px';
+          tempMsg.style.right = '20px';
+          tempMsg.style.backgroundColor = '#2ecc71';
+          tempMsg.style.color = 'white';
+          tempMsg.style.padding = '10px';
+          tempMsg.style.borderRadius = '4px';
+          tempMsg.style.zIndex = '1000';
+          document.body.appendChild(tempMsg);
+          setTimeout(() => tempMsg.remove(), 2000);
+        })
+        .catch(err => {
+          console.error('Failed to copy:', err);
+        });
     }
 
     function refreshData() {
