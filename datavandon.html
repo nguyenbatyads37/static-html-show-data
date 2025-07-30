@@ -100,7 +100,8 @@
   </div>
 
   <script>
-    const POST_URL = 'https://script.google.com/macros/s/AKfycbwwKIKqKd6pX4T2HcaDqnQFfNHXXog2w7ZNNhBy3BaSR7YLf64DL4nnid3EWpHSfaBC/exec';
+    // ĐÃ THAY LINK MỚI TẠI ĐÂY
+    const POST_URL = 'https://script.google.com/macros/s/AKfycbyYqGSOIOsrZT-FlLu16zR0n00IEDAFK8lUrwPoXJ48hy1yWPZhRq4gYWwyK9AxbIoo/exec';
 
     const editableCols = [
         "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền",
@@ -168,6 +169,23 @@
       if (!dateString || typeof dateString !== 'string') {
         return '';
       }
+      
+      // Xử lý chuỗi có 'Z' ở cuối (ISO 8601)
+      if (dateString.endsWith('Z')) {
+        try {
+          const dateObj = new Date(dateString);
+          if (isNaN(dateObj.getTime())) return dateString;
+          
+          const day = String(dateObj.getDate()).padStart(2, '0');
+          const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+          const year = dateObj.getFullYear();
+          return `${day}/${month}/${year}`;
+        } catch (e) {
+          return dateString;
+        }
+      }
+      
+      // Xử lý các định dạng khác
       const match = dateString.match(/^(\d{4})-(\d{2})-(\d{2})/);
       if (match) {
         const [, year, month, day] = match;
@@ -237,7 +255,10 @@
             dataToFilter = dataToFilter.filter(row => {
                 const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
                 if (!orderDateStr) return false;
-                const orderDate = new Date(orderDateStr.substring(0, 10));
+                
+                // Xử lý chuỗi có 'Z'
+                const dateStr = orderDateStr.endsWith('Z') ? orderDateStr.split('T')[0] : orderDateStr;
+                const orderDate = new Date(dateStr);
                 if (isNaN(orderDate.getTime())) return false;
 
                 if (start && orderDate < start) return false;
@@ -382,16 +403,26 @@
     
     function reformatDateForSheet(value) {
       if (!value) return '';
-      if (typeof value === 'string') {
-        if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
-          const [dd, mm, yyyy] = value.split('/');
-          return `${yyyy}-${mm}-${dd}`;
-        }
+      
+      // Nếu là định dạng dd/mm/yyyy thì chuyển thành yyyy-mm-dd
+      if (typeof value === 'string' && /^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+        const [dd, mm, yyyy] = value.split('/');
+        return `${yyyy}-${mm}-${dd}`;
       }
-      return ''; // Chỉ chuyển đổi dd/mm/yyyy, các định dạng khác không quan tâm
+      
+      // Nếu là chuỗi có 'Z' (ISO 8601) thì giữ nguyên
+      if (typeof value === 'string' && value.endsWith('Z')) {
+        return value.split('T')[0]; // Lấy phần ngày trước chữ T
+      }
+      
+      // Nếu là định dạng yyyy-mm-dd thì giữ nguyên
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}/.test(value)) {
+        return value;
+      }
+      
+      return ''; // Trường hợp không nhận dạng được
     }
 
-    // ✅ FINAL, SIMPLIFIED LOGIC
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -421,15 +452,14 @@
           const cell = tr.cells[colIndex];
           let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
           
-          if (colName === "Ngày hẹn đẩy đơn") {
+          if (colName === "Ngày hẹn đẩy đơn" || colName === "Ngày lên đơn") {
             valueFromDOM = reformatDateForSheet(valueFromDOM);
           }
           
           updatedRowData[colName] = valueFromDOM;
         });
         
-        // ✅ NEW STEP: Xóa cột "Ngày lên đơn" khỏi payload để khớp với logic của doPost
-        // Điều này ngăn chặn mọi khả năng ghi đè ngược giá trị này về sheet.
+        // Xóa cột "Ngày lên đơn" khỏi payload để khớp với logic của doPost
         delete updatedRowData["Ngày lên đơn"];
         delete updatedRowData["Thời gian lên đơn"]; // Xóa cả key dự phòng cho chắc chắn
         
