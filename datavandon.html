@@ -100,7 +100,7 @@
   </div>
 
   <script>
-    const POST_URL = 'https://script.google.com/macros/s/AKfycbx5HfY1HaUPNGkjcX3b5Gtq5WBxHymqayxtREL5_RuccnT8mHgf6-l41kHKOAxECmkp/exec';
+    const POST_URL = 'https://script.google.com/macros/s/AKfycbywmvvC_1x5rIS6keNkADH2yPbxNLCqshCwyx_-gP2yFYpyygfS1l-Z5i1EAlXrIfzL/exec';
 
     const editableCols = [
         "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền",
@@ -382,23 +382,16 @@
     
     function reformatDateForSheet(value) {
       if (!value) return '';
-      if (Object.prototype.toString.call(value) === '[object Date]' && !isNaN(value)) {
-        const yyyy = value.getFullYear();
-        const mm = String(value.getMonth() + 1).padStart(2, '0');
-        const dd = String(value.getDate()).padStart(2, '0');
-        return `${yyyy}-${mm}-${dd}`;
-      }
       if (typeof value === 'string') {
-        if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.substring(0, 10);
         if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
           const [dd, mm, yyyy] = value.split('/');
           return `${yyyy}-${mm}-${dd}`;
         }
       }
-      return '';
+      return ''; // Chỉ chuyển đổi dd/mm/yyyy, các định dạng khác không quan tâm
     }
 
-    // ✅ FINAL VERSION: Logic đơn giản, an toàn và chính xác nhất.
+    // ✅ FINAL, SIMPLIFIED LOGIC
     function updateAllChangedRows() {
       if (changedRows.size === 0) {
         alert('Không có thay đổi nào để cập nhật');
@@ -421,35 +414,25 @@
         const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if(!tr) return;
         
-        // 1. Bắt đầu với một bản sao hoàn chỉnh của dữ liệu gốc.
-        //    Tất cả các cột không được sửa (bao gồm "Ngày lên đơn") sẽ được bảo toàn 100%.
         const updatedRowData = { ...originalData };
 
-        // 2. CHỈ lặp qua các cột được phép sửa (`editableCols`).
         editableCols.forEach(colName => {
           const colIndex = displayColumns.indexOf(colName);
           const cell = tr.cells[colIndex];
           let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim();
-
-          // 3. Nếu cột đang sửa là cột ngày tháng ("Ngày hẹn đẩy đơn"), 
-          //    thì định dạng lại nó.
+          
           if (colName === "Ngày hẹn đẩy đơn") {
             valueFromDOM = reformatDateForSheet(valueFromDOM);
           }
           
-          // 4. Cập nhật giá trị đã lấy từ giao diện vào bản sao.
           updatedRowData[colName] = valueFromDOM;
         });
         
-        // 5. Dọn dẹp key dự phòng "Thời gian lên đơn" nếu có, để payload gửi đi được sạch sẽ.
-        //    Logic này không còn thực sự cần thiết với cách làm mới, nhưng giữ lại để phòng vệ.
-        if (updatedRowData.hasOwnProperty("Thời gian lên đơn")) {
-             delete updatedRowData["Thời gian lên đơn"];
-        }
-
-        // 6. Thêm payload đã hoàn thiện vào danh sách gửi đi.
-        //    Payload này chứa tất cả các cột, nhưng chỉ các cột có thể sửa là đã được cập nhật.
-        //    Các cột khác giữ nguyên giá trị gốc.
+        // ✅ NEW STEP: Xóa cột "Ngày lên đơn" khỏi payload để khớp với logic của doPost
+        // Điều này ngăn chặn mọi khả năng ghi đè ngược giá trị này về sheet.
+        delete updatedRowData["Ngày lên đơn"];
+        delete updatedRowData["Thời gian lên đơn"]; // Xóa cả key dự phòng cho chắc chắn
+        
         rowsToSend.push(updatedRowData);
       });
 
