@@ -172,6 +172,7 @@
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbywmvvC_1x5rIS6keNkADH2yPbxNLCqshCwyx_-gP2yFYpyygfS1l-Z5i1EAlXrIfzL/exec';
 
+    // ✅ ĐÃ THÊM CÁC CỘT BẠN YÊU CẦU VÀO ĐÂY
     const editableCols = [
         "Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền",
         "Ngày hẹn đẩy đơn", "Loại thanh toán", "Tên người chuyển khoản"
@@ -180,7 +181,9 @@
     const dropdownCols = {
         "Kết quả Check": ["", "OK", "Huỷ", "Treo", "Vận đơn XL", "Đợi hàng", "Khách hẹn"],
         "Trạng thái giao hàng NB": ["", "Giao Thành Công", "Đang Giao", "Chưa Giao", "Hủy", "Hoàn", "chờ check", "Giao không thành công", "Bom_Thất Lạc"],
-        "Trạng thái thu tiền": ["", "Có bill", "Có bill 1 phần", "Bom_bùng_chặn", "Hẹn Thanh Toán", "Hoàn Hàng", "Khó Đòi", "Không nhận được hàng", "Không PH dưới 3N", "Thanh toán phí hoàn", "KPH nhiều ngày"]
+        "Trạng thái thu tiền": ["", "Có bill", "Có bill 1 phần", "Bom_bùng_chặn", "Hẹn Thanh Toán", "Hoàn Hàng", "Khó Đòi", "Không nhận được hàng", "Không PH dưới 3N", "Thanh toán phí hoàn", "KPH nhiều ngày"],
+        // ✅ ĐÃ THÊM MENU THẢ XUỐNG CHO "Loại thanh toán" (bạn có thể thay đổi các tùy chọn này)
+        "Loại thanh toán": ["", "Chuyển khoản", "Tiền mặt", "Khác"]
     };
 
     const displayColumns = [
@@ -193,19 +196,11 @@
     ];
     
     const statusStyles = {
-      // Kết quả Check
-      'OK': { color: '#27ae60', fontWeight: 'bold' },
-      'Huỷ': { color: '#e74c3c', fontWeight: 'bold' },
-      'Treo': { color: '#f39c12', fontWeight: 'bold' },
-      // Trạng thái giao hàng NB
-      'Giao Thành Công': { color: '#2ecc71', fontWeight: 'bold' },
-      'Hủy': { color: '#e74c3c', fontWeight: 'bold' },
-      'Hoàn': { color: '#e67e22', fontWeight: 'bold' },
-      'Bom_Thất Lạc': { color: '#c0392b', fontWeight: 'bold' },
-      // Trạng thái thu tiền
-      'Có bill': { color: '#2980b9', fontWeight: 'bold' },
-      'Bom_bùng_chặn': { color: '#c0392b', fontWeight: 'bold' },
-      'Khó Đòi': { color: '#e74c3c', fontWeight: 'bold' },
+      'OK': { color: '#27ae60', fontWeight: 'bold' }, 'Huỷ': { color: '#e74c3c', fontWeight: 'bold' },
+      'Treo': { color: '#f39c12', fontWeight: 'bold' }, 'Giao Thành Công': { color: '#2ecc71', fontWeight: 'bold' },
+      'Hủy': { color: '#e74c3c', fontWeight: 'bold' }, 'Hoàn': { color: '#e67e22', fontWeight: 'bold' },
+      'Bom_Thất Lạc': { color: '#c0392b', fontWeight: 'bold' }, 'Có bill': { color: '#2980b9', fontWeight: 'bold' },
+      'Bom_bùng_chặn': { color: '#c0392b', fontWeight: 'bold' }, 'Khó Đòi': { color: '#e74c3c', fontWeight: 'bold' },
     };
 
     function applySelectStyles(selectElement) {
@@ -215,11 +210,7 @@
         selectElement.style.fontWeight = style.fontWeight;
     }
 
-    let allData = [];
-    let staffFilteredData = [];
-    let changedRows = new Set();
-    let currentStaff = null;
-    let teamMembers = [];
+    let allData = [], staffFilteredData = [], changedRows = new Set(), currentStaff = null, teamMembers = [];
 
     function getUrlParameter(name) { name = name.replace(/[\[\]]/g, '\\$&'); const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'); const results = regex.exec(window.location.href); if (!results) return null; if (!results[2]) return ''; return decodeURIComponent(results[2].replace(/\+/g, ' ')); }
     async function fetchStaffInfo(idns) { try { const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; const response = await fetch(staffApiUrl, { cache: "no-store" }); if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên'); const data = await response.json(); const staffMember = data.find(staff => String(staff.idnv) === idns); if (!staffMember) throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`); if (staffMember.vi_tri === "Leader") { const teamName = staffMember.team; teamMembers = data.filter(member => member.team === teamName).map(member => member.ho_va_ten); } return staffMember; } catch (error) { showError(error.message); throw error; } }
@@ -230,7 +221,6 @@
     
     function applyAllFilters() {
         let dataToFilter = [...staffFilteredData];
-        
         const startDateStr = document.getElementById('startDateFilter').value;
         const endDateStr = document.getElementById('endDateFilter').value;
         const startNum = startDateStr ? parseInt(startDateStr.replace(/-/g, ''), 10) : null;
@@ -256,8 +246,8 @@
                 const colName = filter.dataset.column;
                 dataToFilter = dataToFilter.filter(row => {
                     let cellValue = row[colName] !== undefined ? row[colName] : row[colName.replace(/ /g, '_')] || '';
-                    if (colName === "Ngày lên đơn") {
-                        cellValue = formatDate(cellValue); // So sánh với định dạng dd/mm/yyyy đã hiển thị
+                    if (colName === "Ngày lên đơn") { // ✅ So sánh bộ lọc văn bản với ngày đã được định dạng dd/mm/yyyy
+                        cellValue = formatDate(cellValue);
                     }
                     return cellValue.toString().toLowerCase().includes(value);
                 });
