@@ -16,10 +16,11 @@
       display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center;
       background: #fff; padding: 10px 15px; border-radius: 5px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100; flex-wrap: wrap;
+      gap: 15px;
     }
-    .controls .left-controls, .controls .right-controls { display: flex; align-items: center; gap: 10px; }
+    .controls .left-controls, .controls .right-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;}
     .date-filter { display: flex; align-items: center; gap: 5px; }
-    .date-filter input[type="date"] {
+    .date-filter input[type="date"], .controls .filter-input {
       padding: 5px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;
     }
     .table-wrapper {
@@ -107,6 +108,21 @@
       color: #e74c3c;
       font-weight: bold;
     }
+    .summary-staff-header td {
+        background-color: #ecf0f1 !important;
+        font-weight: bold;
+        text-align: left !important;
+        color: #2c3e50;
+    }
+    .summary-staff-total td {
+        background-color: #bdc3c7 !important;
+        font-weight: bold;
+    }
+    .summary-grand-total td {
+        background-color: #34495e !important;
+        font-weight: bold;
+        color: white;
+    }
     /* Always show horizontal scrollbar */
     ::-webkit-scrollbar {
       -webkit-appearance: none;
@@ -137,6 +153,8 @@
         <span>Đến ngày:</span>
         <input type="date" id="endDateFilter" />
       </div>
+      <input type="text" id="productFilter" placeholder="Lọc theo sản phẩm..." class="filter-input" />
+      <input type="text" id="marketFilter" placeholder="Lọc theo thị trường (City)..." class="filter-input" />
       <button id="clearFilters" class="clear-filter-btn">Xóa bộ lọc</button>
     </div>
   </div>
@@ -146,7 +164,7 @@
     <table class="summary-table">
       <thead>
         <tr>
-          <th rowspan="2">Tên vận đơn</th>
+          <th rowspan="2">NV Vận đơn</th>
           <th rowspan="2">Đơn vị vận chuyển</th>
           <th colspan="2">Đã Thanh Toán (có bill)</th>
           <th rowspan="2">Bill 1 phần</th>
@@ -244,9 +262,9 @@
       }
     }
     
-    function showError(message) {
-      const container = document.getElementById('tableBody');
-      const colCount = displayColumns.length > 0 ? displayColumns.length : 10;
+    function showError(message, containerId = 'tableBody') {
+      const container = document.getElementById(containerId);
+      const colCount = containerId === 'tableBody' ? (displayColumns.length > 0 ? displayColumns.length : 10) : 17;
       container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`;
     }
 
@@ -299,19 +317,11 @@
         Tổng tiền: <span style="color: #27ae60;">${formattedAmount}</span>
       `;
       
-      // Update the detailed summary table
       updateDetailedSummaryTable(filteredData);
     }
-
-    function updateDetailedSummaryTable(filteredData) {
-      // Group by shipping company
-      const shippingCompanies = {};
-      
-      filteredData.forEach(row => {
-        const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định";
-        
-        if (!shippingCompanies[shippingCompany]) {
-          shippingCompanies[shippingCompany] = {
+    
+    function createEmptyStats() {
+        return {
             "Đã Thanh Toán (có bill)": { count: 0, amount: 0 },
             "Bill 1 phần": { count: 0, amount: 0 },
             "Tổng đơn lên nội bộ": { count: 0, amount: 0 },
@@ -323,268 +333,137 @@
             "Hoàn": { count: 0, amount: 0 },
             "chờ check": { count: 0, amount: 0 },
             "Trống trạng thái": { count: 0, amount: 0 }
-          };
-        }
-        
-        const companyData = shippingCompanies[shippingCompany];
-        const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0;
-        let numericAmount = 0;
-        
-        if (typeof amountValue === 'string') {
-          numericAmount = parseFloat(amountValue.replace(/[^\d.-]/g, '')) || 0;
-        } else {
-          numericAmount = amountValue;
-        }
-
-        // Check payment status
-        const paymentStatus = row["Trạng thái thu tiền"] || "";
-        if (paymentStatus.includes("Có bill")) {
-          companyData["Đã Thanh Toán (có bill)"].count++;
-          companyData["Đã Thanh Toán (có bill)"].amount += numericAmount;
-        } else if (paymentStatus.includes("Có bill 1 phần")) {
-          companyData["Bill 1 phần"].count++;
-          companyData["Bill 1 phần"].amount += numericAmount;
-        }
-
-        // Check delivery status
-        const deliveryStatus = row["Trạng thái giao hàng NB"] || "";
-        if (deliveryStatus.includes("Giao Thành Công")) {
-          companyData["Giao Thành Công"].count++;
-          companyData["Giao Thành Công"].amount += numericAmount;
-        } else if (deliveryStatus.includes("Đang Giao")) {
-          companyData["Đang Giao"].count++;
-          companyData["Đang Giao"].amount += numericAmount;
-        } else if (deliveryStatus.includes("Chưa Giao")) {
-          companyData["Chưa Giao"].count++;
-          companyData["Chưa Giao"].amount += numericAmount;
-        } else if (deliveryStatus.includes("Hoàn")) {
-          companyData["Hoàn"].count++;
-          companyData["Hoàn"].amount += numericAmount;
-        } else if (deliveryStatus.includes("chờ check")) {
-          companyData["chờ check"].count++;
-          companyData["chờ check"].amount += numericAmount;
-        } else if (deliveryStatus === "") {
-          companyData["Trống trạng thái"].count++;
-          companyData["Trống trạng thái"].amount += numericAmount;
-        }
-
-        // Count all orders
-        companyData["Tổng đơn lên nội bộ"].count++;
-        companyData["Tổng đơn lên nội bộ"].amount += numericAmount;
-
-        // Count orders eligible for shipping (example condition)
-        if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) {
-          companyData["Tổng đơn đủ đkien đẩy vh"].count++;
-          companyData["Tổng đơn đủ đkien đẩy vh"].amount += numericAmount;
-        }
-
-        // Count orders actually shipped (example condition)
-        if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) {
-          companyData["Tổng đơn lên vận hành"].count++;
-          companyData["Tổng đơn lên vận hành"].amount += numericAmount;
-        }
-      });
-
-      // Update the summary table
-      const summaryTableBody = document.getElementById('summaryTableBody');
-      summaryTableBody.innerHTML = '';
-
-      // Create rows for each shipping company
-      Object.entries(shippingCompanies).forEach(([company, companyData]) => {
-        const tr = document.createElement('tr');
-        
-        // Staff name
-        const staffNameTd = document.createElement('td');
-        staffNameTd.textContent = currentStaff ? currentStaff.ho_va_ten : 'Tất cả';
-        tr.appendChild(staffNameTd);
-
-        // Shipping company
-        const companyTd = document.createElement('td');
-        companyTd.textContent = company;
-        tr.appendChild(companyTd);
-
-        // Paid bills
-        const paidCountTd = document.createElement('td');
-        paidCountTd.textContent = companyData["Đã Thanh Toán (có bill)"].count;
-        tr.appendChild(paidCountTd);
-        
-        const paidAmountTd = document.createElement('td');
-        paidAmountTd.textContent = new Intl.NumberFormat('vi-VN', { 
-          style: 'currency', 
-          currency: 'VND' 
-        }).format(companyData["Đã Thanh Toán (có bill)"].amount);
-        tr.appendChild(paidAmountTd);
-
-        // Partial bills
-        const partialTd = document.createElement('td');
-        partialTd.textContent = companyData["Bill 1 phần"].count;
-        tr.appendChild(partialTd);
-
-        // Total internal orders
-        const totalInternalTd = document.createElement('td');
-        totalInternalTd.textContent = companyData["Tổng đơn lên nội bộ"].count;
-        tr.appendChild(totalInternalTd);
-
-        // Eligible for shipping
-        const eligibleTd = document.createElement('td');
-        eligibleTd.textContent = companyData["Tổng đơn đủ đkien đẩy vh"].count;
-        tr.appendChild(eligibleTd);
-
-        // Actually shipped
-        const shippedTd = document.createElement('td');
-        shippedTd.textContent = companyData["Tổng đơn lên vận hành"].count;
-        tr.appendChild(shippedTd);
-
-        // Shipping rate
-        const shippingRate = companyData["Tổng đơn lên nội bộ"].count > 0 ? 
-          (companyData["Tổng đơn lên vận hành"].count / companyData["Tổng đơn lên nội bộ"].count * 100).toFixed(2) + '%' : '0%';
-        
-        const shippingRateTd = document.createElement('td');
-        shippingRateTd.textContent = shippingRate;
-        shippingRateTd.className = parseFloat(shippingRate) > 50 ? 'positive' : 'negative';
-        tr.appendChild(shippingRateTd);
-
-        // Delivery status counts
-        tr.appendChild(createTd(companyData["Giao Thành Công"].count));
-        tr.appendChild(createTd(companyData["Đang Giao"].count));
-        tr.appendChild(createTd(companyData["Chưa Giao"].count));
-        tr.appendChild(createTd(companyData["Hoàn"].count));
-        tr.appendChild(createTd(companyData["chờ check"].count));
-        tr.appendChild(createTd(companyData["Trống trạng thái"].count));
-
-        // Payment success rate
-        const paymentSuccessRate = companyData["Giao Thành Công"].count > 0 ? 
-          (companyData["Đã Thanh Toán (có bill)"].count / companyData["Giao Thành Công"].count * 100).toFixed(2) + '%' : '0%';
-        
-        const paymentRateTd = document.createElement('td');
-        paymentRateTd.textContent = paymentSuccessRate;
-        paymentRateTd.className = parseFloat(paymentSuccessRate) > 50 ? 'positive' : 'negative';
-        tr.appendChild(paymentRateTd);
-
-        // Shipping success rate
-        const shippingSuccessRate = companyData["Tổng đơn lên vận hành"].count > 0 ? 
-          (companyData["Giao Thành Công"].count / companyData["Tổng đơn lên vận hành"].count * 100).toFixed(2) + '%' : '0%';
-        
-        const feeRateTd = document.createElement('td');
-        feeRateTd.textContent = shippingSuccessRate;
-        feeRateTd.className = parseFloat(shippingSuccessRate) > 50 ? 'positive' : 'negative';
-        tr.appendChild(feeRateTd);
-
-        summaryTableBody.appendChild(tr);
-      });
-
-      // Add total row if multiple companies
-      if (Object.keys(shippingCompanies).length > 1) {
-        const totalData = {
-          "Đã Thanh Toán (có bill)": { count: 0, amount: 0 },
-          "Bill 1 phần": { count: 0, amount: 0 },
-          "Tổng đơn lên nội bộ": { count: 0, amount: 0 },
-          "Tổng đơn đủ đkien đẩy vh": { count: 0, amount: 0 },
-          "Tổng đơn lên vận hành": { count: 0, amount: 0 },
-          "Giao Thành Công": { count: 0, amount: 0 },
-          "Đang Giao": { count: 0, amount: 0 },
-          "Chưa Giao": { count: 0, amount: 0 },
-          "Hoàn": { count: 0, amount: 0 },
-          "chờ check": { count: 0, amount: 0 },
-          "Trống trạng thái": { count: 0, amount: 0 }
         };
-
-        Object.values(shippingCompanies).forEach(companyData => {
-          Object.keys(totalData).forEach(key => {
-            totalData[key].count += companyData[key].count;
-            totalData[key].amount += companyData[key].amount;
-          });
-        });
-
-        const tr = document.createElement('tr');
-        tr.style.fontWeight = 'bold';
-        tr.style.backgroundColor = '#f5f5f5';
-        
-        // Staff name
-        const staffNameTd = document.createElement('td');
-        staffNameTd.textContent = 'Tổng cộng';
-        tr.appendChild(staffNameTd);
-
-        // Shipping company
-        const companyTd = document.createElement('td');
-        companyTd.textContent = 'Tất cả';
-        tr.appendChild(companyTd);
-
-        // Paid bills
-        const paidCountTd = document.createElement('td');
-        paidCountTd.textContent = totalData["Đã Thanh Toán (có bill)"].count;
-        tr.appendChild(paidCountTd);
-        
-        const paidAmountTd = document.createElement('td');
-        paidAmountTd.textContent = new Intl.NumberFormat('vi-VN', { 
-          style: 'currency', 
-          currency: 'VND' 
-        }).format(totalData["Đã Thanh Toán (có bill)"].amount);
-        tr.appendChild(paidAmountTd);
-
-        // Partial bills
-        const partialTd = document.createElement('td');
-        partialTd.textContent = totalData["Bill 1 phần"].count;
-        tr.appendChild(partialTd);
-
-        // Total internal orders
-        const totalInternalTd = document.createElement('td');
-        totalInternalTd.textContent = totalData["Tổng đơn lên nội bộ"].count;
-        tr.appendChild(totalInternalTd);
-
-        // Eligible for shipping
-        const eligibleTd = document.createElement('td');
-        eligibleTd.textContent = totalData["Tổng đơn đủ đkien đẩy vh"].count;
-        tr.appendChild(eligibleTd);
-
-        // Actually shipped
-        const shippedTd = document.createElement('td');
-        shippedTd.textContent = totalData["Tổng đơn lên vận hành"].count;
-        tr.appendChild(shippedTd);
-
-        // Shipping rate
-        const shippingRate = totalData["Tổng đơn lên nội bộ"].count > 0 ? 
-          (totalData["Tổng đơn lên vận hành"].count / totalData["Tổng đơn lên nội bộ"].count * 100).toFixed(2) + '%' : '0%';
-        
-        const shippingRateTd = document.createElement('td');
-        shippingRateTd.textContent = shippingRate;
-        shippingRateTd.className = parseFloat(shippingRate) > 50 ? 'positive' : 'negative';
-        tr.appendChild(shippingRateTd);
-
-        // Delivery status counts
-        tr.appendChild(createTd(totalData["Giao Thành Công"].count));
-        tr.appendChild(createTd(totalData["Đang Giao"].count));
-        tr.appendChild(createTd(totalData["Chưa Giao"].count));
-        tr.appendChild(createTd(totalData["Hoàn"].count));
-        tr.appendChild(createTd(totalData["chờ check"].count));
-        tr.appendChild(createTd(totalData["Trống trạng thái"].count));
-
-        // Payment success rate
-        const paymentSuccessRate = totalData["Giao Thành Công"].count > 0 ? 
-          (totalData["Đã Thanh Toán (có bill)"].count / totalData["Giao Thành Công"].count * 100).toFixed(2) + '%' : '0%';
-        
-        const paymentRateTd = document.createElement('td');
-        paymentRateTd.textContent = paymentSuccessRate;
-        paymentRateTd.className = parseFloat(paymentSuccessRate) > 50 ? 'positive' : 'negative';
-        tr.appendChild(paymentRateTd);
-
-        // Shipping success rate
-        const shippingSuccessRate = totalData["Tổng đơn lên vận hành"].count > 0 ? 
-          (totalData["Giao Thành Công"].count / totalData["Tổng đơn lên vận hành"].count * 100).toFixed(2) + '%' : '0%';
-        
-        const feeRateTd = document.createElement('td');
-        feeRateTd.textContent = shippingSuccessRate;
-        feeRateTd.className = parseFloat(shippingSuccessRate) > 50 ? 'positive' : 'negative';
-        tr.appendChild(feeRateTd);
-
-        summaryTableBody.appendChild(tr);
-      }
     }
 
-    function createTd(content) {
-      const td = document.createElement('td');
-      td.textContent = content;
-      return td;
+    function updateDetailedSummaryTable(filteredData) {
+        const summaryTableBody = document.getElementById('summaryTableBody');
+        summaryTableBody.innerHTML = '';
+
+        if (filteredData.length === 0) {
+            showError('Không có dữ liệu thống kê.', 'summaryTableBody');
+            return;
+        }
+
+        const staffStats = {};
+        const grandTotal = createEmptyStats();
+
+        filteredData.forEach(row => {
+            const staffName = row["NV Vận đơn"] || row["NV_Vận_đơn"] || "Chưa có NV";
+            const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định";
+            
+            if (!staffStats[staffName]) {
+                staffStats[staffName] = { _total: createEmptyStats() };
+            }
+            if (!staffStats[staffName][shippingCompany]) {
+                staffStats[staffName][shippingCompany] = createEmptyStats();
+            }
+
+            const statsToUpdate = [
+                staffStats[staffName][shippingCompany],
+                staffStats[staffName]._total,
+                grandTotal
+            ];
+            
+            const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0;
+            const numericAmount = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0;
+            const paymentStatus = row["Trạng thái thu tiền"] || "";
+            const deliveryStatus = row["Trạng thái giao hàng NB"] || "";
+
+            statsToUpdate.forEach(stats => {
+                if (paymentStatus.includes("Có bill")) {
+                    stats["Đã Thanh Toán (có bill)"].count++;
+                    stats["Đã Thanh Toán (có bill)"].amount += numericAmount;
+                } else if (paymentStatus.includes("Có bill 1 phần")) {
+                    stats["Bill 1 phần"].count++;
+                }
+                
+                if (deliveryStatus.includes("Giao Thành Công")) stats["Giao Thành Công"].count++;
+                else if (deliveryStatus.includes("Đang Giao")) stats["Đang Giao"].count++;
+                else if (deliveryStatus.includes("Chưa Giao")) stats["Chưa Giao"].count++;
+                else if (deliveryStatus.includes("Hoàn")) stats["Hoàn"].count++;
+                else if (deliveryStatus.includes("chờ check")) stats["chờ check"].count++;
+                else if (deliveryStatus === "") stats["Trống trạng thái"].count++;
+                
+                stats["Tổng đơn lên nội bộ"].count++;
+
+                if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) {
+                    stats["Tổng đơn đủ đkien đẩy vh"].count++;
+                }
+                if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) {
+                    stats["Tổng đơn lên vận hành"].count++;
+                }
+            });
+        });
+
+        // Render rows for each staff
+        Object.keys(staffStats).sort().forEach(staffName => {
+            const staffData = staffStats[staffName];
+            
+            // Staff Header Row
+            const headerRow = summaryTableBody.insertRow();
+            headerRow.className = 'summary-staff-header';
+            const headerCell = headerRow.insertCell();
+            headerCell.colSpan = 17;
+            headerCell.textContent = `Nhân viên: ${staffName}`;
+
+            // Render details for each shipping company under this staff
+            Object.keys(staffData).filter(key => key !== '_total').sort().forEach(companyName => {
+                const companyData = staffData[companyName];
+                const tr = renderSummaryRow(staffName, companyName, companyData);
+                summaryTableBody.appendChild(tr);
+            });
+            
+            // Staff Total Row
+            const totalRow = renderSummaryRow("Tổng cộng", "Tất cả DVVC", staffData._total);
+            totalRow.className = 'summary-staff-total';
+            summaryTableBody.appendChild(totalRow);
+        });
+        
+        // Grand Total Row
+        const grandTotalRow = renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal);
+        grandTotalRow.className = 'summary-grand-total';
+        summaryTableBody.appendChild(grandTotalRow);
+    }
+    
+    function renderSummaryRow(staffName, companyName, data) {
+        const tr = document.createElement('tr');
+
+        tr.insertCell().textContent = staffName;
+        tr.insertCell().textContent = companyName;
+        
+        tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count;
+        const paidAmountCell = tr.insertCell();
+        paidAmountCell.textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫';
+        
+        tr.insertCell().textContent = data["Bill 1 phần"].count;
+        tr.insertCell().textContent = data["Tổng đơn lên nội bộ"].count;
+        tr.insertCell().textContent = data["Tổng đơn đủ đkien đẩy vh"].count;
+        tr.insertCell().textContent = data["Tổng đơn lên vận hành"].count;
+
+        const shippingRate = data["Tổng đơn lên nội bộ"].count > 0 ? (data["Tổng đơn lên vận hành"].count / data["Tổng đơn lên nội bộ"].count * 100) : 0;
+        const shippingRateCell = tr.insertCell();
+        shippingRateCell.textContent = shippingRate.toFixed(2) + '%';
+        shippingRateCell.className = shippingRate > 70 ? 'positive' : 'negative';
+
+        tr.insertCell().textContent = data["Giao Thành Công"].count;
+        tr.insertCell().textContent = data["Đang Giao"].count;
+        tr.insertCell().textContent = data["Chưa Giao"].count;
+        tr.insertCell().textContent = data["Hoàn"].count;
+        tr.insertCell().textContent = data["chờ check"].count;
+        tr.insertCell().textContent = data["Trống trạng thái"].count;
+
+        const paymentSuccessRate = data["Giao Thành Công"].count > 0 ? (data["Đã Thanh Toán (có bill)"].count / data["Giao Thành Công"].count * 100) : 0;
+        const paymentRateCell = tr.insertCell();
+        paymentRateCell.textContent = paymentSuccessRate.toFixed(2) + '%';
+        paymentRateCell.className = paymentSuccessRate > 80 ? 'positive' : 'negative';
+
+        const feeRate = data["Tổng đơn lên vận hành"].count > 0 ? (data["Giao Thành Công"].count / data["Tổng đơn lên vận hành"].count * 100) : 0;
+        const feeRateCell = tr.insertCell();
+        feeRateCell.textContent = feeRate.toFixed(2) + '%';
+        feeRateCell.className = feeRate > 80 ? 'positive' : 'negative';
+        
+        return tr;
     }
 
     function handleCellSelection(cell, addToSelection = true) {
@@ -768,6 +647,7 @@
         const tableHead = document.getElementById('tableHead');
         if (!tableHead.querySelector('tr')) return;
 
+        // Date range filter
         const startDate = document.getElementById('startDateFilter').value;
         const endDate = document.getElementById('endDateFilter').value;
         if (startDate || endDate) {
@@ -790,6 +670,22 @@
             });
         }
 
+        // Product and Market filters
+        const productFilterValue = document.getElementById('productFilter').value.toLowerCase().trim();
+        if (productFilterValue) {
+            dataToFilter = dataToFilter.filter(row => 
+                (row["Mặt hàng"] || '').toLowerCase().includes(productFilterValue)
+            );
+        }
+        
+        const marketFilterValue = document.getElementById('marketFilter').value.toLowerCase().trim();
+        if (marketFilterValue) {
+            dataToFilter = dataToFilter.filter(row => 
+                (row["City"] || '').toLowerCase().includes(marketFilterValue)
+            );
+        }
+
+        // Column-specific filters
         const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
         filters.forEach(filter => {
             const value = filter.value.toLowerCase().trim();
@@ -910,9 +806,13 @@
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
       document.getElementById('startDateFilter').addEventListener('change', applyAllFilters);
       document.getElementById('endDateFilter').addEventListener('change', applyAllFilters);
+      document.getElementById('productFilter').addEventListener('input', applyAllFilters);
+      document.getElementById('marketFilter').addEventListener('input', applyAllFilters);
       document.getElementById('clearFilters').addEventListener('click', () => {
           document.getElementById('startDateFilter').value = '';
           document.getElementById('endDateFilter').value = '';
+          document.getElementById('productFilter').value = '';
+          document.getElementById('marketFilter').value = '';
           document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => f.value = '');
           applyAllFilters();
       });
