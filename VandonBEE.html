@@ -48,6 +48,13 @@
       border-color: #2980b9;
       font-weight: bold;
     }
+    .tab-btn.tracking-tab {
+      background-color: #e74c3c;
+      color: white;
+    }
+    .tab-btn.tracking-tab.active {
+      background-color: #c0392b;
+    }
     .controls {
       display: flex;
       justify-content: space-between;
@@ -186,6 +193,9 @@
       </button>
       <button id="updateAll">Cập nhật tất cả thay đổi</button>
     </div>
+    <div>
+      <button id="toggleTrackingView" class="tab-btn tracking-tab">Xem đơn có mã Tracking</button>
+    </div>
   </div>
   
   <div class="table-wrapper" id="tableContainer">
@@ -234,7 +244,6 @@
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbzNeQSd_fUNicLT8VyVg90Di9NpAZxCagmBLFboJZ5I64qjqHBHM7uOZalO11mJdAxN/exec';
     
-    // *** THAY ĐỔI 1: Thêm "Khu vực" vào danh sách hiển thị ***
     const displayColumns = [
       "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", 
       "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", 
@@ -253,8 +262,9 @@
     let initialFilteredData = []; 
     let filteredData = []; 
     let changedRows = new Set();
-    let activeRegion = 'all'; // *** THAY ĐỔI 2: Đổi tên biến từ activeState sang activeRegion ***
+    let activeRegion = 'all';
     let filterValues = {}; 
+    let showTrackingOrders = false; // Thêm biến để theo dõi trạng thái hiển thị
 
     function formatDate(dateString) {
       if (!dateString) return '';
@@ -313,7 +323,13 @@
         initialFilteredData = allData.filter(row => {
             const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
             const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
-            return carrier && carrier.toString().toUpperCase() === "BEE" && (!trackingCode || trackingCode.toString().trim() === '');
+            
+            // Thay đổi logic lọc dữ liệu ban đầu dựa trên showTrackingOrders
+            if (showTrackingOrders) {
+                return carrier && carrier.toString().toUpperCase() === "BEE" && trackingCode && trackingCode.toString().trim() !== '';
+            } else {
+                return carrier && carrier.toString().toUpperCase() === "BEE" && (!trackingCode || trackingCode.toString().trim() === '');
+            }
         });
     }
 
@@ -321,19 +337,18 @@
         const tabContainer = document.getElementById('tabContainer');
         tabContainer.innerHTML = '';
         
-        // *** THAY ĐỔI 3: Lấy dữ liệu từ cột "Khu vực" để tạo tab ***
         const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort();
 
         const createTab = (name, value) => {
             const button = document.createElement('button');
             button.className = 'tab-btn';
             button.textContent = name;
-            button.dataset.region = value; // Thay đổi dataset
+            button.dataset.region = value;
             if (value === activeRegion) {
                 button.classList.add('active');
             }
             button.addEventListener('click', () => {
-                activeRegion = value; // Cập nhật activeRegion
+                activeRegion = value;
                 document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
                 applyAllFilters();
@@ -374,7 +389,6 @@
     function applyAllFilters() {
         let dataToRender = [...initialFilteredData];
 
-        // *** THAY ĐỔI 4: Lọc theo Tab (Khu vực) ***
         if (activeRegion !== 'all') {
             dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion);
         }
@@ -463,16 +477,40 @@
     function setupControls() {
       document.getElementById('refreshData').addEventListener('click', refreshData);
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
+      
+      // Thêm sự kiện cho nút chuyển đổi hiển thị đơn có mã Tracking
+      document.getElementById('toggleTrackingView').addEventListener('click', toggleTrackingView);
     }
 
     function refreshData() {
       const btn = document.getElementById('refreshData');
       btn.innerHTML = '<span class="loading"></span> Đang tải...';
-      activeRegion = 'all'; // Reset tab về "Tất cả"
+      activeRegion = 'all';
       filterValues = {};
       document.getElementById('tabContainer').innerHTML = '';
       document.getElementById('filterRow').innerHTML = '';
       loadData();
+    }
+
+    function toggleTrackingView() {
+      const btn = document.getElementById('toggleTrackingView');
+      showTrackingOrders = !showTrackingOrders;
+      
+      if (showTrackingOrders) {
+        btn.textContent = 'Xem đơn chưa có mã Tracking';
+        btn.classList.add('active');
+      } else {
+        btn.textContent = 'Xem đơn có mã Tracking';
+        btn.classList.remove('active');
+      }
+      
+      // Reset các bộ lọc và tab khi chuyển đổi chế độ xem
+      activeRegion = 'all';
+      filterValues = {};
+      filterInitialData();
+      createTabs(initialFilteredData);
+      setupColumnFilters();
+      applyAllFilters();
     }
 
     function loadData() {
