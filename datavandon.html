@@ -30,7 +30,7 @@
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     .main-table-wrapper {
-      overflow-x: scroll; /* << THAY ĐỔI: Luôn hiện thanh cuộn ngang */
+      overflow-x: scroll; /* Luôn hiện thanh cuộn ngang */
       overflow-y: auto;
       max-height: 60vh;
     }
@@ -579,8 +579,8 @@
         document.getElementById('userInfo').textContent = staffInfo;
 
         filterDataByStaff();
-        generateDynamicOptions(staffFilteredData); // Tạo options trước khi render
-        populateExternalFilters(); // Điền options cho bộ lọc ngoài
+        generateDynamicOptions(staffFilteredData);
+        populateExternalFilters();
         renderHeader();
         applyAllFilters();
         setupCellSelection();
@@ -609,7 +609,8 @@
                 const value = row[colName] || row[colName.replace(/ /g, '_')];
                 if (value) uniqueValues.add(value);
             });
-            dynamicFilterOptions[colName] = Array.from(uniqueValues).sort((a, b) => a.localeCompare(b));
+            // << SỬA LỖI TẠI ĐÂY >>
+            dynamicFilterOptions[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b)));
         });
     }
 
@@ -617,16 +618,13 @@
         const productFilter = document.getElementById('productFilter');
         const marketFilter = document.getElementById('marketFilter');
 
-        // Clear existing options
         productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>';
         marketFilter.innerHTML = '<option value="">Tất cả thị trường</option>';
 
-        // Populate products
         (dynamicFilterOptions['Mặt hàng'] || []).forEach(opt => {
             productFilter.add(new Option(opt, opt));
         });
 
-        // Populate markets
         (dynamicFilterOptions['City'] || []).forEach(opt => {
             marketFilter.add(new Option(opt, opt));
         });
@@ -637,7 +635,6 @@
         const tableHead = document.getElementById('tableHead');
         if (!tableHead.querySelector('tr')) return;
 
-        // Date range filter
         const startDate = document.getElementById('startDateFilter').value;
         const endDate = document.getElementById('endDateFilter').value;
         if (startDate || endDate) {
@@ -655,7 +652,6 @@
             });
         }
 
-        // External filters (Product, Market)
         const productFilterValue = document.getElementById('productFilter').value;
         if (productFilterValue) {
             dataToFilter = dataToFilter.filter(row => (row["Mặt hàng"] || '') === productFilterValue);
@@ -665,7 +661,6 @@
             dataToFilter = dataToFilter.filter(row => (row["City"] || '') === marketFilterValue);
         }
 
-        // Column-specific filters
         const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
         filters.forEach(filter => {
             const value = filter.value;
@@ -691,16 +686,15 @@
             if (colName === "Mã đơn hàng") th.classList.add('fixed-column');
             
             let filterElement;
-            // Use dynamic dropdowns where available
             if (dynamicFilterOptions[colName]) {
                 filterElement = document.createElement('select');
                 filterElement.className = 'filter-select';
-                filterElement.add(new Option(`Tất cả ${colName}`, '')); // Default option
+                filterElement.add(new Option(`Tất cả ${colName}`, ''));
                 dynamicFilterOptions[colName].forEach(opt => {
                     filterElement.add(new Option(opt, opt));
                 });
                 filterElement.addEventListener('change', applyAllFilters);
-            } else { // Fallback to text input
+            } else {
                 filterElement = document.createElement('input');
                 filterElement.type = 'text';
                 filterElement.className = 'filter-input';
@@ -792,7 +786,13 @@
           document.getElementById('endDateFilter').value = '';
           document.getElementById('productFilter').selectedIndex = 0;
           document.getElementById('marketFilter').selectedIndex = 0;
-          document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => f.value = '');
+          document.querySelectorAll('#tableHead .filter-input, #tableHead .filter-select').forEach(f => {
+              if (f.tagName === 'SELECT') {
+                  f.selectedIndex = 0;
+              } else {
+                  f.value = '';
+              }
+          });
           applyAllFilters();
       });
     }
