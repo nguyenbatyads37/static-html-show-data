@@ -605,7 +605,13 @@
         columnsToMakeDynamic.forEach(colName => {
             const uniqueValues = new Set();
             data.forEach(row => {
-                const value = row[colName] || row[colName.replace(/ /g, '_')];
+                let value;
+                // Ưu tiên lấy dữ liệu từ "Khu vực"
+                if (colName === 'khu vực') {
+                    value = row['Khu vực'] || row['khu vực'];
+                } else {
+                    value = row[colName] || row[colName.replace(/ /g, '_')];
+                }
                 if (value) uniqueValues.add(value);
             });
             dynamicFilterOptions[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b)));
@@ -622,7 +628,8 @@
         (dynamicFilterOptions['Mặt hàng'] || []).forEach(opt => {
             productFilter.add(new Option(opt, opt));
         });
-
+        
+        // Dùng options của "khu vực" cho bộ lọc thị trường
         (dynamicFilterOptions['khu vực'] || []).forEach(opt => {
             marketFilter.add(new Option(opt, opt));
         });
@@ -656,7 +663,8 @@
         }
         const marketFilterValue = document.getElementById('marketFilter').value;
         if (marketFilterValue) {
-            dataToFilter = dataToFilter.filter(row => (row["khu vực"] || row["Khu vực"] || '') === marketFilterValue);
+            // Lọc theo cột "Khu vực"
+            dataToFilter = dataToFilter.filter(row => (row["Khu vực"] || row["khu vực"] || '') === marketFilterValue);
         }
 
         const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
@@ -665,7 +673,12 @@
             if (value === '') return;
             const colName = filter.dataset.column;
             dataToFilter = dataToFilter.filter(row => {
-                 let cellValue = row[colName] !== undefined ? row[colName] : row[colName.replace(/ /g, '_')] || '';
+                 let cellValue;
+                 if (colName === 'khu vực') {
+                    cellValue = row['Khu vực'] || row['khu vực'] || '';
+                 } else {
+                    cellValue = row[colName] !== undefined ? row[colName] : row[colName.replace(/ /g, '_')] || '';
+                 }
                  return cellValue.toString().toLowerCase().includes(value.toLowerCase());
             });
         });
@@ -722,13 +735,17 @@
         displayColumns.forEach(col => {
           const td = document.createElement('td');
           const unifiedColName = col;
-          let value = row[unifiedColName] || row[unifiedColName.replace(/ /g, '_')] || '';
+          let value;
           
-          if (allDateColumns.includes(col)) {
-              const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : value;
+          if (unifiedColName === 'khu vực') {
+              value = row['Khu vực'] || row['khu vực'] || '';
+          } else if (allDateColumns.includes(col)) {
+              const dateSource = col === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : (row[col] || '');
               const formattedDate = formatDate(dateSource);
               value = formattedDate.display;
               td.dataset.originalValue = formattedDate.original;
+          } else {
+              value = row[unifiedColName] || row[unifiedColName.replace(/ /g, '_')] || '';
           }
 
           if (col === "Mã đơn hàng") td.classList.add('fixed-column');
