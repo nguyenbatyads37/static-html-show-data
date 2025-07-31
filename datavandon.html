@@ -28,6 +28,7 @@
       position: relative; overflow: auto; max-height: 75vh;
       background: white; border-radius: 0 0 5px 5px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-top: 20px; /* Thêm khoảng cách trên cho bảng tóm tắt */
     }
     .main-table-wrapper {
       overflow-x: scroll;
@@ -35,7 +36,10 @@
       max-height: 60vh;
     }
     table {
-      border-collapse: collapse; width: 100%; min-width: 2200px; font-size: 18px;
+      border-collapse: collapse; width: 100%; min-width: 2200px;
+      /* YÊU CẦU: Chữ đậm và to hơn 50% */
+      font-size: 27px; /* 18px * 1.5 */
+      font-weight: bold;
     }
     thead { position: sticky; top: 0; z-index: 10; }
     th, td {
@@ -48,13 +52,15 @@
     }
     th .filter-input, th .filter-select {
       width: 100%; margin-top: 5px; padding: 4px;
-      font-size: 14px;
+      /* YÊU CẦU: Tăng kích thước tương ứng */
+      font-size: 20px; /* 14px -> 20px */
       border: 1px solid #ccc; border-radius: 3px;
     }
     td.editable { background-color: #fffbe8; }
     td select, td input.date-input {
       width: 100%; padding: 6px; border: none;
       background: transparent; font-family: inherit; font-size: inherit;
+      font-weight: inherit; /* Kế thừa độ đậm */
     }
     button {
       padding: 6px 12px; cursor: pointer; background-color: #3498db; color: white;
@@ -93,7 +99,8 @@
       border-radius: 5px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
       overflow: hidden;
-      font-size: 14px;
+      /* YÊU CẦU: Chữ to hơn 50% */
+      font-size: 21px; /* 14px * 1.5 */
     }
     .summary-table th {
       background-color: #2c3e50;
@@ -183,6 +190,15 @@
     </div>
   </div>
 
+  <!-- YÊU CẦU: Di chuyển bảng dữ liệu chính lên trên -->
+  <div class="main-table-wrapper" id="tableContainer">
+    <table>
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+  
+  <!-- YÊU CẦU: Di chuyển bảng tổng kết xuống dưới -->
   <div class="table-wrapper">
     <table class="summary-table">
       <thead>
@@ -214,12 +230,6 @@
     </table>
   </div>
 
-  <div class="main-table-wrapper" id="tableContainer">
-    <table>
-      <thead id="tableHead"></thead>
-      <tbody id="tableBody"></tbody>
-    </table>
-  </div>
 
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbzNeQSd_fUNicLT8VyVg90Di9NpAZxCagmBLFboJZ5I64qjqHBHM7uOZalO11mJdAxN/exec';
@@ -266,6 +276,7 @@
       return decodeURIComponent(results[2].replace(/\+/g, ' '));
     }
 
+    // YÊU CẦU: Thay thế hàm fetchStaffInfo
     async function fetchStaffInfo(idns, id1 = null) {
       try {
         const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
@@ -275,33 +286,31 @@
         
         // Tìm nhân viên với id chính
         let staffMember = data.find(staff => String(staff.idnv) === idns);
+        let staffMember1 = id1 ? data.find(staff => String(staff.idnv) === id1) : null;
         
-        // Nếu không tìm thấy và có id1, thử tìm với id1
-        if (!staffMember && id1) {
-          staffMember = data.find(staff => String(staff.idnv) === id1);
-        }
-        
-        if (!staffMember) {
-          // Nếu vẫn không tìm thấy, tạo thông báo lỗi chi tiết
+        if (!staffMember && !staffMember1) {
           let errorMsg = `Không tìm thấy nhân viên với ID: ${idns}`;
           if (id1) errorMsg += ` hoặc ID1: ${id1}`;
           throw new Error(errorMsg);
         }
         
-        if (staffMember.vi_tri === "Leader") {
-          const teamName = staffMember.team;
-          teamMembers = data.filter(member => member.team === teamName).map(member => member.ho_va_ten);
-        }
-        
-        // Nếu có id1 và id1 khác id chính, thêm nhân viên id1 vào teamMembers
-        if (id1 && id1 !== idns) {
-          const staffMember1 = data.find(staff => String(staff.idnv) === id1);
-          if (staffMember1) {
-            teamMembers.push(staffMember1.ho_va_ten);
+        // Nếu có id1 và khác id chính, thêm vào teamMembers
+        teamMembers = [];
+        if (staffMember) {
+          if (staffMember.vi_tri === "Leader") {
+            const teamName = staffMember.team;
+            teamMembers = data.filter(member => member.team === teamName).map(member => member.ho_va_ten);
+          } else {
+            teamMembers.push(staffMember.ho_va_ten);
           }
         }
         
-        return staffMember;
+        if (staffMember1 && (!staffMember || staffMember1.idnv !== staffMember.idnv)) {
+          teamMembers.push(staffMember1.ho_va_ten);
+        }
+        
+        // Trả về nhân viên chính hoặc nhân viên phụ nếu không có chính
+        return staffMember || staffMember1;
       } catch (error) {
         showError(error.message);
         throw error;
@@ -594,7 +603,9 @@
       }).catch(err => console.error('Lỗi sao chép:', err));
     }
 
+    // YÊU CẦU: Thay thế hàm handleData
     async function handleData(response) {
+      // (phần đầu giữ nguyên)
       document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
       allData = []; staffFilteredData = []; changedRows = new Set();
 
@@ -616,38 +627,37 @@
         currentStaff = await fetchStaffInfo(staffId, staffId1);
         let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`;
         
-        // Thêm thông tin về id1 nếu có
+        // Hiển thị thông tin cả 2 ID nếu có
         if (staffId1 && staffId1 !== staffId) {
-          staffInfo += ` (và ID1: ${staffId1})`;
+          staffInfo += ` và ${teamMembers.find(name => name !== currentStaff.ho_va_ten) || ''}`;
         }
         
-        staffInfo += (currentStaff.vi_tri === "Leader") ? ` (Leader - Team ${currentStaff.team})` : ` (Nhân viên)`;
+        if (currentStaff.vi_tri === "Leader") {
+          staffInfo += ` (Leader - Team ${currentStaff.team})`;
+        }
         document.getElementById('userInfo').textContent = staffInfo;
 
         filterDataByStaff();
+        
+        // (phần sau giữ nguyên)
         generateDynamicOptions(staffFilteredData);
         populateExternalFilters();
         renderHeader();
         applyAllFilters();
         setupCellSelection();
+        
       } catch (error) {
+        // (phần sau giữ nguyên)
         showError(error.message);
       }
     }
-
+    
+    // YÊU CẦU: Thay thế hàm filterDataByStaff
     function filterDataByStaff() {
-      if (!currentStaff) return;
+      if (!currentStaff || teamMembers.length === 0) return;
       staffFilteredData = allData.filter(row => {
         const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || '';
-        if (currentStaff.vi_tri === "Leader") {
-          return teamMembers.includes(deliveryStaff);
-        } else {
-          // Nếu là nhân viên thường, hiển thị cả đơn của id và id1 (nếu có)
-          if (teamMembers.length > 0) {
-            return teamMembers.includes(deliveryStaff);
-          }
-          return deliveryStaff === currentStaff.ho_va_ten;
-        }
+        return teamMembers.includes(deliveryStaff);
       });
     }
 
