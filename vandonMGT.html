@@ -48,6 +48,13 @@
       border-color: #2980b9;
       font-weight: bold;
     }
+    .tab-btn.tracking-tab {
+      background-color: #e74c3c;
+      color: white;
+    }
+    .tab-btn.tracking-tab.active {
+      background-color: #c0392b;
+    }
     .controls {
       display: flex;
       justify-content: space-between;
@@ -186,6 +193,9 @@
       </button>
       <button id="updateAll">Cập nhật tất cả thay đổi</button>
     </div>
+    <div>
+      <button id="toggleTrackingView" class="tab-btn tracking-tab">Xem đơn có mã Tracking</button>
+    </div>
   </div>
   
   <div class="table-wrapper" id="tableContainer">
@@ -254,6 +264,7 @@
     let changedRows = new Set();
     let activeRegion = 'all';
     let filterValues = {}; 
+    let showTrackingOrders = false;
 
     function formatDate(dateString) {
       if (!dateString) return '';
@@ -312,8 +323,12 @@
         initialFilteredData = allData.filter(row => {
             const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
             const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
-            // Thay đổi điều kiện lọc từ BEE sang MGT
-            return carrier && carrier.toString().toUpperCase() === "MGT" && (!trackingCode || trackingCode.toString().trim() === '');
+            
+            if (showTrackingOrders) {
+                return carrier && carrier.toString().toUpperCase() === "MGT" && trackingCode && trackingCode.toString().trim() !== '';
+            } else {
+                return carrier && carrier.toString().toUpperCase() === "MGT" && (!trackingCode || trackingCode.toString().trim() === '');
+            }
         });
     }
 
@@ -461,6 +476,7 @@
     function setupControls() {
       document.getElementById('refreshData').addEventListener('click', refreshData);
       document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
+      document.getElementById('toggleTrackingView').addEventListener('click', toggleTrackingView);
     }
 
     function refreshData() {
@@ -471,6 +487,26 @@
       document.getElementById('tabContainer').innerHTML = '';
       document.getElementById('filterRow').innerHTML = '';
       loadData();
+    }
+
+    function toggleTrackingView() {
+      const btn = document.getElementById('toggleTrackingView');
+      showTrackingOrders = !showTrackingOrders;
+      
+      if (showTrackingOrders) {
+        btn.textContent = 'Xem đơn chưa có mã Tracking';
+        btn.classList.add('active');
+      } else {
+        btn.textContent = 'Xem đơn có mã Tracking';
+        btn.classList.remove('active');
+      }
+      
+      activeRegion = 'all';
+      filterValues = {};
+      filterInitialData();
+      createTabs(initialFilteredData);
+      setupColumnFilters();
+      applyAllFilters();
     }
 
     function loadData() {
