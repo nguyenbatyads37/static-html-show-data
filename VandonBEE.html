@@ -274,11 +274,11 @@
     
     const displayColumns = ["Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ghi chú vận đơn", "Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
     
-    // *** THAY ĐỔI: Sửa lại mapping cho đúng. Vui lòng kiểm tra tên cột chính xác trong Google Sheet.
-    // Tôi đoán tên cột là "Kết quả check đặt trước", nếu sai, bạn hãy sửa lại ở đây.
+    // *** THAY ĐỔI: Sửa lại mapping theo yêu cầu ***
+    // Cột "Kết quả check" trên web sẽ lấy dữ liệu từ cột "Kết quả Check" trong sheet
     const columnMapping = {
       "Ghi chú vận đơn": "ngày hẹn đẩy đơn",
-      "Kết quả check": "Kết quả check đặt trước" 
+      "Kết quả check": "Kết quả Check" 
     };
 
     const editableCols = ["Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
@@ -300,7 +300,7 @@
       allData = data;
       filterInitialData();
       createTabs(initialFilteredData);
-      populateMainFilters(initialFilteredData); // *** MỚI: Populate bộ lọc chính
+      populateMainFilters(initialFilteredData);
       setupColumnFilters();
       applyAllFilters();
     }
@@ -363,7 +363,7 @@
             dataToRender = dataToRender.filter(row => {
                 return activeFilters.every(([col, filterValue]) => {
                     const dataKey = columnMapping[col] || col;
-                    const cellValue = row[dataKey] ?? row[dataKey.replace(/ /g, '_')] ?? '';
+                    const cellValue = row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? '';
                     return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
                 });
             });
@@ -384,7 +384,6 @@
             displayColumns.forEach(col => {
                 const td = document.createElement('td');
                 const dataKey = columnMapping[col] || col;
-                // *** THAY ĐỔI: Ưu tiên tìm key đã map, sau đó là key gốc, cuối cùng là key với dấu gạch dưới
                 let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '';
                 
                 if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) { value = formatDate(value); }
@@ -419,7 +418,6 @@
         document.getElementById('refreshData').addEventListener('click', refreshData);
         document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
         document.getElementById('toggleTrackingView').addEventListener('click', toggleTrackingView);
-        // *** MỚI: Gắn sự kiện cho bộ lọc chính
         document.getElementById('filterMarket').addEventListener('change', applyAllFilters);
         document.getElementById('filterProduct').addEventListener('change', applyAllFilters);
         document.getElementById('filterDateFrom').addEventListener('change', applyAllFilters);
@@ -432,13 +430,12 @@
     function loadData() { const container = document.getElementById('tableBody'); container.innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center;">Đang tải...</td></tr>`; const script = document.createElement('script'); script.src = 'https://script.google.com/macros/s/AKfycbwEd7eA6NAUMtbEpcEPJQWeX-zsJRE1mnTVVBD23NoKrnXYwOLvuNef2mIbJ7-NMNbe/exec?callback=handleData&rand=' + Math.random(); const oldScript = document.querySelector('script[src^="https://script.google.com"]'); if (oldScript) document.body.removeChild(oldScript); document.body.appendChild(script); }
 
     // --- CẬP NHẬT, DÁN, CHỌN, SAO CHÉP DỮ LIỆU ---
-    // (Các hàm updateAllChangedRows, sendRows, setupPasteHandler, setupMultiSelectAndCopy không đổi, để ngắn gọn tôi sẽ ẩn đi)
     function updateAllChangedRows() { if(changedRows.size===0){alert('Không có thay đổi');return} const statusEl=document.createElement('span');statusEl.className='status';document.getElementById('updateAll').appendChild(statusEl);sendRows(Array.from(changedRows),statusEl)}
     function sendRows(rowIndexes,statusEl){statusEl.innerHTML='<span class="loading"></span> Đang gửi...';const rowsToSend=[];const tableBody=document.querySelector('tbody');rowIndexes.forEach(rowIndex=>{const originalRowData=filteredData[rowIndex];if(!originalRowData)return;const domRow=tableBody.rows[rowIndex];if(!domRow)return;const updatedRowData={...originalRowData};displayColumns.forEach((col,colIndex)=>{if(editableCols.includes(col)){const cell=domRow.cells[colIndex];let value;if(col==="Ngày đóng hàng"&&cell.querySelector('input')){value=cell.querySelector('input').value.trim();value=parseDateToISO(value)}else{value=cell.textContent.trim()}updatedRowData[col]=value}});rowsToSend.push(updatedRowData);Array.from(domRow.cells).forEach(cell=>{if(cell.classList.contains('highlight')){cell.classList.remove('highlight')}})});fetch(POST_URL,{method:'POST',mode:'cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({rows:JSON.stringify(rowsToSend)})}).then(r=>r.json()).then(json=>{if(json.message){statusEl.textContent=`Thành công: ${json.message}`;changedRows.clear()}else{statusEl.textContent=json.error||'Lỗi';statusEl.classList.add('error-status')}setTimeout(()=>{statusEl.remove()},4000)}).catch(e=>{statusEl.textContent='Lỗi: '+e.message;statusEl.classList.add('error-status');setTimeout(()=>{statusEl.remove()},4000)})}
     function setupPasteHandler(){document.addEventListener('paste',e=>{const activeElement=document.activeElement;const isEditableCell=activeElement.classList.contains('editable')||(activeElement.tagName==='INPUT'&&activeElement.parentElement.classList.contains('editable'));if(!isEditableCell)return;e.preventDefault();const pasteData=e.clipboardData.getData('text/plain');if(!pasteData)return;const rows=pasteData.split('\n').map(row=>row.split('\t'));const tableBody=document.querySelector('tbody');if(!tableBody)return;let startRow=Array.from(tableBody.rows).findIndex(row=>Array.from(row.cells).some(cell=>cell===activeElement||cell.contains(activeElement)));let startCol=-1;if(startRow>=0){const cells=Array.from(tableBody.rows[startRow].cells);startCol=cells.findIndex(cell=>cell===activeElement||cell.contains(activeElement))}if(startRow<0||startCol<0)return;for(let i=0;i<rows.length;i++){const rowIndex=startRow+i;if(rowIndex>=tableBody.rows.length)break;const rowData=rows[i];for(let j=0;j<rowData.length;j++){const colIndex=startCol+j;if(colIndex>=tableBody.rows[rowIndex].cells.length)break;const cell=tableBody.rows[rowIndex].cells[colIndex];if(cell.classList.contains('editable')){if(displayColumns[colIndex]==="Ngày đóng hàng"&&cell.querySelector('input')){cell.querySelector('input').value=rowData[j]}else{cell.textContent=rowData[j]}cell.classList.add('highlight');changedRows.add(rowIndex)}}}})}
     function setupMultiSelectAndCopy(){const tableBody=document.getElementById('tableBody');if(!tableBody)return;let isSelecting=!1,startCell=null,lastClickedCell=null;const clearSelection=()=>{document.querySelectorAll('td.cell-selected').forEach(cell=>{cell.classList.remove('cell-selected')})};const selectCells=(start,end)=>{clearSelection();const minRow=Math.min(start.rowIndex,end.rowIndex);const maxRow=Math.max(start.rowIndex,end.rowIndex);const minCol=Math.min(start.cellIndex,end.cellIndex);const maxCol=Math.max(start.cellIndex,end.cellIndex);for(let i=minRow;i<=maxRow;i++){for(let j=minCol;j<=maxCol;j++){const cell=tableBody.rows[i]?.cells[j];if(cell){cell.classList.add('cell-selected')}}}};tableBody.addEventListener('mousedown',e=>{if(e.button!==0||e.target.isContentEditable||e.target.tagName==='INPUT'){return}const cell=e.target.closest('td');if(!cell)return;e.preventDefault();if(e.shiftKey&&lastClickedCell){selectCells(lastClickedCell,cell)}else{isSelecting=!0;clearSelection();startCell=cell;lastClickedCell=cell;cell.classList.add('cell-selected')}});tableBody.addEventListener('mousemove',e=>{if(!isSelecting||!startCell)return;const cell=e.target.closest('td');if(cell){selectCells(startCell,cell)}});document.addEventListener('mouseup',()=>{isSelecting=!1});document.addEventListener('copy',e=>{const selectedCells=document.querySelectorAll('td.cell-selected');if(selectedCells.length===0){return}e.preventDefault();const rows=new Map();selectedCells.forEach(cell=>{const rowIndex=cell.parentElement.rowIndex;if(!rows.has(rowIndex)){rows.set(rowIndex,[])}const input=cell.querySelector('input');const text=input?input.value:cell.textContent;rows.get(rowIndex).push({colIndex:cell.cellIndex,text:text})});const sortedRows=[...rows.entries()].sort((a,b)=>a[0]-b[0]);const copyText=sortedRows.map(([rowIndex,cells])=>{return cells.sort((a,b)=>a.colIndex-b.colIndex).map(cell=>cell.text).join('\t')}).join('\n');e.clipboardData.setData('text/plain',copyText)})}
     
-    // --- HÀM MỚI: TẢI FILE EXCEL (CSV) ---
+    // --- HÀM TẢI FILE EXCEL (CSV) ---
     function downloadAsExcel() {
         if (filteredData.length === 0) {
             alert("Không có dữ liệu để tải về.");
@@ -448,9 +445,7 @@
         const sanitizeCsvCell = (cell) => {
             if (cell === null || cell === undefined) return '';
             let str = String(cell);
-            // Nếu cell chứa dấu phẩy, dấu nháy kép hoặc ký tự xuống dòng, bao nó trong dấu nháy kép
             if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-                // Thay thế mọi dấu nháy kép bên trong bằng hai dấu nháy kép
                 str = str.replace(/"/g, '""');
                 return `"${str}"`;
             }
@@ -464,13 +459,12 @@
                 const dataKey = columnMapping[col] || col;
                 let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '';
                 if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
-                    value = formatDate(value); // Đảm bảo ngày có định dạng dd/mm/yyyy
+                    value = formatDate(value);
                 }
                 return sanitizeCsvCell(value);
             }).join(',');
         }).join('\n');
 
-        // BOM (Byte Order Mark) để Excel mở file UTF-8 đúng cách (hiển thị tiếng Việt)
         const BOM = '\uFEFF';
         const csvContent = BOM + headers + '\n' + rows;
 
