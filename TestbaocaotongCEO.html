@@ -573,17 +573,28 @@
                 const selectedTeam = document.getElementById('team-filter-mkt').value;
                 
                 document.getElementById('report-date-mkt').textContent = `Từ ngày ${formatUtils.formatDate(startDateInput)} đến ngày ${formatUtils.formatDate(endDateInput)}`;
-                const startDate = new Date(startDateInput);
-                const endDate = new Date(endDateInput);
+
+                // --- START OF FIX: Correct date handling ---
+                // Create dates at the beginning of the start day and the end of the end day
+                const startDate = startDateInput ? new Date(startDateInput + 'T00:00:00') : null;
+                const endDate = endDateInput ? new Date(endDateInput + 'T23:59:59') : null;
+                
                 const filteredData = this.allData.filter(record => {
                     if (!record.ngay) return false;
-                    const recordDateStr = new Date(record.ngay);
-                    const dateMatch = recordDateStr >= startDate && recordDateStr <= endDate;
+                    
+                    const recordDate = new Date(record.ngay);
+                    // Add a safety check for invalid dates in the data
+                    if (isNaN(recordDate.getTime())) { return false; }
+
+                    // Corrected date matching logic
+                    const dateMatch = (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
+                    
                     const marketMatch = !selectedMarket || record.thiTruong === selectedMarket;
                     const teamMatch = !selectedTeam || record.team === selectedTeam;
 
                     return dateMatch && marketMatch && teamMatch;
                 });
+                // --- END OF FIX ---
 
                 this.processAndDisplayData(filteredData);
             },
