@@ -352,6 +352,12 @@
             <label for="team-filter-mkt">Team:</label>
             <select id="team-filter-mkt"></select>
           </div>
+          <!-- START: Thêm bộ lọc Ca -->
+          <div class="filter-group">
+            <label for="ca-filter-mkt">Ca:</label>
+            <select id="ca-filter-mkt"></select>
+          </div>
+          <!-- END: Thêm bộ lọc Ca -->
           <button id="apply-filter-mkt">Áp dụng</button>
       </div>
 
@@ -556,14 +562,17 @@
             },
 
             populateFilters: function() {
-                const markets = [...new Set(this.allData.map(r => r.thiTruong))].sort();
-                const teams = [...new Set(this.allData.map(r => r.team))].sort();
+                const markets = [...new Set(this.allData.map(r => r.thiTruong).filter(Boolean))].sort();
+                const teams = [...new Set(this.allData.map(r => r.team).filter(Boolean))].sort();
+                const shifts = [...new Set(this.allData.map(r => r.ca).filter(ca => ca != null && ca !== ''))].sort((a, b) => a - b);
                 
                 const marketSelect = document.getElementById('market-filter-mkt');
                 const teamSelect = document.getElementById('team-filter-mkt');
+                const shiftSelect = document.getElementById('ca-filter-mkt');
 
                 marketSelect.innerHTML = '<option value="">Tất cả Thị trường</option>' + markets.map(m => `<option value="${m}">${m}</option>`).join('');
                 teamSelect.innerHTML = '<option value="">Tất cả Team</option>' + teams.map(t => `<option value="${t}">${t}</option>`).join('');
+                shiftSelect.innerHTML = '<option value="">Tất cả Ca</option>' + shifts.map(s => `<option value="${s}">${s}</option>`).join('');
             },
 
             applyFilters: function() {
@@ -571,11 +580,10 @@
                 const endDateInput = document.getElementById('end-date-mkt').value;
                 const selectedMarket = document.getElementById('market-filter-mkt').value;
                 const selectedTeam = document.getElementById('team-filter-mkt').value;
+                const selectedCa = document.getElementById('ca-filter-mkt').value;
                 
                 document.getElementById('report-date-mkt').textContent = `Từ ngày ${formatUtils.formatDate(startDateInput)} đến ngày ${formatUtils.formatDate(endDateInput)}`;
 
-                // --- START OF FIX: Correct date handling ---
-                // Create dates at the beginning of the start day and the end of the end day
                 const startDate = startDateInput ? new Date(startDateInput + 'T00:00:00') : null;
                 const endDate = endDateInput ? new Date(endDateInput + 'T23:59:59') : null;
                 
@@ -583,18 +591,16 @@
                     if (!record.ngay) return false;
                     
                     const recordDate = new Date(record.ngay);
-                    // Add a safety check for invalid dates in the data
                     if (isNaN(recordDate.getTime())) { return false; }
 
-                    // Corrected date matching logic
                     const dateMatch = (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
-                    
                     const marketMatch = !selectedMarket || record.thiTruong === selectedMarket;
                     const teamMatch = !selectedTeam || record.team === selectedTeam;
+                    // Sử dụng String() để xử lý trường hợp record.ca là số và selectedCa là chuỗi
+                    const caMatch = !selectedCa || String(record.ca) === selectedCa;
 
-                    return dateMatch && marketMatch && teamMatch;
+                    return dateMatch && marketMatch && teamMatch && caMatch;
                 });
-                // --- END OF FIX ---
 
                 this.processAndDisplayData(filteredData);
             },
@@ -697,7 +703,6 @@
                 const tr = document.createElement('tr');
                 if (className) tr.className = className;
                 
-                // Công thức tính toán theo logic code cũ
                 const costPercent = data.dsChot ? data.cpqc / data.dsChot : 0;
                 const cps = data.soDon ? data.cpqc / data.soDon : 0;
                 const avgOrderValue = data.soDon ? data.dsChot / data.soDon : 0;
