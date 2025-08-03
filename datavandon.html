@@ -91,27 +91,27 @@
       max-height: calc(100vh - 200px);
     }
     
-    /********** CSS ĐÃ SỬA ĐỔI **********/
     table {
       border-collapse: collapse; 
       width: 100%; 
-      /* min-width: 2200px;  Đã xóa để bảng linh hoạt hơn */
-      font-size: 12px; /* Tăng nhẹ font chữ cho dễ đọc hơn */
+      font-size: 12px;
       font-weight: bold;
     }
     thead { position: sticky; top: 0; z-index: 10; }
+    
+    /********** CSS ĐÃ SỬA ĐỔI **********/
     th, td {
       border: 1px solid #e0e0e0; 
-      padding: 8px 15px; /* Tăng khoảng đệm để ô rộng hơn */
-      white-space: normal; /* Cho phép văn bản tự động xuống dòng */
-      overflow-wrap: break-word; /* Đảm bảo từ quá dài cũng sẽ được ngắt dòng */
+      padding: 8px 15px;
+      white-space: pre-wrap; /* <<< THAY ĐỔI QUAN TRỌNG: Giữ dấu xuống dòng */
+      overflow-wrap: break-word; /* Xử lý từ quá dài nếu cần */
       background-color: white; 
       text-align: left;
-      vertical-align: top; /* Căn nội dung lên trên cùng của ô */
+      vertical-align: top;
       position: relative;
     }
     /********** KẾT THÚC SỬA ĐỔI **********/
-
+    
     th {
       background-color: #3498db; color: white; font-weight: 500;
       position: sticky; top: 0; z-index: 20;
@@ -123,6 +123,11 @@
       border: 1px solid #ccc; border-radius: 3px;
     }
     td.editable { background-color: #fffbe8; }
+    td[contenteditable="true"] {
+        outline: 2px solid #3498db;
+        background-color: #e3f2fd !important;
+    }
+
     td select, td input.date-input {
       width: 100%; padding: 4px; border: none;
       background: transparent; font-family: inherit; font-size: inherit;
@@ -214,7 +219,6 @@
   </style>
 </head>
 <body>
-  <!-- HTML and Script remain the same -->
   <h2>QUẢN LÝ VẬN ĐƠN</h2>
 
   <div class="tab-controls" style="margin-left: 20px; margin-bottom: 15px;">
@@ -306,13 +310,11 @@
 
     let allData = [], staffFilteredData = [], japanData = [], changedRows = new Set(), japanChangedRows = new Set(), currentStaff = null, teamMembers = [], dynamicFilterOptions = {}, japanDynamicFilterOptions = {};
     
-    // === CÁC BIẾN QUẢN LÝ TRẠNG THÁI CHỌN VÀ KÉO-THẢ ===
     let selectedCells = new Set();
     let isMouseDown = false;
     let isFilling = false;
-    let startCell = null; // Ô bắt đầu kéo (cho cả chọn và điền)
-    let focusedCell = null; // Ô có viền xanh, nơi tay nắm sẽ xuất hiện
-    // =======================================================
+    let startCell = null; 
+    let focusedCell = null; 
 
     const mainTabConfig = {
         data: () => staffFilteredData, changedRows: changedRows,
@@ -327,7 +329,6 @@
         dynamicOptions: () => japanDynamicFilterOptions
     };
 
-    // === CÁC HÀM TRỢ GIÚP MỚI VÀ ĐƯỢC CẢI TIẾN ===
     function getCurrentConfig() {
         const activeTabId = document.querySelector('.tab-btn.active').id;
         return activeTabId === 'tabJapan' ? japanTabConfig : mainTabConfig;
@@ -344,14 +345,13 @@
         if (!cell) return;
         const input = cell.querySelector('input, select');
         if (input) {
-            // Đảm bảo giá trị tồn tại trong dropdown trước khi gán
             if(input.tagName === 'SELECT'){
                 const optionExists = [...input.options].some(opt => opt.value === value);
                 if(optionExists) input.value = value;
             } else {
                  input.value = value;
             }
-        } else if (cell.isContentEditable) {
+        } else if (cell.classList.contains('editable')) {
             cell.textContent = value;
         }
     }
@@ -378,7 +378,6 @@
             cell.appendChild(handle);
         }
     }
-    // =================================================
 
     function getUrlParameter(name) { name = name.replace(/[\[\]]/g, '\\$&'); const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'); const results = regex.exec(window.location.href); if (!results) return null; if (!results[2]) return ''; return decodeURIComponent(results[2].replace(/\+/g, ' '));}
     function parseDateString(dateString) { if (!dateString || typeof dateString !== 'string') return null; const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, ''); if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) { const d = new Date(cleanedDateString); if (!isNaN(d.getTime())) return d; } const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/); if (parts) { const month = parseInt(parts[1], 10); const day = parseInt(parts[2], 10); const year = parseInt(parts[3], 10); if (year > 1000 && month > 0 && month <= 12 && day > 0 && day <= 31) { const d = new Date(Date.UTC(year, month - 1, day)); if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1) return d; } } return null; }
@@ -390,30 +389,29 @@
     function updateDetailedSummaryTable(filteredData) { const summaryTableBody = document.getElementById('summaryTableBody'); summaryTableBody.innerHTML = ''; if (filteredData.length === 0) { showError('Không có dữ liệu thống kê.', 'summaryTableBody'); return; } const staffStats = {}; const grandTotal = createEmptyStats(); filteredData.forEach(row => { const staffName = row["NV Vận đơn"] || row["NV_Vận_đơn"] || "Chưa có NV"; const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định"; if (!staffStats[staffName]) { staffStats[staffName] = { _total: createEmptyStats() }; } if (!staffStats[staffName][shippingCompany]) { staffStats[staffName][shippingCompany] = createEmptyStats(); } const statsToUpdate = [ staffStats[staffName][shippingCompany], staffStats[staffName]._total, grandTotal ]; const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0; const numericAmount = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0; const paymentStatus = row["Trạng thái thu tiền"] || ""; const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; statsToUpdate.forEach(stats => { if (paymentStatus.includes("Có bill")) { stats["Đã Thanh Toán (có bill)"].count++; stats["Đã Thanh Toán (có bill)"].amount += numericAmount; } else if (paymentStatus.includes("Có bill 1 phần")) { stats["Bill 1 phần"].count++; } if (deliveryStatus.includes("Giao Thành Công")) stats["Giao Thành Công"].count++; else if (deliveryStatus.includes("Đang Giao")) stats["Đang Giao"].count++; else if (deliveryStatus.includes("Chưa Giao")) stats["Chưa Giao"].count++; else if (deliveryStatus.includes("Hoàn")) stats["Hoàn"].count++; else if (deliveryStatus.includes("chờ check")) stats["chờ check"].count++; else if (deliveryStatus === "") stats["Trống trạng thái"].count++; stats["Tổng đơn lên nội bộ"].count++; if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) { stats["Tổng đơn đủ đkien đẩy vh"].count++; } if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) { stats["Tổng đơn lên vận hành"].count++; } }); }); Object.keys(staffStats).sort().forEach(staffName => { const staffData = staffStats[staffName]; const headerRow = summaryTableBody.insertRow(); headerRow.className = 'summary-staff-header'; const headerCell = headerRow.insertCell(); headerCell.colSpan = 17; headerCell.textContent = `Nhân viên: ${staffName}`; Object.keys(staffData).filter(key => key !== '_total').sort().forEach(companyName => { const companyData = staffData[companyName]; const tr = renderSummaryRow(staffName, companyName, companyData); summaryTableBody.appendChild(tr); }); const totalRow = renderSummaryRow("Tổng cộng", "Tất cả DVVC", staffData._total); totalRow.className = 'summary-staff-total'; summaryTableBody.appendChild(totalRow); }); const grandTotalRow = renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal); grandTotalRow.className = 'summary-grand-total'; summaryTableBody.appendChild(grandTotalRow); }
     function renderSummaryRow(staffName, companyName, data) { const tr = document.createElement('tr'); tr.insertCell().textContent = staffName; tr.insertCell().textContent = companyName; tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count; const paidAmountCell = tr.insertCell(); paidAmountCell.textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫'; tr.insertCell().textContent = data["Bill 1 phần"].count; tr.insertCell().textContent = data["Tổng đơn lên nội bộ"].count; tr.insertCell().textContent = data["Tổng đơn đủ đkien đẩy vh"].count; tr.insertCell().textContent = data["Tổng đơn lên vận hành"].count; const shippingRate = data["Tổng đơn lên nội bộ"].count > 0 ? (data["Tổng đơn lên vận hành"].count / data["Tổng đơn lên nội bộ"].count * 100) : 0; const shippingRateCell = tr.insertCell(); shippingRateCell.textContent = shippingRate.toFixed(2) + '%'; shippingRateCell.className = shippingRate > 70 ? 'positive' : 'negative'; tr.insertCell().textContent = data["Giao Thành Công"].count; tr.insertCell().textContent = data["Đang Giao"].count; tr.insertCell().textContent = data["Chưa Giao"].count; tr.insertCell().textContent = data["Hoàn"].count; tr.insertCell().textContent = data["chờ check"].count; tr.insertCell().textContent = data["Trống trạng thái"].count; const paymentSuccessRate = data["Giao Thành Công"].count > 0 ? (data["Đã Thanh Toán (có bill)"].count / data["Giao Thành Công"].count * 100) : 0; const paymentRateCell = tr.insertCell(); paymentRateCell.textContent = paymentSuccessRate.toFixed(2) + '%'; paymentRateCell.className = paymentSuccessRate > 80 ? 'positive' : 'negative'; const feeRate = data["Tổng đơn lên vận hành"].count > 0 ? (data["Giao Thành Công"].count / data["Tổng đơn lên vận hành"].count * 100) : 0; const feeRateCell = tr.insertCell(); feeRateCell.textContent = feeRate.toFixed(2) + '%'; feeRateCell.className = feeRate > 80 ? 'positive' : 'negative'; return tr; }
     
-    // === HÀM setupCellSelection ĐÃ ĐƯỢC VIẾT LẠI HOÀN TOÀN ===
     function setupCellSelection(tableBodyId) {
         const tableBody = document.getElementById(tableBodyId);
         if(!tableBody) return;
 
         tableBody.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            
             const target = e.target;
             const clickedCell = target.closest('td');
             if (!clickedCell) return;
 
-            // Kiểm tra nếu click vào tay nắm kéo
             if (target.classList.contains('drag-handle')) {
+                e.preventDefault();
                 isFilling = true;
-                startCell = focusedCell; // Ô nguồn là ô đang được focus
+                startCell = focusedCell;
                 return;
             }
 
-            // Nếu click vào ô khác
+            if (clickedCell.isContentEditable) return;
+            e.preventDefault();
+
             isMouseDown = true;
             startCell = clickedCell;
 
-            if (e.ctrlKey) { // Giữ Ctrl để chọn/bỏ chọn
+            if (e.ctrlKey) {
                 if (selectedCells.has(clickedCell)) {
                     clickedCell.classList.remove('cell-selected');
                     selectedCells.delete(clickedCell);
@@ -421,7 +419,7 @@
                     clickedCell.classList.add('cell-selected');
                     selectedCells.add(clickedCell);
                 }
-            } else { // Click bình thường
+            } else {
                 setFocus(clickedCell);
             }
         });
@@ -430,7 +428,6 @@
             const currentCell = e.target.closest('td');
             if (!currentCell) return;
 
-            // Logic Kéo để điền
             if (isFilling) {
                 const config = getCurrentConfig();
                 if (currentCell.cellIndex === startCell.cellIndex && currentCell.classList.contains('editable')) {
@@ -441,7 +438,6 @@
                     config.changedRows.add(rowIndex);
                 }
             }
-            // Logic Kéo để chọn nhiều ô
             else if (isMouseDown) {
                 clearSelection();
                 const rows = tableBody.rows;
@@ -459,7 +455,7 @@
                         }
                     }
                 }
-                startCell.classList.add('cell-focused'); // Giữ focus cho ô bắt đầu
+                startCell.classList.add('cell-focused');
                 focusedCell = startCell;
             }
         });
@@ -484,7 +480,90 @@
     function populateExternalFilters(config) { const options = config.dynamicOptions(); const productFilter = document.getElementById(config.controls.product); productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>'; (options['Mặt hàng'] || []).forEach(opt => productFilter.add(new Option(opt, opt))); if (config.controls.market) { const marketFilter = document.getElementById(config.controls.market); marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>'; (options['khu vực'] || []).forEach(opt => marketFilter.add(new Option(opt, opt))); } if (config.controls.staff) { const staffFilter = document.getElementById(config.controls.staff); staffFilter.innerHTML = '<option value="">Tất cả NV Vận đơn</option>'; (options['NV Vận đơn'] || []).forEach(opt => staffFilter.add(new Option(opt, opt))); } }
     function applyAllFilters(config) { clearSelection(); let dataToFilter = [...config.data()]; const tableHead = document.getElementById(config.table.head); if (!tableHead.querySelector('tr')) { renderTableBody(config, dataToFilter); updateSummaryInfo(dataToFilter, config.controls.summary, config === mainTabConfig); return; } const startDate = document.getElementById(config.controls.startDate).value; const endDate = document.getElementById(config.controls.endDate).value; if (startDate || endDate) { const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if(start) start.setHours(0,0,0,0); if(end) end.setHours(23,59,59,999); dataToFilter = dataToFilter.filter(row => { const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"]; const orderDate = parseDateString(orderDateStr); if (!orderDate) return false; return (!start || orderDate >= start) && (!end || orderDate <= end); }); } const productFilterValue = document.getElementById(config.controls.product).value; if (productFilterValue) dataToFilter = dataToFilter.filter(row => (row["Mặt hàng"] || '') === productFilterValue); if (config.controls.market && document.getElementById(config.controls.market).value) { const marketFilterValue = document.getElementById(config.controls.market).value; dataToFilter = dataToFilter.filter(row => (row["Khu vực"] || row["khu vực"] || '') === marketFilterValue); } if (config.controls.staff && document.getElementById(config.controls.staff).value) { const staffFilterValue = document.getElementById(config.controls.staff).value; dataToFilter = dataToFilter.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"] || '') === staffFilterValue); } const filters = tableHead.querySelectorAll('.filter-input, .filter-select'); filters.forEach(filter => { const value = filter.value.toLowerCase(); if (value === '') return; const colName = filter.dataset.column; const dataKey = columnDisplayMapping[colName] || colName; dataToFilter = dataToFilter.filter(row => { let cellValue = row[dataKey] !== undefined ? row[dataKey] : row[dataKey.replace(/ /g, '_')] || ''; if (dataKey === 'khu vực') cellValue = row['Khu vực'] || row['khu vực'] || ''; return String(cellValue).toLowerCase().includes(value); }); }); updateSummaryInfo(dataToFilter, config.controls.summary, config === mainTabConfig); renderTableBody(config, dataToFilter); }
     function renderHeader(config) { const header = document.getElementById(config.table.head); const options = config.dynamicOptions(); header.innerHTML = ''; const tr = document.createElement('tr'); const filterFunction = () => applyAllFilters(config); displayColumns.forEach(colName => { const th = document.createElement('th'); th.textContent = colName; if (colName === "Mã đơn hàng") th.classList.add('fixed-column'); let filterElement; if (options[colName]) { filterElement = document.createElement('select'); filterElement.className = 'filter-select'; filterElement.add(new Option(`Tất cả ${colName}`, '')); options[colName].forEach(opt => filterElement.add(new Option(opt, opt))); filterElement.addEventListener('change', filterFunction); } else { filterElement = document.createElement('input'); filterElement.type = 'text'; filterElement.className = 'filter-input'; filterElement.placeholder = `Lọc ${colName}...`; filterElement.addEventListener('input', filterFunction); } filterElement.dataset.column = colName; th.appendChild(document.createElement('br')); th.appendChild(filterElement); tr.appendChild(th); }); header.appendChild(tr); }
-    function renderTableBody(config, data) { const container = document.getElementById(config.table.body); container.innerHTML = ''; if (data.length === 0) { showError(`Không có đơn hàng nào khớp với bộ lọc.`, config.table.body); return; } const originalDataSet = config.data(); data.forEach((row) => { const originalRowIndex = originalDataSet.indexOf(row); const tr = document.createElement('tr'); tr.dataset.rowIndex = originalRowIndex; displayColumns.forEach(col => { const td = document.createElement('td'); const dataKey = columnDisplayMapping[col] || col; let value; if (allDateColumns.includes(dataKey)) { const dateSource = dataKey === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : (row[dataKey] || ''); const formattedDate = formatDate(dateSource); value = (dataKey === "Ngày hẹn đẩy đơn") ? (row[dataKey] || '') : formattedDate.display; td.dataset.originalValue = formattedDate.original; } else { value = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : ''); } if (col === "Mã đơn hàng") td.classList.add('fixed-column'); if (editableCols.includes(dataKey)) { td.classList.add('editable'); if (dropdownCols[dataKey]) { const select = document.createElement('select'); dropdownCols[dataKey].forEach(opt => select.add(new Option(opt, opt))); select.value = value; select.addEventListener('change', () => { td.classList.add('highlight'); config.changedRows.add(originalRowIndex); }); td.appendChild(select); } else if (dataKey === "Ngày hẹn đẩy đơn") { const input = document.createElement('input'); input.type = 'text'; input.className = 'date-input'; input.value = value; input.addEventListener('input', () => { td.classList.add('highlight'); config.changedRows.add(originalRowIndex); }); td.appendChild(input); } else { td.contentEditable = 'true'; td.textContent = value; td.addEventListener('input', () => { td.classList.add('highlight'); config.changedRows.add(originalRowIndex); }); } } else { td.textContent = value; } if (col === "Kết quả Check") { if (value === 'OK') td.classList.add('cell-ok'); else if (value === 'Vận đơn XL') td.classList.add('cell-xl'); else if (value === 'Huỷ') td.classList.add('cell-cancel'); } tr.appendChild(td); }); container.appendChild(tr); }); }
+    
+    function renderTableBody(config, data) { 
+      const container = document.getElementById(config.table.body); container.innerHTML = ''; 
+      if (data.length === 0) { showError(`Không có đơn hàng nào khớp với bộ lọc.`, config.table.body); return; } 
+      const originalDataSet = config.data(); 
+      data.forEach((row) => { 
+        const originalRowIndex = originalDataSet.indexOf(row); 
+        const tr = document.createElement('tr'); tr.dataset.rowIndex = originalRowIndex; 
+        displayColumns.forEach(col => { 
+          const td = document.createElement('td'); 
+          const dataKey = columnDisplayMapping[col] || col; 
+          let value; 
+          if (allDateColumns.includes(dataKey)) { 
+            const dateSource = dataKey === "Ngày lên đơn" ? (row["Ngày lên đơn"] || row["Thời gian lên đơn"]) : (row[dataKey] || ''); 
+            const formattedDate = formatDate(dateSource); 
+            value = (dataKey === "Ngày hẹn đẩy đơn") ? (row[dataKey] || '') : formattedDate.display; 
+            td.dataset.originalValue = formattedDate.original; 
+          } else { 
+            value = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : ''); 
+          } 
+          if (col === "Mã đơn hàng") td.classList.add('fixed-column'); 
+          if (editableCols.includes(dataKey)) { 
+            td.classList.add('editable'); 
+            if (dropdownCols[dataKey]) { 
+              const select = document.createElement('select'); 
+              dropdownCols[dataKey].forEach(opt => select.add(new Option(opt, opt))); 
+              select.value = value; 
+              select.addEventListener('change', () => { 
+                td.classList.add('highlight'); 
+                config.changedRows.add(originalRowIndex); 
+              }); 
+              td.appendChild(select); 
+            } else if (dataKey === "Ngày hẹn đẩy đơn") { 
+              const input = document.createElement('input'); 
+              input.type = 'text'; 
+              input.className = 'date-input'; 
+              input.value = value; 
+              input.addEventListener('input', () => { 
+                td.classList.add('highlight'); 
+                config.changedRows.add(originalRowIndex); 
+              }); 
+              td.appendChild(input); 
+            } else { 
+                td.contentEditable = 'false';
+                td.textContent = value;
+                
+                td.addEventListener('dblclick', () => {
+                    if (td.isContentEditable) return;
+                    td.contentEditable = 'true';
+                    td.focus();
+                });
+                
+                td.addEventListener('blur', () => {
+                    td.contentEditable = 'false';
+                });
+
+                td.addEventListener('input', () => {
+                    td.classList.add('highlight');
+                    config.changedRows.add(originalRowIndex);
+                });
+                
+                // === THÊM LOGIC XỬ LÝ PHÍM ENTER ===
+                td.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        document.execCommand('insertLineBreak');
+                    }
+                });
+                // ===================================
+            } 
+          } else { 
+            td.textContent = value; 
+          } 
+          if (col === "Kết quả Check") { 
+            if (value === 'OK') td.classList.add('cell-ok'); 
+            else if (value === 'Vận đơn XL') td.classList.add('cell-xl'); 
+            else if (value === 'Huỷ') td.classList.add('cell-cancel'); 
+          } 
+          tr.appendChild(td); 
+        }); 
+        container.appendChild(tr); 
+      }); 
+    }
+
     function setupControls() { setupTabs(); setupTabControls(mainTabConfig); setupTabControls(japanTabConfig); }
     function setupTabControls(config) { document.getElementById(config.controls.refreshBtn).addEventListener('click', refreshData); document.getElementById(config.controls.updateBtn).addEventListener('click', () => updateAllChangedRows(config)); document.getElementById(config.controls.startDate).addEventListener('change', () => applyAllFilters(config)); document.getElementById(config.controls.endDate).addEventListener('change', () => applyAllFilters(config)); document.getElementById(config.controls.product).addEventListener('change', () => applyAllFilters(config)); if(config.controls.market) document.getElementById(config.controls.market).addEventListener('change', () => applyAllFilters(config)); if(config.controls.staff) document.getElementById(config.controls.staff).addEventListener('change', () => applyAllFilters(config)); document.getElementById(config.controls.clearBtn).addEventListener('click', () => { document.getElementById(config.controls.startDate).value = ''; document.getElementById(config.controls.endDate).value = ''; document.getElementById(config.controls.product).selectedIndex = 0; if(config.controls.market) document.getElementById(config.controls.market).selectedIndex = 0; if(config.controls.staff) document.getElementById(config.controls.staff).selectedIndex = 0; document.querySelectorAll(`#${config.table.head} .filter-input, #${config.table.head} .filter-select`).forEach(f => { if (f.tagName === 'SELECT') f.selectedIndex = 0; else f.value = ''; }); applyAllFilters(config); }); }
     function setupTabs() { const tabs = document.querySelectorAll('.tab-btn'); const contents = document.querySelectorAll('.content-tab'); tabs.forEach(tab => { tab.addEventListener('click', () => { clearSelection(); tabs.forEach(item => item.classList.remove('active')); contents.forEach(content => content.classList.remove('active')); tab.classList.add('active'); const contentId = 'content' + tab.id.substring(3); document.getElementById(contentId).classList.add('active'); }); }); }
