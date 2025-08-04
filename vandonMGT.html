@@ -377,6 +377,7 @@
         products.forEach(product => productFilter.innerHTML += `<option value="${product}">${product}</option>`);
     }
 
+    // *** UPDATED FUNCTION ***
     function applyAllFilters() {
         let dataToRender = [...initialFilteredData];
         const market = document.getElementById('filterMarket').value;
@@ -389,6 +390,14 @@
         if (dateFrom) { const from = new Date(dateFrom); from.setHours(0, 0, 0, 0); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) >= from); }
         if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
         if (activeRegion !== 'all') { dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion); }
+        
+        // --- NEW: Logic for multi-tracking search ---
+        const trackingFilterValue = filterValues['Mã Tracking'] || '';
+        let trackingCodesToFind = null;
+        if (trackingFilterValue.includes('\n')) {
+             trackingCodesToFind = new Set(trackingFilterValue.split('\n').map(t => t.trim()).filter(Boolean));
+        }
+        // --- END NEW ---
 
         const activeFilters = Object.entries(filterValues).filter(([_, val]) => val.trim() !== '');
         if (activeFilters.length > 0) {
@@ -396,6 +405,13 @@
                 return activeFilters.every(([col, filterValue]) => {
                     const dataKey = columnMapping[col] || col;
                     const cellValue = row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? '';
+                    
+                    // --- NEW: Apply multi-tracking search logic ---
+                    if (col === 'Mã Tracking' && trackingCodesToFind) {
+                        return trackingCodesToFind.has(String(cellValue).trim());
+                    } 
+                    // --- END NEW ---
+                    
                     return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
                 });
             });
@@ -463,7 +479,34 @@
     }
 
     function createTabs(data) { const tabContainer = document.getElementById('tabContainer'); tabContainer.innerHTML = ''; const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort(); const createTab = (name, value) => { const button = document.createElement('button'); button.className = 'tab-btn'; button.textContent = name; button.dataset.region = value; if (value === activeRegion) button.classList.add('active'); button.addEventListener('click', () => { activeRegion = value; document.querySelectorAll('#tabContainer .tab-btn').forEach(btn => btn.classList.remove('active')); button.classList.add('active'); applyAllFilters(); }); return button; }; tabContainer.appendChild(createTab('Tất cả', 'all')); regions.forEach(region => tabContainer.appendChild(createTab(region, region))); }
-    function setupColumnFilters() { const filterRow = document.getElementById('filterRow'); filterRow.innerHTML = ''; filterValues = {}; displayColumns.forEach((col, index) => { const th = document.createElement('th'); if (index === 0) th.classList.add('fixed-column'); const input = document.createElement('input'); input.type = 'text'; input.className = 'filter-input'; input.placeholder = `Lọc ${col}`; input.dataset.column = col; input.addEventListener('input', () => { filterValues[col] = input.value; applyAllFilters(); }); th.appendChild(input); filterRow.appendChild(th); }); }
+    
+    // *** UPDATED FUNCTION ***
+    function setupColumnFilters() {
+        const filterRow = document.getElementById('filterRow'); filterRow.innerHTML = ''; filterValues = {}; 
+        displayColumns.forEach((col, index) => { 
+            const th = document.createElement('th'); 
+            if (index === 0) th.classList.add('fixed-column'); 
+            const input = document.createElement('input'); 
+            input.type = 'text'; 
+            input.className = 'filter-input'; 
+            
+            // --- NEW: Custom placeholder for tracking code ---
+            if (col === "Mã Tracking") {
+                input.placeholder = "Lọc hoặc dán danh sách mã";
+            } else {
+                input.placeholder = `Lọc ${col}`;
+            }
+            // --- END NEW ---
+
+            input.dataset.column = col; 
+            input.addEventListener('input', () => { 
+                filterValues[col] = input.value; 
+                applyAllFilters(); 
+            }); 
+            th.appendChild(input); 
+            filterRow.appendChild(th); 
+        }); 
+    }
     
     // --- CÁC HÀM ĐIỀU KHIỂN ---
     function setupControls() {
@@ -545,7 +588,7 @@
         }
     }
 
-    // --- CÀI ĐẶT CHỌN, SAO CHÉP, DÁN (PHIÊN BẢN SỬA LỖI) ---
+    // *** UPDATED FUNCTION ***
     function setupInteractionHandlers() {
         const tableBody = document.getElementById('tableBody');
         if (!tableBody) return;
@@ -575,19 +618,18 @@
                     }
                 }
             }
-            if (start) { // Đặt lại ô neo sau khi chọn lại
+            if (start) {
                 pasteAnchorCell = start;
                 start.classList.add('paste-anchor');
             }
         };
         
-        // SỰ KIỆN CHÍNH ĐỂ CHỌN Ô
         tableBody.addEventListener('mousedown', e => {
             if (e.button !== 0) return;
             const cell = e.target.closest('td');
             if (!cell) return;
             
-            e.preventDefault(); // Ngăn hành vi chọn văn bản mặc định
+            e.preventDefault();
 
             if (e.shiftKey && pasteAnchorCell) {
                 selectCells(pasteAnchorCell, cell);
@@ -595,7 +637,7 @@
                 isSelecting = true;
                 clearAllSelections();
                 startCell = cell;
-                pasteAnchorCell = cell; // Đặt ô hiện tại làm ô neo
+                pasteAnchorCell = cell;
                 cell.classList.add('cell-selected');
                 cell.classList.add('paste-anchor');
             }
@@ -613,7 +655,6 @@
             isSelecting = false;
         });
 
-        // SỰ KIỆN ĐỂ VÀO CHẾ ĐỘ CHỈNH SỬA
         tableBody.addEventListener('dblclick', e => {
             const cell = e.target.closest('td.editable');
             if (!cell) return;
@@ -622,13 +663,11 @@
                 input.focus();
             } else if (cell.isContentEditable) {
                 cell.focus();
-                // Đặt con trỏ vào cuối nội dung để dễ dàng sửa
                 document.execCommand('selectAll', false, null);
                 document.getSelection().collapseToEnd();
             }
         });
 
-        // HÀM SAO CHÉP
         document.addEventListener('copy', e => {
             const selectedCells = document.querySelectorAll('td.cell-selected');
             if (selectedCells.length === 0) return;
@@ -645,7 +684,6 @@
             showCustomAlert(`Đã sao chép ${selectedCells.length} ô.`, 'info', 2000);
         });
         
-        // HÀM DÁN
         document.addEventListener('paste', e => {
             const selectedCells = document.querySelectorAll('td.cell-selected');
             if (!pasteAnchorCell && selectedCells.length === 0) return;
@@ -656,7 +694,6 @@
             const pastedRows = pasteData.split(/[\r\n]+/).map(row => row.split('\t')).filter(row => row.length > 0 && !(row.length === 1 && row[0] === ''));
             if (pastedRows.length === 0) return;
 
-            // Dán 1 giá trị vào nhiều ô đã chọn
             if (pastedRows.length === 1 && pastedRows[0].length === 1) {
                 const singleValue = pastedRows[0][0];
                 const editableSelected = document.querySelectorAll('td.cell-selected.editable');
@@ -667,7 +704,6 @@
                 }
             }
 
-            // Dán một khối dữ liệu từ ô neo
             if (!pasteAnchorCell) return;
             const tableRows = Array.from(document.getElementById('tableBody').rows);
             let startRowIndex = tableRows.findIndex(row => row.rowIndex === pasteAnchorCell.parentElement.rowIndex);
@@ -686,6 +722,26 @@
             });
             showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000);
         });
+
+        // --- NEW: Handle deleting content from selected cells ---
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                // Don't interfere if user is typing in a filter input or main input
+                if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                    return;
+                }
+
+                const editableSelected = document.querySelectorAll('td.cell-selected.editable');
+                if (editableSelected.length > 0) {
+                    e.preventDefault(); // Prevent default browser action (e.g., navigating back)
+                    editableSelected.forEach(cell => {
+                        setCellValue(cell, ''); // Use existing function to clear content
+                    });
+                    showCustomAlert(`Đã xóa nội dung ${editableSelected.length} ô.`, 'success', 2000);
+                }
+            }
+        });
+        // --- END NEW ---
     }
 
     // --- HÀM TẢI FILE EXCEL (CSV) ---
@@ -703,7 +759,7 @@
     // --- KHỞI TẠO ---
     document.addEventListener('DOMContentLoaded', () => {
         setupControls();
-        setupInteractionHandlers(); // Thay thế các hàm cũ
+        setupInteractionHandlers(); 
         refreshData();
     });
   </script>
