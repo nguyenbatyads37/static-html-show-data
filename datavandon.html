@@ -377,120 +377,56 @@
         const tableBody = document.getElementById(tableBodyId);
         if(!tableBody) return;
         
-        // Xử lý sự kiện click để edit ô
+        let lastClickTime = 0;
+        let lastClickCell = null;
+
+        // Xử lý sự kiện click để chọn ô
         tableBody.addEventListener('click', (e) => {
             const td = e.target.closest('td');
-            if (!td || !td.classList.contains('editable')) return;
+            if (!td) return;
+
+            const currentTime = new Date().getTime();
+            const isDoubleClick = (currentTime - lastClickTime < 300) && (lastClickCell === td);
             
-            // Nếu đang edit thì không làm gì
-            if (td.classList.contains('editing')) return;
-            
-            // Nếu có dropdown thì focus vào dropdown
-            const select = td.querySelector('select');
-            if (select) {
-                select.focus();
-                return;
-            }
-            
-            // Nếu là ô input date thì focus vào input
-            const dateInput = td.querySelector('input.date-input');
-            if (dateInput) {
-                dateInput.focus();
-                return;
-            }
-            
-            // Tạo input để edit
-            const input = document.createElement('input');
-            input.value = td.textContent;
-            td.innerHTML = '';
-            td.appendChild(input);
-            td.classList.add('editing');
-            input.focus();
-            
-            // Xử lý khi kết thúc edit
-            const finishEdit = () => {
-                const newValue = input.value.trim();
-                td.textContent = newValue;
-                td.classList.remove('editing');
-                
-                // Đánh dấu là đã thay đổi
-                td.classList.add('highlight');
-                const rowIndex = td.closest('tr').dataset.rowIndex;
-                if (rowIndex) {
-                    const config = tableBodyId === 'tableBody' ? mainTabConfig : japanTabConfig;
-                    config.changedRows.add(parseInt(rowIndex));
-                }
-                
-                // Xóa các event listener
-                input.removeEventListener('blur', finishEdit);
-                input.removeEventListener('keydown', handleKeyDown);
-            };
-            
-            // Xử lý phím Enter và Escape
-            const handleKeyDown = (e) => {
-                if (e.key === 'Enter') {
-                    finishEdit();
-                } else if (e.key === 'Escape') {
-                    td.textContent = input.value; // Giữ nguyên giá trị cũ
-                    td.classList.remove('editing');
-                    input.removeEventListener('blur', finishEdit);
-                    input.removeEventListener('keydown', handleKeyDown);
-                }
-            };
-            
-            input.addEventListener('blur', finishEdit);
-            input.addEventListener('keydown', handleKeyDown);
-        });
-        
-        // Xử lý selection nhiều ô
-        tableBody.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'TD') {
-                isMouseDown = true;
-                startCell = e.target;
-                
+            if (isDoubleClick) {
+                // Xử lý double click để edit
+                handleEditCell(td, tableBodyId);
+            } else {
+                // Xử lý single click để chọn
                 if (!e.ctrlKey && !e.metaKey) {
                     selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
                     selectedCells.clear();
                 }
                 
-                startCell.classList.add('cell-selected');
-                selectedCells.add(startCell);
+                td.classList.add('cell-selected');
+                selectedCells.add(td);
+                startCell = td;
+            }
+
+            lastClickTime = currentTime;
+            lastClickCell = td;
+        });
+
+        // Xử lý kéo chuột để chọn nhiều ô
+        tableBody.addEventListener('mousedown', (e) => {
+            if (e.target.tagName === 'TD') {
+                isMouseDown = true;
+                startCell = e.target;
                 e.preventDefault();
             }
         });
-        
+
         tableBody.addEventListener('mouseover', (e) => {
-            if (isMouseDown && e.target.tagName === 'TD' && startCell !== e.target) {
-                const startRow = startCell.parentNode.rowIndex;
-                const startCol = startCell.cellIndex;
-                const endRow = e.target.parentNode.rowIndex;
-                const endCol = e.target.cellIndex;
-                
-                const minRow = Math.min(startRow, endRow);
-                const maxRow = Math.max(startRow, endRow);
-                const minCol = Math.min(startCol, endCol);
-                const maxCol = Math.max(startCol, endCol);
-                
-                selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
-                selectedCells.clear();
-                
-                for (let i = minRow; i <= maxRow; i++) {
-                    for (let j = minCol; j <= maxCol; j++) {
-                        const cell = tableBody.rows[i].cells[j];
-                        if(cell) {
-                            cell.classList.add('cell-selected');
-                            selectedCells.add(cell);
-                        }
-                    }
-                }
+            if (isMouseDown && e.target.tagName === 'TD') {
+                const endCell = e.target;
+                selectCellsBetween(startCell, endCell);
             }
         });
-        
+
         document.addEventListener('mouseup', () => {
             isMouseDown = false;
-            startCell = null;
         });
-        
+
         // Xử lý copy và paste
         document.addEventListener('keydown', (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCells.size > 0) {
@@ -504,41 +440,166 @@
             }
         });
     }
-    
+
+    function selectCellsBetween(startCell, endCell) {
+        if (!startCell || !endCell) return;
+        
+        const tableBody = startCell.closest('tbody');
+        const startRow = startCell.parentNode.rowIndex;
+        const startCol = startCell.cellIndex;
+        const endRow = endCell.parentNode.rowIndex;
+        const endCol = endCell.cellIndex;
+        
+        const minRow = Math.min(startRow, endRow);
+        const maxRow = Math.max(startRow, endRow);
+        const minCol = Math.min(startCol, endCol);
+        const maxCol = Math.max(startCol, endCol);
+        
+        selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
+        selectedCells.clear();
+        
+        for (let i = minRow; i <= maxRow; i++) {
+            for (let j = minCol; j <= maxCol; j++) {
+                const cell = tableBody.rows[i].cells[j];
+                if(cell) {
+                    cell.classList.add('cell-selected');
+                    selectedCells.add(cell);
+                }
+            }
+        }
+    }
+
+    function handleEditCell(td, tableBodyId) {
+        if (!td.classList.contains('editable')) return;
+        
+        // Nếu có dropdown thì focus vào dropdown
+        const select = td.querySelector('select');
+        if (select) {
+            select.focus();
+            return;
+        }
+        
+        // Nếu là ô input date thì focus vào input
+        const dateInput = td.querySelector('input.date-input');
+        if (dateInput) {
+            dateInput.focus();
+            return;
+        }
+        
+        // Tạo input để edit
+        const input = document.createElement('input');
+        input.value = td.textContent;
+        td.innerHTML = '';
+        td.appendChild(input);
+        td.classList.add('editing');
+        input.focus();
+        
+        // Xử lý khi kết thúc edit
+        const finishEdit = () => {
+            const newValue = input.value.trim();
+            td.textContent = newValue;
+            td.classList.remove('editing');
+            
+            // Đánh dấu là đã thay đổi
+            td.classList.add('highlight');
+            const rowIndex = td.closest('tr').dataset.rowIndex;
+            if (rowIndex) {
+                const config = tableBodyId === 'tableBody' ? mainTabConfig : japanTabConfig;
+                config.changedRows.add(parseInt(rowIndex));
+            }
+            
+            // Xóa các event listener
+            input.removeEventListener('blur', finishEdit);
+            input.removeEventListener('keydown', handleKeyDown);
+        };
+        
+        // Xử lý phím Enter và Escape
+        const handleKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                finishEdit();
+            } else if (e.key === 'Escape') {
+                td.textContent = input.value; // Giữ nguyên giá trị cũ
+                td.classList.remove('editing');
+                input.removeEventListener('blur', finishEdit);
+                input.removeEventListener('keydown', handleKeyDown);
+            }
+        };
+        
+        input.addEventListener('blur', finishEdit);
+        input.addEventListener('keydown', handleKeyDown);
+    }
+
     function copySelectedCells() {
         if (selectedCells.size === 0) return;
         
-        let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity;
-        selectedCells.forEach(cell => {
-            const row = cell.parentNode.rowIndex;
-            const col = cell.cellIndex;
-            minRow = Math.min(minRow, row);
-            maxRow = Math.max(maxRow, row);
-            minCol = Math.min(minCol, col);
-            maxCol = Math.max(maxCol, col);
+        // Sắp xếp các ô theo vị trí hàng và cột
+        const sortedCells = Array.from(selectedCells).sort((a, b) => {
+            const rowDiff = a.parentNode.rowIndex - b.parentNode.rowIndex;
+            if (rowDiff !== 0) return rowDiff;
+            return a.cellIndex - b.cellIndex;
         });
         
-        const grid = Array(maxRow - minRow + 1).fill().map(() => Array(maxCol - minCol + 1).fill(''));
+        // Xác định phạm vi copy
+        const firstCell = sortedCells[0];
+        const lastCell = sortedCells[sortedCells.length - 1];
+        const minRow = firstCell.parentNode.rowIndex;
+        const maxRow = lastCell.parentNode.rowIndex;
+        const minCol = Math.min(...sortedCells.map(cell => cell.cellIndex));
+        const maxCol = Math.max(...sortedCells.map(cell => cell.cellIndex));
         
-        selectedCells.forEach(cell => {
-            const row = cell.parentNode.rowIndex - minRow;
-            const col = cell.cellIndex - minCol;
+        // Tạo grid dữ liệu để copy
+        const grid = [];
+        let currentRow = minRow;
+        let currentGridRow = [];
+        let currentGridRowIndex = 0;
+        
+        sortedCells.forEach((cell, index) => {
+            const cellRow = cell.parentNode.rowIndex;
             
-            // Lấy giá trị từ select nếu có, không thì lấy textContent
+            // Nếu sang hàng mới
+            if (cellRow !== currentRow) {
+                // Điền các ô trống nếu có
+                while (currentGridRow.length < (maxCol - minCol + 1)) {
+                    currentGridRow.push('');
+                }
+                grid.push(currentGridRow);
+                currentGridRow = [];
+                currentGridRowIndex = 0;
+                currentRow = cellRow;
+            }
+            
+            // Điền các ô trống giữa các cột
+            const expectedCol = minCol + currentGridRowIndex;
+            while (cell.cellIndex > expectedCol) {
+                currentGridRow.push('');
+                currentGridRowIndex++;
+            }
+            
+            // Thêm giá trị ô hiện tại
             const select = cell.querySelector('select');
             if (select) {
-                grid[row][col] = select.value;
+                currentGridRow.push(select.value);
             } else {
-                grid[row][col] = cell.textContent.trim();
+                currentGridRow.push(cell.textContent.trim());
             }
+            currentGridRowIndex++;
         });
         
+        // Thêm hàng cuối cùng vào grid
+        if (currentGridRow.length > 0) {
+            while (currentGridRow.length < (maxCol - minCol + 1)) {
+                currentGridRow.push('');
+            }
+            grid.push(currentGridRow);
+        }
+        
+        // Tạo text để copy
         const tsv = grid.map(row => row.join('\t')).join('\n');
         navigator.clipboard.writeText(tsv).then(() => {
             showTempMessage(`Đã sao chép ${selectedCells.size} ô`);
         }).catch(err => console.error('Lỗi sao chép:', err));
     }
-    
+
     function pasteToSelectedCells(text) {
         if (selectedCells.size === 0) return;
         
@@ -546,10 +607,17 @@
         const rows = text.split('\n').map(row => row.split('\t'));
         if (rows.length === 0 || rows[0].length === 0) return;
         
+        // Sắp xếp các ô theo vị trí hàng và cột
+        const sortedCells = Array.from(selectedCells).sort((a, b) => {
+            const rowDiff = a.parentNode.rowIndex - b.parentNode.rowIndex;
+            if (rowDiff !== 0) return rowDiff;
+            return a.cellIndex - b.cellIndex;
+        });
+        
         // Nếu chỉ có 1 giá trị, áp dụng cho tất cả các ô được chọn
         if (rows.length === 1 && rows[0].length === 1) {
             const value = rows[0][0];
-            selectedCells.forEach(cell => {
+            sortedCells.forEach(cell => {
                 updateCellValue(cell, value);
             });
             showTempMessage(`Đã áp dụng giá trị cho ${selectedCells.size} ô`);
@@ -557,35 +625,21 @@
         }
         
         // Nếu có nhiều giá trị, áp dụng theo thứ tự từ trái sang phải, từ trên xuống dưới
-        const cellsArray = Array.from(selectedCells);
-        const minRow = Math.min(...cellsArray.map(cell => cell.parentNode.rowIndex));
-        const minCol = Math.min(...cellsArray.map(cell => cell.cellIndex));
-        
-        // Tạo grid từ các ô được chọn
-        const grid = [];
-        cellsArray.forEach(cell => {
-            const rowIdx = cell.parentNode.rowIndex - minRow;
-            const colIdx = cell.cellIndex - minCol;
-            
-            if (!grid[rowIdx]) grid[rowIdx] = [];
-            grid[rowIdx][colIdx] = cell;
-        });
-        
-        // Dán giá trị từ clipboard vào grid
         let pasteCount = 0;
-        for (let i = 0; i < rows.length && i < grid.length; i++) {
-            for (let j = 0; j < rows[i].length && j < grid[i].length; j++) {
-                if (grid[i][j]) {
-                    updateCellValue(grid[i][j], rows[i][j]);
-                    pasteCount++;
-                }
+        let valueIndex = 0;
+        const totalValues = rows.flat().length;
+        
+        for (let i = 0; i < rows.length && valueIndex < totalValues; i++) {
+            for (let j = 0; j < rows[i].length && valueIndex < sortedCells.length; j++) {
+                updateCellValue(sortedCells[valueIndex], rows[i][j]);
+                pasteCount++;
+                valueIndex++;
             }
         }
         
         showTempMessage(`Đã dán ${pasteCount} giá trị`);
     }
 
-    // Hàm cập nhật giá trị cho ô
     function updateCellValue(cell, value) {
         if (!cell.classList.contains('editable')) return;
         
