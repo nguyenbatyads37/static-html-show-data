@@ -542,55 +542,68 @@
     function pasteToSelectedCells(text) {
         if (selectedCells.size === 0) return;
         
-        // Phân tích dữ liệu từ clipboard
+        // Phân tích dữ liệu từ clipboard thành mảng 2 chiều
         const rows = text.split('\n').map(row => row.split('\t'));
-        if (rows.length === 0) return;
+        if (rows.length === 0 || rows[0].length === 0) return;
         
         // Nếu chỉ có 1 giá trị, áp dụng cho tất cả các ô được chọn
         if (rows.length === 1 && rows[0].length === 1) {
             const value = rows[0][0];
             selectedCells.forEach(cell => {
-                if (cell.classList.contains('editable')) {
-                    const select = cell.querySelector('select');
-                    if (select) {
-                        select.value = value;
-                        select.dispatchEvent(new Event('change'));
-                    } else {
-                        cell.textContent = value;
-                        cell.classList.add('highlight');
-                        const rowIndex = cell.closest('tr').dataset.rowIndex;
-                        if (rowIndex) {
-                            const config = cell.closest('tbody').id === 'tableBody' ? mainTabConfig : japanTabConfig;
-                            config.changedRows.add(parseInt(rowIndex));
-                        }
-                    }
-                }
+                updateCellValue(cell, value);
             });
             showTempMessage(`Đã áp dụng giá trị cho ${selectedCells.size} ô`);
             return;
         }
         
-        // Nếu có nhiều giá trị, chỉ áp dụng cho ô đầu tiên được chọn
-        const firstCell = Array.from(selectedCells)[0];
-        if (firstCell && firstCell.classList.contains('editable')) {
-            const value = rows[0][0];
-            const select = firstCell.querySelector('select');
-            if (select) {
-                select.value = value;
-                select.dispatchEvent(new Event('change'));
-            } else {
-                firstCell.textContent = value;
-                firstCell.classList.add('highlight');
-                const rowIndex = firstCell.closest('tr').dataset.rowIndex;
-                if (rowIndex) {
-                    const config = firstCell.closest('tbody').id === 'tableBody' ? mainTabConfig : japanTabConfig;
-                    config.changedRows.add(parseInt(rowIndex));
+        // Nếu có nhiều giá trị, áp dụng theo thứ tự từ trái sang phải, từ trên xuống dưới
+        const cellsArray = Array.from(selectedCells);
+        const minRow = Math.min(...cellsArray.map(cell => cell.parentNode.rowIndex));
+        const minCol = Math.min(...cellsArray.map(cell => cell.cellIndex));
+        
+        // Tạo grid từ các ô được chọn
+        const grid = [];
+        cellsArray.forEach(cell => {
+            const rowIdx = cell.parentNode.rowIndex - minRow;
+            const colIdx = cell.cellIndex - minCol;
+            
+            if (!grid[rowIdx]) grid[rowIdx] = [];
+            grid[rowIdx][colIdx] = cell;
+        });
+        
+        // Dán giá trị từ clipboard vào grid
+        let pasteCount = 0;
+        for (let i = 0; i < rows.length && i < grid.length; i++) {
+            for (let j = 0; j < rows[i].length && j < grid[i].length; j++) {
+                if (grid[i][j]) {
+                    updateCellValue(grid[i][j], rows[i][j]);
+                    pasteCount++;
                 }
             }
-            showTempMessage('Đã dán giá trị vào ô đầu tiên');
+        }
+        
+        showTempMessage(`Đã dán ${pasteCount} giá trị`);
+    }
+
+    // Hàm cập nhật giá trị cho ô
+    function updateCellValue(cell, value) {
+        if (!cell.classList.contains('editable')) return;
+        
+        const select = cell.querySelector('select');
+        if (select) {
+            select.value = value;
+            select.dispatchEvent(new Event('change'));
+        } else {
+            cell.textContent = value;
+            cell.classList.add('highlight');
+            const rowIndex = cell.closest('tr').dataset.rowIndex;
+            if (rowIndex) {
+                const config = cell.closest('tbody').id === 'tableBody' ? mainTabConfig : japanTabConfig;
+                config.changedRows.add(parseInt(rowIndex));
+            }
         }
     }
-    
+
     function showTempMessage(message) {
         const tempMsg = document.createElement('div');
         tempMsg.textContent = message;
