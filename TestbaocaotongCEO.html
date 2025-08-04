@@ -618,8 +618,12 @@
         // =========== MODULE CHO BÁO CÁO NHÂN SỰ (TAB 5) ====================
         // ===================================================================
         const staffReportApp = {
-            isInitialized: false, allData: [], charts: {}, fullReportData: [],
-            currentSummaryData: [], currentDailyData: {},
+            isInitialized: false, 
+            allData: [], 
+            charts: {}, 
+            fullReportData: [],
+            currentTeamMembers: [], 
+            currentDailyData: {},
 
             init: function() { this.addEventListeners(); this.setDefaultDates(); this.fetchData(); this.isInitialized = true; },
             
@@ -682,21 +686,72 @@
             applyFilters: function() {
                 showLoader();
                 setTimeout(() => { 
-                    const startDate = document.getElementById('start-date-staff').value, endDate = document.getElementById('end-date-staff').value, selectedTeams = Array.from(document.getElementById('team-filter-staff').selectedOptions).map(opt => opt.value), selectedTarget = document.getElementById('staff-filter-staff').value;
-                    const placeholder = document.getElementById('staff-placeholder'), resultsContainer = document.getElementById('staff-results-container'), dailyComparisonContainer = document.getElementById('daily-comparison-container');
-                    if (selectedTeams.length === 0 || !selectedTarget) { placeholder.style.display = 'block'; resultsContainer.style.display = 'none'; hideLoader(); return; }
-                    const dateFilteredData = this.allData.filter(r => { if (!r.ngay) return false; const dateStr = new Date(r.ngay).toISOString().split('T')[0]; return (!startDate || dateStr >= startDate) && (!endDate || dateStr <= endDate); });
+                    const startDateInput = document.getElementById('start-date-staff').value, 
+                          endDateInput = document.getElementById('end-date-staff').value, 
+                          selectedTeams = Array.from(document.getElementById('team-filter-staff').selectedOptions).map(opt => opt.value), 
+                          selectedTarget = document.getElementById('staff-filter-staff').value;
+                          
+                    const placeholder = document.getElementById('staff-placeholder'), 
+                          resultsContainer = document.getElementById('staff-results-container'), 
+                          dailyComparisonContainer = document.getElementById('daily-comparison-container');
+                          
+                    if (selectedTeams.length === 0 || !selectedTarget) { 
+                        placeholder.style.display = 'block'; 
+                        resultsContainer.style.display = 'none'; 
+                        hideLoader(); 
+                        return; 
+                    }
+                    
+                    // *** UPDATED DATE FILTERING LOGIC ***
+                    const startDateObj = startDateInput ? new Date(startDateInput) : null;
+                    const endDateObj = endDateInput ? new Date(endDateInput) : null;
+                    if (startDateObj) startDateObj.setHours(0, 0, 0, 0); // Set to start of day
+                    if (endDateObj) endDateObj.setHours(23, 59, 59, 999); // Set to end of day
+
+                    const dateFilteredData = this.allData.filter(r => {
+                        if (!r.ngay) return false;
+                        const recordDate = new Date(r.ngay);
+                        if (isNaN(recordDate.getTime())) return false; // Check for invalid date
+                        
+                        const isAfterStart = !startDateObj || recordDate >= startDateObj;
+                        const isBeforeEnd = !endDateObj || recordDate <= endDateObj;
+                        return isAfterStart && isBeforeEnd;
+                    });
+                    // *** END OF UPDATED LOGIC ***
+
                     const isFullTeamView = selectedTarget === '__FULL_TEAM__';
-                    this.fullReportData = isFullTeamView ? dateFilteredData.filter(r => selectedTeams.includes(r.team)) : dateFilteredData.filter(r => r.ten === selectedTarget);
-                    if (this.fullReportData.length === 0) { placeholder.style.display = 'block'; placeholder.innerHTML = `<p>Không tìm thấy dữ liệu cho lựa chọn của bạn.</p>`; resultsContainer.style.display = 'none'; } 
-                    else { const reportTitle = isFullTeamView ? `Báo cáo Team: ${selectedTeams.join(', ')}` : `Báo cáo chi tiết: ${selectedTarget}`;
-                        placeholder.style.display = 'none'; resultsContainer.style.display = 'block'; document.getElementById('staff-report-title').textContent = reportTitle;
+
+                    if (isFullTeamView) {
+                        this.currentTeamMembers = [...new Set(this.allData.filter(r => selectedTeams.includes(r.team)).map(r => r.ten))].sort();
+                        this.fullReportData = dateFilteredData.filter(r => selectedTeams.includes(r.team));
+                    } else {
+                        this.currentTeamMembers = [];
+                        this.fullReportData = dateFilteredData.filter(r => r.ten === selectedTarget);
+                    }
+
+                    if ( (isFullTeamView && this.currentTeamMembers.length === 0) || (!isFullTeamView && this.fullReportData.length === 0 && selectedTarget) ) { 
+                        placeholder.style.display = 'block'; 
+                        placeholder.innerHTML = `<p>Không tìm thấy dữ liệu cho lựa chọn của bạn.</p>`; 
+                        resultsContainer.style.display = 'none'; 
+                    } else { 
+                        const reportTitle = isFullTeamView ? `Báo cáo Team: ${selectedTeams.join(', ')}` : `Báo cáo chi tiết: ${selectedTarget}`;
+                        placeholder.style.display = 'none'; 
+                        resultsContainer.style.display = 'block'; 
+                        document.getElementById('staff-report-title').textContent = reportTitle;
                         
-                        this.updateChartVisibility(isFullTeamView); // SET INITIAL VISIBILITY
+                        this.updateChartVisibility(isFullTeamView);
                         
-                        this.renderSummaryTable(this.fullReportData, isFullTeamView); this.renderDailyBreakdownTable(this.fullReportData, isFullTeamView);
-                        if (isFullTeamView) { dailyComparisonContainer.style.display = 'block'; this.renderTeamTrendChart(this.fullReportData); this.renderTeamCharts(this.fullReportData); } 
-                        else { dailyComparisonContainer.style.display = 'none'; this.renderIndividualCharts(this.fullReportData); }
+                        this.renderSummaryTable(this.fullReportData, isFullTeamView, this.currentTeamMembers);
+                        this.renderDailyBreakdownTable(this.fullReportData, isFullTeamView);
+                        
+                        if (isFullTeamView) { 
+                            dailyComparisonContainer.style.display = 'block'; 
+                            this.renderTeamTrendChart(this.fullReportData); 
+                            this.renderTeamCharts(this.fullReportData); 
+                        } else { 
+                            dailyComparisonContainer.style.display = 'none'; 
+                            this.renderIndividualCharts(this.fullReportData); 
+                        }
                     }
                     hideLoader();
                 }, 10);
@@ -742,14 +797,33 @@
                 this.charts.teamTrend.update(); 
             },
             
-            renderSummaryTable: function(data, isFullTeamView, sortKey = 'chot', sortDir = 'desc') {
+            renderSummaryTable: function(data, isFullTeamView, allStaffInTeam = [], sortKey = 'chot', sortDir = 'desc') {
                 const table = document.getElementById('staff-summary-table');
                 const createRowHtml = (metrics, label, staffName, rowClass) => { const rateClass = metrics.tiLeChot > 0.1 ? 'bg-green' : (metrics.tiLeChot > 0.05 ? 'bg-yellow' : ''); return `<tr class="${rowClass}" data-staff-name="${staffName || ''}"><td>${label}</td><td>${formatUtils.formatNumber(metrics.mess)}</td><td>${formatUtils.formatCurrency(metrics.cpqc)}</td><td>${formatUtils.formatNumber(metrics.don)}</td><td>${formatUtils.formatCurrency(metrics.chot)}</td><td class="${rateClass}">${formatUtils.formatPercent(metrics.tiLeChot)}</td><td>${formatUtils.formatCurrency(metrics.giaMess)}</td><td>${formatUtils.formatCurrency(metrics.cps)}</td><td>${formatUtils.formatPercent(metrics.cpDsRatio)}</td><td>${formatUtils.formatCurrency(metrics.giaTbDon)}</td></tr>`; };
                 const headerHtml = `<thead><tr><th class="sortable-header" data-sort="name">Thành viên</th><th class="sortable-header" data-sort="mess">Số Mess</th><th class="sortable-header" data-sort="cpqc">CPQC</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th><th class="sortable-header" data-sort="giaMess">Giá Mess</th><th class="sortable-header" data-sort="cps">CPS</th><th class="sortable-header" data-sort="cpDsRatio">%CP/DS</th><th class="sortable-header" data-sort="giaTbDon">Giá TB Đơn</th></tr></thead>`;
                 let bodyHtml = '';
-                if (isFullTeamView) { const memberStats = data.reduce((acc, r) => { (acc[r.ten] = acc[r.ten] || []).push(r); return acc; }, {}); let memberMetrics = Object.keys(memberStats).map(name => ({ name, metrics: this.calculateMetrics(memberStats[name]) })); memberMetrics.sort((a, b) => { const valA = sortKey === 'name' ? a.name : a.metrics[sortKey]; const valB = sortKey === 'name' ? b.name : b.metrics[sortKey]; if (typeof valA === 'string') return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); return sortDir === 'asc' ? valA - valB : valB - valA; }); this.currentSummaryData = memberMetrics; let memberRowsHtml = memberMetrics.map(item => createRowHtml(item.metrics, item.name, item.name, 'clickable-staff-row')).join(''); const totalMetrics = this.calculateMetrics(data); bodyHtml = `<tbody>${createRowHtml(totalMetrics, 'TỔNG CỘNG TEAM', '', 'total-row')}${memberRowsHtml}</tbody>`; } 
-                else { this.currentSummaryData = []; const metrics = this.calculateMetrics(data); bodyHtml = `<tbody>${createRowHtml(metrics, data[0]?.ten || 'Tổng cộng', '', '')}</tbody>`; }
-                table.innerHTML = headerHtml + bodyHtml; table.querySelector(`#StaffReport th[data-sort="${sortKey}"]`)?.classList.add(sortDir === 'desc' ? 'sorted-desc' : 'sorted-asc');
+
+                if (isFullTeamView) {
+                    const memberPerformanceData = data.reduce((acc, r) => { (acc[r.ten] = acc[r.ten] || []).push(r); return acc; }, {});
+                    const zeroMetrics = { mess: 0, don: 0, chot: 0, cpqc: 0, tiLeChot: 0, giaMess: 0, cps: 0, cpDsRatio: 0, giaTbDon: 0 };
+                    
+                    let memberMetrics = allStaffInTeam.map(staffName => {
+                        const performanceRecords = memberPerformanceData[staffName];
+                        const metrics = performanceRecords ? this.calculateMetrics(performanceRecords) : { ...zeroMetrics };
+                        return { name: staffName, metrics: metrics };
+                    });
+
+                    memberMetrics.sort((a, b) => { const valA = sortKey === 'name' ? a.name : a.metrics[sortKey]; const valB = sortKey === 'name' ? b.name : b.metrics[sortKey]; if (typeof valA === 'string') return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); return sortDir === 'asc' ? valA - valB : valB - valA; });
+                    
+                    let memberRowsHtml = memberMetrics.map(item => createRowHtml(item.metrics, item.name, item.name, 'clickable-staff-row')).join('');
+                    const totalMetrics = this.calculateMetrics(data);
+                    bodyHtml = `<tbody>${createRowHtml(totalMetrics, 'TỔNG CỘNG TEAM', '', 'total-row')}${memberRowsHtml}</tbody>`; 
+                } else {
+                    const metrics = this.calculateMetrics(data); 
+                    bodyHtml = `<tbody>${createRowHtml(metrics, data[0]?.ten || 'Tổng cộng', '', '')}</tbody>`; 
+                }
+                table.innerHTML = headerHtml + bodyHtml; 
+                table.querySelector(`#StaffReport th[data-sort="${sortKey}"]`)?.classList.add(sortDir === 'desc' ? 'sorted-desc' : 'sorted-asc');
             },
             
             renderDailyBreakdownTable: function(data, isFullTeamView, sortKey = 'dateObj', sortDir = 'desc') {
@@ -772,7 +846,24 @@
                 container.innerHTML = `<div class="nested-table-container" data-date="${dateKey}"><table>${createNestedHeader()}<tbody>${bodyHtml}</tbody></table></div>`; container.querySelector(`#StaffReport th[data-sort="${sortKey}"]`)?.classList.add(sortDir === 'desc' ? 'sorted-desc' : 'sorted-asc');
             },
             
-            handleTableSort: function(event, tableType, dateKey = null) { const header = event.target.closest('.sortable-header'); if (!header) return; const sortKey = header.dataset.sort; if (!sortKey) return; let currentSortDir = 'desc'; if (header.classList.contains('sorted-desc')) { currentSortDir = 'asc'; } showLoader(); setTimeout(() => { if (tableType === 'staff-summary-table') { this.renderSummaryTable(this.fullReportData, true, sortKey, currentSortDir); } else if (tableType === 'daily-breakdown') { this.renderDailyBreakdownTable(this.fullReportData, true, sortKey, currentSortDir); } else if (tableType === 'nested' && dateKey) { const detailsRow = document.querySelector(`#StaffReport .details-container-row[data-date='${dateKey}'] td`); this.renderNestedTable(detailsRow, dateKey, this.currentDailyData[dateKey].members, sortKey, currentSortDir); } hideLoader(); }, 10); },
+            handleTableSort: function(event, tableType, dateKey = null) { 
+                const header = event.target.closest('.sortable-header'); if (!header) return; 
+                const sortKey = header.dataset.sort; if (!sortKey) return; 
+                let currentSortDir = 'desc'; 
+                if (header.classList.contains('sorted-desc')) { currentSortDir = 'asc'; } 
+                showLoader(); 
+                setTimeout(() => { 
+                    if (tableType === 'staff-summary-table') { 
+                        this.renderSummaryTable(this.fullReportData, true, this.currentTeamMembers, sortKey, currentSortDir); 
+                    } else if (tableType === 'daily-breakdown') { 
+                        this.renderDailyBreakdownTable(this.fullReportData, true, sortKey, currentSortDir); 
+                    } else if (tableType === 'nested' && dateKey) { 
+                        const detailsRow = document.querySelector(`#StaffReport .details-container-row[data-date='${dateKey}'] td`); 
+                        this.renderNestedTable(detailsRow, dateKey, this.currentDailyData[dateKey].members, sortKey, currentSortDir); 
+                    } 
+                    hideLoader(); 
+                }, 10); 
+            },
             
             renderIndividualCharts: function(data) { 
                 const dailyData = Object.entries(data.reduce((acc,r) => { const date = formatUtils.formatDate(r.ngay); if (!acc[date]) acc[date] = { mess: 0, don: 0, chot: 0, dateObj: new Date(r.ngay) }; acc[date].chot += r.dsChot; acc[date].don += r.soDon; acc[date].mess += r.soMessCmt; return acc; }, {})).sort((a,b) => a[1].dateObj - b[1].dateObj).reduce((acc,[key,val]) => ({...acc, [key]:val}), {}); 
@@ -781,7 +872,6 @@
                 const barCP = chartColorPalette.getColorPair(2);
                 const comboLineCP = chartColorPalette.getColorPair(3);
                 
-                // Cập nhật icon với màu mới
                 document.querySelector('#StaffReport .chart-container[data-chart="line"] i').style.color = lineCP.b;
                 document.querySelector('#StaffReport .chart-container[data-chart="combo"] i').style.color = barCP.b;
 
