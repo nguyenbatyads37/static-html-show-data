@@ -148,10 +148,21 @@
       border-radius: 3px;
       font-size: 13px;
     }
+    
+    /* --- CSS CHO BỘ LỌC KÉP --- */
+    .dual-filter-container {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .dual-filter-container input {
+      flex: 1; /* Chia đều không gian */
+      min-width: 0; /* Cho phép co lại khi cần */
+    }
+
     td.editable {
       background-color: #fffbe8;
     }
-    /* CSS cho dropdown trạng thái */
     td.editable:has(.status-select) {
         padding: 0;
     }
@@ -209,7 +220,6 @@
         outline-offset: -2px;
     }
 
-    /* BỘ ĐẾM ĐƠN HÀNG */
     .order-counter {
       margin-left: 15px;
       font-weight: bold;
@@ -221,8 +231,28 @@
       font-size: 16px;
       padding: 0 4px;
     }
+    
+    .selection-summary {
+      margin-left: 20px;
+      font-size: 14px;
+      color: #2980b9;
+      font-weight: 500;
+      display: flex;
+      gap: 15px;
+      align-items: center;
+    }
+    .selection-summary .summary-item {
+      display: inline-block;
+      background-color: #ecf0f1;
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid #bdc3c7;
+    }
+    .selection-summary b {
+      color: #c0392b;
+      padding-left: 5px;
+    }
 
-    /* --- CSS CHO HỘP THOẠI THÔNG BÁO TÙY CHỈNH --- */
     .custom-alert-overlay {
         position: fixed; top: 0; left: 0; width: 100%; height: 100%;
         background: rgba(0, 0, 0, 0.4); display: flex; justify-content: center;
@@ -281,6 +311,7 @@
       <button id="updateAll">Cập nhật tất cả thay đổi</button>
       <button id="downloadExcel">Tải Excel</button>
       <span id="orderCounter" class="order-counter"></span>
+      <span id="selectionSummary" class="selection-summary"></span>
     </div>
     <div>
       <button id="toggleTrackingView" class="tab-btn tracking-tab">Xem đơn có mã Tracking</button>
@@ -318,7 +349,7 @@
 
     let allData = [], initialFilteredData = [], filteredData = [];
     let changedRows = new Set(), activeRegion = 'all', filterValues = {}, showTrackingOrders = false;
-    let pasteAnchorCell = null; // Biến lưu ô neo để dán và chọn mở rộng
+    let pasteAnchorCell = null;
 
     // --- HÀM THÔNG BÁO TÙY CHỈNH ---
     function showCustomAlert(message, type = 'info', duration = 4000) {
@@ -385,35 +416,57 @@
         const dateFrom = document.getElementById('filterDateFrom').value;
         const dateTo = document.getElementById('filterDateTo').value;
 
+        // 1. Áp dụng các bộ lọc chính
         if (market) { dataToRender = dataToRender.filter(row => row["Khu vực"] === market); }
         if (product) { dataToRender = dataToRender.filter(row => row["Mặt hàng"] === product); }
         if (dateFrom) { const from = new Date(dateFrom); from.setHours(0, 0, 0, 0); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) >= from); }
         if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
         if (activeRegion !== 'all') { dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion); }
         
-        // --- NEW: Logic for multi-tracking search ---
-        const trackingFilterValue = filterValues['Mã Tracking'] || '';
-        let trackingCodesToFind = null;
-        if (trackingFilterValue.includes('\n')) {
-             trackingCodesToFind = new Set(trackingFilterValue.split('\n').map(t => t.trim()).filter(Boolean));
-        }
-        // --- END NEW ---
-
-        const activeFilters = Object.entries(filterValues).filter(([_, val]) => val.trim() !== '');
-        if (activeFilters.length > 0) {
+        // 2. Tách bộ lọc cột tracking và các cột khác
+        const trackingIncludeRaw = filterValues['tracking_include'] || '';
+        const trackingExcludeRaw = filterValues['tracking_exclude'] || '';
+        const otherColumnFilters = Object.entries(filterValues).filter(([key, val]) => val.trim() !== '' && !key.startsWith('tracking_'));
+        
+        // 3. Áp dụng các bộ lọc cột khác
+        if (otherColumnFilters.length > 0) {
             dataToRender = dataToRender.filter(row => {
-                return activeFilters.every(([col, filterValue]) => {
+                return otherColumnFilters.every(([col, filterValue]) => {
                     const dataKey = columnMapping[col] || col;
                     const cellValue = row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? '';
-                    
-                    // --- NEW: Apply multi-tracking search logic ---
-                    if (col === 'Mã Tracking' && trackingCodesToFind) {
-                        return trackingCodesToFind.has(String(cellValue).trim());
-                    } 
-                    // --- END NEW ---
-                    
                     return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
                 });
+            });
+        }
+        
+        // 4. Áp dụng bộ lọc Mã Tracking (bao gồm và loại trừ)
+        if (trackingIncludeRaw || trackingExcludeRaw) {
+            const lowerInclude = trackingIncludeRaw.toLowerCase();
+            const lowerExclude = trackingExcludeRaw.toLowerCase();
+            
+            dataToRender = dataToRender.filter(row => {
+                const cellValue = row['Mã Tracking'] || '';
+                const lowerCellValue = cellValue.toLowerCase();
+
+                // Điều kiện loại trừ: nếu có giá trị và cellValue chứa nó, loại ra
+                if (lowerExclude && lowerCellValue.includes(lowerExclude)) {
+                    return false;
+                }
+
+                // Điều kiện bao gồm: nếu có giá trị, cellValue phải thỏa mãn
+                if (lowerInclude) {
+                    // Dán danh sách
+                    if (lowerInclude.includes('\n')) {
+                        const codes = new Set(trackingIncludeRaw.split('\n').map(t => t.trim()).filter(Boolean));
+                        if (!codes.has(cellValue.trim())) return false;
+                    } 
+                    // Lọc thường
+                    else {
+                        if (!lowerCellValue.includes(lowerInclude)) return false;
+                    }
+                }
+                
+                return true; // Thỏa mãn tất cả điều kiện
             });
         }
         
@@ -482,30 +535,52 @@
     
     // *** UPDATED FUNCTION ***
     function setupColumnFilters() {
-        const filterRow = document.getElementById('filterRow'); filterRow.innerHTML = ''; filterValues = {}; 
-        displayColumns.forEach((col, index) => { 
-            const th = document.createElement('th'); 
-            if (index === 0) th.classList.add('fixed-column'); 
-            const input = document.createElement('input'); 
-            input.type = 'text'; 
-            input.className = 'filter-input'; 
-            
-            // --- NEW: Custom placeholder for tracking code ---
-            if (col === "Mã Tracking") {
-                input.placeholder = "Lọc hoặc dán danh sách mã";
-            } else {
-                input.placeholder = `Lọc ${col}`;
-            }
-            // --- END NEW ---
+        const filterRow = document.getElementById('filterRow');
+        filterRow.innerHTML = '';
+        filterValues = {};
+        displayColumns.forEach((col, index) => {
+            const th = document.createElement('th');
+            if (index === 0) th.classList.add('fixed-column');
 
-            input.dataset.column = col; 
-            input.addEventListener('input', () => { 
-                filterValues[col] = input.value; 
-                applyAllFilters(); 
-            }); 
-            th.appendChild(input); 
-            filterRow.appendChild(th); 
-        }); 
+            if (col === "Mã Tracking") {
+                const container = document.createElement('div');
+                container.className = 'dual-filter-container';
+
+                const includeInput = document.createElement('input');
+                includeInput.type = 'text';
+                includeInput.className = 'filter-input';
+                includeInput.placeholder = 'Bao gồm...';
+                includeInput.addEventListener('input', () => {
+                    filterValues['tracking_include'] = includeInput.value;
+                    applyAllFilters();
+                });
+
+                const excludeInput = document.createElement('input');
+                excludeInput.type = 'text';
+                excludeInput.className = 'filter-input';
+                excludeInput.placeholder = 'Loại trừ...';
+                excludeInput.addEventListener('input', () => {
+                    filterValues['tracking_exclude'] = excludeInput.value;
+                    applyAllFilters();
+                });
+
+                container.appendChild(includeInput);
+                container.appendChild(excludeInput);
+                th.appendChild(container);
+            } else {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'filter-input';
+                input.placeholder = `Lọc ${col}`;
+                input.dataset.column = col;
+                input.addEventListener('input', () => {
+                    filterValues[col] = input.value;
+                    applyAllFilters();
+                });
+                th.appendChild(input);
+            }
+            filterRow.appendChild(th);
+        });
     }
     
     // --- CÁC HÀM ĐIỀU KHIỂN ---
@@ -563,7 +638,6 @@
         .finally(() => { buttonEl.disabled = false; buttonEl.textContent = 'Cập nhật tất cả thay đổi'; });
     }
     
-    // --- CÁC HÀM TRỢ GIÚP ĐA NĂNG CHO COPY/PASTE ---
     function getCellValue(cell) {
         if (!cell) return '';
         const select = cell.querySelector('select'); if (select) return select.value;
@@ -588,7 +662,58 @@
         }
     }
 
-    // *** UPDATED FUNCTION ***
+    function updateSelectionSummary() {
+        const summaryEl = document.getElementById('selectionSummary');
+        const selectedCells = document.querySelectorAll('td.cell-selected');
+        summaryEl.innerHTML = '';
+
+        if (selectedCells.length <= 1) { return; }
+
+        const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"];
+        const columns = new Map();
+
+        selectedCells.forEach(cell => {
+            const colIndex = cell.cellIndex;
+            if (!columns.has(colIndex)) {
+                columns.set(colIndex, []);
+            }
+            columns.get(colIndex).push(cell);
+        });
+        
+        const summaryParts = [];
+        columns.forEach((cells, colIndex) => {
+            const headerText = displayColumns[colIndex].toLowerCase();
+            const isNumeric = numericKeywords.some(kw => headerText.includes(kw));
+
+            if (isNumeric) {
+                let sum = 0;
+                let count = 0;
+                cells.forEach(cell => {
+                    const value = getCellValue(cell);
+                    const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+                    if (!isNaN(num)) {
+                        sum += num;
+                        count++;
+                    }
+                });
+                if (count > 0) {
+                     summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`);
+                }
+            } else {
+                let count = 0;
+                cells.forEach(cell => {
+                    if (getCellValue(cell).trim() !== '') {
+                        count++;
+                    }
+                });
+                if (count > 0) {
+                    summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`);
+                }
+            }
+        });
+        summaryEl.innerHTML = summaryParts.join('');
+    }
+
     function setupInteractionHandlers() {
         const tableBody = document.getElementById('tableBody');
         if (!tableBody) return;
@@ -601,6 +726,7 @@
                 pasteAnchorCell.classList.remove('paste-anchor');
                 pasteAnchorCell = null;
             }
+            updateSelectionSummary(); 
         };
 
         const selectCells = (start, end) => {
@@ -633,6 +759,7 @@
 
             if (e.shiftKey && pasteAnchorCell) {
                 selectCells(pasteAnchorCell, cell);
+                updateSelectionSummary();
             } else {
                 isSelecting = true;
                 clearAllSelections();
@@ -640,6 +767,7 @@
                 pasteAnchorCell = cell;
                 cell.classList.add('cell-selected');
                 cell.classList.add('paste-anchor');
+                updateSelectionSummary();
             }
         });
 
@@ -652,7 +780,10 @@
         });
 
         document.addEventListener('mouseup', () => {
-            isSelecting = false;
+            if (isSelecting) {
+                isSelecting = false;
+                updateSelectionSummary();
+            }
         });
 
         tableBody.addEventListener('dblclick', e => {
@@ -685,10 +816,15 @@
         });
         
         document.addEventListener('paste', e => {
+            const activeEl = document.activeElement;
+            if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName)) {
+                return;
+            }
+
             const selectedCells = document.querySelectorAll('td.cell-selected');
             if (!pasteAnchorCell && selectedCells.length === 0) return;
             
-            e.preventDefault();
+            e.preventDefault(); 
             const pasteData = e.clipboardData.getData('text/plain');
             if (!pasteData) return;
             const pastedRows = pasteData.split(/[\r\n]+/).map(row => row.split('\t')).filter(row => row.length > 0 && !(row.length === 1 && row[0] === ''));
@@ -700,6 +836,7 @@
                 if (editableSelected.length > 0) {
                      editableSelected.forEach(cell => setCellValue(cell, singleValue));
                      showCustomAlert(`Đã dán giá trị vào ${editableSelected.length} ô.`, 'success', 2000);
+                     updateSelectionSummary();
                      return;
                 }
             }
@@ -721,27 +858,26 @@
                 });
             });
             showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000);
+            updateSelectionSummary();
         });
 
-        // --- NEW: Handle deleting content from selected cells ---
         document.addEventListener('keydown', e => {
             if (e.key === 'Delete' || e.key === 'Backspace') {
-                // Don't interfere if user is typing in a filter input or main input
                 if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
                     return;
                 }
 
                 const editableSelected = document.querySelectorAll('td.cell-selected.editable');
                 if (editableSelected.length > 0) {
-                    e.preventDefault(); // Prevent default browser action (e.g., navigating back)
+                    e.preventDefault();
                     editableSelected.forEach(cell => {
-                        setCellValue(cell, ''); // Use existing function to clear content
+                        setCellValue(cell, '');
                     });
                     showCustomAlert(`Đã xóa nội dung ${editableSelected.length} ô.`, 'success', 2000);
+                    updateSelectionSummary();
                 }
             }
         });
-        // --- END NEW ---
     }
 
     // --- HÀM TẢI FILE EXCEL (CSV) ---
