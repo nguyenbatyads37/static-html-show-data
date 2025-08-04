@@ -199,16 +199,6 @@
     td select, .controls .filter-select, th .filter-select { background-color: #e3f2fd; border: 1px solid #b0bec5; border-radius: 4px; cursor: pointer; transition: background-color 0.2s, box-shadow 0.2s; }
     td select:hover, .controls .filter-select:hover, th .filter-select:hover { background-color: #d1eaff; }
     td select:focus, .controls .filter-select:focus, th .filter-select:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.4); }
-
-    /* Style cho kéo thả hàng */
-    tr.dragging {
-      opacity: 0.5;
-      background-color: #f5f5f5;
-    }
-
-    tr.drop-target {
-      border-top: 2px solid #3498db;
-    }
   </style>
 </head>
 <body>
@@ -261,10 +251,6 @@
     let dragStartCell = null;
     let fillHandle;
 
-    // --- State cho kéo thả hàng ---
-    let draggedRow = null;
-    let dropTargetRow = null;
-
     const mainTabConfig = { data: () => staffFilteredData, changedRows: changedRows, controls: { refreshBtn: 'refreshData', updateBtn: 'updateAll', clearBtn: 'clearFilters', startDate: 'startDateFilter', endDate: 'endDateFilter', product: 'productFilter', market: 'marketFilter', summary: 'summaryInfo' }, table: { head: 'tableHead', body: 'tableBody' }, dynamicOptions: () => dynamicFilterOptions };
     const japanTabConfig = { data: () => japanData, changedRows: japanChangedRows, controls: { refreshBtn: 'japanRefreshData', updateBtn: 'japanUpdateAll', clearBtn: 'japanClearFilters', startDate: 'japanStartDateFilter', endDate: 'japanEndDateFilter', product: 'japanProductFilter', staff: 'japanStaffFilter', summary: 'japanSummaryInfo' }, table: { head: 'japanTableHead', body: 'japanTableBody' }, dynamicOptions: () => japanDynamicFilterOptions };
 
@@ -294,7 +280,12 @@
         cell.isEditing = true;
         if(cell.hasAttribute('data-content-editable')) {
             cell.contentEditable = 'true';
-            cell.focus();
+            // Chọn toàn bộ văn bản trong ô để người dùng có thể gõ đè lên ngay lập tức
+            const range = document.createRange();
+            range.selectNodeContents(cell);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
         }
     }
 
@@ -358,93 +349,26 @@
         }
     }
 
-    // --- CÁC HÀM XỬ LÝ KÉO THẢ HÀNG ---
-    function handleDragStart(e) {
-        draggedRow = e.target.closest('tr');
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/html', draggedRow);
-        draggedRow.classList.add('dragging');
-    }
-
-    function handleDragOver(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        
-        const targetRow = e.target.closest('tr');
-        if (!targetRow || targetRow === draggedRow) return;
-        
-        if (dropTargetRow) dropTargetRow.classList.remove('drop-target');
-        dropTargetRow = targetRow;
-        dropTargetRow.classList.add('drop-target');
-    }
-
-    function handleDragEnd() {
-        if (draggedRow) draggedRow.classList.remove('dragging');
-        if (dropTargetRow) dropTargetRow.classList.remove('drop-target');
-        draggedRow = null;
-        dropTargetRow = null;
-    }
-
-    function handleDrop(e, config) {
-        e.preventDefault();
-        if (!draggedRow || !dropTargetRow || draggedRow === dropTargetRow) return;
-        
-        const tableBody = draggedRow.parentNode;
-        const draggedIndex = Array.from(tableBody.children).indexOf(draggedRow);
-        const dropIndex = Array.from(tableBody.children).indexOf(dropTargetRow);
-        
-        if (draggedIndex < dropIndex) {
-            tableBody.insertBefore(draggedRow, dropTargetRow.nextSibling);
-        } else {
-            tableBody.insertBefore(draggedRow, dropTargetRow);
-        }
-        
-        // Cập nhật lại chỉ số hàng
-        updateRowIndexes(tableBody, config);
-        
-        // Đánh dấu thay đổi
-        markRowsAsChanged(draggedRow, dropTargetRow, config);
-        
-        handleDragEnd();
-    }
-
-    function updateRowIndexes(tableBody, config) {
-        const rows = tableBody.querySelectorAll('tr');
-        rows.forEach((row, index) => {
-            row.dataset.rowIndex = index;
-        });
-    }
-
-    function markRowsAsChanged(draggedRow, dropTargetRow, config) {
-        const draggedIndex = parseInt(draggedRow.dataset.rowIndex, 10);
-        const dropIndex = parseInt(dropTargetRow.dataset.rowIndex, 10);
-        
-        // Đánh dấu cả 2 hàng liên quan đã thay đổi
-        config.changedRows.add(draggedIndex);
-        config.changedRows.add(dropIndex);
-        
-        // Highlight các hàng đã thay đổi
-        draggedRow.querySelectorAll('td').forEach(td => td.classList.add('highlight'));
-        dropTargetRow.querySelectorAll('td').forEach(td => td.classList.add('highlight'));
-    }
-
-    function setupInteractionListeners(tableBodyId, config) {
+    // [MODIFICATION START] - Cập nhật logic xử lý click chuột để chỉnh sửa dễ hơn
+    function setupInteractionListeners(tableBodyId) {
         const tableBody = document.getElementById(tableBodyId);
         if(!tableBody) return;
 
-        // Thêm sự kiện kéo thả
-        tableBody.addEventListener('dragstart', handleDragStart);
-        tableBody.addEventListener('dragover', handleDragOver);
-        tableBody.addEventListener('dragend', handleDragEnd);
-        tableBody.addEventListener('drop', (e) => handleDrop(e, config));
-        
         tableBody.addEventListener('mousedown', e => {
             const cell = e.target.closest('td');
             if (!cell) return;
             
+            // Ngăn các hành vi mặc định của trình duyệt
             e.preventDefault();
 
             if (e.button === 0) { // Chỉ xử lý click chuột trái
+                
+                // Cải tiến logic: Click lần 2 vào ô đang active để chỉnh sửa
+                if (cell === activeCell) {
+                    enterEditMode(cell);
+                    return; // Dừng lại sau khi vào chế độ chỉnh sửa
+                }
+
                 isMouseDown = true;
                 dragStartCell = cell;
 
@@ -477,11 +401,12 @@
                 }
             } else if (isFilling) {
                 const targetCell = e.target.closest('td');
+                if (!targetCell) return;
                 const table = targetCell.closest('table');
 
                 table.querySelectorAll('.fill-target-preview').forEach(c => c.classList.remove('fill-target-preview'));
 
-                if (targetCell && targetCell.cellIndex === activeCell.cellIndex && targetCell.parentNode.rowIndex > activeCell.parentNode.rowIndex) {
+                if (targetCell.cellIndex === activeCell.cellIndex && targetCell.parentNode.rowIndex > activeCell.parentNode.rowIndex) {
                      for (let i = activeCell.parentNode.rowIndex + 1; i <= targetCell.parentNode.rowIndex; i++) {
                         const cell = table.rows[i].cells[activeCell.cellIndex];
                         if (cell && cell.classList.contains('editable')) {
@@ -492,17 +417,50 @@
             }
         });
         
-        tableBody.addEventListener('dblclick', e => {
-            const cell = e.target.closest('td');
-            if (cell) enterEditMode(cell);
-        });
+        // Bỏ sự kiện dblclick vì đã xử lý bằng mousedown
+        // tableBody.addEventListener('dblclick', e => { ... });
     }
+    // [MODIFICATION END]
 
-    function copySelectedCells() { if (selectedCells.size === 0) return; let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity; selectedCells.forEach(cell => { const row = cell.parentNode.rowIndex; const col = cell.cellIndex; minRow = Math.min(minRow, row); maxRow = Math.max(maxRow, row); minCol = Math.min(minCol, col); maxCol = Math.max(maxCol, col); }); const grid = Array(maxRow - minRow + 1).fill().map(() => Array(maxCol - minCol + 1).fill('')); selectedCells.forEach(cell => { const row = cell.parentNode.rowIndex - minRow; const col = cell.cellIndex - minCol; grid[row][col] = getCellValue(cell); }); const tsv = grid.map(row => row.join('\t')).join('\n'); navigator.clipboard.writeText(tsv).then(() => { const tempMsg = document.createElement('div'); tempMsg.textContent = `Đã sao chép ${selectedCells.size} ô`; Object.assign(tempMsg.style, { position: 'fixed', bottom: '20px', right: '20px', backgroundColor: '#2ecc71', color: 'white', padding: '10px', borderRadius: '4px', zIndex: '1000' }); document.body.appendChild(tempMsg); setTimeout(() => tempMsg.remove(), 2000); }).catch(err => console.error('Lỗi sao chép:', err)); }
+    function copySelectedCells() { 
+        if (selectedCells.size === 0) return; 
+        let minRow = Infinity, maxRow = -Infinity, minCol = Infinity, maxCol = -Infinity; 
+        selectedCells.forEach(cell => { 
+            const row = cell.parentNode.rowIndex; 
+            const col = cell.cellIndex; 
+            minRow = Math.min(minRow, row); 
+            maxRow = Math.max(maxRow, row); 
+            minCol = Math.min(minCol, col); 
+            maxCol = Math.max(maxCol, col); 
+        }); 
+        const grid = Array(maxRow - minRow + 1).fill().map(() => Array(maxCol - minCol + 1).fill('')); 
+        selectedCells.forEach(cell => { 
+            const row = cell.parentNode.rowIndex - minRow; 
+            const col = cell.cellIndex - minCol; 
+            grid[row][col] = getCellValue(cell); 
+        }); 
+        const tsv = grid.map(row => row.join('\t')).join('\n'); 
+        navigator.clipboard.writeText(tsv).then(() => { 
+            const tempMsg = document.createElement('div'); 
+            tempMsg.textContent = `Đã sao chép ${selectedCells.size} ô`; 
+            Object.assign(tempMsg.style, { 
+                position: 'fixed', 
+                bottom: '20px', 
+                right: '20px', 
+                backgroundColor: '#2ecc71', 
+                color: 'white', 
+                padding: '10px', 
+                borderRadius: '4px', 
+                zIndex: '1000' 
+            }); 
+            document.body.appendChild(tempMsg); 
+            setTimeout(() => tempMsg.remove(), 2000); 
+        }).catch(err => console.error('Lỗi sao chép:', err)); 
+    }
     
     // --- CÁC HÀM LOGIC CỦA ỨNG DỤNG ---
-    async function handleData(response) { document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; document.getElementById(mainTabConfig.controls.updateBtn).disabled = true; document.getElementById(japanTabConfig.controls.updateBtn).disabled = true; allData = []; staffFilteredData = []; japanData = []; changedRows.clear(); japanChangedRows.clear(); if (response.error || !Array.isArray(response.rows)) { showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'), mainTabConfig.table.body); showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'), japanTabConfig.table.body); return; } allData = response.rows; const staffId = getUrlParameter('id'); const staffId1 = getUrlParameter('id1'); if (!staffId && !staffId1) { showError('Thiếu tham số ID nhân viên trong URL', mainTabConfig.table.body); } else { try { currentStaff = await fetchStaffInfo(staffId, staffId1); let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`; if (staffId1 && staffId1 !== staffId) { staffInfo += ` và ${teamMembers.find(name => name !== currentStaff.ho_va_ten) || ''}`; } if (currentStaff.vi_tri === "Leader") staffInfo += ` (Leader - Team ${currentStaff.team})`; document.getElementById('userInfo').textContent = staffInfo; staffFilteredData = allData.filter(row => { const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''; return teamMembers.includes(deliveryStaff); }); initializeTab(mainTabConfig, staffFilteredData); } catch (error) { showError(error.message, mainTabConfig.table.body); } } japanData = allData.filter(row => (row['khu vực'] || row['Khu vực']) === 'Nhật Bản'); initializeTab(japanTabConfig, japanData); }
-    function initializeTab(config, data) { generateDynamicOptions(config, data); populateExternalFilters(config); renderHeader(config); applyAllFilters(config); setupInteractionListeners(config.table.body, config); }
+    async function handleData(response) { document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; allData = []; staffFilteredData = []; japanData = []; changedRows.clear(); japanChangedRows.clear(); if (response.error || !Array.isArray(response.rows)) { showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'), mainTabConfig.table.body); showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'), japanTabConfig.table.body); return; } allData = response.rows; const staffId = getUrlParameter('id'); const staffId1 = getUrlParameter('id1'); if (!staffId && !staffId1) { showError('Thiếu tham số ID nhân viên trong URL', mainTabConfig.table.body); } else { try { currentStaff = await fetchStaffInfo(staffId, staffId1); let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`; if (staffId1 && staffId1 !== staffId) { staffInfo += ` và ${teamMembers.find(name => name !== currentStaff.ho_va_ten) || ''}`; } if (currentStaff.vi_tri === "Leader") staffInfo += ` (Leader - Team ${currentStaff.team})`; document.getElementById('userInfo').textContent = staffInfo; staffFilteredData = allData.filter(row => { const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''; return teamMembers.includes(deliveryStaff); }); initializeTab(mainTabConfig, staffFilteredData); } catch (error) { showError(error.message, mainTabConfig.table.body); } } japanData = allData.filter(row => (row['khu vực'] || row['Khu vực']) === 'Nhật Bản'); initializeTab(japanTabConfig, japanData); }
+    function initializeTab(config, data) { generateDynamicOptions(config, data); populateExternalFilters(config); renderHeader(config); applyAllFilters(config); setupInteractionListeners(config.table.body); }
     function generateDynamicOptions(config, data) { const options = {}; columnsToMakeDynamic.forEach(colName => { const dataKey = columnDisplayMapping[colName] || colName; const uniqueValues = new Set(data.map(row => row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : '')).filter(Boolean)); options[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b))); }); if (config === japanTabConfig) { japanDynamicFilterOptions = options; } else { dynamicFilterOptions = options; } }
     function populateExternalFilters(config) { const options = config.dynamicOptions(); const productFilter = document.getElementById(config.controls.product); productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>'; (options['Mặt hàng'] || []).forEach(opt => productFilter.add(new Option(opt, opt))); if (config.controls.market) { const marketFilter = document.getElementById(config.controls.market); marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>'; (options['khu vực'] || []).forEach(opt => marketFilter.add(new Option(opt, opt))); } if (config.controls.staff) { const staffFilter = document.getElementById(config.controls.staff); staffFilter.innerHTML = '<option value="">Tất cả NV Vận đơn</option>'; (options['NV Vận đơn'] || []).forEach(opt => staffFilter.add(new Option(opt, opt))); } }
     function applyAllFilters(config) { let dataToFilter = [...config.data()]; const tableHead = document.getElementById(config.table.head); if (!tableHead.querySelector('tr')) { renderTableBody(config, dataToFilter); updateSummaryInfo(dataToFilter, config.controls.summary, config === mainTabConfig); return; } const startDate = document.getElementById(config.controls.startDate).value; const endDate = document.getElementById(config.controls.endDate).value; if (startDate || endDate) { const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if(start) start.setHours(0,0,0,0); if(end) end.setHours(23,59,59,999); dataToFilter = dataToFilter.filter(row => { const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"]; const orderDate = parseDateString(orderDateStr); if (!orderDate) return false; return (!start || orderDate >= start) && (!end || orderDate <= end); }); } const productFilterValue = document.getElementById(config.controls.product).value; if (productFilterValue) dataToFilter = dataToFilter.filter(row => (row["Mặt hàng"] || '') === productFilterValue); if (config.controls.market && document.getElementById(config.controls.market).value) { const marketFilterValue = document.getElementById(config.controls.market).value; dataToFilter = dataToFilter.filter(row => (row["Khu vực"] || row["khu vực"] || '') === marketFilterValue); } if (config.controls.staff && document.getElementById(config.controls.staff).value) { const staffFilterValue = document.getElementById(config.controls.staff).value; dataToFilter = dataToFilter.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"] || '') === staffFilterValue); } const filters = tableHead.querySelectorAll('.filter-input, .filter-select'); filters.forEach(filter => { const value = filter.value.toLowerCase(); if (value === '') return; const colName = filter.dataset.column; const dataKey = columnDisplayMapping[colName] || colName; dataToFilter = dataToFilter.filter(row => { let cellValue = row[dataKey] !== undefined ? row[dataKey] : row[dataKey.replace(/ /g, '_')] || ''; if (dataKey === 'khu vực') cellValue = row['Khu vực'] || row['khu vực'] || ''; return String(cellValue).toLowerCase().includes(value); }); }); updateSummaryInfo(dataToFilter, config.controls.summary, config === mainTabConfig); renderTableBody(config, dataToFilter); }
@@ -517,13 +475,12 @@
         }
 
         const originalDataSet = config.data();
-        const options = config.dynamicOptions();
+        const options = config.dynamicOptions(); // Lấy các tùy chọn động cho tab hiện tại
 
-        data.forEach((row, index) => {
+        data.forEach((row) => {
             const originalRowIndex = originalDataSet.indexOf(row);
             const tr = document.createElement('tr');
             tr.dataset.rowIndex = originalRowIndex;
-            tr.draggable = true;  // Cho phép kéo thả hàng
 
             displayColumns.forEach(col => {
                 const td = document.createElement('td');
@@ -584,7 +541,8 @@
                         td.addEventListener('blur', () => {
                             leaveEditMode(td);
                             // Chỉ đánh dấu thay đổi nếu nội dung thực sự khác
-                            if (td.textContent !== String(value)) {
+                            const originalValue = row[dataKey] || row[dataKey.replace(/ /g, '_')] || '';
+                            if (td.textContent !== String(originalValue)) {
                                 td.classList.add('highlight');
                                 config.changedRows.add(originalRowIndex);
                             }
@@ -597,9 +555,10 @@
                 
                 // Tô màu theo điều kiện
                 if (col === "Kết quả Check") {
-                    if (value === 'OK') td.classList.add('cell-ok');
-                    else if (value === 'Vận đơn XL') td.classList.add('cell-xl');
-                    else if (value === 'Huỷ') td.classList.add('cell-cancel');
+                    const checkValue = getCellValue(td);
+                    if (checkValue === 'OK') td.classList.add('cell-ok');
+                    else if (checkValue === 'Vận đơn XL') td.classList.add('cell-xl');
+                    else if (checkValue === 'Huỷ') td.classList.add('cell-cancel');
                 }
                 tr.appendChild(td);
             });
@@ -607,186 +566,14 @@
         });
     }
 
-    function setupControls() { fillHandle = document.getElementById('fillHandle'); fillHandle.addEventListener('mousedown', () => { isMouseDown = false; isFilling = true; }); document.addEventListener('mouseup', () => { if (isFilling) { const activeConfig = document.getElementById('contentData').classList.contains('active') ? mainTabConfig : japanTabConfig; const activeTableBody = document.getElementById(activeConfig.table.body); const sourceValue = getCellValue(activeCell); activeTableBody.querySelectorAll('.fill-target-preview').forEach(targetCell => { setCellValue(targetCell, sourceValue); targetCell.classList.add('highlight'); const rowIndex = parseInt(targetCell.parentNode.dataset.rowIndex, 10); activeConfig.changedRows.add(rowIndex); targetCell.classList.remove('fill-target-preview'); }); } isMouseDown = false; isFilling = false; dragStartCell = null; document.querySelectorAll('.fill-target-preview').forEach(c => c.classList.remove('fill-target-preview')); }); document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCells.size > 0) { e.preventDefault(); copySelectedCells(); } }); setupTabs(); setupTabControls(mainTabConfig); setupTabControls(japanTabConfig); }
+    function setupControls() { fillHandle = document.getElementById('fillHandle'); fillHandle.addEventListener('mousedown', () => { isMouseDown = false; isFilling = true; }); document.addEventListener('mouseup', () => { if (isFilling) { const activeConfig = document.getElementById('contentData').classList.contains('active') ? mainTabConfig : japanTabConfig; const activeTableBody = document.getElementById(activeConfig.table.body); const sourceValue = getCellValue(activeCell); activeTableBody.querySelectorAll('.fill-target-preview').forEach(targetCell => { setCellValue(targetCell, sourceValue); targetCell.classList.add('highlight'); const rowIndex = parseInt(targetCell.parentNode.dataset.rowIndex, 10); activeConfig.changedRows.add(rowIndex); targetCell.classList.remove('fill-target-preview'); }); } isMouseDown = false; isFilling = false; dragStartCell = null; document.querySelectorAll('.fill-target-preview').forEach(c => c.classList.remove('fill-target-preview')); }); document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && activeCell) { leaveEditMode(activeCell); } else if ((e.ctrlKey || e.metaKey) && e.key === 'c' && selectedCells.size > 0) { e.preventDefault(); copySelectedCells(); } }); setupTabs(); setupTabControls(mainTabConfig); setupTabControls(japanTabConfig); }
     function setupTabControls(config) { document.getElementById(config.controls.refreshBtn).addEventListener('click', refreshData); document.getElementById(config.controls.updateBtn).addEventListener('click', () => updateAllChangedRows(config)); document.getElementById(config.controls.startDate).addEventListener('change', () => applyAllFilters(config)); document.getElementById(config.controls.endDate).addEventListener('change', () => applyAllFilters(config)); document.getElementById(config.controls.product).addEventListener('change', () => applyAllFilters(config)); if(config.controls.market) document.getElementById(config.controls.market).addEventListener('change', () => applyAllFilters(config)); if(config.controls.staff) document.getElementById(config.controls.staff).addEventListener('change', () => applyAllFilters(config)); document.getElementById(config.controls.clearBtn).addEventListener('click', () => { document.getElementById(config.controls.startDate).value = ''; document.getElementById(config.controls.endDate).value = ''; document.getElementById(config.controls.product).selectedIndex = 0; if(config.controls.market) document.getElementById(config.controls.market).selectedIndex = 0; if(config.controls.staff) document.getElementById(config.controls.staff).selectedIndex = 0; document.querySelectorAll(`#${config.table.head} .filter-input, #${config.table.head} .filter-select`).forEach(f => { if (f.tagName === 'SELECT') f.selectedIndex = 0; else f.value = ''; }); applyAllFilters(config); }); }
     function setupTabs() { const tabs = document.querySelectorAll('.tab-btn'); const contents = document.querySelectorAll('.content-tab'); tabs.forEach(tab => { tab.addEventListener('click', () => { selectedCells.forEach(c => c.classList.remove('cell-selected', 'cell-active')); selectedCells.clear(); activeCell = null; fillHandle.style.display = 'none'; tabs.forEach(item => item.classList.remove('active')); contents.forEach(content => content.classList.remove('active')); tab.classList.add('active'); const contentId = 'content' + tab.id.substring(3); document.getElementById(contentId).classList.add('active'); if (tab.id === 'tabReport') { generateSummaryReport(allData); } }); }); }
     function refreshData() { document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="loading"></span> Đang tải...'; document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="loading"></span> Đang tải...'; document.getElementById(mainTabConfig.controls.updateBtn).disabled = true; document.getElementById(japanTabConfig.controls.updateBtn).disabled = true; loadData(); setTimeout(() => { document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu'; document.getElementById(mainTabConfig.controls.updateBtn).disabled = false; document.getElementById(japanTabConfig.controls.updateBtn).disabled = false; }, 5000); }
     function updateAllChangedRows(config) { if (config.changedRows.size === 0) { alert('Không có thay đổi nào để cập nhật'); return; } const updateBtn = document.getElementById(config.controls.updateBtn); const statusEl = document.createElement('span'); statusEl.className = 'status'; statusEl.textContent = 'Đang xử lý...'; updateBtn.appendChild(statusEl); updateBtn.disabled = true; const rowsToSend = []; const tableBody = document.getElementById(config.table.body); config.changedRows.forEach(rowIndex => { const originalData = config.data()[rowIndex]; if (!originalData) return; const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`); if(!tr) return; const updatedRowData = { ...originalData }; editableCols.forEach(dataKey => { const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; const cell = tr.cells[colIndex]; updatedRowData[dataKey] = getCellValue(cell); }); allDateColumns.forEach(dataKey => { if (editableCols.indexOf(dataKey) === -1) { const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; const cell = tr.cells[colIndex]; updatedRowData[dataKey] = cell.dataset.originalValue || cell.textContent.trim(); } }); delete updatedRowData["Thời gian lên đơn"]; rowsToSend.push(updatedRowData); }); if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) }) .then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Cập nhật thành công ${rowsToSend.length} dòng. Vui lòng nhấn "Load dữ liệu" để xem thay đổi.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 2000); }) .catch(e => { statusEl.textContent = 'Lỗi mạng: ' + e.message; statusEl.classList.add('error-status'); setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); }); }
     
-    function updateSummaryInfo(data, elementId, isMainTab) {
-        const summaryEl = document.getElementById(elementId);
-        if (!summaryEl) return;
-
-        if (!data || data.length === 0) {
-            summaryEl.innerHTML = '';
-            return;
-        }
-
-        let totalRevenue = 0;
-        let okOrders = 0;
-        let unprocessedOrders = 0;
-
-        data.forEach(row => {
-            const revenue = parseFloat(String(row["Tổng tiền VNĐ"] || '0').replace(/,/g, ''));
-            if (!isNaN(revenue)) {
-                totalRevenue += revenue;
-            }
-
-            const checkStatus = row["Kết quả Check"] || '';
-            if (checkStatus === 'OK') {
-                okOrders++;
-            } else if (checkStatus === '' || checkStatus === 'Treo' || checkStatus === 'Đợi hàng') {
-                unprocessedOrders++;
-            }
-        });
-
-        const formattedRevenue = totalRevenue.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' });
-        
-        let summaryText = `<strong>${data.length}</strong> đơn | Doanh thu: <strong>${formattedRevenue}</strong> | OK: <strong>${okOrders}</strong>`;
-        if (isMainTab) {
-            summaryText += ` | Chờ XL: <strong>${unprocessedOrders}</strong>`;
-        }
-        
-        summaryEl.innerHTML = summaryText;
-    }
-
-    function generateSummaryReport(data) {
-        const summaryBody = document.getElementById('summaryTableBody');
-        summaryBody.innerHTML = '';
-        if (!data || data.length === 0) {
-            summaryBody.innerHTML = '<tr><td colspan="17" class="no-data">Không có dữ liệu để tạo báo cáo.</td></tr>';
-            return;
-        }
-
-        const report = {};
-        const grandTotal = { paidCount: 0, paidAmount: 0, partialBill: 0, totalOrders: 0, readyToShip: 0, shipped: 0, success: 0, delivering: 0, notDelivered: 0, returned: 0, waitingCheck: 0, emptyStatus: 0, chargedShipping: 0 };
-
-        data.forEach(row => {
-            const staff = row['NV Vận đơn'] || 'N/A';
-            const carrier = row['Đơn vị vận chuyển'] || 'N/A';
-
-            if (!report[staff]) report[staff] = { carriers: {}, total: { paidCount: 0, paidAmount: 0, partialBill: 0, totalOrders: 0, readyToShip: 0, shipped: 0, success: 0, delivering: 0, notDelivered: 0, returned: 0, waitingCheck: 0, emptyStatus: 0, chargedShipping: 0 }};
-            if (!report[staff].carriers[carrier]) report[staff].carriers[carrier] = { paidCount: 0, paidAmount: 0, partialBill: 0, totalOrders: 0, readyToShip: 0, shipped: 0, success: 0, delivering: 0, notDelivered: 0, returned: 0, waitingCheck: 0, emptyStatus: 0, chargedShipping: 0 };
-            
-            const group = report[staff].carriers[carrier];
-            const staffTotal = report[staff].total;
-
-            const revenue = parseFloat(String(row['Tổng tiền VNĐ'] || '0').replace(/,/g, ''));
-            const isPaid = row['Trạng thái thu tiền'] === 'Có bill';
-            const isPartialPaid = row['Trạng thái thu tiền'] === 'Có bill 1 phần';
-            const isReady = row['Kết quả Check'] === 'OK';
-            const isShipped = !!row['Mã Tracking']; // Giả định có tracking là đã lên vận hành
-            const deliveryStatus = row['Trạng thái giao hàng NB'] || '';
-            const isChargeable = deliveryStatus !== 'Hủy' && deliveryStatus !== 'Hoàn';
-
-            const counters = [group, staffTotal, grandTotal];
-            counters.forEach(c => {
-                c.totalOrders++;
-                if (isPaid) {
-                    c.paidCount++;
-                    if (!isNaN(revenue)) c.paidAmount += revenue;
-                }
-                if (isPartialPaid) c.partialBill++;
-                if (isReady) c.readyToShip++;
-                if (isShipped) c.shipped++;
-                if (isChargeable) c.chargedShipping++;
-
-                switch(deliveryStatus) {
-                    case 'Giao Thành Công': c.success++; break;
-                    case 'Đang Giao': c.delivering++; break;
-                    case 'Chưa Giao': c.notDelivered++; break;
-                    case 'Hoàn': c.returned++; break;
-                    case 'chờ check': c.waitingCheck++; break;
-                    case '': c.emptyStatus++; break;
-                }
-            });
-        });
-
-        let html = '';
-        const staffNames = Object.keys(report).sort();
-
-        staffNames.forEach(staff => {
-            html += `<tr class="summary-staff-header"><td colspan="17">${staff}</td></tr>`;
-            const carrierNames = Object.keys(report[staff].carriers).sort();
-
-            carrierNames.forEach(carrier => {
-                const r = report[staff].carriers[carrier];
-                const rateShip = r.totalOrders > 0 ? (r.shipped / r.totalOrders * 100).toFixed(1) + '%' : '0%';
-                const ratePaid = r.success > 0 ? (r.paidCount / r.success * 100).toFixed(1) + '%' : '0%';
-                const rateChargeable = r.totalOrders > 0 ? (r.chargedShipping / r.totalOrders * 100).toFixed(1) + '%' : '0%';
-                html += `
-                    <tr>
-                        <td></td>
-                        <td>${carrier}</td>
-                        <td>${r.paidCount}</td>
-                        <td class="positive">${r.paidAmount.toLocaleString('vi-VN')}</td>
-                        <td>${r.partialBill}</td>
-                        <td>${r.totalOrders}</td>
-                        <td>${r.readyToShip}</td>
-                        <td>${r.shipped}</td>
-                        <td>${rateShip}</td>
-                        <td>${r.success}</td>
-                        <td>${r.delivering}</td>
-                        <td>${r.notDelivered}</td>
-                        <td class="negative">${r.returned}</td>
-                        <td>${r.waitingCheck}</td>
-                        <td>${r.emptyStatus}</td>
-                        <td class="positive">${ratePaid}</td>
-                        <td>${rateChargeable}</td>
-                    </tr>`;
-            });
-            
-            const st = report[staff].total;
-            const rateShipTotal = st.totalOrders > 0 ? (st.shipped / st.totalOrders * 100).toFixed(1) + '%' : '0%';
-            const ratePaidTotal = st.success > 0 ? (st.paidCount / st.success * 100).toFixed(1) + '%' : '0%';
-            const rateChargeableTotal = st.totalOrders > 0 ? (st.chargedShipping / st.totalOrders * 100).toFixed(1) + '%' : '0%';
-             html += `
-                <tr class="summary-staff-total">
-                    <td colspan="2">Tổng cộng (${staff})</td>
-                    <td>${st.paidCount}</td>
-                    <td class="positive">${st.paidAmount.toLocaleString('vi-VN')}</td>
-                    <td>${st.partialBill}</td>
-                    <td>${st.totalOrders}</td>
-                    <td>${st.readyToShip}</td>
-                    <td>${st.shipped}</td>
-                    <td>${rateShipTotal}</td>
-                    <td>${st.success}</td>
-                    <td>${st.delivering}</td>
-                    <td>${st.notDelivered}</td>
-                    <td class="negative">${st.returned}</td>
-                    <td>${st.waitingCheck}</td>
-                    <td>${st.emptyStatus}</td>
-                    <td class="positive">${ratePaidTotal}</td>
-                    <td>${rateChargeableTotal}</td>
-                </tr>`;
-        });
-        
-        const gt = grandTotal;
-        const rateShipGrand = gt.totalOrders > 0 ? (gt.shipped / gt.totalOrders * 100).toFixed(1) + '%' : '0%';
-        const ratePaidGrand = gt.success > 0 ? (gt.paidCount / gt.success * 100).toFixed(1) + '%' : '0%';
-        const rateChargeableGrand = gt.totalOrders > 0 ? (gt.chargedShipping / gt.totalOrders * 100).toFixed(1) + '%' : '0%';
-        html += `
-            <tr class="summary-grand-total">
-                <td colspan="2">TỔNG TOÀN BỘ</td>
-                <td>${gt.paidCount}</td>
-                <td>${gt.paidAmount.toLocaleString('vi-VN')}</td>
-                <td>${gt.partialBill}</td>
-                <td>${gt.totalOrders}</td>
-                <td>${gt.readyToShip}</td>
-                <td>${gt.shipped}</td>
-                <td>${rateShipGrand}</td>
-                <td>${gt.success}</td>
-                <td>${gt.delivering}</td>
-                <td>${gt.notDelivered}</td>
-                <td>${gt.returned}</td>
-                <td>${gt.waitingCheck}</td>
-                <td>${gt.emptyStatus}</td>
-                <td>${ratePaidGrand}</td>
-                <td>${rateChargeableGrand}</td>
-            </tr>`;
-
-        summaryBody.innerHTML = html;
-    }
+    function updateSummaryInfo(data, elementId, isMainTab) { const summaryEl = document.getElementById(elementId); if (!summaryEl) return; if (!data || data.length === 0) { summaryEl.innerHTML = ''; return; } let totalRevenue = 0, okOrders = 0, unprocessedOrders = 0; data.forEach(row => { const revenue = parseFloat(String(row["Tổng tiền VNĐ"] || '0').replace(/,/g, '')); if (!isNaN(revenue)) { totalRevenue += revenue; } const checkStatus = row["Kết quả Check"] || ''; if (checkStatus === 'OK') { okOrders++; } else if (checkStatus === '' || checkStatus === 'Treo' || checkStatus === 'Đợi hàng') { unprocessedOrders++; } }); const formattedRevenue = totalRevenue.toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }); let summaryText = `<strong>${data.length}</strong> đơn | Doanh thu: <strong>${formattedRevenue}</strong> | OK: <strong>${okOrders}</strong>`; if (isMainTab) { summaryText += ` | Chờ XL: <strong>${unprocessedOrders}</strong>`; } summaryEl.innerHTML = summaryText; }
+    function generateSummaryReport(data) { const summaryBody = document.getElementById('summaryTableBody'); summaryBody.innerHTML = ''; if (!data || data.length === 0) { summaryBody.innerHTML = '<tr><td colspan="17" class="no-data">Không có dữ liệu để tạo báo cáo.</td></tr>'; return; } const report = {}; const grandTotal = { paidCount: 0, paidAmount: 0, partialBill: 0, totalOrders: 0, readyToShip: 0, shipped: 0, success: 0, delivering: 0, notDelivered: 0, returned: 0, waitingCheck: 0, emptyStatus: 0, chargedShipping: 0 }; data.forEach(row => { const staff = row['NV Vận đơn'] || 'N/A'; const carrier = row['Đơn vị vận chuyển'] || 'N/A'; if (!report[staff]) report[staff] = { carriers: {}, total: { paidCount: 0, paidAmount: 0, partialBill: 0, totalOrders: 0, readyToShip: 0, shipped: 0, success: 0, delivering: 0, notDelivered: 0, returned: 0, waitingCheck: 0, emptyStatus: 0, chargedShipping: 0 }}; if (!report[staff].carriers[carrier]) report[staff].carriers[carrier] = { paidCount: 0, paidAmount: 0, partialBill: 0, totalOrders: 0, readyToShip: 0, shipped: 0, success: 0, delivering: 0, notDelivered: 0, returned: 0, waitingCheck: 0, emptyStatus: 0, chargedShipping: 0 }; const group = report[staff].carriers[carrier]; const staffTotal = report[staff].total; const revenue = parseFloat(String(row['Tổng tiền VNĐ'] || '0').replace(/,/g, '')); const isPaid = row['Trạng thái thu tiền'] === 'Có bill'; const isPartialPaid = row['Trạng thái thu tiền'] === 'Có bill 1 phần'; const isReady = row['Kết quả Check'] === 'OK'; const isShipped = !!row['Mã Tracking']; const deliveryStatus = row['Trạng thái giao hàng NB'] || ''; const isChargeable = deliveryStatus !== 'Hủy' && deliveryStatus !== 'Hoàn'; const counters = [group, staffTotal, grandTotal]; counters.forEach(c => { c.totalOrders++; if (isPaid) { c.paidCount++; if (!isNaN(revenue)) c.paidAmount += revenue; } if (isPartialPaid) c.partialBill++; if (isReady) c.readyToShip++; if (isShipped) c.shipped++; if (isChargeable) c.chargedShipping++; switch(deliveryStatus) { case 'Giao Thành Công': c.success++; break; case 'Đang Giao': c.delivering++; break; case 'Chưa Giao': c.notDelivered++; break; case 'Hoàn': c.returned++; break; case 'chờ check': c.waitingCheck++; break; case '': c.emptyStatus++; break; } }); }); let html = ''; const staffNames = Object.keys(report).sort(); staffNames.forEach(staff => { html += `<tr class="summary-staff-header"><td colspan="17">${staff}</td></tr>`; const carrierNames = Object.keys(report[staff].carriers).sort(); carrierNames.forEach(carrier => { const r = report[staff].carriers[carrier]; const rateShip = r.totalOrders > 0 ? (r.shipped / r.totalOrders * 100).toFixed(1) + '%' : '0%'; const ratePaid = r.success > 0 ? (r.paidCount / r.success * 100).toFixed(1) + '%' : '0%'; const rateChargeable = r.totalOrders > 0 ? (r.chargedShipping / r.totalOrders * 100).toFixed(1) + '%' : '0%'; html += `<tr><td></td><td>${carrier}</td><td>${r.paidCount}</td><td class="positive">${r.paidAmount.toLocaleString('vi-VN')}</td><td>${r.partialBill}</td><td>${r.totalOrders}</td><td>${r.readyToShip}</td><td>${r.shipped}</td><td>${rateShip}</td><td>${r.success}</td><td>${r.delivering}</td><td>${r.notDelivered}</td><td class="negative">${r.returned}</td><td>${r.waitingCheck}</td><td>${r.emptyStatus}</td><td class="positive">${ratePaid}</td><td>${rateChargeable}</td></tr>`; }); const st = report[staff].total; const rateShipTotal = st.totalOrders > 0 ? (st.shipped / st.totalOrders * 100).toFixed(1) + '%' : '0%'; const ratePaidTotal = st.success > 0 ? (st.paidCount / st.success * 100).toFixed(1) + '%' : '0%'; const rateChargeableTotal = st.totalOrders > 0 ? (st.chargedShipping / st.totalOrders * 100).toFixed(1) + '%' : '0%'; html += `<tr class="summary-staff-total"><td colspan="2">Tổng cộng (${staff})</td><td>${st.paidCount}</td><td class="positive">${st.paidAmount.toLocaleString('vi-VN')}</td><td>${st.partialBill}</td><td>${st.totalOrders}</td><td>${st.readyToShip}</td><td>${st.shipped}</td><td>${rateShipTotal}</td><td>${st.success}</td><td>${st.delivering}</td><td>${st.notDelivered}</td><td class="negative">${st.returned}</td><td>${st.waitingCheck}</td><td>${st.emptyStatus}</td><td class="positive">${ratePaidTotal}</td><td>${rateChargeableTotal}</td></tr>`; }); const gt = grandTotal; const rateShipGrand = gt.totalOrders > 0 ? (gt.shipped / gt.totalOrders * 100).toFixed(1) + '%' : '0%'; const ratePaidGrand = gt.success > 0 ? (gt.paidCount / gt.success * 100).toFixed(1) + '%' : '0%'; const rateChargeableGrand = gt.totalOrders > 0 ? (gt.chargedShipping / gt.totalOrders * 100).toFixed(1) + '%' : '0%'; html += `<tr class="summary-grand-total"><td colspan="2">TỔNG TOÀN BỘ</td><td>${gt.paidCount}</td><td>${gt.paidAmount.toLocaleString('vi-VN')}</td><td>${gt.partialBill}</td><td>${gt.totalOrders}</td><td>${gt.readyToShip}</td><td>${gt.shipped}</td><td>${rateShipGrand}</td><td>${gt.success}</td><td>${gt.delivering}</td><td>${gt.notDelivered}</td><td>${gt.returned}</td><td>${gt.waitingCheck}</td><td>${gt.emptyStatus}</td><td>${ratePaidGrand}</td><td>${rateChargeableGrand}</td></tr>`; summaryBody.innerHTML = html; }
 
     function loadData() { showError('Đang tải dữ liệu...', mainTabConfig.table.body); showError('Đang tải dữ liệu...', japanTabConfig.table.body); const script = document.createElement('script'); script.src = `${POST_URL}?callback=handleData&rand=${Math.random()}`; const oldScript = document.querySelector('script[src^="https://script.google.com"]'); if (oldScript) oldScript.remove(); document.body.appendChild(script); }
     
