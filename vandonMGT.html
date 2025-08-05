@@ -1,931 +1,1149 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8">
-  <title>Quản lý đơn hàng MGT</title>
+  <meta charset="UTF-8" />
+  <title>QUẢN LÝ VẬN ĐƠN</title>
   <style>
-    :root {
-      --filter-row-height: 38px;
-    }
     body {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       padding: 20px;
       background-color: #f5f5f5;
       color: #333;
       margin: 0;
-      user-select: none;
     }
-    h2 {
-      text-align: center;
-      margin-bottom: 20px;
-      color: #2c3e50;
+    h2 { text-align: center; margin-bottom: 20px; color: #2c3e50; }
+    .controls {
+      display: flex; justify-content: space-between; margin-bottom: 15px; align-items: center;
+      background: #fff; padding: 15px; border-radius: 8px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1); position: sticky; top: 0; z-index: 100; flex-wrap: wrap;
+      gap: 15px;
+      transition: box-shadow 0.3s ease;
     }
-    .main-filters {
+    .controls .left-controls, .controls .right-controls { display: flex; align-items: center; gap: 15px; flex-wrap: wrap;}
+    .controls .date-filter { display: flex; align-items: center; gap: 8px; }
+    
+    .controls button:not(.tab-btn) {
+      padding: 10px 15px;
+      border: none; 
+      border-radius: 5px; 
+      font-size: 18px;
+      color: white;
+      background-color: #27ae60; /* THEME COLOR */
+      transition: all 0.2s ease-in-out;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .controls button:not(.tab-btn):hover {
+        background-color: #229954; /* THEME COLOR HOVER */
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+
+    .controls .filter-input, 
+    .controls .filter-select,
+    .controls input[type="date"] {
+      padding: 10px 15px;
+      border: 1px solid #ccc; 
+      border-radius: 5px; 
+      font-size: 18px;
+      background-color: white;
+    }
+    
+    .controls .date-filter span { font-size: 18px; }
+    #userInfo, .japan-tab-info { font-size: 18px; font-weight: bold; }
+
+    .tab-controls {
       display: flex;
-      gap: 20px;
-      align-items: center;
-      margin-bottom: 15px;
-      padding: 15px;
-      background: #fff;
-      border-radius: 5px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      flex-wrap: wrap;
-    }
-    .filter-group {
-      display: flex;
-      flex-direction: column;
-    }
-    .filter-group label {
-      font-size: 13px;
-      font-weight: 500;
-      margin-bottom: 5px;
-      color: #555;
-    }
-    .filter-group select, .filter-group input {
-      padding: 6px 8px;
-      border-radius: 4px;
       border: 1px solid #ccc;
-      font-size: 14px;
-    }
-    .tab-container {
-      margin-bottom: 15px;
-      padding: 5px;
-      background: #fff;
       border-radius: 5px;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
+      overflow: hidden;
+      margin-left: 20px;
+      margin-bottom: 15px;
     }
     .tab-btn {
-      padding: 8px 15px;
-      cursor: pointer;
-      background-color: #ecf0f1;
-      color: #2c3e50;
-      border: 1px solid #bdc3c7;
-      border-radius: 4px;
-      font-size: 14px;
-      transition: all 0.3s;
+      background-color: #f1f1f1; border: none; padding: 12px 22px; cursor: pointer;
+      font-size: 16px; font-weight: bold;
+      transition: all 0.2s ease-in-out;
     }
-    .tab-btn:hover {
-      background-color: #dfe6e9;
-    }
+    .tab-btn:hover { background-color: #e0e0e0; }
     .tab-btn.active {
-      background-color: #3498db;
+      background-color: #27ae60; /* THEME COLOR */
       color: white;
-      border-color: #2980b9;
-      font-weight: bold;
+      box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
     }
-    .tab-btn.tracking-tab {
-      background-color: #e74c3c;
-      color: white;
-    }
-    .tab-btn.tracking-tab.active {
-      background-color: #c0392b;
-    }
-    .controls {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 15px;
-      align-items: center;
-      background: #fff;
-      padding: 10px 15px;
-      border-radius: 5px;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-    .controls > div {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
+    .content-tab { display: none; }
+    .content-tab.active { display: block; }
+
     .table-wrapper {
-      position: relative;
-      overflow: auto;
-      max-height: 65vh;
-      background: white;
-      border-radius: 0 0 5px 5px;
+      position: relative; overflow: auto; max-height: 75vh;
+      background: white; border-radius: 5px;
       box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      margin-top: 20px;
+    }
+    .main-table-wrapper {
+      overflow-x: scroll; overflow-y: auto; max-height: calc(100vh - 200px);
     }
     table {
-      border-collapse: collapse;
-      width: 100%;
-      min-width: 1800px;
-      font-size: 14px;
+      border-collapse: collapse; width: 100%; min-width: 2200px;
+      font-size: 11px; font-weight: bold;
     }
-    thead {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-    }
+    thead { position: sticky; top: 0; z-index: 10; }
     th, td {
-      border: 1px solid #e0e0e0;
-      padding: 8px 12px;
-      text-align: left;
-      white-space: nowrap;
-      background-color: white;
-      position: relative;
+      border: 1px solid #e0e0e0; padding: 6px 10px;
+      white-space: nowrap; background-color: white; text-align: left;
     }
     th {
-      background-color: #3498db;
-      color: white;
-      position: sticky;
-      top: var(--filter-row-height);
-      z-index: 20;
-      font-weight: 500;
+      background-color: #27ae60; /* THEME COLOR */
+      color: white; font-weight: 500;
+      vertical-align: top; position: sticky; top: 0; z-index: 20;
     }
-    #filterRow th {
-        top: 0;
-        background-color: #f2f6fa;
-        padding: 4px 8px;
+    th .filter-input, th .filter-select {
+      width: 100%; margin-top: 5px; 
+      padding: 6px 4px; font-size: 12px;
+      border: 1px solid #ccc; border-radius: 3px;
     }
-    .filter-input {
-      width: 100%;
-      padding: 5px;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      font-size: 13px;
+    td.editable { background-color: #fffbe8; }
+    td select, td input.date-input {
+      width: 100%; padding: 4px; border: none;
+      background: transparent; font-family: inherit; font-size: inherit;
+      font-weight: inherit;
     }
-    
-    /* --- CSS CHO BỘ LỌC KÉP --- */
-    .dual-filter-container {
-      display: flex;
-      gap: 4px;
-      align-items: center;
-    }
-    .dual-filter-container input {
-      flex: 1; /* Chia đều không gian */
-      min-width: 0; /* Cho phép co lại khi cần */
-    }
+    button { cursor: pointer; border: none; transition: background-color 0.3s; }
 
-    td.editable {
-      background-color: #fffbe8;
-    }
-    td.editable:has(.status-select) {
-        padding: 0;
-    }
-    .status-select {
-        width: 100%;
-        height: 100%;
-        border: none;
-        background: transparent;
-        font-family: inherit;
-        font-size: inherit;
-        padding: 8px 12px;
-        appearance: none;
-        -webkit-appearance: none;
-        -moz-appearance: none;
-        cursor: pointer;
-    }
-
-    button {
-      padding: 6px 12px;
-      cursor: pointer;
-      background-color: #3498db;
-      color: white;
-      border: none;
-      border-radius: 4px;
-      font-size: 13px;
-      transition: background-color 0.3s;
-    }
-    button:hover {
-      background-color: #2980b9;
-    }
-    #downloadExcel {
-        background-color: #16a085;
-    }
-    #downloadExcel:hover {
-        background-color: #1abc9c;
-    }
-    #updateAll {
-        position: relative;
-    }
-    .highlight { background-color: #ffeb3b !important; }
-    .no-data { text-align: center; padding: 20px; color: #7f8c8d; font-style: italic; }
+    .update-btn { background-color: #3498db; }
+    .update-btn:hover { background-color: #2980b9; }
     .refresh-btn { background-color: #2ecc71; }
     .refresh-btn:hover { background-color: #27ae60; }
-    .refresh-icon { margin-right: 5px; }
-    .fixed-column { position: sticky; left: 0; z-index: 5; background-color: white; }
-    th.fixed-column { z-index: 30; background-color: #3498db; }
-    #filterRow th.fixed-column { z-index: 40; background-color: #f2f6fa; }
-    .date-input { border: none; background: transparent; width: 100%; font-family: inherit; font-size: inherit; user-select: text; }
-    .note-highlight { background-color: #fff2a8; }
-    .status-ok { background-color: #d4edda; color: #155724; font-weight: bold; }
-    .status-cancel { background-color: #f8d7da; color: #721c24; font-weight: bold; }
-    td.cell-selected { background-color: rgba(52, 152, 219, 0.4) !important; }
-    td.paste-anchor {
-        outline: 2px solid #e74c3c !important; /* Màu khác để chỉ điểm neo dán */
-        outline-offset: -2px;
-    }
+    .clear-filter-btn { background-color: #f39c12; }
+    .clear-filter-btn:hover { background-color: #e67e22; }
 
-    .order-counter {
-      margin-left: 15px;
-      font-weight: bold;
-      font-size: 14px;
-      color: #2c3e50;
+    .status { font-size: 0.85em; margin-left: 8px; color: #27ae60; }
+    .error-status { color: #e74c3c; }
+    .highlight { background-color: #ffeb3b !important; }
+    .no-data {
+      text-align: center; padding: 20px;
+      color: #7f8c8d; font-style: italic; font-size: 16px;
     }
-    .order-counter b {
-      color: #e74c3c;
-      font-size: 16px;
-      padding: 0 4px;
+    .refresh-icon { margin-right: 5px; }
+    .fixed-column { position: sticky; left: 0; z-index: 5; }
+    th.fixed-column { z-index: 30; background-color: #27ae60; } /* THEME COLOR */
+    td.fixed-column { background-color: #f9f9f9; }
+
+    .summary-info {
+      background: #e3f2fd; padding: 8px 15px; border-radius: 4px;
+      margin-left: 10px; font-weight: bold; font-size: 18px;
     }
     
-    .selection-summary {
-      margin-left: 20px;
-      font-size: 14px;
-      color: #2980b9;
-      font-weight: 500;
-      display: flex;
-      gap: 15px;
-      align-items: center;
+    .cell-selected {
+      background-color: #a7ffeb !important; /* THEME COLOR SELECTION */
+      outline: 2px solid #00bfa5;
     }
-    .selection-summary .summary-item {
-      display: inline-block;
-      background-color: #ecf0f1;
-      padding: 3px 8px;
-      border-radius: 4px;
-      border: 1px solid #bdc3c7;
+    #tableBody tr:hover td, #japanTableBody tr:hover td {
+        background-color: #f1f1f1 !important;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
     }
-    .selection-summary b {
-      color: #c0392b;
-      padding-left: 5px;
+    
+    .cell-ok { background-color: #e8f5e9 !important; }
+    .cell-cancel { background-color: #ffebee !important; }
+    .cell-xl { background-color: #fffde7 !important; }
+
+    .summary-table {
+      width: 100%; margin-bottom: 20px; background: white;
+      border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      overflow: hidden; font-size: 13px; 
+    }
+    .summary-table th { background-color: #2c3e50; position: sticky; top: 0; }
+    .summary-table td { text-align: center; }
+    .positive { color: #27ae60; font-weight: bold; }
+    .negative { color: #e74c3c; font-weight: bold; }
+    .summary-staff-header td { background-color: #ecf0f1 !important; font-weight: bold; text-align: left !important; color: #2c3e50; }
+    .summary-staff-total td { background-color: #fff9c4 !important; font-weight: bold; color: #5d4037; }
+    .summary-grand-total td { background-color: #ffeb3b !important; font-weight: bold; color: #3e2723; }
+    
+    ::-webkit-scrollbar { -webkit-appearance: none; height: 15px; width: 15px; }
+    ::-webkit-scrollbar-thumb { border-radius: 5px; background-color: #27ae60; border: 2px solid #f5f5f5; }
+    ::-webkit-scrollbar-thumb:hover { background-color: #229954; }
+    
+    td select, .controls .filter-select, th .filter-select {
+      background-color: #e0f2f1; border: 1px solid #b2dfdb; border-radius: 4px;
+      cursor: pointer; transition: background-color 0.2s, box-shadow 0.2s;
+    }
+    td select:hover, .controls .filter-select:hover, th .filter-select:hover { background-color: #b2dfdb; }
+    td select:focus, .controls .filter-select:focus, th .filter-select:focus {
+      outline: none; border-color: #27ae60; box-shadow: 0 0 0 2px rgba(39, 174, 96, 0.4);
+    }
+    
+    td.editing { padding: 0; }
+    td.editing input {
+      width: 100%; height: 100%; border: 2px solid #27ae60;
+      padding: 4px; box-sizing: border-box;
+      font-family: inherit; font-size: inherit; font-weight: inherit;
     }
 
-    .custom-alert-overlay {
-        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-        background: rgba(0, 0, 0, 0.4); display: flex; justify-content: center;
-        align-items: flex-start; z-index: 1000; padding-top: 50px;
-        opacity: 0; visibility: hidden; transition: opacity 0.3s, visibility 0.3s;
+    /* NEW STYLES FOR MULTI-SELECT DROPDOWN */
+    .multi-select-container { position: relative; display: inline-block; }
+    .multi-select-container button {
+        background-color: white; color: #333;
+        border: 1px solid #ccc; font-size: 18px;
+        padding: 10px 15px; text-align: left;
+        width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .custom-alert-overlay.show { opacity: 1; visibility: visible; }
-    .custom-alert-box {
-        background: white; padding: 20px 40px 20px 20px; border-radius: 5px;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.3); min-width: 300px;
-        max-width: 500px; position: relative; transform: translateY(-50px);
-        transition: transform 0.3s; border-top: 4px solid #3498db;
+    .checkbox-dropdown {
+        display: none; position: absolute; background-color: #f9f9f9;
+        min-width: 250px; box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+        z-index: 101; border: 1px solid #ddd; border-radius: 5px;
+        max-height: 300px; overflow-y: auto; padding: 10px;
     }
-    .custom-alert-overlay.show .custom-alert-box { transform: translateY(0); }
-    .custom-alert-box.info { border-top-color: #3498db; }
-    .custom-alert-box.success { border-top-color: #2ecc71; }
-    .custom-alert-box.error { border-top-color: #e74c3c; }
-    #customAlertMessage { margin: 0; font-size: 16px; color: #333; }
-    .custom-alert-close-btn {
-        position: absolute; top: 5px; right: 10px; background: none;
-        border: none; font-size: 24px; font-weight: bold; color: #aaa;
-        cursor: pointer; padding: 5px; line-height: 1;
+    .checkbox-dropdown.show { display: block; }
+    .checkbox-dropdown label {
+        display: block; padding: 8px 12px;
+        cursor: pointer; border-radius: 4px;
+        transition: background-color 0.2s;
     }
-    .custom-alert-close-btn:hover { color: #333; }
+    .checkbox-dropdown label:hover { background-color: #f1f1f1; }
+    .checkbox-dropdown label input { margin-right: 10px; }
   </style>
 </head>
 <body>
-  <h2>QUẢN LÝ ĐƠN HÀNG MGT</h2>
+  <h2>QUẢN LÝ VẬN ĐƠN</h2>
 
-  <div id="mainFilters" class="main-filters">
-    <div class="filter-group">
-        <label for="filterMarket">Thị trường</label>
-        <select id="filterMarket"><option value="">Tất cả</option></select>
-    </div>
-    <div class="filter-group">
-        <label for="filterProduct">Sản phẩm</label>
-        <select id="filterProduct"><option value="">Tất cả</option></select>
-    </div>
-    <div class="filter-group">
-        <label for="filterDateFrom">Từ ngày</label>
-        <input type="date" id="filterDateFrom">
-    </div>
-    <div class="filter-group">
-        <label for="filterDateTo">Tới ngày</label>
-        <input type="date" id="filterDateTo">
-    </div>
+  <div class="tab-controls">
+      <button id="tabData" class="tab-btn active">Dữ liệu đơn hàng</button>
+      <button id="tabJapan" class="tab-btn">Đơn Nhật</button>
+      <button id="tabReport" class="tab-btn">Báo cáo tổng kết</button>
   </div>
 
-  <div id="tabContainer" class="tab-container"></div>
-  
-  <div class="controls">
-    <div>
-      <button id="refreshData" class="refresh-btn">
-        <span class="refresh-icon">↻</span> Load dữ liệu
-      </button>
-      <button id="updateAll">Cập nhật tất cả thay đổi</button>
-      <button id="downloadExcel">Tải Excel</button>
-      <span id="orderCounter" class="order-counter"></span>
-      <span id="selectionSummary" class="selection-summary"></span>
+  <div id="contentData" class="content-tab active">
+    <div class="controls">
+      <div class="left-controls">
+        <span id="userInfo"></span>
+        <button id="refreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+        <button id="updateAll" class="update-btn">Cập nhật</button>
+        <div id="summaryInfo" class="summary-info"></div>
+        <div id="selectionSummary" class="summary-info" style="background-color: #e8f5e9; border: 1px solid #a5d6a7;"></div>
+      </div>
+      <div class="right-controls">
+        <div class="date-filter">
+          <span>Từ:</span><input type="date" id="startDateFilter" />
+          <span>Đến:</span><input type="date" id="endDateFilter" />
+        </div>
+         <select id="productFilter" class="filter-select"><option value="">Tất cả sản phẩm</option></select>
+         <select id="marketFilter" class="filter-select"><option value="">Tất cả khu vực</option></select>
+        <button id="clearFilters" class="clear-filter-btn">Xóa lọc</button>
+      </div>
     </div>
-    <div>
-      <button id="toggleTrackingView" class="tab-btn tracking-tab">Xem đơn có mã Tracking</button>
+    <div class="main-table-wrapper" id="tableContainer">
+      <table>
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+      </table>
     </div>
   </div>
-  
-  <div class="table-wrapper" id="tableContainer">
-    <table>
-      <thead>
-        <tr id="filterRow"></tr>
-        <tr>
-          <th class="fixed-column">Mã đơn hàng</th>
-          <th>Ngày lên đơn</th><th>Name*</th><th>Phone*</th><th>Add</th><th>City</th><th>State</th><th>Khu vực</th><th>Zipcode</th><th>Mặt hàng</th><th>Tên mặt hàng 1</th><th>Số lượng mặt hàng 1</th><th>Tên mặt hàng 2</th><th>Số lượng mặt hàng 2</th><th>Quà tặng</th><th>Số lượng quà kèm</th><th>Giá bán</th><th>Loại tiền thanh toán</th><th>Tổng tiền VNĐ</th><th>Hình thức thanh toán</th><th>Ghi chú</th><th>Ghi chú vận đơn</th><th>Kết quả check</th><th>Mã Tracking</th><th>Ngày đóng hàng</th><th>Trạng thái giao hàng</th><th>Thời gian giao dự kiến</th><th>Phí ship nội địa Mỹ (usd)</th><th>Phí xử lý đơn đóng hàng-Lưu kho(usd)</th><th>GHI CHÚ</th>
-        </tr>
-      </thead>
-      <tbody id="tableBody"></tbody>
-    </table>
+
+  <div id="contentJapan" class="content-tab">
+      <div class="controls">
+          <div class="left-controls">
+              <span class="japan-tab-info">Đơn hàng khu vực: Nhật Bản</span>
+              <button id="japanRefreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+              <button id="japanUpdateAll" class="update-btn">Cập nhật</button>
+              <div id="japanSummaryInfo" class="summary-info"></div>
+          </div>
+          <div class="right-controls">
+              <div class="date-filter">
+                  <span>Từ:</span><input type="date" id="japanStartDateFilter" />
+                  <span>Đến:</span><input type="date" id="japanEndDateFilter" />
+              </div>
+              <select id="japanProductFilter" class="filter-select"><option value="">Sản phẩm</option></select>
+              <select id="japanStaffFilter" class="filter-select"><option value="">NV Vận đơn</option></select>
+              <button id="japanClearFilters" class="clear-filter-btn">Xóa lọc</button>
+          </div>
+      </div>
+      <div class="main-table-wrapper" id="japanTableContainer">
+          <table>
+              <thead id="japanTableHead"></thead>
+              <tbody id="japanTableBody"></tbody>
+          </table>
+      </div>
   </div>
   
-  <!-- HỘP THOẠI THÔNG BÁO TÙY CHỈNH -->
-  <div id="customAlert" class="custom-alert-overlay">
-    <div id="customAlertBox" class="custom-alert-box">
-      <p id="customAlertMessage"></p>
-      <button id="customAlertClose" class="custom-alert-close-btn">×</button>
+  <div id="contentReport" class="content-tab">
+    <div class="controls">
+        <div class="left-controls">
+            <span style="font-weight: bold; font-size: 18px;">Tùy chọn Báo cáo</span>
+        </div>
+        <div class="right-controls">
+             <div class="date-filter">
+                <span>Từ:</span><input type="date" id="reportStartDateFilter" />
+                <span>Đến:</span><input type="date" id="reportEndDateFilter" />
+            </div>
+            <!-- NEW MULTI-SELECT STAFF FILTER -->
+            <div class="multi-select-container">
+                <button id="reportStaffFilterBtn">Tất cả NV Vận đơn</button>
+                <div id="reportStaffDropdown" class="checkbox-dropdown">
+                    <!-- Checkboxes will be populated by JS -->
+                </div>
+            </div>
+            <select id="reportProductFilter" class="filter-select"><option value="">Tất cả sản phẩm</option></select>
+            <select id="reportMarketFilter" class="filter-select"><option value="">Tất cả khu vực</option></select>
+            <button id="reportClearFilters" class="clear-filter-btn">Xóa lọc</button>
+        </div>
+    </div>
+    <div class="table-wrapper">
+      <table class="summary-table">
+        <thead>
+          <tr>
+            <th rowspan="2">NV Vận đơn</th><th rowspan="2">Đơn vị vận chuyển</th><th colspan="2">Đã Thanh Toán (có bill)</th><th rowspan="2">Bill 1 phần</th><th rowspan="2">Tổng đơn lên nội bộ</th><th rowspan="2">Tổng đơn đủ đkien đẩy vh</th><th rowspan="2">Tổng đơn lên vận hành</th><th rowspan="2">Tỷ lệ đơn lên vận hành</th><th rowspan="2">Giao Thành Công</th><th rowspan="2">Đang Giao</th><th rowspan="2">Chưa Giao</th><th rowspan="2">Hoàn</th><th rowspan="2">chờ check</th><th rowspan="2">Trống trạng thái</th><th rowspan="2">Tỷ lệ thu tiền/giao thành công</th><th rowspan="2">Tỷ lệ đơn tính phí vc</th>
+          </tr>
+          <tr>
+            <th>Số đơn</th><th>Thành Tiền</th>
+          </tr>
+        </thead>
+        <tbody id="summaryTableBody"></tbody>
+      </table>
     </div>
   </div>
 
   <script>
-    const POST_URL = 'https://script.google.com/macros/s/AKfycbzNeQSd_fUNicLT8VyVg90Di9NpAZxCagmBLFboJZ5I64qjqHBHM7uOZalO11mJdAxN/exec';
+    const POST_URL = 'https://script.google.com/macros/s/AKfycbyGW5O47Y0TwPEqRzta72wwNSUN3jA1IPzSr1N72eOxVcqH4G8sgyelQROtDk9aVq75/exec';
+    const columnDisplayMapping = { "Ghi chú vận đơn": "Ngày hẹn đẩy đơn" };
+    const editableCols = ["Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền", "Ngày hẹn đẩy đơn"];
+    const dropdownCols = {
+        "Kết quả Check": ["", "OK", "Huỷ", "Treo", "Vận đơn XL", "Đợi hàng", "Khách hẹn"],
+        "Trạng thái giao hàng NB": ["", "Giao Thành Công", "Đang Giao", "Chưa Giao", "Hủy", "Hoàn", "chờ check", "Giao không thành công", "Bom_Thất Lạc"],
+        "Trạng thái thu tiền": ["", "Có bill", "Có bill 1 phần", "Bom_bùng_chặn", "Hẹn Thanh Toán", "Hoàn Hàng", "Khó Đòi", "Không nhận được hàng", "Không PH dưới 3N", "Thanh toán phí hoàn", "KPH nhiều ngày"]
+    };
+    const displayColumns = ["Mã đơn hàng", "Kết quả Check", "Trạng thái giao hàng NB", "Mã Tracking", "Lý do", "Trạng thái thu tiền", "Ghi chú vận đơn", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển", "Số tiền của đơn hàng đã về TK Cty", "Kế toán xác nhận thu tiền về", "Đối soát lần 3"];
+    const allDateColumns = ["Ngày lên đơn", "Ngày đóng hàng", "Ngày hẹn đẩy đơn"];
+    const columnsToMakeDynamic = ["Kết quả Check", "Trạng thái giao hàng NB", "Trạng thái thu tiền", "khu vực", "Mặt hàng", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển"];
+
+    let allData = [], staffFilteredData = [], japanData = [], changedRows = new Set(), japanChangedRows = new Set(), currentStaff = null, teamMembers = [], selectedCells = new Set(), isMouseDown = false, startCell = null, dynamicFilterOptions = {}, japanDynamicFilterOptions = {};
     
-    const displayColumns = ["Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ghi chú vận đơn", "Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
-    const columnMapping = { "Ghi chú vận đơn": "ngày hẹn đẩy đơn", "Kết quả check": "Kết quả Check" };
-    const editableCols = ["Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
-    const DELIVERY_STATUS_OPTIONS = ["", "Chưa giao", "Đang giao", "Đã giao", "Giao thất bại", "Hoàn hàng", "Hủy"];
-
-    let allData = [], initialFilteredData = [], filteredData = [];
-    let changedRows = new Set(), activeRegion = 'all', filterValues = {}, showTrackingOrders = false;
-    let pasteAnchorCell = null;
-
-    // --- HÀM THÔNG BÁO TÙY CHỈNH ---
-    function showCustomAlert(message, type = 'info', duration = 4000) {
-        const alertOverlay = document.getElementById('customAlert');
-        const alertBox = document.getElementById('customAlertBox');
-        const alertMessage = document.getElementById('customAlertMessage');
-        alertMessage.textContent = message;
-        alertBox.className = 'custom-alert-box ' + type;
-        alertOverlay.classList.add('show');
-        const hideAlert = () => alertOverlay.classList.remove('show');
-        if (duration) { setTimeout(hideAlert, duration); }
-        document.getElementById('customAlertClose').onclick = hideAlert;
-    }
-
-    // --- CÁC HÀM UTILITY ---
-    function formatDate(dateString) { if (!dateString) return ''; try { const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z'); if (isNaN(date.getTime())) return dateString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); return `${day}/${month}/${year}`; } catch (e) { return dateString; } }
-    function parseDateToISO(dateString) { if (!dateString) return ''; const parts = dateString.split('/'); if (parts.length !== 3) return dateString; try { const day = parseInt(parts[0], 10); const month = parseInt(parts[1], 10) - 1; const year = parseInt(parts[2], 10); const date = new Date(Date.UTC(year, month, day)); if (isNaN(date.getTime())) return dateString; return date.toISOString(); } catch (e) { return dateString; } }
-    function updateOrderCounter(count) { const counterElement = document.getElementById('orderCounter'); if (counterElement) { counterElement.innerHTML = `Tổng số đơn: <b>${count}</b>`; } }
-    
-    // --- XỬ LÝ DỮ LIỆU VÀ BỘ LỌC ---
-    function handleData(response) {
-      document.getElementById('refreshData').disabled = false;
-      document.getElementById('refreshData').innerHTML = '<span class="refresh-icon">↻</span> Load dữ liệu';
-      allData = []; changedRows = new Set();
-      if (response.error) { showCustomAlert(`Lỗi tải dữ liệu: ${response.error}`, 'error'); return; }
-      const data = response.rows || response.data || response;
-      if (!Array.isArray(data)) { showCustomAlert('Dữ liệu trả về không hợp lệ.', 'error'); return; }
-      allData = data;
-      filterInitialData();
-      createTabs(initialFilteredData);
-      populateMainFilters(initialFilteredData);
-      setupColumnFilters();
-      applyAllFilters();
-    }
-    
-    function filterInitialData() {
-        initialFilteredData = allData.filter(row => {
-            const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
-            const trackingCode = row["Mã Tracking"] || row["Mã_Tracking"] || '';
-            if (showTrackingOrders) { 
-                return carrier?.toString().toUpperCase() === "MGT" && trackingCode?.trim() !== ''; 
-            } else { 
-                return carrier?.toString().toUpperCase() === "MGT" && !trackingCode?.trim(); 
-            }
-        });
-    }
-
-    function populateMainFilters(data) {
-        const marketFilter = document.getElementById('filterMarket');
-        const productFilter = document.getElementById('filterProduct');
-        const markets = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort();
-        const products = [...new Set(data.map(row => row["Mặt hàng"]).filter(Boolean))].sort();
-        marketFilter.innerHTML = '<option value="">Tất cả Thị trường</option>';
-        productFilter.innerHTML = '<option value="">Tất cả Sản phẩm</option>';
-        markets.forEach(market => marketFilter.innerHTML += `<option value="${market}">${market}</option>`);
-        products.forEach(product => productFilter.innerHTML += `<option value="${product}">${product}</option>`);
-    }
-
-    // *** UPDATED FUNCTION ***
-    function applyAllFilters() {
-        let dataToRender = [...initialFilteredData];
-        const market = document.getElementById('filterMarket').value;
-        const product = document.getElementById('filterProduct').value;
-        const dateFrom = document.getElementById('filterDateFrom').value;
-        const dateTo = document.getElementById('filterDateTo').value;
-
-        // 1. Áp dụng các bộ lọc chính
-        if (market) { dataToRender = dataToRender.filter(row => row["Khu vực"] === market); }
-        if (product) { dataToRender = dataToRender.filter(row => row["Mặt hàng"] === product); }
-        if (dateFrom) { const from = new Date(dateFrom); from.setHours(0, 0, 0, 0); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) >= from); }
-        if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
-        if (activeRegion !== 'all') { dataToRender = dataToRender.filter(row => row["Khu vực"] === activeRegion); }
-        
-        // 2. Tách bộ lọc cột tracking và các cột khác
-        const trackingIncludeRaw = filterValues['tracking_include'] || '';
-        const trackingExcludeRaw = filterValues['tracking_exclude'] || '';
-        const otherColumnFilters = Object.entries(filterValues).filter(([key, val]) => val.trim() !== '' && !key.startsWith('tracking_'));
-        
-        // 3. Áp dụng các bộ lọc cột khác
-        if (otherColumnFilters.length > 0) {
-            dataToRender = dataToRender.filter(row => {
-                return otherColumnFilters.every(([col, filterValue]) => {
-                    const dataKey = columnMapping[col] || col;
-                    const cellValue = row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? '';
-                    return String(cellValue).toLowerCase().includes(filterValue.toLowerCase());
-                });
-            });
+    const mainTabConfig = {
+        data: () => staffFilteredData, changedRows: changedRows,
+        controls: { refreshBtn: 'refreshData', updateBtn: 'updateAll', clearBtn: 'clearFilters', startDate: 'startDateFilter', endDate: 'endDateFilter', product: 'productFilter', market: 'marketFilter', summary: 'summaryInfo' },
+        table: { head: 'tableHead', body: 'tableBody' },
+        dynamicOptions: () => dynamicFilterOptions
+    };
+    const japanTabConfig = {
+        data: () => japanData, changedRows: japanChangedRows,
+        controls: { refreshBtn: 'japanRefreshData', updateBtn: 'japanUpdateAll', clearBtn: 'japanClearFilters', startDate: 'japanStartDateFilter', endDate: 'japanEndDateFilter', product: 'japanProductFilter', staff: 'japanStaffFilter', summary: 'japanSummaryInfo' },
+        table: { head: 'japanTableHead', body: 'japanTableBody' },
+        dynamicOptions: () => japanDynamicFilterOptions
+    };
+    const reportTabConfig = {
+        controls: {
+            clearBtn: 'reportClearFilters', startDate: 'reportStartDateFilter',
+            endDate: 'reportEndDateFilter', product: 'reportProductFilter', market: 'reportMarketFilter',
+            staffBtn: 'reportStaffFilterBtn', staffDropdown: 'reportStaffDropdown'
         }
+    };
+
+    function getUrlParameter(name) { name = name.replace(/[\[\]]/g, '\\$&'); const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)'); const results = regex.exec(window.location.href); if (!results) return null; if (!results[2]) return ''; return decodeURIComponent(results[2].replace(/\+/g, ' '));}
+    function parseDateString(dateString) { if (!dateString || typeof dateString !== 'string') return null; const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, ''); if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) { const d = new Date(cleanedDateString); if (!isNaN(d.getTime())) return d; } const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/); if (parts) { const month = parseInt(parts[1], 10); const day = parseInt(parts[2], 10); const year = parseInt(parts[3], 10); if (year > 1000 && month > 0 && month <= 12 && day > 0 && day <= 31) { const d = new Date(Date.UTC(year, month - 1, day)); if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1) return d; } } return null; }
+    function formatDate(dateString) { const originalValue = (typeof dateString === 'string') ? dateString.trim() : ''; if (!originalValue) return { display: '', original: '' }; const dateObj = parseDateString(originalValue); if (dateObj) { const day = String(dateObj.getUTCDate()).padStart(2, '0'); const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0'); const year = dateObj.getUTCFullYear(); return { display: `${day}/${month}/${year}`, original: originalValue }; } return { display: originalValue, original: originalValue }; }
+    async function fetchStaffInfo(idns, id1 = null) { try { const staffApiUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec'; const response = await fetch(staffApiUrl, { cache: "no-store" }); if (!response.ok) throw new Error('Lỗi mạng khi tải data nhân viên'); const data = await response.json(); let staffMember = data.find(staff => String(staff.idnv) === idns); let staffMember1 = id1 ? data.find(staff => String(staff.idnv) === id1) : null; if (!staffMember && !staffMember1) { let errorMsg = `Không tìm thấy nhân viên với ID: ${idns}`; if (id1) errorMsg += ` hoặc ID1: ${id1}`; throw new Error(errorMsg); } const memberNames = new Set(); if (staffMember) { if (staffMember.ho_va_ten) memberNames.add(staffMember.ho_va_ten); if (staffMember.vi_tri === "Leader" && staffMember.team) { const teamName = staffMember.team; data.forEach(member => { if (member.team === teamName && member.ho_va_ten) memberNames.add(member.ho_va_ten); }); } } if (staffMember1 && staffMember1.ho_va_ten) memberNames.add(staffMember1.ho_va_ten); teamMembers = Array.from(memberNames); return staffMember || staffMember1; } catch (error) { showError(error.message); throw error; } }
+    function showError(message, containerId = 'tableBody') { const container = document.getElementById(containerId); const colCount = displayColumns.length; container.innerHTML = `<tr><td colspan="${colCount}" class="no-data">${message}</td></tr>`; }
+    function createEmptyStats() { return { "Đã Thanh Toán (có bill)": { count: 0, amount: 0 }, "Bill 1 phần": { count: 0, amount: 0 }, "Tổng đơn lên nội bộ": { count: 0, amount: 0 }, "Tổng đơn đủ đkien đẩy vh": { count: 0, amount: 0 }, "Tổng đơn lên vận hành": { count: 0, amount: 0 }, "Giao Thành Công": { count: 0, amount: 0 }, "Đang Giao": { count: 0, amount: 0 }, "Chưa Giao": { count: 0, amount: 0 }, "Hoàn": { count: 0, amount: 0 }, "chờ check": { count: 0, amount: 0 }, "Trống trạng thái": { count: 0, amount: 0 } }; }
+    function updateSummaryInfo(filteredData, summaryElementId) { const totalOrders = filteredData.length; const totalAmount = filteredData.reduce((sum, row) => { let amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0; const numericValue = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0; return sum + numericValue; }, 0); const formattedAmount = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(totalAmount); document.getElementById(summaryElementId).innerHTML = `Tổng đơn: <span style="color: #e74c3c;">${totalOrders}</span> | Tổng tiền: <span style="color: #27ae60;">${formattedAmount}</span>`; }
+    function updateDetailedSummaryTable(filteredData) { const summaryTableBody = document.getElementById('summaryTableBody'); summaryTableBody.innerHTML = ''; if (filteredData.length === 0) { showError('Không có dữ liệu báo cáo khớp với bộ lọc.', 'summaryTableBody'); return; } const staffStats = {}; const grandTotal = createEmptyStats(); filteredData.forEach(row => { const staffName = row["NV Vận đơn"] || row["NV_Vận_đơn"] || "Chưa có NV"; const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định"; if (!staffStats[staffName]) { staffStats[staffName] = { _total: createEmptyStats() }; } if (!staffStats[staffName][shippingCompany]) { staffStats[staffName][shippingCompany] = createEmptyStats(); } const statsToUpdate = [ staffStats[staffName][shippingCompany], staffStats[staffName]._total, grandTotal ]; const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0; const numericAmount = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0; const paymentStatus = row["Trạng thái thu tiền"] || ""; const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; statsToUpdate.forEach(stats => { if (paymentStatus.includes("Có bill")) { stats["Đã Thanh Toán (có bill)"].count++; stats["Đã Thanh Toán (có bill)"].amount += numericAmount; } else if (paymentStatus.includes("Có bill 1 phần")) { stats["Bill 1 phần"].count++; } if (deliveryStatus.includes("Giao Thành Công")) stats["Giao Thành Công"].count++; else if (deliveryStatus.includes("Đang Giao")) stats["Đang Giao"].count++; else if (deliveryStatus.includes("Chưa Giao")) stats["Chưa Giao"].count++; else if (deliveryStatus.includes("Hoàn")) stats["Hoàn"].count++; else if (deliveryStatus.includes("chờ check")) stats["chờ check"].count++; else if (deliveryStatus === "") stats["Trống trạng thái"].count++; stats["Tổng đơn lên nội bộ"].count++; if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) { stats["Tổng đơn đủ đkien đẩy vh"].count++; } if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) { stats["Tổng đơn lên vận hành"].count++; } }); }); Object.keys(staffStats).sort().forEach(staffName => { const staffData = staffStats[staffName]; const headerRow = summaryTableBody.insertRow(); headerRow.className = 'summary-staff-header'; const headerCell = headerRow.insertCell(); headerCell.colSpan = 17; headerCell.textContent = `Nhân viên: ${staffName}`; Object.keys(staffData).filter(key => key !== '_total').sort().forEach(companyName => { const companyData = staffData[companyName]; const tr = renderSummaryRow(staffName, companyName, companyData); summaryTableBody.appendChild(tr); }); const totalRow = renderSummaryRow("Tổng cộng", "Tất cả DVVC", staffData._total); totalRow.className = 'summary-staff-total'; summaryTableBody.appendChild(totalRow); }); const grandTotalRow = renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal); grandTotalRow.className = 'summary-grand-total'; summaryTableBody.appendChild(grandTotalRow); }
+    function renderSummaryRow(staffName, companyName, data) { const tr = document.createElement('tr'); tr.insertCell().textContent = staffName; tr.insertCell().textContent = companyName; tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count; const paidAmountCell = tr.insertCell(); paidAmountCell.textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫'; tr.insertCell().textContent = data["Bill 1 phần"].count; tr.insertCell().textContent = data["Tổng đơn lên nội bộ"].count; tr.insertCell().textContent = data["Tổng đơn đủ đkien đẩy vh"].count; tr.insertCell().textContent = data["Tổng đơn lên vận hành"].count; const shippingRate = data["Tổng đơn lên nội bộ"].count > 0 ? (data["Tổng đơn lên vận hành"].count / data["Tổng đơn lên nội bộ"].count * 100) : 0; const shippingRateCell = tr.insertCell(); shippingRateCell.textContent = shippingRate.toFixed(2) + '%'; shippingRateCell.className = shippingRate > 70 ? 'positive' : 'negative'; tr.insertCell().textContent = data["Giao Thành Công"].count; tr.insertCell().textContent = data["Đang Giao"].count; tr.insertCell().textContent = data["Chưa Giao"].count; tr.insertCell().textContent = data["Hoàn"].count; tr.insertCell().textContent = data["chờ check"].count; tr.insertCell().textContent = data["Trống trạng thái"].count; const paymentSuccessRate = data["Giao Thành Công"].count > 0 ? (data["Đã Thanh Toán (có bill)"].count / data["Giao Thành Công"].count * 100) : 0; const paymentRateCell = tr.insertCell(); paymentRateCell.textContent = paymentSuccessRate.toFixed(2) + '%'; paymentRateCell.className = paymentSuccessRate > 80 ? 'positive' : 'negative'; const feeRate = data["Tổng đơn lên vận hành"].count > 0 ? (data["Giao Thành Công"].count / data["Tổng đơn lên vận hành"].count * 100) : 0; const feeRateCell = tr.insertCell(); feeRateCell.textContent = feeRate.toFixed(2) + '%'; feeRateCell.className = feeRate > 80 ? 'positive' : 'negative'; return tr; }
+    
+    function getDOMCellValue(cell) { if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); if (input) return input.value; return cell.textContent.trim(); }
+    function updateSelectionSummary() { const summaryEl = document.getElementById('selectionSummary'); if (!summaryEl || !document.getElementById('contentData').classList.contains('active')) { if(summaryEl) summaryEl.innerHTML = ''; return; } if (selectedCells.size <= 1) { summaryEl.innerHTML = ''; return; } let totalSum = 0; let numericCount = 0; let nonBlankCount = 0; selectedCells.forEach(cell => { const value = getDOMCellValue(cell); if (value !== '') { nonBlankCount++; } const numericValue = parseFloat(String(value).replace(/[^0-9.-]/g, '')); if (!isNaN(numericValue)) { totalSum += numericValue; numericCount++; } }); let summaryParts = []; summaryParts.push(`Count: <b>${nonBlankCount}</b>`); if (numericCount > 0) { summaryParts.push(`Sum: <b>${totalSum.toLocaleString('vi-VN')}</b>`); } summaryEl.innerHTML = summaryParts.join(' | '); }
+
+    function setupCellSelection(tableBodyId) {
+        const tableBody = document.getElementById(tableBodyId);
+        if(!tableBody) return;
         
-        // 4. Áp dụng bộ lọc Mã Tracking (bao gồm và loại trừ)
-        if (trackingIncludeRaw || trackingExcludeRaw) {
-            const lowerInclude = trackingIncludeRaw.toLowerCase();
-            const lowerExclude = trackingExcludeRaw.toLowerCase();
+        let lastClickTime = 0;
+        let lastClickCell = null;
+
+        tableBody.addEventListener('click', (e) => {
+            const td = e.target.closest('td');
+            if (!td) return;
+
+            const currentTime = new Date().getTime();
+            const isDoubleClick = (currentTime - lastClickTime < 300) && (lastClickCell === td);
             
-            dataToRender = dataToRender.filter(row => {
-                const cellValue = row['Mã Tracking'] || '';
-                const lowerCellValue = cellValue.toLowerCase();
-
-                // Điều kiện loại trừ: nếu có giá trị và cellValue chứa nó, loại ra
-                if (lowerExclude && lowerCellValue.includes(lowerExclude)) {
-                    return false;
-                }
-
-                // Điều kiện bao gồm: nếu có giá trị, cellValue phải thỏa mãn
-                if (lowerInclude) {
-                    // Dán danh sách
-                    if (lowerInclude.includes('\n')) {
-                        const codes = new Set(trackingIncludeRaw.split('\n').map(t => t.trim()).filter(Boolean));
-                        if (!codes.has(cellValue.trim())) return false;
-                    } 
-                    // Lọc thường
-                    else {
-                        if (!lowerCellValue.includes(lowerInclude)) return false;
-                    }
+            if (isDoubleClick) {
+                handleEditCell(td, tableBodyId);
+            } else {
+                if (!e.ctrlKey && !e.metaKey) {
+                    selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
+                    selectedCells.clear();
                 }
                 
-                return true; // Thỏa mãn tất cả điều kiện
-            });
-        }
-        
-        // *** THÊM MỚI: SẮP XẾP DỮ LIỆU ***
-        // Sắp xếp theo cột "Ngày Kế toán đối soát với FFM lần 2" giảm dần
-        // Những hàng không có ngày hợp lệ sẽ được đẩy xuống cuối.
-        const sortKey = 'Ngày Kế toán đối soát với FFM lần 2';
-        dataToRender.sort((a, b) => {
-            const dateA_raw = a[sortKey];
-            const dateB_raw = b[sortKey];
-
-            // Chuyển đổi sang đối tượng Date, trả về null nếu không hợp lệ
-            const parseDate = (val) => {
-                if (!val) return null;
-                const date = new Date(val);
-                return isNaN(date.getTime()) ? null : date;
-            };
-
-            const dateA = parseDate(dateA_raw);
-            const dateB = parseDate(dateB_raw);
-
-            // Xử lý các trường hợp null để đẩy chúng xuống cuối
-            if (dateA === null && dateB === null) return 0; // Cả hai đều null, giữ nguyên thứ tự
-            if (dateA === null) return 1;  // Chỉ A là null, đẩy A xuống cuối
-            if (dateB === null) return -1; // Chỉ B là null, đẩy B xuống cuối
-
-            // Sắp xếp giảm dần khi cả hai đều là ngày hợp lệ
-            return dateB.getTime() - dateA.getTime();
-        });
-        // *** KẾT THÚC KHỐI MÃ MỚI ***
-        
-        filteredData = dataToRender;
-        updateOrderCounter(filteredData.length);
-        renderTable(filteredData);
-    }
-    
-    // --- RENDER GIAO DIỆN ---
-    function renderTable(data) {
-        const container = document.getElementById('tableBody');
-        container.innerHTML = '';
-        if (data.length === 0) { container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">Không có dữ liệu phù hợp</td></tr>`; return; }
-
-        data.forEach((row) => {
-            const tr = document.createElement('tr');
-            tr.dataset.orderId = row["Mã đơn hàng"]; 
-            displayColumns.forEach(col => {
-                const td = document.createElement('td');
-                const dataKey = columnMapping[col] || col;
-                let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '';
-                
-                if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) { value = formatDate(value); }
-                if (col === "Mã đơn hàng") td.classList.add('fixed-column');
-                if (col === "Ghi chú vận đơn" && value) { td.classList.add('note-highlight'); }
-                const checkValue = String(value).trim().toUpperCase();
-                if (col === "Kết quả check") {
-                    if (checkValue === 'OK') td.classList.add('status-ok');
-                    else if (checkValue.includes('HỦY')) td.classList.add('status-cancel');
-                }
-
-                if (editableCols.includes(col)) {
-                    td.classList.add('editable');
-                    if (col === "Trạng thái giao hàng") {
-                        const select = document.createElement('select'); select.className = 'status-select';
-                        DELIVERY_STATUS_OPTIONS.forEach(optionText => {
-                            const option = document.createElement('option');
-                            option.value = optionText; option.textContent = optionText;
-                            select.appendChild(option);
-                        });
-                        select.value = value;
-                        select.addEventListener('change', () => { 
-                            td.classList.add('highlight'); changedRows.add(tr.dataset.orderId); 
-                        });
-                        td.innerHTML = ''; td.appendChild(select);
-                    } else if (col === "Ngày đóng hàng") {
-                        const input = document.createElement('input'); 
-                        input.type = 'text'; input.className = 'date-input'; input.value = value; input.placeholder = 'dd/mm/yyyy';
-                        input.addEventListener('input', () => { td.classList.add('highlight'); changedRows.add(tr.dataset.orderId); });
-                        input.addEventListener('blur', () => { if (!/^\d{2}\/\d{2}\/\d{4}$/.test(input.value) && input.value !== '') { showCustomAlert('Vui lòng nhập ngày theo định dạng dd/mm/yyyy.', 'error'); input.focus(); } });
-                        td.innerHTML = ''; td.appendChild(input);
-                    } else { 
-                        td.contentEditable = 'true'; td.textContent = value; 
-                        td.addEventListener('input', () => { td.classList.add('highlight'); changedRows.add(tr.dataset.orderId); });
-                    }
+                td.classList.toggle('cell-selected');
+                if (td.classList.contains('cell-selected')) {
+                    selectedCells.add(td);
                 } else {
-                    td.textContent = value;
+                    selectedCells.delete(td);
                 }
-                tr.appendChild(td);
-            });
-            container.appendChild(tr);
-        });
-    }
-
-    function createTabs(data) { const tabContainer = document.getElementById('tabContainer'); tabContainer.innerHTML = ''; const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort(); const createTab = (name, value) => { const button = document.createElement('button'); button.className = 'tab-btn'; button.textContent = name; button.dataset.region = value; if (value === activeRegion) button.classList.add('active'); button.addEventListener('click', () => { activeRegion = value; document.querySelectorAll('#tabContainer .tab-btn').forEach(btn => btn.classList.remove('active')); button.classList.add('active'); applyAllFilters(); }); return button; }; tabContainer.appendChild(createTab('Tất cả', 'all')); regions.forEach(region => tabContainer.appendChild(createTab(region, region))); }
-    
-    // *** UPDATED FUNCTION ***
-    function setupColumnFilters() {
-        const filterRow = document.getElementById('filterRow');
-        filterRow.innerHTML = '';
-        filterValues = {};
-        displayColumns.forEach((col, index) => {
-            const th = document.createElement('th');
-            if (index === 0) th.classList.add('fixed-column');
-
-            if (col === "Mã Tracking") {
-                const container = document.createElement('div');
-                container.className = 'dual-filter-container';
-
-                const includeInput = document.createElement('input');
-                includeInput.type = 'text';
-                includeInput.className = 'filter-input';
-                includeInput.placeholder = 'Bao gồm...';
-                includeInput.addEventListener('input', () => {
-                    filterValues['tracking_include'] = includeInput.value;
-                    applyAllFilters();
-                });
-
-                const excludeInput = document.createElement('input');
-                excludeInput.type = 'text';
-                excludeInput.className = 'filter-input';
-                excludeInput.placeholder = 'Loại trừ...';
-                excludeInput.addEventListener('input', () => {
-                    filterValues['tracking_exclude'] = excludeInput.value;
-                    applyAllFilters();
-                });
-
-                container.appendChild(includeInput);
-                container.appendChild(excludeInput);
-                th.appendChild(container);
-            } else {
-                const input = document.createElement('input');
-                input.type = 'text';
-                input.className = 'filter-input';
-                input.placeholder = `Lọc ${col}`;
-                input.dataset.column = col;
-                input.addEventListener('input', () => {
-                    filterValues[col] = input.value;
-                    applyAllFilters();
-                });
-                th.appendChild(input);
+                startCell = td;
             }
-            filterRow.appendChild(th);
-        });
-    }
-    
-    // --- CÁC HÀM ĐIỀU KHIỂN ---
-    function setupControls() {
-        document.getElementById('refreshData').addEventListener('click', refreshData);
-        document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
-        document.getElementById('toggleTrackingView').addEventListener('click', toggleTrackingView);
-        document.getElementById('filterMarket').addEventListener('change', applyAllFilters);
-        document.getElementById('filterProduct').addEventListener('change', applyAllFilters);
-        document.getElementById('filterDateFrom').addEventListener('change', applyAllFilters);
-        document.getElementById('filterDateTo').addEventListener('change', applyAllFilters);
-        document.getElementById('downloadExcel').addEventListener('click', downloadAsExcel);
-    }
-    
-    function refreshData() { const btn = document.getElementById('refreshData'); btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Đang tải...'; activeRegion = 'all'; filterValues = {}; document.getElementById('tabContainer').innerHTML = ''; document.getElementById('filterRow').innerHTML = ''; document.getElementById('mainFilters').querySelectorAll('input, select').forEach(el => el.value = ''); updateOrderCounter(0); loadData(); }
-    function toggleTrackingView() { const btn = document.getElementById('toggleTrackingView'); showTrackingOrders = !showTrackingOrders; if (showTrackingOrders) { btn.textContent = 'Xem đơn chưa có mã Tracking'; btn.classList.add('active'); } else { btn.textContent = 'Xem đơn có mã Tracking'; btn.classList.remove('active'); } activeRegion = 'all'; filterValues = {}; filterInitialData(); createTabs(initialFilteredData); populateMainFilters(initialFilteredData); setupColumnFilters(); applyAllFilters(); }
-    function loadData() { document.getElementById('tableBody').innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center;">Đang tải...</td></tr>`; const script = document.createElement('script'); script.src = 'https://script.google.com/macros/s/AKfycbwEd7eA6NAUMtbEpcEPJQWeX-zsJRE1mnTVVBD23NoKrnXYwOLvuNef2mIbJ7-NMNbe/exec?callback=handleData&rand=' + Math.random(); const oldScript = document.querySelector('script[src^="https://script.google.com"]'); if (oldScript) document.body.removeChild(oldScript); document.body.appendChild(script); }
 
-    // --- CẬP NHẬT, DÁN, CHỌN, SAO CHÉP DỮ LIỆU ---
-    function updateAllChangedRows() {
-      if (changedRows.size === 0) { showCustomAlert('Không có thay đổi cần cập nhật.', 'info'); return; }
-      const updateBtn = document.getElementById('updateAll');
-      updateBtn.disabled = true; updateBtn.textContent = 'Đang gửi...';
-      sendRows(Array.from(changedRows), updateBtn);
-    }
-    
-    function sendRows(orderIds, buttonEl) {
-        const rowsToSend = [];
-        const tableBody = document.querySelector('tbody');
-        orderIds.forEach(orderId => {
-            const originalRowData = allData.find(row => row["Mã đơn hàng"] === orderId);
-            if (!originalRowData) return;
-            const domRow = tableBody.querySelector(`tr[data-order-id="${orderId}"]`);
-            if (!domRow) return;
-            const updatedRowData = { ...originalRowData };
-            displayColumns.forEach((col, colIndex) => {
-                if (editableCols.includes(col)) {
-                    let value = getCellValue(domRow.cells[colIndex]);
-                    if (col === "Ngày đóng hàng") { value = parseDateToISO(value); }
-                    updatedRowData[col] = value;
-                }
-            });
-            rowsToSend.push(updatedRowData);
-            domRow.querySelectorAll('.highlight').forEach(cell => cell.classList.remove('highlight'));
+            lastClickTime = currentTime;
+            lastClickCell = td;
+            updateSelectionSummary();
         });
 
-        if (rowsToSend.length === 0) { buttonEl.disabled = false; buttonEl.textContent = 'Cập nhật tất cả thay đổi'; return; }
-        fetch(POST_URL, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) })
-        .then(r => r.json())
-        .then(json => {
-            if (json.message) { showCustomAlert(`Cập nhật thành công ${rowsToSend.length} đơn hàng!`, 'success'); changedRows.clear(); } 
-            else { showCustomAlert(`Lỗi: ${json.error || 'Lỗi không xác định.'}`, 'error'); }
-        })
-        .catch(e => { showCustomAlert(`Lỗi kết nối: ${e.message}`, 'error'); })
-        .finally(() => { buttonEl.disabled = false; buttonEl.textContent = 'Cập nhật tất cả thay đổi'; });
-    }
-    
-    function getCellValue(cell) {
-        if (!cell) return '';
-        const select = cell.querySelector('select'); if (select) return select.value;
-        const input = cell.querySelector('input.date-input'); return input ? input.value : cell.textContent;
-    }
-
-    function setCellValue(cell, value) {
-        if (!cell) return;
-        const select = cell.querySelector('select');
-        if (select) {
-            const optionExists = [...select.options].some(opt => opt.value === value);
-            select.value = optionExists ? value : "";
-            select.dispatchEvent(new Event('change', { bubbles: true })); return;
-        }
-        const input = cell.querySelector('input.date-input');
-        if (input) {
-            input.value = value;
-            input.dispatchEvent(new Event('input', { bubbles: true }));
-        } else if (cell.isContentEditable) {
-            cell.textContent = value;
-            cell.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-    }
-
-    function updateSelectionSummary() {
-        const summaryEl = document.getElementById('selectionSummary');
-        const selectedCells = document.querySelectorAll('td.cell-selected');
-        summaryEl.innerHTML = '';
-
-        if (selectedCells.length <= 1) { return; }
-
-        const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"];
-        const columns = new Map();
-
-        selectedCells.forEach(cell => {
-            const colIndex = cell.cellIndex;
-            if (!columns.has(colIndex)) {
-                columns.set(colIndex, []);
-            }
-            columns.get(colIndex).push(cell);
-        });
-        
-        const summaryParts = [];
-        columns.forEach((cells, colIndex) => {
-            const headerText = displayColumns[colIndex].toLowerCase();
-            const isNumeric = numericKeywords.some(kw => headerText.includes(kw));
-
-            if (isNumeric) {
-                let sum = 0;
-                let count = 0;
-                cells.forEach(cell => {
-                    const value = getCellValue(cell);
-                    const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
-                    if (!isNaN(num)) {
-                        sum += num;
-                        count++;
-                    }
-                });
-                if (count > 0) {
-                     summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`);
-                }
-            } else {
-                let count = 0;
-                cells.forEach(cell => {
-                    if (getCellValue(cell).trim() !== '') {
-                        count++;
-                    }
-                });
-                if (count > 0) {
-                    summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`);
-                }
-            }
-        });
-        summaryEl.innerHTML = summaryParts.join('');
-    }
-
-    function setupInteractionHandlers() {
-        const tableBody = document.getElementById('tableBody');
-        if (!tableBody) return;
-        let isSelecting = false;
-        let startCell = null;
-        
-        const clearAllSelections = () => {
-            document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected'));
-            if(pasteAnchorCell) {
-                pasteAnchorCell.classList.remove('paste-anchor');
-                pasteAnchorCell = null;
-            }
-            updateSelectionSummary(); 
-        };
-
-        const selectCells = (start, end) => {
-            clearAllSelections();
-            const tableRows = tableBody.rows;
-            const minRow = Math.min(start.parentElement.rowIndex, end.parentElement.rowIndex);
-            const maxRow = Math.max(start.parentElement.rowIndex, end.parentElement.rowIndex);
-            const minCol = Math.min(start.cellIndex, end.cellIndex);
-            const maxCol = Math.max(start.cellIndex, end.cellIndex);
-            for (let i = 0; i < tableRows.length; i++) {
-                const row = tableRows[i];
-                if (row.rowIndex >= minRow && row.rowIndex <= maxRow) {
-                    for (let j = minCol; j <= maxCol; j++) {
-                        if (row.cells[j]) row.cells[j].classList.add('cell-selected');
-                    }
-                }
-            }
-            if (start) {
-                pasteAnchorCell = start;
-                start.classList.add('paste-anchor');
-            }
-        };
-        
-        tableBody.addEventListener('mousedown', e => {
-            if (e.button !== 0) return;
-            const cell = e.target.closest('td');
-            if (!cell) return;
-            
-            e.preventDefault();
-
-            if (e.shiftKey && pasteAnchorCell) {
-                selectCells(pasteAnchorCell, cell);
-                updateSelectionSummary();
-            } else {
-                isSelecting = true;
-                clearAllSelections();
-                startCell = cell;
-                pasteAnchorCell = cell;
-                cell.classList.add('cell-selected');
-                cell.classList.add('paste-anchor');
-                updateSelectionSummary();
+        tableBody.addEventListener('mousedown', (e) => {
+            const td = e.target.closest('td');
+            if (td && !e.ctrlKey && !e.metaKey) {
+                isMouseDown = true;
+                startCell = td;
+                selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
+                selectedCells.clear();
+                td.classList.add('cell-selected');
+                selectedCells.add(td);
+                e.preventDefault();
             }
         });
 
-        tableBody.addEventListener('mousemove', e => {
-            if (!isSelecting || !startCell) return;
-            const currentCell = e.target.closest('td');
-            if (currentCell && currentCell !== startCell) {
-                 selectCells(startCell, currentCell);
+        tableBody.addEventListener('mouseover', (e) => {
+            const td = e.target.closest('td');
+            if (isMouseDown && td) {
+                selectCellsBetween(startCell, td);
             }
         });
 
         document.addEventListener('mouseup', () => {
-            if (isSelecting) {
-                isSelecting = false;
+            if (isMouseDown) {
+                isMouseDown = false;
                 updateSelectionSummary();
             }
         });
 
-        tableBody.addEventListener('dblclick', e => {
-            const cell = e.target.closest('td.editable');
-            if (!cell) return;
-            const input = cell.querySelector('input, select');
-            if (input) {
-                input.focus();
-            } else if (cell.isContentEditable) {
-                cell.focus();
-                document.execCommand('selectAll', false, null);
-                document.getSelection().collapseToEnd();
-            }
-        });
-
-        document.addEventListener('copy', e => {
-            const selectedCells = document.querySelectorAll('td.cell-selected');
-            if (selectedCells.length === 0) return;
-            e.preventDefault();
-            const rows = new Map();
-            selectedCells.forEach(cell => {
-                const rowIndex = cell.parentElement.rowIndex;
-                if (!rows.has(rowIndex)) rows.set(rowIndex, []);
-                rows.get(rowIndex).push({ colIndex: cell.cellIndex, text: getCellValue(cell) });
-            });
-            const sortedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]);
-            const copyText = sortedRows.map(([, cells]) => cells.sort((a, b) => a.colIndex - b.colIndex).map(cell => cell.text).join('\t')).join('\n');
-            e.clipboardData.setData('text/plain', copyText);
-            showCustomAlert(`Đã sao chép ${selectedCells.length} ô.`, 'info', 2000);
-        });
-        
-        document.addEventListener('paste', e => {
+        document.addEventListener('keydown', (e) => {
             const activeEl = document.activeElement;
             if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName)) {
                 return;
             }
 
-            const selectedCells = document.querySelectorAll('td.cell-selected');
-            if (!pasteAnchorCell && selectedCells.length === 0) return;
-            
-            e.preventDefault(); 
-            const pasteData = e.clipboardData.getData('text/plain');
-            if (!pasteData) return;
-            const pastedRows = pasteData.split(/[\r\n]+/).map(row => row.split('\t')).filter(row => row.length > 0 && !(row.length === 1 && row[0] === ''));
-            if (pastedRows.length === 0) return;
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedCells.size > 0) {
+                e.preventDefault();
+                copySelectedCells();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && selectedCells.size > 0) {
+                e.preventDefault();
+                navigator.clipboard.readText().then(text => {
+                    pasteToSelectedCells(text);
+                }).catch(err => console.error('Lỗi đọc clipboard:', err));
+            }
+        });
+    }
 
-            if (pastedRows.length === 1 && pastedRows[0].length === 1) {
-                const singleValue = pastedRows[0][0];
-                const editableSelected = document.querySelectorAll('td.cell-selected.editable');
-                if (editableSelected.length > 0) {
-                     editableSelected.forEach(cell => setCellValue(cell, singleValue));
-                     showCustomAlert(`Đã dán giá trị vào ${editableSelected.length} ô.`, 'success', 2000);
-                     updateSelectionSummary();
-                     return;
+    function selectCellsBetween(start, end) {
+        if (!start || !end || start.closest('tbody') !== end.closest('tbody')) return;
+        
+        const tableBody = start.closest('tbody');
+        const rows = Array.from(tableBody.rows);
+        const startRowIndex = rows.findIndex(row => row.contains(start));
+        const endRowIndex = rows.findIndex(row => row.contains(end));
+        const startColIndex = start.cellIndex;
+        const endColIndex = end.cellIndex;
+        
+        const minRow = Math.min(startRowIndex, endRowIndex);
+        const maxRow = Math.max(startRowIndex, endRowIndex);
+        const minCol = Math.min(startColIndex, endColIndex);
+        const maxCol = Math.max(startColIndex, endColIndex);
+        
+        const newSelection = new Set();
+        for (let i = minRow; i <= maxRow; i++) {
+            for (let j = minCol; j <= maxCol; j++) {
+                const cell = rows[i]?.cells[j];
+                if(cell) {
+                   newSelection.add(cell);
                 }
             }
+        }
 
-            if (!pasteAnchorCell) return;
-            const tableRows = Array.from(document.getElementById('tableBody').rows);
-            let startRowIndex = tableRows.findIndex(row => row.rowIndex === pasteAnchorCell.parentElement.rowIndex);
-            let startColIndex = pasteAnchorCell.cellIndex;
-            if (startRowIndex < 0 || startColIndex < 0) return;
+        selectedCells.forEach(cell => {
+            if (!newSelection.has(cell)) {
+                cell.classList.remove('cell-selected');
+            }
+        });
+        newSelection.forEach(cell => {
+            if (!selectedCells.has(cell)) {
+                cell.classList.add('cell-selected');
+            }
+        });
+        selectedCells = newSelection;
+    }
 
-            pastedRows.forEach((rowData, i) => {
-                const targetRow = tableRows[startRowIndex + i];
-                if (!targetRow) return;
-                rowData.forEach((cellData, j) => {
-                    const targetCell = targetRow.cells[startColIndex + j];
-                    if (targetCell && targetCell.classList.contains('editable')) {
-                        setCellValue(targetCell, cellData);
+    function handleEditCell(td, tableBodyId) {
+        if (!td.classList.contains('editable') || td.classList.contains('editing')) return;
+        
+        const select = td.querySelector('select');
+        if (select) {
+            select.focus();
+            return;
+        }
+        
+        const dateInput = td.querySelector('input.date-input');
+        if (dateInput) {
+            dateInput.focus();
+            return;
+        }
+        
+        const originalValue = td.textContent;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = originalValue;
+        td.textContent = '';
+        td.appendChild(input);
+        td.classList.add('editing');
+        input.focus();
+        
+        const finishEdit = (save) => {
+            const newValue = save ? input.value.trim() : originalValue;
+            td.textContent = newValue;
+            td.classList.remove('editing');
+            
+            if (save && newValue !== originalValue) {
+                td.classList.add('highlight');
+                const rowIndex = td.closest('tr').dataset.rowIndex;
+                if (rowIndex) {
+                    const config = tableBodyId === 'tableBody' ? mainTabConfig : japanTabConfig;
+                    config.changedRows.add(parseInt(rowIndex));
+                }
+            }
+            
+            input.removeEventListener('blur', onBlur);
+            input.removeEventListener('keydown', onKeyDown);
+        };
+
+        const onBlur = () => finishEdit(true);
+        const onKeyDown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                finishEdit(true);
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                finishEdit(false);
+            }
+        };
+        
+        input.addEventListener('blur', onBlur);
+        input.addEventListener('keydown', onKeyDown);
+    }
+
+    function copySelectedCells() {
+        if (selectedCells.size === 0) return;
+        const sortedCells = Array.from(selectedCells).sort((a, b) => a.parentNode.rowIndex - b.parentNode.rowIndex || a.cellIndex - b.cellIndex);
+        const firstCell = sortedCells[0];
+        const minRow = firstCell.parentNode.rowIndex;
+        const minCol = sortedCells.reduce((min, cell) => Math.min(min, cell.cellIndex), Infinity);
+        const grid = new Map();
+        sortedCells.forEach(cell => {
+            const r = cell.parentNode.rowIndex - minRow;
+            const c = cell.cellIndex - minCol;
+            if (!grid.has(r)) grid.set(r, new Map());
+            grid.get(r).set(c, getDOMCellValue(cell));
+        });
+        let tsv = '';
+        const maxR = Math.max(...Array.from(grid.keys()));
+        const maxC = Math.max(...Array.from(grid.values()).flatMap(row => Array.from(row.keys())));
+        for (let r = 0; r <= maxR; r++) {
+            for (let c = 0; c <= maxC; c++) {
+                tsv += grid.get(r)?.get(c) || '';
+                if (c < maxC) tsv += '\t';
+            }
+            if (r < maxR) tsv += '\n';
+        }
+        navigator.clipboard.writeText(tsv).then(() => showTempMessage(`Đã sao chép ${selectedCells.size} ô`)).catch(err => console.error('Lỗi sao chép:', err));
+    }
+
+    function pasteToSelectedCells(text) {
+        if (selectedCells.size === 0) return;
+        const dataGrid = text.split('\n').map(row => row.split('\t'));
+        const sortedCells = Array.from(selectedCells).sort((a, b) => a.parentNode.rowIndex - b.parentNode.rowIndex || a.cellIndex - b.cellIndex);
+        const firstCell = sortedCells[0];
+        const table = firstCell.closest('table');
+        if (!table) return;
+        
+        const startRowIndex = Array.from(table.rows).indexOf(firstCell.closest('tr'));
+        const startColIndex = firstCell.cellIndex;
+        
+        let pasteCount = 0;
+        if (dataGrid.length === 1 && dataGrid[0].length === 1) {
+            const value = dataGrid[0][0];
+            sortedCells.forEach(cell => {
+                if (updateCellValue(cell, value)) {
+                   pasteCount++;
+                }
+            });
+        } else {
+            dataGrid.forEach((row, r) => {
+                row.forEach((value, c) => {
+                    const targetRow = table.rows[startRowIndex + r];
+                    if (targetRow) {
+                        const targetCell = targetRow.cells[startColIndex + c];
+                        if (targetCell) {
+                           if (updateCellValue(targetCell, value)) {
+                               pasteCount++;
+                           }
+                        }
                     }
                 });
             });
-            showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000);
-            updateSelectionSummary();
+        }
+        showTempMessage(`Đã dán ${pasteCount} giá trị`);
+        updateSelectionSummary();
+    }
+
+    function updateCellValue(cell, value) {
+        if (!cell || !cell.classList.contains('editable')) return false;
+        
+        const select = cell.querySelector('select');
+        const dateInput = cell.querySelector('input.date-input');
+        const rowIndex = cell.closest('tr').dataset.rowIndex;
+        const config = cell.closest('tbody').id === 'tableBody' ? mainTabConfig : japanTabConfig;
+
+        let changed = false;
+        if (select) {
+            if ([...select.options].some(opt => opt.value === value)) {
+                if(select.value !== value) {
+                    select.value = value;
+                    select.dispatchEvent(new Event('change', { bubbles: true })); // This will trigger the highlight and add to changedRows
+                    changed = true;
+                }
+            }
+        } else if(dateInput) {
+            if(dateInput.value !== value) {
+                dateInput.value = value;
+                dateInput.dispatchEvent(new Event('input', { bubbles: true })); // This will trigger the highlight and add to changedRows
+                changed = true;
+            }
+        } else {
+            if(cell.textContent !== value) {
+                cell.textContent = value;
+                cell.classList.add('highlight');
+                if (rowIndex) {
+                    config.changedRows.add(parseInt(rowIndex));
+                }
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    function showTempMessage(message) {
+        const existingMsg = document.querySelector('.temp-message');
+        if (existingMsg) existingMsg.remove();
+
+        const tempMsg = document.createElement('div');
+        tempMsg.className = 'temp-message';
+        tempMsg.textContent = message;
+        Object.assign(tempMsg.style, {
+            position: 'fixed', bottom: '20px', right: '20px',
+            backgroundColor: 'rgba(39, 174, 96, 0.9)', color: 'white',
+            padding: '12px 20px', borderRadius: '5px',
+            zIndex: '2000', transition: 'opacity 0.5s', opacity: '1',
+            boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
+        });
+        document.body.appendChild(tempMsg);
+        setTimeout(() => {
+            tempMsg.style.opacity = '0';
+            setTimeout(() => tempMsg.remove(), 500);
+        }, 2000);
+    }
+    
+    async function handleData(response) { 
+        document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load'; 
+        document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load'; 
+        allData = []; staffFilteredData = []; japanData = []; 
+        changedRows.clear(); japanChangedRows.clear(); 
+        
+        if (response.error || !Array.isArray(response.rows)) { 
+            showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'), mainTabConfig.table.body); 
+            showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'), japanTabConfig.table.body); 
+            return; 
+        } 
+        
+        allData = response.rows; 
+
+        allData.sort((a, b) => {
+            const dateA = a["Đối soát lần 3"] ? new Date(a["Đối soát lần 3"]) : null;
+            const dateB = b["Đối soát lần 3"] ? new Date(b["Đối soát lần 3"]) : null;
+            if ((!dateB || isNaN(dateB.getTime())) && (!dateA || isNaN(dateA.getTime()))) return 0;
+            if (!dateB || isNaN(dateB.getTime())) return -1;
+            if (!dateA || isNaN(dateA.getTime())) return 1;
+            return dateB - dateA; 
         });
 
-        document.addEventListener('keydown', e => {
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
-                    return;
-                }
+        const staffId = getUrlParameter('id'); 
+        const staffId1 = getUrlParameter('id1'); 
+        
+        if (!staffId && !staffId1) { 
+            showError('Thiếu tham số ID nhân viên trong URL', mainTabConfig.table.body); 
+        } else { 
+            try { 
+                currentStaff = await fetchStaffInfo(staffId, staffId1); 
+                let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`; 
+                if (staffId1 && staffId1 !== staffId) { 
+                    staffInfo += ` và ${teamMembers.find(name => name !== currentStaff.ho_va_ten) || ''}`; 
+                } 
+                if (currentStaff.vi_tri === "Leader") staffInfo += ` (Leader - Team ${currentStaff.team})`; 
+                document.getElementById('userInfo').textContent = staffInfo; 
+                staffFilteredData = allData.filter(row => { 
+                    const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''; 
+                    return teamMembers.includes(deliveryStaff); 
+                }); 
+                initializeTab(mainTabConfig, staffFilteredData); 
+            } catch (error) { 
+                showError(error.message, mainTabConfig.table.body); 
+            } 
+        } 
+        
+        japanData = allData.filter(row => (row['khu vực'] || row['Khu vực']) === 'Nhật Bản'); 
+        initializeTab(japanTabConfig, japanData);
+        populateReportFilters();
+        applyReportFilters();
+    }
+    
+    function initializeTab(config, data) { 
+        generateDynamicOptions(config, data); 
+        populateExternalFilters(config); 
+        renderHeader(config); 
+        applyAllFilters(config); 
+        // ATTACH CELL SELECTION AND EDITING HANDLERS
+        setupCellSelection(config.table.body); 
+    }
+    
+    function generateDynamicOptions(config, data) { 
+        const options = {}; 
+        columnsToMakeDynamic.forEach(colName => { 
+            const dataKey = columnDisplayMapping[colName] || colName; 
+            const uniqueValues = new Set(data.map(row => row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : '')).filter(Boolean)); 
+            options[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b))); 
+        }); 
+        if (config === japanTabConfig) { 
+            japanDynamicFilterOptions = options; 
+        } else { 
+            dynamicFilterOptions = options; 
+        } 
+    }
+    
+    function populateExternalFilters(config) { 
+        const options = config.dynamicOptions(); 
+        const productFilter = document.getElementById(config.controls.product); 
+        productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>'; 
+        (options['Mặt hàng'] || []).forEach(opt => productFilter.add(new Option(opt, opt))); 
+        
+        if (config.controls.market) { 
+            const marketFilter = document.getElementById(config.controls.market); 
+            marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>'; 
+            (options['khu vực'] || []).forEach(opt => marketFilter.add(new Option(opt, opt))); 
+        } 
+        
+        if (config.controls.staff) { 
+            const staffFilter = document.getElementById(config.controls.staff); 
+            staffFilter.innerHTML = '<option value="">Tất cả NV Vận đơn</option>'; 
+            (options['NV Vận đơn'] || []).forEach(opt => staffFilter.add(new Option(opt, opt))); 
+        } 
+    }
+    
+    function applyAllFilters(config) {
+        let dataToFilter = [...config.data()];
+        const tableHead = document.getElementById(config.table.head);
+        if (!tableHead.querySelector('tr')) {
+            renderTableBody(config, dataToFilter);
+            updateSummaryInfo(dataToFilter, config.controls.summary);
+            return;
+        }
+        
+        const startDate = document.getElementById(config.controls.startDate).value;
+        const endDate = document.getElementById(config.controls.endDate).value;
 
-                const editableSelected = document.querySelectorAll('td.cell-selected.editable');
-                if (editableSelected.length > 0) {
-                    e.preventDefault();
-                    editableSelected.forEach(cell => {
-                        setCellValue(cell, '');
-                    });
-                    showCustomAlert(`Đã xóa nội dung ${editableSelected.length} ô.`, 'success', 2000);
-                    updateSelectionSummary();
-                }
+        if (startDate || endDate) {
+            const start = startDate ? new Date(startDate) : null;
+            const end = endDate ? new Date(endDate) : null;
+            if(start) start.setHours(0,0,0,0);
+            if(end) end.setHours(23,59,59,999);
+
+            dataToFilter = dataToFilter.filter(row => {
+                const orderDateStr = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
+                const orderDate = parseDateString(orderDateStr);
+                if (!orderDate) return false;
+                return (!start || orderDate >= start) && (!end || orderDate <= end);
+            });
+        }
+
+        const productFilterValue = document.getElementById(config.controls.product).value;
+        if (productFilterValue) dataToFilter = dataToFilter.filter(row => (row["Mặt hàng"] || '') === productFilterValue);
+        
+        if (config.controls.market && document.getElementById(config.controls.market).value) {
+            const marketFilterValue = document.getElementById(config.controls.market).value;
+            dataToFilter = dataToFilter.filter(row => (row["Khu vực"] || row["khu vực"] || '') === marketFilterValue);
+        }
+        if (config.controls.staff && document.getElementById(config.controls.staff).value) {
+            const staffFilterValue = document.getElementById(config.controls.staff).value;
+            dataToFilter = dataToFilter.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"] || '') === staffFilterValue);
+        }
+        
+        const filters = tableHead.querySelectorAll('.filter-input, .filter-select');
+        filters.forEach(filter => {
+            const value = filter.value.toLowerCase();
+            if (value === '') return;
+            const colName = filter.dataset.column;
+            const dataKey = columnDisplayMapping[colName] || colName;
+            dataToFilter = dataToFilter.filter(row => {
+                let cellValue = row[dataKey] !== undefined ? row[dataKey] : row[dataKey.replace(/ /g, '_')] || '';
+                if (dataKey === 'khu vực') cellValue = row['Khu vực'] || row['khu vực'] || '';
+                return String(cellValue).toLowerCase().includes(value);
+            });
+        });
+        
+        updateSummaryInfo(dataToFilter, config.controls.summary);
+        renderTableBody(config, dataToFilter);
+    }
+    
+    function renderHeader(config) { 
+        const header = document.getElementById(config.table.head); 
+        const options = config.dynamicOptions(); 
+        header.innerHTML = ''; 
+        const tr = document.createElement('tr'); 
+        const filterFunction = () => applyAllFilters(config); 
+        
+        displayColumns.forEach(colName => { 
+            const th = document.createElement('th'); 
+            th.textContent = colName; 
+            if (colName === "Mã đơn hàng") th.classList.add('fixed-column'); 
+            
+            let filterElement; 
+            if (options[colName]) { 
+                filterElement = document.createElement('select'); 
+                filterElement.className = 'filter-select'; 
+                filterElement.add(new Option(`Tất cả ${colName}`, '')); 
+                options[colName].forEach(opt => filterElement.add(new Option(opt, opt))); 
+                filterElement.addEventListener('change', filterFunction); 
+            } else { 
+                filterElement = document.createElement('input'); 
+                filterElement.type = 'text'; 
+                filterElement.className = 'filter-input'; 
+                filterElement.placeholder = `Lọc ${colName}...`; 
+                filterElement.addEventListener('input', filterFunction); 
+            } 
+            
+            filterElement.dataset.column = colName; 
+            th.appendChild(document.createElement('br')); 
+            th.appendChild(filterElement); 
+            tr.appendChild(th); 
+        }); 
+        
+        header.appendChild(tr); 
+    }
+    
+    function renderTableBody(config, data) {
+      const container = document.getElementById(config.table.body); 
+      container.innerHTML = '';
+      
+      if (data.length === 0) { 
+          showError(`Không có đơn hàng nào khớp với bộ lọc.`, config.table.body); 
+          return; 
+      }
+      
+      const originalDataSet = config.data();
+      data.forEach((row) => {
+        const originalRowIndex = originalDataSet.indexOf(row);
+        const tr = document.createElement('tr'); 
+        tr.dataset.rowIndex = originalRowIndex;
+        
+        displayColumns.forEach(col => {
+          const td = document.createElement('td');
+          const dataKey = columnDisplayMapping[col] || col;
+          let value;
+          
+          if (allDateColumns.includes(dataKey) || dataKey === 'Đối soát lần 3') {
+              let dateSource = row[dataKey] || '';
+              if (dataKey === "Ngày lên đơn") dateSource = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
+              
+              const formattedDate = formatDate(dateSource);
+              value = (dataKey === "Ngày hẹn đẩy đơn") ? (row[dataKey] || '') : formattedDate.display;
+              td.dataset.originalValue = formattedDate.original;
+          } else {
+              value = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : '');
+          }
+          
+          if (col === "Mã đơn hàng") td.classList.add('fixed-column');
+          
+          if (editableCols.includes(dataKey)) {
+            td.classList.add('editable');
+            if (dropdownCols[dataKey]) {
+              const select = document.createElement('select');
+              dropdownCols[dataKey].forEach(opt => select.add(new Option(opt, opt)));
+              select.value = value;
+              select.addEventListener('change', () => { 
+                  td.classList.add('highlight'); 
+                  config.changedRows.add(originalRowIndex); 
+              });
+              td.appendChild(select);
+            } else if (dataKey === "Ngày hẹn đẩy đơn") {
+                const input = document.createElement('input'); 
+                input.type = 'text'; 
+                input.className = 'date-input'; 
+                input.value = value;
+                input.addEventListener('input', () => { 
+                    td.classList.add('highlight'); 
+                    config.changedRows.add(originalRowIndex); 
+                });
+                td.appendChild(input);
+            } else {
+              td.textContent = value;
+            }
+          } else { 
+              td.textContent = value; 
+          }
+          
+          if (col === "Kết quả Check") {
+              if (value === 'OK') td.classList.add('cell-ok');
+              else if (value === 'Vận đơn XL') td.classList.add('cell-xl');
+              else if (value === 'Huỷ') td.classList.add('cell-cancel');
+          }
+          
+          tr.appendChild(td);
+        });
+        
+        container.appendChild(tr);
+      });
+    }
+    
+    function setupControls() { 
+        setupTabs(); 
+        setupTabControls(mainTabConfig); 
+        setupTabControls(japanTabConfig);
+        setupReportControls();
+    }
+    
+    function setupTabControls(config) { 
+        document.getElementById(config.controls.refreshBtn).addEventListener('click', refreshData); 
+        document.getElementById(config.controls.updateBtn).addEventListener('click', () => updateAllChangedRows(config)); 
+        document.getElementById(config.controls.startDate).addEventListener('change', () => applyAllFilters(config)); 
+        document.getElementById(config.controls.endDate).addEventListener('change', () => applyAllFilters(config)); 
+        document.getElementById(config.controls.product).addEventListener('change', () => applyAllFilters(config)); 
+        if(config.controls.market) document.getElementById(config.controls.market).addEventListener('change', () => applyAllFilters(config)); 
+        if(config.controls.staff) document.getElementById(config.controls.staff).addEventListener('change', () => applyAllFilters(config)); 
+        document.getElementById(config.controls.clearBtn).addEventListener('click', () => { 
+            document.getElementById(config.controls.startDate).value = ''; 
+            document.getElementById(config.controls.endDate).value = ''; 
+            document.getElementById(config.controls.product).selectedIndex = 0; 
+            if(config.controls.market) document.getElementById(config.controls.market).selectedIndex = 0; 
+            if(config.controls.staff) document.getElementById(config.controls.staff).selectedIndex = 0; 
+            document.querySelectorAll(`#${config.table.head} .filter-input, #${config.table.head} .filter-select`).forEach(f => { 
+                if (f.tagName === 'SELECT') f.selectedIndex = 0; 
+                else f.value = ''; 
+            }); 
+            applyAllFilters(config); 
+        }); 
+    }
+    
+    function setupReportControls() {
+        const { controls } = reportTabConfig;
+        const staffBtn = document.getElementById(controls.staffBtn);
+        const staffDropdown = document.getElementById(controls.staffDropdown);
+
+        document.getElementById(controls.startDate).addEventListener('change', applyReportFilters);
+        document.getElementById(controls.endDate).addEventListener('change', applyReportFilters);
+        document.getElementById(controls.product).addEventListener('change', applyReportFilters);
+        document.getElementById(controls.market).addEventListener('change', applyReportFilters);
+        document.getElementById(controls.clearBtn).addEventListener('click', () => {
+            document.getElementById(controls.startDate).value = '';
+            document.getElementById(controls.endDate).value = '';
+            document.getElementById(controls.product).selectedIndex = 0;
+            document.getElementById(controls.market).selectedIndex = 0;
+            staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updateStaffFilterButtonText();
+            applyReportFilters();
+        });
+
+        staffBtn.addEventListener('click', () => staffDropdown.classList.toggle('show'));
+        staffDropdown.addEventListener('click', e => e.stopPropagation());
+        window.addEventListener('click', (e) => {
+            if (!staffBtn.contains(e.target)) {
+                staffDropdown.classList.remove('show');
             }
         });
     }
 
-    // --- HÀM TẢI FILE EXCEL (CSV) ---
-    function downloadAsExcel() {
-        if (filteredData.length === 0) { showCustomAlert("Không có dữ liệu để tải về.", 'info'); return; }
-        const sanitizeCsvCell = (cell) => { if (cell === null || cell === undefined) return ''; let str = String(cell); if (str.includes(',') || str.includes('"') || str.includes('\n')) { str = str.replace(/"/g, '""'); return `"${str}"`; } return str; };
-        const headers = displayColumns.map(sanitizeCsvCell).join(',');
-        const rows = filteredData.map(row => { return displayColumns.map(col => { const dataKey = columnMapping[col] || col; let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? ''; if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) { value = formatDate(value); } return sanitizeCsvCell(value); }).join(','); }).join('\n');
-        const BOM = '\uFEFF'; const csvContent = BOM + headers + '\n' + rows;
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
-        if (link.download !== undefined) { const url = URL.createObjectURL(blob); const today = new Date(); const dateStr = `${today.getFullYear()}${(today.getMonth()+1).toString().padStart(2,'0')}${today.getDate().toString().padStart(2,'0')}`; link.setAttribute("href", url); link.setAttribute("download", `BaoCaoDonHang_MGT_${dateStr}.csv`); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
+    function setupTabs() { 
+        const tabs = document.querySelectorAll('.tab-btn'); 
+        const contents = document.querySelectorAll('.content-tab'); 
+        tabs.forEach(tab => { 
+            tab.addEventListener('click', () => { 
+                selectedCells.forEach(cell => cell.classList.remove('cell-selected')); 
+                selectedCells.clear(); 
+                tabs.forEach(item => item.classList.remove('active')); 
+                contents.forEach(content => content.classList.remove('active')); 
+                tab.classList.add('active'); 
+                const contentId = 'content' + tab.id.substring(3); 
+                document.getElementById(contentId).classList.add('active');
+                if (contentId === 'contentData') {
+                    updateSelectionSummary();
+                } else {
+                    const summaryEl = document.getElementById('selectionSummary');
+                    if (summaryEl) summaryEl.innerHTML = '';
+                }
+            }); 
+        }); 
+    }
+    
+    function refreshData() { 
+        document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="loading"></span> Đang tải...'; 
+        document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="loading"></span> Đang tải...'; 
+        document.getElementById(mainTabConfig.controls.updateBtn).disabled = true; 
+        document.getElementById(japanTabConfig.controls.updateBtn).disabled = true; 
+        loadData(); 
+        setTimeout(() => { 
+            document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load'; 
+            document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load'; 
+            document.getElementById(mainTabConfig.controls.updateBtn).disabled = false; 
+            document.getElementById(japanTabConfig.controls.updateBtn).disabled = false; 
+        }, 5000); 
+    }
+    
+    function updateAllChangedRows(config) { 
+        if (config.changedRows.size === 0) { alert('Không có thay đổi nào để cập nhật'); return; } 
+        const updateBtn = document.getElementById(config.controls.updateBtn); 
+        const statusEl = document.createElement('span'); 
+        statusEl.className = 'status'; statusEl.textContent = 'Đang xử lý...'; updateBtn.appendChild(statusEl); updateBtn.disabled = true; 
+        const rowsToSend = []; 
+        const tableBody = document.getElementById(config.table.body); 
+        config.changedRows.forEach(rowIndex => { 
+            const originalData = config.data()[rowIndex]; if (!originalData) return; 
+            const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`); if(!tr) return; 
+            const updatedRowData = { ...originalData }; 
+            editableCols.forEach(dataKey => { 
+                const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; 
+                const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; 
+                const cell = tr.cells[colIndex]; 
+                let valueFromDOM = getDOMCellValue(cell); // Use helper to get value
+                updatedRowData[dataKey] = valueFromDOM; 
+            });
+            allDateColumns.forEach(dataKey => { 
+                if (editableCols.indexOf(dataKey) === -1) { 
+                    const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; 
+                    const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; 
+                    const cell = tr.cells[colIndex]; 
+                    updatedRowData[dataKey] = cell.dataset.originalValue || cell.textContent.trim(); 
+                } 
+            });
+            delete updatedRowData["Thời gian lên đơn"]; 
+            rowsToSend.push(updatedRowData); 
+        });
+        if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } 
+        fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) })
+        .then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Cập nhật thành công ${rowsToSend.length} dòng. Vui lòng nhấn "Load" để xem thay đổi.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 2000); })
+        .catch(e => { statusEl.textContent = 'Lỗi mạng: ' + e.message; statusEl.classList.add('error-status'); setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); }); 
+    }
+    
+    function populateReportFilters() {
+        const { controls } = reportTabConfig;
+        const productFilter = document.getElementById(controls.product);
+        const marketFilter = document.getElementById(controls.market);
+        const staffDropdown = document.getElementById(controls.staffDropdown);
+
+        const allProducts = [...new Set(allData.map(r => r["Mặt hàng"]).filter(Boolean))].sort();
+        const allMarkets = [...new Set(allData.map(r => r["khu vực"] || r["Khu vực"]).filter(Boolean))].sort();
+        const allStaff = [...new Set(allData.map(r => r["NV Vận đơn"] || r["NV_Vận_đơn"]).filter(Boolean))].sort();
+
+        productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>';
+        allProducts.forEach(opt => productFilter.add(new Option(opt, opt)));
+        
+        marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>';
+        allMarkets.forEach(opt => marketFilter.add(new Option(opt, opt)));
+
+        staffDropdown.innerHTML = ''; // Clear previous options
+        
+        // Add "Select All" checkbox
+        const allLabel = document.createElement('label');
+        allLabel.innerHTML = `<input type="checkbox" id="reportStaffSelectAll"> <b>Chọn tất cả</b>`;
+        staffDropdown.appendChild(allLabel);
+
+        allStaff.forEach(staffName => {
+            const label = document.createElement('label');
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.value = staffName;
+            checkbox.addEventListener('change', () => {
+                updateStaffFilterButtonText();
+                applyReportFilters();
+            });
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(` ${staffName}`));
+            staffDropdown.appendChild(label);
+        });
+
+        document.getElementById('reportStaffSelectAll').addEventListener('change', (e) => {
+            const isChecked = e.target.checked;
+            staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = isChecked);
+            updateStaffFilterButtonText();
+            applyReportFilters();
+        });
+    }
+    
+    function updateStaffFilterButtonText() {
+        const { controls } = reportTabConfig;
+        const staffBtn = document.getElementById(controls.staffBtn);
+        const staffDropdown = document.getElementById(controls.staffDropdown);
+        const selectedCount = staffDropdown.querySelectorAll('input[type="checkbox"]:not(#reportStaffSelectAll):checked').length;
+        
+        if (selectedCount === 0) {
+            staffBtn.textContent = 'Tất cả NV Vận đơn';
+        } else if (selectedCount === 1) {
+            staffBtn.textContent = '1 NV đã chọn';
+        } else {
+            staffBtn.textContent = `${selectedCount} NV đã chọn`;
+        }
     }
 
-    // --- KHỞI TẠO ---
-    document.addEventListener('DOMContentLoaded', () => {
-        setupControls();
-        setupInteractionHandlers(); 
-        refreshData();
-    });
+    function applyReportFilters() {
+        let filteredReportData = [...allData];
+        const { controls } = reportTabConfig;
+
+        const startDate = document.getElementById(controls.startDate).value;
+        const endDate = document.getElementById(controls.endDate).value;
+        const product = document.getElementById(controls.product).value;
+        const market = document.getElementById(controls.market).value;
+        
+        const selectedStaff = Array.from(document.querySelectorAll(`#${controls.staffDropdown} input:checked:not(#reportStaffSelectAll)`))
+                                  .map(cb => cb.value);
+
+        if (startDate || endDate) {
+            const start = startDate ? new Date(startDate) : null;
+            const end = endDate ? new Date(endDate) : null;
+            if(start) start.setHours(0,0,0,0);
+            if(end) end.setHours(23,59,59,999);
+            filteredReportData = filteredReportData.filter(row => {
+                const orderDate = parseDateString(row["Ngày lên đơn"] || row["Thời gian lên đơn"]);
+                return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
+            });
+        }
+        if (product) {
+            filteredReportData = filteredReportData.filter(row => row["Mặt hàng"] === product);
+        }
+        if (market) {
+            filteredReportData = filteredReportData.filter(row => (row["khu vực"] || row["Khu vực"]) === market);
+        }
+        if (selectedStaff.length > 0) {
+            const staffSet = new Set(selectedStaff);
+            filteredReportData = filteredReportData.filter(row => staffSet.has(row["NV Vận đơn"] || row["NV_Vận_đơn"]));
+        }
+
+        updateDetailedSummaryTable(filteredReportData);
+    }
+    
+    function loadData() { 
+        showError('Đang tải dữ liệu...', mainTabConfig.table.body); 
+        showError('Đang tải dữ liệu...', japanTabConfig.table.body); 
+        const script = document.createElement('script'); 
+        script.src = `${POST_URL}?callback=handleData&rand=${Math.random()}`; 
+        const oldScript = document.querySelector('script[src^="https://script.google.com"]'); 
+        if (oldScript) oldScript.remove(); 
+        document.body.appendChild(script); 
+    }
+
+    setupControls();
+    loadData();
   </script>
 </body>
 </html>
