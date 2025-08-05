@@ -757,7 +757,280 @@
         };
         
         // ===================================================================
-        // =========== MODULE CHO BÁO CÁO BIỂU ĐỒ (TAB 4) ====================
+        // =========== MODULE CHO BÁO CÁO VẬN ĐƠN (TAB 3) =====================
+        // ===================================================================
+        const vanDonReportApp = {
+            isInitialized: false,
+            POST_URL: 'https://script.google.com/macros/s/AKfycbyGW5O47Y0TwPEqRzta72wwNSUN3jA1IPzSr1N72eOxVcqH4G8sgyelQROtDk9aVq75/exec',
+            allData: [],
+            chartInstances: {},
+
+            init: function() {
+                this.setupControls();
+                this.loadData();
+                this.isInitialized = true;
+            },
+
+            parseDateString: function(dateString) { if (!dateString || typeof dateString !== 'string') return null; const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, ''); if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) { const d = new Date(cleanedDateString); if (!isNaN(d.getTime())) return d; } const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/); if (parts) { const month = parseInt(parts, 10); const day = parseInt(parts, 10); const year = parseInt(parts, 10); if (year > 1000 && month > 0 && month <= 12 && day > 0 && day <= 31) { const d = new Date(Date.UTC(year, month - 1, day)); if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1) return d; } } return null; },
+            showError: function(message, containerId = 'summaryTableBody') { const container = document.getElementById(containerId); if(container) container.innerHTML = `<tr><td colspan="17" class="no-data">${message}</td></tr>`; hideLoader(); },
+
+            handleData: function(response) { 
+                hideLoader();
+                if (response.error || !Array.isArray(response.rows)) { 
+                    this.showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng')); 
+                    return; 
+                } 
+                
+                this.allData = response.rows; 
+                this.populateReportFilters();
+                this.applyAllFilters();
+            },
+
+            createEmptyStats: function() { return { "Đã Thanh Toán (có bill)": { count: 0, amount: 0 }, "Bill 1 phần": { count: 0 }, "Tổng đơn lên nội bộ": { count: 0 }, "Tổng đơn đủ đkien đẩy vh": { count: 0 }, "Tổng đơn lên vận hành": { count: 0 }, "Giao Thành Công": { count: 0 }, "Đang Giao": { count: 0 }, "Chưa Giao": { count: 0 }, "Hoàn": { count: 0 }, "chờ check": { count: 0 }, "Trống trạng thái": { count: 0 } }; },
+            
+            updateDetailedSummaryTable: function(filteredData) {
+                const summaryTableBody = document.getElementById('summaryTableBody');
+                if(!summaryTableBody) return;
+                summaryTableBody.innerHTML = ''; 
+                if (filteredData.length === 0) { 
+                    this.showError('Không có dữ liệu báo cáo khớp với bộ lọc.'); 
+                    return; 
+                } 
+
+                const staffStats = {}; 
+                const grandTotal = this.createEmptyStats(); 
+                
+                filteredData.forEach(row => { 
+                    const staffName = row["NV Vận đơn"] || row["NV_Vận_đơn"] || "Chưa có NV"; 
+                    const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định"; 
+                    if (!staffStats[staffName]) staffStats[staffName] = { _total: this.createEmptyStats() }; 
+                    if (!staffStats[staffName][shippingCompany]) staffStats[staffName][shippingCompany] = this.createEmptyStats(); 
+                    
+                    const statsToUpdate = [ staffStats[staffName][shippingCompany], staffStats[staffName]._total, grandTotal ]; 
+                    const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0; 
+                    const numericAmount = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0; 
+                    const paymentStatus = row["Trạng thái thu tiền"] || ""; 
+                    const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; 
+                    
+                    statsToUpdate.forEach(stats => { 
+                        if (paymentStatus.includes("Có bill")) { 
+                            stats["Đã Thanh Toán (có bill)"].count++; 
+                            stats["Đã Thanh Toán (có bill)"].amount += numericAmount; 
+                        } else if (paymentStatus.includes("Có bill 1 phần")) { 
+                            stats["Bill 1 phần"].count++; 
+                        } 
+                        
+                        if (deliveryStatus.includes("Giao Thành Công")) stats["Giao Thành Công"].count++; 
+                        else if (deliveryStatus.includes("Đang Giao")) stats["Đang Giao"].count++; 
+                        else if (deliveryStatus.includes("Chưa Giao")) stats["Chưa Giao"].count++; 
+                        else if (deliveryStatus.includes("Hoàn")) stats["Hoàn"].count++; 
+                        else if (deliveryStatus.includes("chờ check")) stats["chờ check"].count++; 
+                        else if (deliveryStatus === "") stats["Trống trạng thái"].count++; 
+                        
+                        stats["Tổng đơn lên nội bộ"].count++; 
+                        if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) stats["Tổng đơn đủ đkien đẩy vh"].count++; 
+                        if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) stats["Tổng đơn lên vận hành"].count++; 
+                    }); 
+                }); 
+                
+                Object.keys(staffStats).sort().forEach(staffName => { 
+                    const staffData = staffStats[staffName]; 
+                    const headerRow = summaryTableBody.insertRow(); 
+                    headerRow.className = 'summary-staff-header'; 
+                    const headerCell = headerRow.insertCell(); 
+                    headerCell.colSpan = 17; 
+                    headerCell.textContent = `Nhân viên: ${staffName}`; 
+                    
+                    Object.keys(staffData).filter(key => key !== '_total').sort().forEach(companyName => { 
+                        summaryTableBody.appendChild(this.renderSummaryRow(staffName, companyName, staffData[companyName])); 
+                    }); 
+                    const totalRow = this.renderSummaryRow("Tổng cộng", "Tất cả DVVC", staffData._total); 
+                    totalRow.className = 'summary-staff-total'; 
+                    summaryTableBody.appendChild(totalRow); 
+                }); 
+                
+                const grandTotalRow = this.renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal); 
+                grandTotalRow.className = 'summary-grand-total'; 
+                summaryTableBody.appendChild(grandTotalRow); 
+            },
+            
+            renderSummaryRow: function(staffName, companyName, data) { 
+                const tr = document.createElement('tr'); 
+                tr.insertCell().textContent = staffName; 
+                tr.insertCell().textContent = companyName; 
+                tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count; 
+                tr.insertCell().textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫';
+                tr.insertCell().textContent = data["Bill 1 phần"].count; 
+                tr.insertCell().textContent = data["Tổng đơn lên nội bộ"].count; 
+                tr.insertCell().textContent = data["Tổng đơn đủ đkien đẩy vh"].count; 
+                tr.insertCell().textContent = data["Tổng đơn lên vận hành"].count; 
+                const shippingRateCell = tr.insertCell();
+                const shippingRate = data["Tổng đơn lên nội bộ"].count > 0 ? (data["Tổng đơn lên vận hành"].count / data["Tổng đơn lên nội bộ"].count * 100) : 0; 
+                shippingRateCell.textContent = shippingRate.toFixed(1) + '%';
+                shippingRateCell.className = shippingRate > 70 ? 'positive' : 'negative';
+                tr.insertCell().textContent = data["Giao Thành Công"].count; 
+                tr.insertCell().textContent = data["Đang Giao"].count; 
+                tr.insertCell().textContent = data["Chưa Giao"].count; 
+                tr.insertCell().textContent = data["Hoàn"].count; 
+                tr.insertCell().textContent = data["chờ check"].count; 
+                tr.insertCell().textContent = data["Trống trạng thái"].count; 
+                const paymentRateCell = tr.insertCell();
+                const paymentSuccessRate = data["Giao Thành Công"].count > 0 ? (data["Đã Thanh Toán (có bill)"].count / data["Giao Thành Công"].count * 100) : 0; 
+                paymentRateCell.textContent = paymentSuccessRate.toFixed(1) + '%';
+                paymentRateCell.className = paymentSuccessRate > 80 ? 'positive' : 'negative';
+                const feeRateCell = tr.insertCell();
+                const feeRate = data["Tổng đơn lên vận hành"].count > 0 ? (data["Giao Thành Công"].count / data["Tổng đơn lên vận hành"].count * 100) : 0; 
+                feeRateCell.textContent = feeRate.toFixed(1) + '%';
+                feeRateCell.className = feeRate > 80 ? 'positive' : 'negative';
+                return tr; 
+            },
+
+            updateCharts: function(filteredData) {
+                Object.keys(this.chartInstances).forEach(key => { if(this.chartInstances[key]) this.chartInstances[key].destroy(); });
+                if (filteredData.length === 0) return;
+
+                const statusCounts = { 'Giao Thành Công': 0, 'Hoàn': 0, 'Đang Giao': 0, 'chờ check': 0, 'Khác': 0 };
+                filteredData.forEach(row => { const status = row["Trạng thái giao hàng NB"] || ""; if (status.includes("Giao Thành Công")) statusCounts['Giao Thành Công']++; else if (status.includes("Hoàn")) statusCounts['Hoàn']++; else if (status.includes("Đang Giao")) statusCounts['Đang Giao']++; else if (status.includes("chờ check")) statusCounts['chờ check']++; else if (status) statusCounts['Khác']++; });
+                const statusCtx = document.getElementById('statusBreakdownChart')?.getContext('2d');
+                if(statusCtx) this.chartInstances.status = new Chart(statusCtx, { type: 'doughnut', data: { labels: Object.keys(statusCounts), datasets: [{ label: 'Số lượng đơn', data: Object.values(statusCounts), backgroundColor: ['#2ecc71', '#e74c3c', '#3498db', '#f1c40f', '#95a5a6'], hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: true } });
+
+                const funnelStats = this.createEmptyStats();
+                filteredData.forEach(row => { const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; funnelStats["Tổng đơn lên nội bộ"].count++; if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) { funnelStats["Tổng đơn lên vận hành"].count++; } if (deliveryStatus.includes("Giao Thành Công")) funnelStats["Giao Thành Công"].count++; });
+                const funnelCtx = document.getElementById('funnelChart')?.getContext('2d');
+                if(funnelCtx) this.chartInstances.funnel = new Chart(funnelCtx, { type: 'bar', data: { labels: ['Tổng đơn nội bộ', 'Đơn lên vận hành', 'Giao thành công'], datasets: [{ label: 'Số lượng đơn', data: [ funnelStats["Tổng đơn lên nội bộ"].count, funnelStats["Tổng đơn lên vận hành"].count, funnelStats["Giao Thành Công"].count ], backgroundColor: ['#3498db', '#f39c12', '#27ae60'] }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
+
+                const staffPerformance = {};
+                filteredData.forEach(row => { const staff = row["NV Vận đơn"] || "Chưa có NV"; if (!staffPerformance[staff]) staffPerformance[staff] = { success: 0, returned: 0 }; const status = row["Trạng thái giao hàng NB"] || ""; if (status.includes("Giao Thành Công")) staffPerformance[staff].success++; else if (status.includes("Hoàn")) staffPerformance[staff].returned++; });
+                const staffCtx = document.getElementById('staffPerformanceChart')?.getContext('2d');
+                if(staffCtx) this.chartInstances.staff = new Chart(staffCtx, { type: 'bar', data: { labels: Object.keys(staffPerformance), datasets: [ { label: 'Thành Công', data: Object.values(staffPerformance).map(d => d.success), backgroundColor: '#2ecc71' }, { label: 'Hoàn', data: Object.values(staffPerformance).map(d => d.returned), backgroundColor: '#e74c3c' } ] }, options: { responsive: true, maintainAspectRatio: true, scales: { x: { stacked: true }, y: { stacked: true } } } });
+
+                const carrierPerformance = {};
+                filteredData.forEach(row => { const carrier = row["Đơn vị vận chuyển"] || "Không xác định"; if (!carrierPerformance[carrier]) carrierPerformance[carrier] = { success: 0, returned: 0 }; const status = row["Trạng thái giao hàng NB"] || ""; if (status.includes("Giao Thành Công")) carrierPerformance[carrier].success++; else if (status.includes("Hoàn")) carrierPerformance[carrier].returned++; });
+                const carrierCtx = document.getElementById('carrierPerformanceChart')?.getContext('2d');
+                if(carrierCtx) this.chartInstances.carrier = new Chart(carrierCtx, { type: 'bar', data: { labels: Object.keys(carrierPerformance), datasets: [ { label: 'Thành Công', data: Object.values(carrierPerformance).map(d => d.success), backgroundColor: '#2ecc71' }, { label: 'Hoàn', data: Object.values(carrierPerformance).map(d => d.returned), backgroundColor: '#e74c3c' } ] }, options: { responsive: true, maintainAspectRatio: true, scales: { x: { stacked: true }, y: { stacked: true } } } });
+            },
+
+            setupControls: function() {
+                const staffBtn = document.getElementById('reportStaffFilterBtn');
+                const staffDropdown = document.getElementById('reportStaffDropdown');
+
+                document.getElementById('reportStartDateFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
+                document.getElementById('reportEndDateFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
+                document.getElementById('reportProductFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
+                document.getElementById('reportMarketFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
+                document.getElementById('reportClearFilters')?.addEventListener('click', () => {
+                    const sd = document.getElementById('reportStartDateFilter'), ed = document.getElementById('reportEndDateFilter'), pf = document.getElementById('reportProductFilter'), mf = document.getElementById('reportMarketFilter');
+                    if (sd) sd.value = ''; if (ed) ed.value = ''; if (pf) pf.selectedIndex = 0; if (mf) mf.selectedIndex = 0;
+                    if (staffDropdown) staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                    this.updateStaffFilterButtonText();
+                    this.applyAllFilters();
+                });
+
+                if (staffBtn && staffDropdown) {
+                    staffBtn.addEventListener('click', () => staffDropdown.classList.toggle('show'));
+                    staffDropdown.addEventListener('click', e => e.stopPropagation());
+                    window.addEventListener('click', (e) => {
+                        if (!staffBtn.contains(e.target)) {
+                            staffDropdown.classList.remove('show');
+                        }
+                    });
+                }
+            },
+            
+            populateReportFilters: function() {
+                const productFilter = document.getElementById('reportProductFilter');
+                const marketFilter = document.getElementById('reportMarketFilter');
+                const staffDropdown = document.getElementById('reportStaffDropdown');
+                if (!productFilter || !marketFilter || !staffDropdown) return;
+
+                const allProducts = [...new Set(this.allData.map(r => r["Mặt hàng"]).filter(Boolean))].sort();
+                const allMarkets = [...new Set(this.allData.map(r => r["khu vực"] || r["Khu vực"]).filter(Boolean))].sort();
+                const allStaff = [...new Set(this.allData.map(r => r["NV Vận đơn"] || r["NV_Vận_đơn"]).filter(Boolean))].sort();
+
+                productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>';
+                allProducts.forEach(opt => productFilter.add(new Option(opt, opt)));
+                
+                marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>';
+                allMarkets.forEach(opt => marketFilter.add(new Option(opt, opt)));
+
+                staffDropdown.innerHTML = '';
+                const allLabel = document.createElement('label');
+                allLabel.innerHTML = `<input type="checkbox" id="reportStaffSelectAll"> <b>Chọn tất cả</b>`;
+                staffDropdown.appendChild(allLabel);
+
+                allStaff.forEach(staffName => {
+                    const label = document.createElement('label');
+                    label.innerHTML = `<input type="checkbox" value="${staffName}"> ${staffName}`;
+                    label.querySelector('input').addEventListener('change', () => {
+                        this.updateStaffFilterButtonText();
+                        this.applyAllFilters();
+                    });
+                    staffDropdown.appendChild(label);
+                });
+
+                document.getElementById('reportStaffSelectAll')?.addEventListener('change', (e) => {
+                    staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+                    this.updateStaffFilterButtonText();
+                    this.applyAllFilters();
+                });
+            },
+            
+            updateStaffFilterButtonText: function() {
+                const staffBtn = document.getElementById('reportStaffFilterBtn'), dropdown = document.getElementById('reportStaffDropdown');
+                if(!staffBtn || !dropdown) return;
+                const selectedCount = dropdown.querySelectorAll('input:checked:not(#reportStaffSelectAll)').length;
+                
+                if (selectedCount === 0) staffBtn.textContent = 'Tất cả NV Vận đơn';
+                else if (selectedCount === 1) staffBtn.textContent = '1 NV đã chọn';
+                else staffBtn.textContent = `${selectedCount} NV đã chọn`;
+            },
+
+            applyAllFilters: function() {
+                let filteredData = [...this.allData];
+                const startDate = document.getElementById('reportStartDateFilter')?.value;
+                const endDate = document.getElementById('reportEndDateFilter')?.value;
+                const product = document.getElementById('reportProductFilter')?.value;
+                const market = document.getElementById('reportMarketFilter')?.value;
+                const selectedStaff = Array.from(document.querySelectorAll('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)')).map(cb => cb.value);
+
+                if (startDate || endDate) {
+                    const start = startDate ? new Date(startDate) : null;
+                    const end = endDate ? new Date(endDate) : null;
+                    if(start) start.setHours(0,0,0,0);
+                    if(end) end.setHours(23,59,59,999);
+                    filteredData = filteredData.filter(row => {
+                        const orderDate = this.parseDateString(row["Ngày lên đơn"] || row["Thời gian lên đơn"]);
+                        return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
+                    });
+                }
+                if (product) filteredData = filteredData.filter(row => row["Mặt hàng"] === product);
+                if (market) filteredData = filteredData.filter(row => (row["khu vực"] || row["Khu vực"]) === market);
+                if (selectedStaff.length > 0) {
+                    const staffSet = new Set(selectedStaff);
+                    filteredData = filteredData.filter(row => staffSet.has(row["NV Vận đơn"] || row["NV_Vận_đơn"]));
+                }
+                
+                this.updateDetailedSummaryTable(filteredData);
+                this.updateCharts(filteredData);
+            },
+            
+            loadData: function() { 
+                showLoader();
+                this.showError('Đang tải dữ liệu, vui lòng chờ...'); 
+                this.updateCharts([]); 
+                
+                window.handleVanDonData = this.handleData.bind(this);
+                
+                const script = document.createElement('script'); 
+                script.src = `${this.POST_URL}?callback=handleVanDonData&rand=${Math.random()}`; 
+                document.body.appendChild(script); 
+                script.onload = () => script.remove();
+                script.onerror = () => this.showError('Tải dữ liệu thất bại. Vui lòng kiểm tra kết nối mạng và thử lại.');
+            }
+        };
+
+        // ===================================================================
+        // =========== MODULE CHO BÁO CÁO BIỂU ĐỒ (TAB 4 - ĐÃ SỬA) ===========
         // ===================================================================
         const chartReportApp = {
             isInitialized: false, 
@@ -882,16 +1155,19 @@
                 this.updateChart(this.charts.soDonSaleChart,'Số Đơn (Sale)',l,l.map(d=>D[d].donSale),chartColorPalette.getColorPair(7));
                 this.updateChart(this.charts.dsChotSaleChart,'DS Chốt (Sale)',l,l.map(d=>D[d].chotSale),chartColorPalette.getColorPair(8));
                 this.updateChart(this.charts.rateSaleChart,'Tỉ lệ chốt (Sale)',l,l.map(d=>(D[d].messSale?D[d].donSale/D[d].messSale:0)*100),chartColorPalette.getColorPair(9));
-                // SHARED
-                const pS={},mS={};
-                [...mktData, ...saleData].forEach(r=>{
+                
+                // SHARED (FIXED)
+                const pS = {}, mS = {};
+                [...mktData, ...saleData].forEach(r => {
                     const dsChotValue = r.dsChot || 0;
-                    if(r.sanPham)pS[r.sanPham]=(pS[r.sanPham]||0)+dsChotValue;
-                    if(r.thiTruong)mS[r.thiTruong]=(mS[r.thiTruong]||0)+dsChotValue;
+                    if (r.sanPham) pS[r.sanPham] = (pS[r.sanPham] || 0) + dsChotValue;
+                    if (r.thiTruong) mS[r.thiTruong] = (mS[r.thiTruong] || 0) + dsChotValue;
                 });
-                const sP=Object.entries(pS).sort((a,b)=>b-a),sM=Object.entries(mS).sort((a,b)=>b-a);
-                this.updateChart(this.charts.productSalesChart,'DS theo SP',sP.map(p=>p),sP.map(p=>p),chartColorPalette.getColorPair(10),'bar');
-                this.updateChart(this.charts.marketSalesChart,'DS theo TT',sM.map(m=>m),sM.map(m=>m),chartColorPalette.getColorPair(11),'bar');
+                const sP = Object.entries(pS).sort(([, valA], [, valB]) => valB - valA);
+                const sM = Object.entries(mS).sort(([, valA], [, valB]) => valB - valA);
+                
+                this.updateChart(this.charts.productSalesChart, 'DS theo SP (Tổng)', sP.map(p => p), sP.map(p => p), chartColorPalette.getColorPair(10), 'bar');
+                this.updateChart(this.charts.marketSalesChart, 'DS theo TT (Tổng)', sM.map(m => m), sM.map(m => m), chartColorPalette.getColorPair(11), 'bar');
             },
             getLineChartConfig: function(y,f=formatUtils.formatPriceShort){return{type:'line',options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f(c.raw)}`}},datalabels:{display: false}},scales:{y:{ticks:{callback:f}}}}};},
             getBarChartConfig: function(){return{type:'bar',options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.x.toLocaleString()} VND`}},datalabels:{anchor:'end',align:'right',offset:8,color:'#333',font:{weight:'600'},formatter:formatUtils.formatPriceShort}},scales:{x:{ticks: {display: false}},y:{grid:{display:false}}}}};},
@@ -1298,280 +1574,6 @@
             setDefaultDates: function() { const today = new Date(); const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1); const formatDate = d => d.toISOString().split('T'); document.getElementById('start-date-staff').value = formatDate(firstDayOfMonth); document.getElementById('end-date-staff').value = formatDate(today); },
         };
         
-        // ===================================================================
-        // =========== MODULE CHO BÁO CÁO VẬN ĐƠN (TAB 3 - TRƯỚC LÀ 6) =======
-        // ===================================================================
-        const vanDonReportApp = {
-            isInitialized: false,
-            POST_URL: 'https://script.google.com/macros/s/AKfycbyGW5O47Y0TwPEqRzta72wwNSUN3jA1IPzSr1N72eOxVcqH4G8sgyelQROtDk9aVq75/exec',
-            allData: [],
-            chartInstances: {},
-
-            init: function() {
-                this.setupControls();
-                this.loadData();
-                this.isInitialized = true;
-            },
-
-            parseDateString: function(dateString) { if (!dateString || typeof dateString !== 'string') return null; const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, ''); if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) { const d = new Date(cleanedDateString); if (!isNaN(d.getTime())) return d; } const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/); if (parts) { const month = parseInt(parts, 10); const day = parseInt(parts, 10); const year = parseInt(parts, 10); if (year > 1000 && month > 0 && month <= 12 && day > 0 && day <= 31) { const d = new Date(Date.UTC(year, month - 1, day)); if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1) return d; } } return null; },
-            showError: function(message, containerId = 'summaryTableBody') { const container = document.getElementById(containerId); if(container) container.innerHTML = `<tr><td colspan="17" class="no-data">${message}</td></tr>`; hideLoader(); },
-
-            handleData: function(response) { 
-                hideLoader();
-                if (response.error || !Array.isArray(response.rows)) { 
-                    this.showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng')); 
-                    return; 
-                } 
-                
-                this.allData = response.rows; 
-                this.populateReportFilters();
-                this.applyAllFilters();
-            },
-
-            createEmptyStats: function() { return { "Đã Thanh Toán (có bill)": { count: 0, amount: 0 }, "Bill 1 phần": { count: 0 }, "Tổng đơn lên nội bộ": { count: 0 }, "Tổng đơn đủ đkien đẩy vh": { count: 0 }, "Tổng đơn lên vận hành": { count: 0 }, "Giao Thành Công": { count: 0 }, "Đang Giao": { count: 0 }, "Chưa Giao": { count: 0 }, "Hoàn": { count: 0 }, "chờ check": { count: 0 }, "Trống trạng thái": { count: 0 } }; },
-            
-            updateDetailedSummaryTable: function(filteredData) {
-                const summaryTableBody = document.getElementById('summaryTableBody');
-                if(!summaryTableBody) return;
-                summaryTableBody.innerHTML = ''; 
-                if (filteredData.length === 0) { 
-                    this.showError('Không có dữ liệu báo cáo khớp với bộ lọc.'); 
-                    return; 
-                } 
-
-                const staffStats = {}; 
-                const grandTotal = this.createEmptyStats(); 
-                
-                filteredData.forEach(row => { 
-                    const staffName = row["NV Vận đơn"] || row["NV_Vận_đơn"] || "Chưa có NV"; 
-                    const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định"; 
-                    if (!staffStats[staffName]) staffStats[staffName] = { _total: this.createEmptyStats() }; 
-                    if (!staffStats[staffName][shippingCompany]) staffStats[staffName][shippingCompany] = this.createEmptyStats(); 
-                    
-                    const statsToUpdate = [ staffStats[staffName][shippingCompany], staffStats[staffName]._total, grandTotal ]; 
-                    const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0; 
-                    const numericAmount = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0; 
-                    const paymentStatus = row["Trạng thái thu tiền"] || ""; 
-                    const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; 
-                    
-                    statsToUpdate.forEach(stats => { 
-                        if (paymentStatus.includes("Có bill")) { 
-                            stats["Đã Thanh Toán (có bill)"].count++; 
-                            stats["Đã Thanh Toán (có bill)"].amount += numericAmount; 
-                        } else if (paymentStatus.includes("Có bill 1 phần")) { 
-                            stats["Bill 1 phần"].count++; 
-                        } 
-                        
-                        if (deliveryStatus.includes("Giao Thành Công")) stats["Giao Thành Công"].count++; 
-                        else if (deliveryStatus.includes("Đang Giao")) stats["Đang Giao"].count++; 
-                        else if (deliveryStatus.includes("Chưa Giao")) stats["Chưa Giao"].count++; 
-                        else if (deliveryStatus.includes("Hoàn")) stats["Hoàn"].count++; 
-                        else if (deliveryStatus.includes("chờ check")) stats["chờ check"].count++; 
-                        else if (deliveryStatus === "") stats["Trống trạng thái"].count++; 
-                        
-                        stats["Tổng đơn lên nội bộ"].count++; 
-                        if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) stats["Tổng đơn đủ đkien đẩy vh"].count++; 
-                        if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) stats["Tổng đơn lên vận hành"].count++; 
-                    }); 
-                }); 
-                
-                Object.keys(staffStats).sort().forEach(staffName => { 
-                    const staffData = staffStats[staffName]; 
-                    const headerRow = summaryTableBody.insertRow(); 
-                    headerRow.className = 'summary-staff-header'; 
-                    const headerCell = headerRow.insertCell(); 
-                    headerCell.colSpan = 17; 
-                    headerCell.textContent = `Nhân viên: ${staffName}`; 
-                    
-                    Object.keys(staffData).filter(key => key !== '_total').sort().forEach(companyName => { 
-                        summaryTableBody.appendChild(this.renderSummaryRow(staffName, companyName, staffData[companyName])); 
-                    }); 
-                    const totalRow = this.renderSummaryRow("Tổng cộng", "Tất cả DVVC", staffData._total); 
-                    totalRow.className = 'summary-staff-total'; 
-                    summaryTableBody.appendChild(totalRow); 
-                }); 
-                
-                const grandTotalRow = this.renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal); 
-                grandTotalRow.className = 'summary-grand-total'; 
-                summaryTableBody.appendChild(grandTotalRow); 
-            },
-            
-            renderSummaryRow: function(staffName, companyName, data) { 
-                const tr = document.createElement('tr'); 
-                tr.insertCell().textContent = staffName; 
-                tr.insertCell().textContent = companyName; 
-                tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count; 
-                tr.insertCell().textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫';
-                tr.insertCell().textContent = data["Bill 1 phần"].count; 
-                tr.insertCell().textContent = data["Tổng đơn lên nội bộ"].count; 
-                tr.insertCell().textContent = data["Tổng đơn đủ đkien đẩy vh"].count; 
-                tr.insertCell().textContent = data["Tổng đơn lên vận hành"].count; 
-                const shippingRateCell = tr.insertCell();
-                const shippingRate = data["Tổng đơn lên nội bộ"].count > 0 ? (data["Tổng đơn lên vận hành"].count / data["Tổng đơn lên nội bộ"].count * 100) : 0; 
-                shippingRateCell.textContent = shippingRate.toFixed(1) + '%';
-                shippingRateCell.className = shippingRate > 70 ? 'positive' : 'negative';
-                tr.insertCell().textContent = data["Giao Thành Công"].count; 
-                tr.insertCell().textContent = data["Đang Giao"].count; 
-                tr.insertCell().textContent = data["Chưa Giao"].count; 
-                tr.insertCell().textContent = data["Hoàn"].count; 
-                tr.insertCell().textContent = data["chờ check"].count; 
-                tr.insertCell().textContent = data["Trống trạng thái"].count; 
-                const paymentRateCell = tr.insertCell();
-                const paymentSuccessRate = data["Giao Thành Công"].count > 0 ? (data["Đã Thanh Toán (có bill)"].count / data["Giao Thành Công"].count * 100) : 0; 
-                paymentRateCell.textContent = paymentSuccessRate.toFixed(1) + '%';
-                paymentRateCell.className = paymentSuccessRate > 80 ? 'positive' : 'negative';
-                const feeRateCell = tr.insertCell();
-                const feeRate = data["Tổng đơn lên vận hành"].count > 0 ? (data["Giao Thành Công"].count / data["Tổng đơn lên vận hành"].count * 100) : 0; 
-                feeRateCell.textContent = feeRate.toFixed(1) + '%';
-                feeRateCell.className = feeRate > 80 ? 'positive' : 'negative';
-                return tr; 
-            },
-
-            updateCharts: function(filteredData) {
-                Object.keys(this.chartInstances).forEach(key => { if(this.chartInstances[key]) this.chartInstances[key].destroy(); });
-                if (filteredData.length === 0) return;
-
-                const statusCounts = { 'Giao Thành Công': 0, 'Hoàn': 0, 'Đang Giao': 0, 'chờ check': 0, 'Khác': 0 };
-                filteredData.forEach(row => { const status = row["Trạng thái giao hàng NB"] || ""; if (status.includes("Giao Thành Công")) statusCounts['Giao Thành Công']++; else if (status.includes("Hoàn")) statusCounts['Hoàn']++; else if (status.includes("Đang Giao")) statusCounts['Đang Giao']++; else if (status.includes("chờ check")) statusCounts['chờ check']++; else if (status) statusCounts['Khác']++; });
-                const statusCtx = document.getElementById('statusBreakdownChart')?.getContext('2d');
-                if(statusCtx) this.chartInstances.status = new Chart(statusCtx, { type: 'doughnut', data: { labels: Object.keys(statusCounts), datasets: [{ label: 'Số lượng đơn', data: Object.values(statusCounts), backgroundColor: ['#2ecc71', '#e74c3c', '#3498db', '#f1c40f', '#95a5a6'], hoverOffset: 4 }] }, options: { responsive: true, maintainAspectRatio: true } });
-
-                const funnelStats = this.createEmptyStats();
-                filteredData.forEach(row => { const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; funnelStats["Tổng đơn lên nội bộ"].count++; if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) { funnelStats["Tổng đơn lên vận hành"].count++; } if (deliveryStatus.includes("Giao Thành Công")) funnelStats["Giao Thành Công"].count++; });
-                const funnelCtx = document.getElementById('funnelChart')?.getContext('2d');
-                if(funnelCtx) this.chartInstances.funnel = new Chart(funnelCtx, { type: 'bar', data: { labels: ['Tổng đơn nội bộ', 'Đơn lên vận hành', 'Giao thành công'], datasets: [{ label: 'Số lượng đơn', data: [ funnelStats["Tổng đơn lên nội bộ"].count, funnelStats["Tổng đơn lên vận hành"].count, funnelStats["Giao Thành Công"].count ], backgroundColor: ['#3498db', '#f39c12', '#27ae60'] }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } } } });
-
-                const staffPerformance = {};
-                filteredData.forEach(row => { const staff = row["NV Vận đơn"] || "Chưa có NV"; if (!staffPerformance[staff]) staffPerformance[staff] = { success: 0, returned: 0 }; const status = row["Trạng thái giao hàng NB"] || ""; if (status.includes("Giao Thành Công")) staffPerformance[staff].success++; else if (status.includes("Hoàn")) staffPerformance[staff].returned++; });
-                const staffCtx = document.getElementById('staffPerformanceChart')?.getContext('2d');
-                if(staffCtx) this.chartInstances.staff = new Chart(staffCtx, { type: 'bar', data: { labels: Object.keys(staffPerformance), datasets: [ { label: 'Thành Công', data: Object.values(staffPerformance).map(d => d.success), backgroundColor: '#2ecc71' }, { label: 'Hoàn', data: Object.values(staffPerformance).map(d => d.returned), backgroundColor: '#e74c3c' } ] }, options: { responsive: true, maintainAspectRatio: true, scales: { x: { stacked: true }, y: { stacked: true } } } });
-
-                const carrierPerformance = {};
-                filteredData.forEach(row => { const carrier = row["Đơn vị vận chuyển"] || "Không xác định"; if (!carrierPerformance[carrier]) carrierPerformance[carrier] = { success: 0, returned: 0 }; const status = row["Trạng thái giao hàng NB"] || ""; if (status.includes("Giao Thành Công")) carrierPerformance[carrier].success++; else if (status.includes("Hoàn")) carrierPerformance[carrier].returned++; });
-                const carrierCtx = document.getElementById('carrierPerformanceChart')?.getContext('2d');
-                if(carrierCtx) this.chartInstances.carrier = new Chart(carrierCtx, { type: 'bar', data: { labels: Object.keys(carrierPerformance), datasets: [ { label: 'Thành Công', data: Object.values(carrierPerformance).map(d => d.success), backgroundColor: '#2ecc71' }, { label: 'Hoàn', data: Object.values(carrierPerformance).map(d => d.returned), backgroundColor: '#e74c3c' } ] }, options: { responsive: true, maintainAspectRatio: true, scales: { x: { stacked: true }, y: { stacked: true } } } });
-            },
-
-            setupControls: function() {
-                const staffBtn = document.getElementById('reportStaffFilterBtn');
-                const staffDropdown = document.getElementById('reportStaffDropdown');
-
-                document.getElementById('reportStartDateFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
-                document.getElementById('reportEndDateFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
-                document.getElementById('reportProductFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
-                document.getElementById('reportMarketFilter')?.addEventListener('change', this.applyAllFilters.bind(this));
-                document.getElementById('reportClearFilters')?.addEventListener('click', () => {
-                    const sd = document.getElementById('reportStartDateFilter'), ed = document.getElementById('reportEndDateFilter'), pf = document.getElementById('reportProductFilter'), mf = document.getElementById('reportMarketFilter');
-                    if (sd) sd.value = ''; if (ed) ed.value = ''; if (pf) pf.selectedIndex = 0; if (mf) mf.selectedIndex = 0;
-                    if (staffDropdown) staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                    this.updateStaffFilterButtonText();
-                    this.applyAllFilters();
-                });
-
-                if (staffBtn && staffDropdown) {
-                    staffBtn.addEventListener('click', () => staffDropdown.classList.toggle('show'));
-                    staffDropdown.addEventListener('click', e => e.stopPropagation());
-                    window.addEventListener('click', (e) => {
-                        if (!staffBtn.contains(e.target)) {
-                            staffDropdown.classList.remove('show');
-                        }
-                    });
-                }
-            },
-            
-            populateReportFilters: function() {
-                const productFilter = document.getElementById('reportProductFilter');
-                const marketFilter = document.getElementById('reportMarketFilter');
-                const staffDropdown = document.getElementById('reportStaffDropdown');
-                if (!productFilter || !marketFilter || !staffDropdown) return;
-
-                const allProducts = [...new Set(this.allData.map(r => r["Mặt hàng"]).filter(Boolean))].sort();
-                const allMarkets = [...new Set(this.allData.map(r => r["khu vực"] || r["Khu vực"]).filter(Boolean))].sort();
-                const allStaff = [...new Set(this.allData.map(r => r["NV Vận đơn"] || r["NV_Vận_đơn"]).filter(Boolean))].sort();
-
-                productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>';
-                allProducts.forEach(opt => productFilter.add(new Option(opt, opt)));
-                
-                marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>';
-                allMarkets.forEach(opt => marketFilter.add(new Option(opt, opt)));
-
-                staffDropdown.innerHTML = '';
-                const allLabel = document.createElement('label');
-                allLabel.innerHTML = `<input type="checkbox" id="reportStaffSelectAll"> <b>Chọn tất cả</b>`;
-                staffDropdown.appendChild(allLabel);
-
-                allStaff.forEach(staffName => {
-                    const label = document.createElement('label');
-                    label.innerHTML = `<input type="checkbox" value="${staffName}"> ${staffName}`;
-                    label.querySelector('input').addEventListener('change', () => {
-                        this.updateStaffFilterButtonText();
-                        this.applyAllFilters();
-                    });
-                    staffDropdown.appendChild(label);
-                });
-
-                document.getElementById('reportStaffSelectAll')?.addEventListener('change', (e) => {
-                    staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
-                    this.updateStaffFilterButtonText();
-                    this.applyAllFilters();
-                });
-            },
-            
-            updateStaffFilterButtonText: function() {
-                const staffBtn = document.getElementById('reportStaffFilterBtn'), dropdown = document.getElementById('reportStaffDropdown');
-                if(!staffBtn || !dropdown) return;
-                const selectedCount = dropdown.querySelectorAll('input:checked:not(#reportStaffSelectAll)').length;
-                
-                if (selectedCount === 0) staffBtn.textContent = 'Tất cả NV Vận đơn';
-                else if (selectedCount === 1) staffBtn.textContent = '1 NV đã chọn';
-                else staffBtn.textContent = `${selectedCount} NV đã chọn`;
-            },
-
-            applyAllFilters: function() {
-                let filteredData = [...this.allData];
-                const startDate = document.getElementById('reportStartDateFilter')?.value;
-                const endDate = document.getElementById('reportEndDateFilter')?.value;
-                const product = document.getElementById('reportProductFilter')?.value;
-                const market = document.getElementById('reportMarketFilter')?.value;
-                const selectedStaff = Array.from(document.querySelectorAll('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)')).map(cb => cb.value);
-
-                if (startDate || endDate) {
-                    const start = startDate ? new Date(startDate) : null;
-                    const end = endDate ? new Date(endDate) : null;
-                    if(start) start.setHours(0,0,0,0);
-                    if(end) end.setHours(23,59,59,999);
-                    filteredData = filteredData.filter(row => {
-                        const orderDate = this.parseDateString(row["Ngày lên đơn"] || row["Thời gian lên đơn"]);
-                        return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
-                    });
-                }
-                if (product) filteredData = filteredData.filter(row => row["Mặt hàng"] === product);
-                if (market) filteredData = filteredData.filter(row => (row["khu vực"] || row["Khu vực"]) === market);
-                if (selectedStaff.length > 0) {
-                    const staffSet = new Set(selectedStaff);
-                    filteredData = filteredData.filter(row => staffSet.has(row["NV Vận đơn"] || row["NV_Vận_đơn"]));
-                }
-                
-                this.updateDetailedSummaryTable(filteredData);
-                this.updateCharts(filteredData);
-            },
-            
-            loadData: function() { 
-                showLoader();
-                this.showError('Đang tải dữ liệu, vui lòng chờ...'); 
-                this.updateCharts([]); 
-                
-                window.handleVanDonData = this.handleData.bind(this);
-                
-                const script = document.createElement('script'); 
-                script.src = `${this.POST_URL}?callback=handleVanDonData&rand=${Math.random()}`; 
-                document.body.appendChild(script); 
-                script.onload = () => script.remove();
-                script.onerror = () => this.showError('Tải dữ liệu thất bại. Vui lòng kiểm tra kết nối mạng và thử lại.');
-            }
-        };
-
-
         document.getElementById("defaultOpen").click();
     });
 </script>
