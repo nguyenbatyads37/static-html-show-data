@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -368,16 +369,20 @@
             if (isDoubleClick) {
                 handleEditCell(td, tableBodyId);
             } else {
-                if (!e.ctrlKey && !e.metaKey) {
+                if (e.shiftKey && startCell) {
+                     selectCellsBetween(startCell, td);
+                } else if (!e.ctrlKey && !e.metaKey) {
                     selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
                     selectedCells.clear();
-                }
-                
-                td.classList.toggle('cell-selected');
-                if (td.classList.contains('cell-selected')) {
+                    td.classList.add('cell-selected');
                     selectedCells.add(td);
                 } else {
-                    selectedCells.delete(td);
+                    td.classList.toggle('cell-selected');
+                    if (td.classList.contains('cell-selected')) {
+                        selectedCells.add(td);
+                    } else {
+                        selectedCells.delete(td);
+                    }
                 }
                 startCell = td;
             }
@@ -389,21 +394,23 @@
 
         tableBody.addEventListener('mousedown', (e) => {
             const td = e.target.closest('td');
-            if (td && !e.ctrlKey && !e.metaKey) {
+            if (td && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                 isMouseDown = true;
                 startCell = td;
                 selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
                 selectedCells.clear();
                 td.classList.add('cell-selected');
                 selectedCells.add(td);
-                e.preventDefault();
+                e.preventDefault(); // Prevent text selection
             }
         });
 
         tableBody.addEventListener('mouseover', (e) => {
-            const td = e.target.closest('td');
-            if (isMouseDown && td) {
-                selectCellsBetween(startCell, td);
+            if (isMouseDown) {
+                const td = e.target.closest('td');
+                if (td) {
+                    selectCellsBetween(startCell, td);
+                }
             }
         });
 
@@ -411,23 +418,6 @@
             if (isMouseDown) {
                 isMouseDown = false;
                 updateSelectionSummary();
-            }
-        });
-
-        document.addEventListener('keydown', (e) => {
-            const activeEl = document.activeElement;
-            if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName)) {
-                return;
-            }
-
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedCells.size > 0) {
-                e.preventDefault();
-                copySelectedCells();
-            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && selectedCells.size > 0) {
-                e.preventDefault();
-                navigator.clipboard.readText().then(text => {
-                    pasteToSelectedCells(text);
-                }).catch(err => console.error('Lỗi đọc clipboard:', err));
             }
         });
     }
@@ -590,6 +580,21 @@
         showTempMessage(`Đã dán ${pasteCount} giá trị`);
         updateSelectionSummary();
     }
+    
+    // NEW: Function to clear selected cells
+    function clearSelectedCells() {
+        if (selectedCells.size === 0) return;
+        let clearCount = 0;
+        selectedCells.forEach(cell => {
+            if (updateCellValue(cell, '')) {
+                clearCount++;
+            }
+        });
+        if (clearCount > 0) {
+            showTempMessage(`Đã xóa nội dung ${clearCount} ô`);
+        }
+    }
+
 
     function updateCellValue(cell, value) {
         if (!cell || !cell.classList.contains('editable')) return false;
@@ -913,6 +918,32 @@
         setupTabControls(mainTabConfig); 
         setupTabControls(japanTabConfig);
         setupReportControls();
+        
+        // Add global keydown listener for copy/paste/delete
+        document.addEventListener('keydown', (e) => {
+            const activeEl = document.activeElement;
+            // Do not interfere if user is typing in an input/select
+            if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) && !activeEl.closest('td')) {
+                return;
+            }
+             // Do not interfere if a cell is in editing mode
+            if (document.querySelector('td.editing')) {
+                return;
+            }
+
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedCells.size > 0) {
+                e.preventDefault();
+                copySelectedCells();
+            } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && selectedCells.size > 0) {
+                e.preventDefault();
+                navigator.clipboard.readText().then(text => {
+                    pasteToSelectedCells(text);
+                }).catch(err => console.error('Lỗi đọc clipboard:', err));
+            } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCells.size > 0) {
+                e.preventDefault();
+                clearSelectedCells();
+            }
+        });
     }
     
     function setupTabControls(config) { 
@@ -955,11 +986,23 @@
             updateStaffFilterButtonText();
             applyReportFilters();
         });
-
-        staffBtn.addEventListener('click', () => staffDropdown.classList.toggle('show'));
-        staffDropdown.addEventListener('click', e => e.stopPropagation());
+        
+        // FIXED: Dropdown toggle logic
+        staffBtn.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent window click listener from firing immediately
+            staffDropdown.classList.toggle('show');
+        });
+        // Close dropdown when clicking inside it on a label (to check a box)
+        staffDropdown.addEventListener('click', (e) => {
+             if (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') {
+                // Let the checkbox logic handle itself
+             } else {
+                 e.stopPropagation();
+             }
+        });
+        // Close dropdown when clicking outside
         window.addEventListener('click', (e) => {
-            if (!staffBtn.contains(e.target)) {
+            if (!staffBtn.contains(e.target) && staffDropdown.classList.contains('show')) {
                 staffDropdown.classList.remove('show');
             }
         });
@@ -1031,9 +1074,24 @@
             rowsToSend.push(updatedRowData); 
         });
         if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } 
+        
+        // FIXED: Better feedback for 'no-cors' fetch
         fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) })
-        .then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Cập nhật thành công ${rowsToSend.length} dòng. Vui lòng nhấn "Load" để xem thay đổi.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 2000); })
-        .catch(e => { statusEl.textContent = 'Lỗi mạng: ' + e.message; statusEl.classList.add('error-status'); setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); }); 
+        .then(() => { 
+            statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; 
+            setTimeout(() => { 
+                alert(`Yêu cầu cập nhật ${rowsToSend.length} dòng đã được gửi đi. \n\nVui lòng nhấn "Load" để kiểm tra và xem kết quả mới nhất.`); 
+                config.changedRows.clear(); 
+                document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); 
+                if(statusEl.parentElement) updateBtn.removeChild(statusEl); 
+                updateBtn.disabled = false; 
+            }, 1500); 
+        })
+        .catch(e => { 
+            statusEl.textContent = 'Lỗi mạng: ' + e.message; 
+            statusEl.classList.add('error-status'); 
+            setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); 
+        }); 
     }
     
     function populateReportFilters() {
@@ -1054,7 +1112,6 @@
 
         staffDropdown.innerHTML = ''; // Clear previous options
         
-        // Add "Select All" checkbox
         const allLabel = document.createElement('label');
         allLabel.innerHTML = `<input type="checkbox" id="reportStaffSelectAll"> <b>Chọn tất cả</b>`;
         staffDropdown.appendChild(allLabel);
@@ -1085,14 +1142,17 @@
         const { controls } = reportTabConfig;
         const staffBtn = document.getElementById(controls.staffBtn);
         const staffDropdown = document.getElementById(controls.staffDropdown);
-        const selectedCount = staffDropdown.querySelectorAll('input[type="checkbox"]:not(#reportStaffSelectAll):checked').length;
+        const allStaffCheckboxes = staffDropdown.querySelectorAll('input[type="checkbox"]:not(#reportStaffSelectAll)');
+        const selectedCount = Array.from(allStaffCheckboxes).filter(cb => cb.checked).length;
         
         if (selectedCount === 0) {
             staffBtn.textContent = 'Tất cả NV Vận đơn';
-        } else if (selectedCount === 1) {
-            staffBtn.textContent = '1 NV đã chọn';
+        } else if (selectedCount === allStaffCheckboxes.length) {
+            staffBtn.textContent = 'Tất cả NV đã chọn';
+            document.getElementById('reportStaffSelectAll').checked = true;
         } else {
             staffBtn.textContent = `${selectedCount} NV đã chọn`;
+            document.getElementById('reportStaffSelectAll').checked = false;
         }
     }
 
