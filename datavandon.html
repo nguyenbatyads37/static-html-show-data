@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -103,10 +102,21 @@
       border: 1px solid #ccc; border-radius: 3px;
     }
     td.editable { background-color: #fffbe8; }
+    /* Make the entire cell clickable for dropdowns */
+    td.editable.has-dropdown {
+      cursor: pointer;
+    }
     td select, td input.date-input {
-      width: 100%; padding: 4px; border: none;
+      width: 100%; height: 100%; 
+      padding: 4px; border: none;
       background: transparent; font-family: inherit; font-size: inherit;
       font-weight: inherit;
+      cursor: pointer;
+      -webkit-appearance: none; /* Hide default arrow in some browsers */
+      -moz-appearance: none;
+      appearance: none;
+      text-indent: 1px;
+      text-overflow: '';
     }
     button { cursor: pointer; border: none; transition: background-color 0.3s; }
 
@@ -359,9 +369,35 @@
         let lastClickTime = 0;
         let lastClickCell = null;
 
+        tableBody.addEventListener('mousedown', (e) => {
+            const td = e.target.closest('td');
+            if (!td) return;
+            
+            // UPDATED: Handle dropdown click directly
+            if (e.target.tagName === 'SELECT') {
+                 // Let the select element handle the click
+                 return;
+            }
+
+            if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
+                isMouseDown = true;
+                startCell = td;
+                selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
+                selectedCells.clear();
+                td.classList.add('cell-selected');
+                selectedCells.add(td);
+                e.preventDefault(); // Prevent text selection
+            }
+        });
+
         tableBody.addEventListener('click', (e) => {
             const td = e.target.closest('td');
             if (!td) return;
+
+            // If the target is a select, don't do selection logic, just let it open.
+            if (e.target.tagName === 'SELECT') {
+                return;
+            }
 
             const currentTime = new Date().getTime();
             const isDoubleClick = (currentTime - lastClickTime < 300) && (lastClickCell === td);
@@ -372,11 +408,12 @@
                 if (e.shiftKey && startCell) {
                      selectCellsBetween(startCell, td);
                 } else if (!e.ctrlKey && !e.metaKey) {
+                    // This logic is now mostly handled by mousedown, but we keep it as a fallback.
                     selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
                     selectedCells.clear();
                     td.classList.add('cell-selected');
                     selectedCells.add(td);
-                } else {
+                } else { // Ctrl/Cmd click
                     td.classList.toggle('cell-selected');
                     if (td.classList.contains('cell-selected')) {
                         selectedCells.add(td);
@@ -390,19 +427,6 @@
             lastClickTime = currentTime;
             lastClickCell = td;
             updateSelectionSummary();
-        });
-
-        tableBody.addEventListener('mousedown', (e) => {
-            const td = e.target.closest('td');
-            if (td && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                isMouseDown = true;
-                startCell = td;
-                selectedCells.forEach(cell => cell.classList.remove('cell-selected'));
-                selectedCells.clear();
-                td.classList.add('cell-selected');
-                selectedCells.add(td);
-                e.preventDefault(); // Prevent text selection
-            }
         });
 
         tableBody.addEventListener('mouseover', (e) => {
@@ -461,13 +485,8 @@
     }
 
     function handleEditCell(td, tableBodyId) {
-        if (!td.classList.contains('editable') || td.classList.contains('editing')) return;
-        
-        const select = td.querySelector('select');
-        if (select) {
-            select.focus();
-            return;
-        }
+        // This function is now mainly for non-dropdown editable cells
+        if (!td.classList.contains('editable') || td.classList.contains('editing') || td.querySelector('select')) return;
         
         const dateInput = td.querySelector('input.date-input');
         if (dateInput) {
@@ -606,17 +625,18 @@
 
         let changed = false;
         if (select) {
-            if ([...select.options].some(opt => opt.value === value)) {
-                if(select.value !== value) {
-                    select.value = value;
-                    select.dispatchEvent(new Event('change', { bubbles: true })); // This will trigger the highlight and add to changedRows
-                    changed = true;
-                }
+            // Check if the pasted value is a valid option
+            const optionExists = [...select.options].some(opt => opt.value === value);
+            if (optionExists && select.value !== value) {
+                select.value = value;
+                // Manually trigger the 'change' event to ensure highlighting and data tracking
+                select.dispatchEvent(new Event('change', { bubbles: true })); 
+                changed = true;
             }
         } else if(dateInput) {
             if(dateInput.value !== value) {
                 dateInput.value = value;
-                dateInput.dispatchEvent(new Event('input', { bubbles: true })); // This will trigger the highlight and add to changedRows
+                dateInput.dispatchEvent(new Event('input', { bubbles: true }));
                 changed = true;
             }
         } else {
@@ -711,7 +731,6 @@
         populateExternalFilters(config); 
         renderHeader(config); 
         applyAllFilters(config); 
-        // ATTACH CELL SELECTION AND EDITING HANDLERS
         setupCellSelection(config.table.body); 
     }
     
@@ -875,6 +894,7 @@
           if (editableCols.includes(dataKey)) {
             td.classList.add('editable');
             if (dropdownCols[dataKey]) {
+              td.classList.add('has-dropdown'); // Add class for styling/identification
               const select = document.createElement('select');
               dropdownCols[dataKey].forEach(opt => select.add(new Option(opt, opt)));
               select.value = value;
@@ -922,11 +942,11 @@
         // Add global keydown listener for copy/paste/delete
         document.addEventListener('keydown', (e) => {
             const activeEl = document.activeElement;
-            // Do not interfere if user is typing in an input/select
+            // Do not interfere if user is typing in an input/select that is NOT in a cell
             if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) && !activeEl.closest('td')) {
                 return;
             }
-             // Do not interfere if a cell is in editing mode
+             // Do not interfere if a cell is in inline editing mode (for text inputs)
             if (document.querySelector('td.editing')) {
                 return;
             }
@@ -987,20 +1007,15 @@
             applyReportFilters();
         });
         
-        // FIXED: Dropdown toggle logic
         staffBtn.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent window click listener from firing immediately
+            e.stopPropagation(); 
             staffDropdown.classList.toggle('show');
         });
-        // Close dropdown when clicking inside it on a label (to check a box)
         staffDropdown.addEventListener('click', (e) => {
-             if (e.target.tagName === 'LABEL' || e.target.tagName === 'INPUT') {
-                // Let the checkbox logic handle itself
-             } else {
+             if (e.target.tagName !== 'LABEL' && e.target.tagName !== 'INPUT') {
                  e.stopPropagation();
              }
         });
-        // Close dropdown when clicking outside
         window.addEventListener('click', (e) => {
             if (!staffBtn.contains(e.target) && staffDropdown.classList.contains('show')) {
                 staffDropdown.classList.remove('show');
@@ -1059,7 +1074,7 @@
                 const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; 
                 const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; 
                 const cell = tr.cells[colIndex]; 
-                let valueFromDOM = getDOMCellValue(cell); // Use helper to get value
+                let valueFromDOM = getDOMCellValue(cell);
                 updatedRowData[dataKey] = valueFromDOM; 
             });
             allDateColumns.forEach(dataKey => { 
@@ -1075,7 +1090,6 @@
         });
         if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } 
         
-        // FIXED: Better feedback for 'no-cors' fetch
         fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) })
         .then(() => { 
             statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; 
@@ -1110,7 +1124,7 @@
         marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>';
         allMarkets.forEach(opt => marketFilter.add(new Option(opt, opt)));
 
-        staffDropdown.innerHTML = ''; // Clear previous options
+        staffDropdown.innerHTML = ''; 
         
         const allLabel = document.createElement('label');
         allLabel.innerHTML = `<input type="checkbox" id="reportStaffSelectAll"> <b>Chọn tất cả</b>`;
