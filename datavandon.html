@@ -177,6 +177,7 @@
     td.editing input {
       width: 100%; height: 100%; border: 2px solid #27ae60;
       padding: 4px; box-sizing: border-box;
+      font-family: inherit; font-size: inherit; font-weight: inherit;
     }
 
     /* NEW STYLES FOR MULTI-SELECT DROPDOWN */
@@ -486,6 +487,7 @@
         
         const originalValue = td.textContent;
         const input = document.createElement('input');
+        input.type = 'text';
         input.value = originalValue;
         td.textContent = '';
         td.appendChild(input);
@@ -566,8 +568,9 @@
         if (dataGrid.length === 1 && dataGrid[0].length === 1) {
             const value = dataGrid[0][0];
             sortedCells.forEach(cell => {
-                updateCellValue(cell, value);
-                pasteCount++;
+                if (updateCellValue(cell, value)) {
+                   pasteCount++;
+                }
             });
         } else {
             dataGrid.forEach((row, r) => {
@@ -576,8 +579,9 @@
                     if (targetRow) {
                         const targetCell = targetRow.cells[startColIndex + c];
                         if (targetCell) {
-                           updateCellValue(targetCell, value);
-                           pasteCount++;
+                           if (updateCellValue(targetCell, value)) {
+                               pasteCount++;
+                           }
                         }
                     }
                 });
@@ -588,28 +592,39 @@
     }
 
     function updateCellValue(cell, value) {
-        if (!cell || !cell.classList.contains('editable')) return;
+        if (!cell || !cell.classList.contains('editable')) return false;
         
         const select = cell.querySelector('select');
         const dateInput = cell.querySelector('input.date-input');
         const rowIndex = cell.closest('tr').dataset.rowIndex;
         const config = cell.closest('tbody').id === 'tableBody' ? mainTabConfig : japanTabConfig;
 
+        let changed = false;
         if (select) {
             if ([...select.options].some(opt => opt.value === value)) {
-                select.value = value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
+                if(select.value !== value) {
+                    select.value = value;
+                    select.dispatchEvent(new Event('change', { bubbles: true })); // This will trigger the highlight and add to changedRows
+                    changed = true;
+                }
             }
         } else if(dateInput) {
-            dateInput.value = value;
-            dateInput.dispatchEvent(new Event('input', { bubbles: true }));
+            if(dateInput.value !== value) {
+                dateInput.value = value;
+                dateInput.dispatchEvent(new Event('input', { bubbles: true })); // This will trigger the highlight and add to changedRows
+                changed = true;
+            }
         } else {
-            cell.textContent = value;
-            cell.classList.add('highlight');
-            if (rowIndex) {
-                config.changedRows.add(parseInt(rowIndex));
+            if(cell.textContent !== value) {
+                cell.textContent = value;
+                cell.classList.add('highlight');
+                if (rowIndex) {
+                    config.changedRows.add(parseInt(rowIndex));
+                }
+                changed = true;
             }
         }
+        return changed;
     }
 
     function showTempMessage(message) {
@@ -691,6 +706,7 @@
         populateExternalFilters(config); 
         renderHeader(config); 
         applyAllFilters(config); 
+        // ATTACH CELL SELECTION AND EDITING HANDLERS
         setupCellSelection(config.table.body); 
     }
     
@@ -1000,7 +1016,7 @@
                 const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; 
                 const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; 
                 const cell = tr.cells[colIndex]; 
-                let valueFromDOM = cell.querySelector('select, input')?.value ?? cell.textContent.trim(); 
+                let valueFromDOM = getDOMCellValue(cell); // Use helper to get value
                 updatedRowData[dataKey] = valueFromDOM; 
             });
             allDateColumns.forEach(dataKey => { 
@@ -1016,7 +1032,7 @@
         });
         if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } 
         fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) })
-        .then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Cập nhật thành công ${rowsToSend.length} dòng. Vui lòng nhấn "Load dữ liệu" để xem thay đổi.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 2000); })
+        .then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Cập nhật thành công ${rowsToSend.length} dòng. Vui lòng nhấn "Load" để xem thay đổi.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 2000); })
         .catch(e => { statusEl.textContent = 'Lỗi mạng: ' + e.message; statusEl.classList.add('error-status'); setTimeout(() => { if(statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); }); 
     }
     
