@@ -1126,8 +1126,8 @@
                 this.charts.dsChotSaleChart=c('dsChotSaleChart',this.getLineChartConfig('DS Chốt (Sale)'));
                 this.charts.rateSaleChart=c('rateSaleChart',this.getLineChartConfig('Tỉ lệ chốt (Sale)',v=>formatUtils.formatPercent(v/100)));
                 // Shared Charts
-                this.charts.productSalesChart=c('productSalesChart',this.getPieChartConfig('DS theo Sản phẩm (Tổng)'));
-                this.charts.marketSalesChart=c('marketSalesChart',this.getPieChartConfig('DS theo Thị trường (Tổng)'));
+                this.charts.productSalesChart=c('productSalesChart',this.getBarChartConfig());
+                this.charts.marketSalesChart=c('marketSalesChart',this.getBarChartConfig());
                 this.toggleChartVisibility();
             },
             renderAllDailyCharts: function(mktData, saleData){
@@ -1156,52 +1156,21 @@
                 this.updateChart(this.charts.dsChotSaleChart,'DS Chốt (Sale)',l,l.map(d=>D[d].chotSale),chartColorPalette.getColorPair(8));
                 this.updateChart(this.charts.rateSaleChart,'Tỉ lệ chốt (Sale)',l,l.map(d=>(D[d].messSale?D[d].donSale/D[d].messSale:0)*100),chartColorPalette.getColorPair(9));
                 
-                // SHARED PIE CHARTS (FIXED LOGIC)
+                // SHARED (FIXED)
                 const pS = {}, mS = {};
                 [...mktData, ...saleData].forEach(r => {
                     const dsChotValue = r.dsChot || 0;
                     if (r.sanPham) pS[r.sanPham] = (pS[r.sanPham] || 0) + dsChotValue;
                     if (r.thiTruong) mS[r.thiTruong] = (mS[r.thiTruong] || 0) + dsChotValue;
                 });
-
-                const topProducts = Object.entries(pS).sort(([, a], [, b]) => b - a).slice(0, 10);
-                const topMarkets = Object.entries(mS).sort(([, a], [, b]) => b - a).slice(0, 10);
-
-                const productChart = this.charts.productSalesChart;
-                productChart.data.labels = topProducts.map(p => p);
-                productChart.data.datasets.data = topProducts.map(p => p);
-                productChart.data.datasets.backgroundColor = chartColorPalette.border;
-                productChart.update();
-
-                const marketChart = this.charts.marketSalesChart;
-                marketChart.data.labels = topMarkets.map(m => m);
-                marketChart.data.datasets.data = topMarkets.map(m => m);
-                marketChart.data.datasets.backgroundColor = chartColorPalette.border.slice().reverse(); // Use different colors
-                marketChart.update();
+                const sP = Object.entries(pS).sort(([, valA], [, valB]) => valB - valA);
+                const sM = Object.entries(mS).sort(([, valA], [, valB]) => valB - valA);
+                
+                this.updateChart(this.charts.productSalesChart, 'DS theo SP (Tổng)', sP.map(p => p), sP.map(p => p), chartColorPalette.getColorPair(10), 'bar');
+                this.updateChart(this.charts.marketSalesChart, 'DS theo TT (Tổng)', sM.map(m => m), sM.map(m => m), chartColorPalette.getColorPair(11), 'bar');
             },
             getLineChartConfig: function(y,f=formatUtils.formatPriceShort){return{type:'line',options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f(c.raw)}`}},datalabels:{display: false}},scales:{y:{ticks:{callback:f}}}}};},
-            getPieChartConfig: function(title) {
-                return {
-                    type: 'doughnut',
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { position: 'top' },
-                            title: { display: true, text: title },
-                            tooltip: { callbacks: { label: function(context) { const label = context.label || ''; const value = context.parsed; return `${label}: ${formatUtils.formatCurrency(value)}`; }}},
-                            datalabels: {
-                                formatter: (value, ctx) => {
-                                    const sum = ctx.chart.data.datasets.data.reduce((a, b) => a + b, 0);
-                                    const percentage = (value * 100 / sum).toFixed(1) + '%';
-                                    return sum > 0 ? percentage : '0%';
-                                },
-                                color: '#fff', font: { weight: 'bold' }
-                            }
-                        }
-                    },
-                };
-            },
+            getBarChartConfig: function(){return{type:'bar',options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.x.toLocaleString()} VND`}},datalabels:{anchor:'end',align:'right',offset:8,color:'#333',font:{weight:'600'},formatter:formatUtils.formatPriceShort}},scales:{x:{ticks: {display: false}},y:{grid:{display:false}}}}};},
             updateChart: function(c,l,L,d,C,t='line'){c.data.labels=L;c.data.datasets=[this.createDataset(l,d,C,t)];c.update('none');},
             createDataset: function(l,d,c,t='line'){const i=t==='line';return{label:l,data:d,backgroundColor:i?c.f:c.b,borderColor:c.b,type:t,fill:i,tension:0.4,borderWidth:i?3:1,pointRadius:i?5:undefined,pointBackgroundColor:'#fff',pointBorderWidth:2,borderRadius:i?0:4};}
         };
