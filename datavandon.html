@@ -359,8 +359,47 @@
     function updateDetailedSummaryTable(filteredData) { const summaryTableBody = document.getElementById('summaryTableBody'); summaryTableBody.innerHTML = ''; if (filteredData.length === 0) { showError('Không có dữ liệu báo cáo khớp với bộ lọc.', 'summaryTableBody'); return; } const staffStats = {}; const grandTotal = createEmptyStats(); filteredData.forEach(row => { const staffName = row["NV Vận đơn"] || row["NV_Vận_đơn"] || "Chưa có NV"; const shippingCompany = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"] || "Không xác định"; if (!staffStats[staffName]) { staffStats[staffName] = { _total: createEmptyStats() }; } if (!staffStats[staffName][shippingCompany]) { staffStats[staffName][shippingCompany] = createEmptyStats(); } const statsToUpdate = [ staffStats[staffName][shippingCompany], staffStats[staffName]._total, grandTotal ]; const amountValue = row["Tổng tiền VNĐ"] || row["Tổng_tiền_VNĐ"] || 0; const numericAmount = parseFloat(String(amountValue).replace(/[^\d.-]/g, '')) || 0; const paymentStatus = row["Trạng thái thu tiền"] || ""; const deliveryStatus = row["Trạng thái giao hàng NB"] || ""; statsToUpdate.forEach(stats => { if (paymentStatus.includes("Có bill")) { stats["Đã Thanh Toán (có bill)"].count++; stats["Đã Thanh Toán (có bill)"].amount += numericAmount; } else if (paymentStatus.includes("Có bill 1 phần")) { stats["Bill 1 phần"].count++; } if (deliveryStatus.includes("Giao Thành Công")) stats["Giao Thành Công"].count++; else if (deliveryStatus.includes("Đang Giao")) stats["Đang Giao"].count++; else if (deliveryStatus.includes("Chưa Giao")) stats["Chưa Giao"].count++; else if (deliveryStatus.includes("Hoàn")) stats["Hoàn"].count++; else if (deliveryStatus.includes("chờ check")) stats["chờ check"].count++; else if (deliveryStatus === "") stats["Trống trạng thái"].count++; stats["Tổng đơn lên nội bộ"].count++; if (paymentStatus.includes("Có bill") || paymentStatus.includes("Có bill 1 phần")) { stats["Tổng đơn đủ đkien đẩy vh"].count++; } if (deliveryStatus && !deliveryStatus.includes("Chưa Giao") && !deliveryStatus.includes("chờ check")) { stats["Tổng đơn lên vận hành"].count++; } }); }); Object.keys(staffStats).sort().forEach(staffName => { const staffData = staffStats[staffName]; const headerRow = summaryTableBody.insertRow(); headerRow.className = 'summary-staff-header'; const headerCell = headerRow.insertCell(); headerCell.colSpan = 17; headerCell.textContent = `Nhân viên: ${staffName}`; Object.keys(staffData).filter(key => key !== '_total').sort().forEach(companyName => { const companyData = staffData[companyName]; const tr = renderSummaryRow(staffName, companyName, companyData); summaryTableBody.appendChild(tr); }); const totalRow = renderSummaryRow("Tổng cộng", "Tất cả DVVC", staffData._total); totalRow.className = 'summary-staff-total'; summaryTableBody.appendChild(totalRow); }); const grandTotalRow = renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal); grandTotalRow.className = 'summary-grand-total'; summaryTableBody.appendChild(grandTotalRow); }
     function renderSummaryRow(staffName, companyName, data) { const tr = document.createElement('tr'); tr.insertCell().textContent = staffName; tr.insertCell().textContent = companyName; tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count; const paidAmountCell = tr.insertCell(); paidAmountCell.textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫'; tr.insertCell().textContent = data["Bill 1 phần"].count; tr.insertCell().textContent = data["Tổng đơn lên nội bộ"].count; tr.insertCell().textContent = data["Tổng đơn đủ đkien đẩy vh"].count; tr.insertCell().textContent = data["Tổng đơn lên vận hành"].count; const shippingRate = data["Tổng đơn lên nội bộ"].count > 0 ? (data["Tổng đơn lên vận hành"].count / data["Tổng đơn lên nội bộ"].count * 100) : 0; const shippingRateCell = tr.insertCell(); shippingRateCell.textContent = shippingRate.toFixed(2) + '%'; shippingRateCell.className = shippingRate > 70 ? 'positive' : 'negative'; tr.insertCell().textContent = data["Giao Thành Công"].count; tr.insertCell().textContent = data["Đang Giao"].count; tr.insertCell().textContent = data["Chưa Giao"].count; tr.insertCell().textContent = data["Hoàn"].count; tr.insertCell().textContent = data["chờ check"].count; tr.insertCell().textContent = data["Trống trạng thái"].count; const paymentSuccessRate = data["Giao Thành Công"].count > 0 ? (data["Đã Thanh Toán (có bill)"].count / data["Giao Thành Công"].count * 100) : 0; const paymentRateCell = tr.insertCell(); paymentRateCell.textContent = paymentSuccessRate.toFixed(2) + '%'; paymentRateCell.className = paymentSuccessRate > 80 ? 'positive' : 'negative'; const feeRate = data["Tổng đơn lên vận hành"].count > 0 ? (data["Giao Thành Công"].count / data["Tổng đơn lên vận hành"].count * 100) : 0; const feeRateCell = tr.insertCell(); feeRateCell.textContent = feeRate.toFixed(2) + '%'; feeRateCell.className = feeRate > 80 ? 'positive' : 'negative'; return tr; }
     
-    function getDOMCellValue(cell) { if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); if (input) return input.value; return cell.textContent.trim(); }
-    function updateSelectionSummary() { const summaryEl = document.getElementById('selectionSummary'); if (!summaryEl || !document.getElementById('contentData').classList.contains('active')) { if(summaryEl) summaryEl.innerHTML = ''; return; } if (selectedCells.size <= 1) { summaryEl.innerHTML = ''; return; } let totalSum = 0; let numericCount = 0; let nonBlankCount = 0; selectedCells.forEach(cell => { const value = getDOMCellValue(cell); if (value !== '') { nonBlankCount++; } const numericValue = parseFloat(String(value).replace(/[^0-9.-]/g, '')); if (!isNaN(numericValue)) { totalSum += numericValue; numericCount++; } }); let summaryParts = []; summaryParts.push(`Count: <b>${nonBlankCount}</b>`); if (numericCount > 0) { summaryParts.push(`Sum: <b>${totalSum.toLocaleString('vi-VN')}</b>`); } summaryEl.innerHTML = summaryParts.join(' | '); }
+    // *** NEW/MODIFIED FUNCTIONS FOR SELECTION AND EDITING ***
+
+    function getDOMCellValue(cell) { 
+        if (!cell) return ''; 
+        const select = cell.querySelector('select'); 
+        if (select) return select.value; 
+        const input = cell.querySelector('input'); 
+        if (input) return input.value; 
+        return cell.textContent.trim(); 
+    }
+
+    function updateSelectionSummary() { 
+        const summaryEl = document.getElementById('selectionSummary'); 
+        if (!summaryEl || !document.getElementById('contentData').classList.contains('active')) { 
+            if(summaryEl) summaryEl.innerHTML = ''; return; 
+        } 
+        if (selectedCells.size <= 1) { 
+            summaryEl.innerHTML = ''; 
+            return; 
+        } 
+        let totalSum = 0; 
+        let numericCount = 0; 
+        let nonBlankCount = 0; 
+        selectedCells.forEach(cell => { 
+            const value = getDOMCellValue(cell); 
+            if (value !== '') { 
+                nonBlankCount++; 
+            } 
+            const numericValue = parseFloat(String(value).replace(/[^0-9.-]/g, '')); 
+            if (!isNaN(numericValue)) { 
+                totalSum += numericValue; 
+                numericCount++; 
+            } 
+        }); 
+        let summaryParts = []; 
+        summaryParts.push(`Count: <b>${nonBlankCount}</b>`); 
+        if (numericCount > 0) { 
+            summaryParts.push(`Sum: <b>${totalSum.toLocaleString('vi-VN')}</b>`); 
+        } 
+        summaryEl.innerHTML = summaryParts.join(' | '); 
+    }
 
     function setupCellSelection(tableBodyId) {
         const tableBody = document.getElementById(tableBodyId);
@@ -373,10 +412,8 @@
             const td = e.target.closest('td');
             if (!td) return;
             
-            // UPDATED: Handle dropdown click directly
             if (e.target.tagName === 'SELECT') {
-                 // Let the select element handle the click
-                 return;
+                 return; // Let the select element handle the click
             }
 
             if (!e.ctrlKey && !e.metaKey && !e.shiftKey) {
@@ -394,7 +431,6 @@
             const td = e.target.closest('td');
             if (!td) return;
 
-            // If the target is a select, don't do selection logic, just let it open.
             if (e.target.tagName === 'SELECT') {
                 return;
             }
@@ -485,7 +521,6 @@
     }
 
     function handleEditCell(td, tableBodyId) {
-        // This function is now mainly for non-dropdown editable cells
         if (!td.classList.contains('editable') || td.classList.contains('editing') || td.querySelector('select')) return;
         
         const dateInput = td.querySelector('input.date-input');
@@ -516,22 +551,14 @@
                     config.changedRows.add(parseInt(rowIndex));
                 }
             }
-            
             input.removeEventListener('blur', onBlur);
             input.removeEventListener('keydown', onKeyDown);
         };
-
         const onBlur = () => finishEdit(true);
         const onKeyDown = (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                finishEdit(true);
-            } else if (e.key === 'Escape') {
-                e.preventDefault();
-                finishEdit(false);
-            }
+            if (e.key === 'Enter') { e.preventDefault(); finishEdit(true); } 
+            else if (e.key === 'Escape') { e.preventDefault(); finishEdit(false); }
         };
-        
         input.addEventListener('blur', onBlur);
         input.addEventListener('keydown', onKeyDown);
     }
@@ -574,14 +601,14 @@
         const startColIndex = firstCell.cellIndex;
         
         let pasteCount = 0;
-        if (dataGrid.length === 1 && dataGrid[0].length === 1) {
+        if (dataGrid.length === 1 && dataGrid[0].length === 1) { // Paste single value to all selected cells
             const value = dataGrid[0][0];
             sortedCells.forEach(cell => {
                 if (updateCellValue(cell, value)) {
                    pasteCount++;
                 }
             });
-        } else {
+        } else { // Paste grid
             dataGrid.forEach((row, r) => {
                 row.forEach((value, c) => {
                     const targetRow = table.rows[startRowIndex + r];
@@ -600,7 +627,6 @@
         updateSelectionSummary();
     }
     
-    // NEW: Function to clear selected cells
     function clearSelectedCells() {
         if (selectedCells.size === 0) return;
         let clearCount = 0;
@@ -614,7 +640,6 @@
         }
     }
 
-
     function updateCellValue(cell, value) {
         if (!cell || !cell.classList.contains('editable')) return false;
         
@@ -625,11 +650,9 @@
 
         let changed = false;
         if (select) {
-            // Check if the pasted value is a valid option
             const optionExists = [...select.options].some(opt => opt.value === value);
             if (optionExists && select.value !== value) {
                 select.value = value;
-                // Manually trigger the 'change' event to ensure highlighting and data tracking
                 select.dispatchEvent(new Event('change', { bubbles: true })); 
                 changed = true;
             }
@@ -673,6 +696,8 @@
         }, 2000);
     }
     
+    // *** END OF NEW/MODIFIED FUNCTIONS ***
+
     async function handleData(response) { 
         document.getElementById(mainTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load'; 
         document.getElementById(japanTabConfig.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load'; 
@@ -731,7 +756,7 @@
         populateExternalFilters(config); 
         renderHeader(config); 
         applyAllFilters(config); 
-        setupCellSelection(config.table.body); 
+        setupCellSelection(config.table.body); // <-- SETUP SELECTION FOR EACH TAB
     }
     
     function generateDynamicOptions(config, data) { 
@@ -894,7 +919,7 @@
           if (editableCols.includes(dataKey)) {
             td.classList.add('editable');
             if (dropdownCols[dataKey]) {
-              td.classList.add('has-dropdown'); // Add class for styling/identification
+              td.classList.add('has-dropdown');
               const select = document.createElement('select');
               dropdownCols[dataKey].forEach(opt => select.add(new Option(opt, opt)));
               select.value = value;
@@ -939,14 +964,11 @@
         setupTabControls(japanTabConfig);
         setupReportControls();
         
-        // Add global keydown listener for copy/paste/delete
         document.addEventListener('keydown', (e) => {
             const activeEl = document.activeElement;
-            // Do not interfere if user is typing in an input/select that is NOT in a cell
             if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) && !activeEl.closest('td')) {
                 return;
             }
-             // Do not interfere if a cell is in inline editing mode (for text inputs)
             if (document.querySelector('td.editing')) {
                 return;
             }
