@@ -366,7 +366,6 @@
     // --- CÁC HÀM UTILITY ---
     function formatDate(dateString) { if (!dateString) return ''; try { const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z'); if (isNaN(date.getTime())) return dateString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); return `${day}/${month}/${year}`; } catch (e) { return dateString; } }
     
-    // *** NEW FUNCTION to format DATETIME ***
     function formatDateTime(dateString) {
         if (!dateString) return '';
         try {
@@ -510,7 +509,6 @@
                 const dataKey = columnMapping[col] || col;
                 let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '';
                 
-                // *** UPDATED LOGIC to use formatDateTime for the specific column ***
                 if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
                     value = formatDate(value);
                 } else if (col === "Ngày Kế toán đối soát với FFM lần 2") {
@@ -536,18 +534,34 @@
                         });
                         select.value = value;
                         select.addEventListener('change', () => { 
-                            td.classList.add('highlight'); changedRows.add(tr.dataset.orderId); 
+                            td.classList.add('highlight'); 
+                            changedRows.add(tr.dataset.orderId); 
                         });
                         td.innerHTML = ''; td.appendChild(select);
                     } else if (col === "Ngày đóng hàng") {
                         const input = document.createElement('input'); 
                         input.type = 'text'; input.className = 'date-input'; input.value = value; input.placeholder = 'dd/mm/yyyy';
-                        input.addEventListener('input', () => { td.classList.add('highlight'); changedRows.add(tr.dataset.orderId); });
+                        input.addEventListener('input', () => { 
+                            td.classList.add('highlight'); 
+                            changedRows.add(tr.dataset.orderId); 
+                        });
                         input.addEventListener('blur', () => { if (!/^\d{2}\/\d{2}\/\d{4}$/.test(input.value) && input.value !== '') { showCustomAlert('Vui lòng nhập ngày theo định dạng dd/mm/yyyy.', 'error'); input.focus(); } });
                         td.innerHTML = ''; td.appendChild(input);
                     } else { 
-                        td.contentEditable = 'true'; td.textContent = value; 
-                        td.addEventListener('input', () => { td.classList.add('highlight'); changedRows.add(tr.dataset.orderId); });
+                        td.contentEditable = 'true'; 
+                        td.textContent = value;
+                        
+                        // --- START: SỬA LỖI MẤT KÝ TỰ KHI GÕ ---
+                        td.addEventListener('input', () => {
+                            changedRows.add(tr.dataset.orderId);
+                        });
+
+                        td.addEventListener('blur', () => {
+                            if (changedRows.has(tr.dataset.orderId)) {
+                                td.classList.add('highlight');
+                            }
+                        });
+                        // --- END: SỬA LỖI ---
                     }
                 } else {
                     td.textContent = value;
@@ -661,8 +675,67 @@
         document.addEventListener('mouseup', () => { if (isSelecting) { isSelecting = false; updateSelectionSummary(); } });
         tableBody.addEventListener('dblclick', e => { const cell = e.target.closest('td.editable'); if (!cell) return; const input = cell.querySelector('input, select'); if (input) { input.focus(); } else if (cell.isContentEditable) { cell.focus(); document.execCommand('selectAll', false, null); document.getSelection().collapseToEnd(); } });
         document.addEventListener('copy', e => { const selectedCells = document.querySelectorAll('td.cell-selected'); if (selectedCells.length === 0) return; e.preventDefault(); const rows = new Map(); selectedCells.forEach(cell => { const rowIndex = cell.parentElement.rowIndex; if (!rows.has(rowIndex)) rows.set(rowIndex, []); rows.get(rowIndex).push({ colIndex: cell.cellIndex, text: getCellValue(cell) }); }); const sortedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]); const copyText = sortedRows.map(([, cells]) => cells.sort((a, b) => a.colIndex - b[0]).map(cell => cell.text).join('\t')).join('\n'); e.clipboardData.setData('text/plain', copyText); showCustomAlert(`Đã sao chép ${selectedCells.length} ô.`, 'info', 2000); });
-        document.addEventListener('paste', e => { const activeEl = document.activeElement; if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName)) { return; } const selectedCells = document.querySelectorAll('td.cell-selected'); if (!pasteAnchorCell && selectedCells.length === 0) return; e.preventDefault(); const pasteData = e.clipboardData.getData('text/plain'); if (!pasteData) return; const pastedRows = pasteData.split(/[\r\n]+/).map(row => row.split('\t')).filter(row => row.length > 0 && !(row.length === 1 && row[0] === '')); if (pastedRows.length === 0) return; if (pastedRows.length === 1 && pastedRows[0].length === 1) { const singleValue = pastedRows[0][0]; const editableSelected = document.querySelectorAll('td.cell-selected.editable'); if (editableSelected.length > 0) { editableSelected.forEach(cell => setCellValue(cell, singleValue)); showCustomAlert(`Đã dán giá trị vào ${editableSelected.length} ô.`, 'success', 2000); updateSelectionSummary(); return; } } if (!pasteAnchorCell) return; const tableRows = Array.from(document.getElementById('tableBody').rows); let startRowIndex = tableRows.findIndex(row => row.rowIndex === pasteAnchorCell.parentElement.rowIndex); let startColIndex = pasteAnchorCell.cellIndex; if (startRowIndex < 0 || startColIndex < 0) return; pastedRows.forEach((rowData, i) => { const targetRow = tableRows[startRowIndex + i]; if (!targetRow) return; rowData.forEach((cellData, j) => { const targetCell = targetRow.cells[startColIndex + j]; if (targetCell && targetCell.classList.contains('editable')) { setCellValue(targetCell, cellData); } }); }); showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000); updateSelectionSummary(); });
-        document.addEventListener('keydown', e => { if (e.key === 'Delete' || e.key === 'Backspace') { if (document.activeElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) { return; } const editableSelected = document.querySelectorAll('td.cell-selected.editable'); if (editableSelected.length > 0) { e.preventDefault(); editableSelected.forEach(cell => { setCellValue(cell, ''); }); showCustomAlert(`Đã xóa nội dung ${editableSelected.length} ô.`, 'success', 2000); updateSelectionSummary(); } } });
+        
+        document.addEventListener('paste', e => {
+            const activeEl = document.activeElement;
+            if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) {
+                return;
+            }
+            const selectedCells = document.querySelectorAll('td.cell-selected');
+            if (!pasteAnchorCell && selectedCells.length === 0) return;
+            e.preventDefault();
+            const pasteData = e.clipboardData.getData('text/plain');
+            if (!pasteData) return;
+            const pastedRows = pasteData.split(/[\r\n]+/).map(row => row.split('\t')).filter(row => row.length > 0 && !(row.length === 1 && row[0] === ''));
+            if (pastedRows.length === 0) return;
+            if (pastedRows.length === 1 && pastedRows[0].length === 1) {
+                const singleValue = pastedRows[0][0];
+                const editableSelected = document.querySelectorAll('td.cell-selected.editable');
+                if (editableSelected.length > 0) {
+                    editableSelected.forEach(cell => setCellValue(cell, singleValue));
+                    showCustomAlert(`Đã dán giá trị vào ${editableSelected.length} ô.`, 'success', 2000);
+                    updateSelectionSummary();
+                    return;
+                }
+            }
+            if (!pasteAnchorCell) return;
+            const tableRows = Array.from(document.getElementById('tableBody').rows);
+            let startRowIndex = tableRows.findIndex(row => row.rowIndex === pasteAnchorCell.parentElement.rowIndex);
+            let startColIndex = pasteAnchorCell.cellIndex;
+            if (startRowIndex < 0 || startColIndex < 0) return;
+            pastedRows.forEach((rowData, i) => {
+                const targetRow = tableRows[startRowIndex + i];
+                if (!targetRow) return;
+                rowData.forEach((cellData, j) => {
+                    const targetCell = targetRow.cells[startColIndex + j];
+                    if (targetCell && targetCell.classList.contains('editable')) {
+                        setCellValue(targetCell, cellData);
+                    }
+                });
+            });
+            showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000);
+            updateSelectionSummary();
+        });
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                const activeEl = document.activeElement;
+                if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) {
+                    return;
+                }
+                const editableSelected = document.querySelectorAll('td.cell-selected.editable');
+                if (editableSelected.length > 0) {
+                    e.preventDefault();
+                    editableSelected.forEach(cell => {
+                        setCellValue(cell, '');
+                    });
+                    if (editableSelected.length > 1) {
+                        showCustomAlert(`Đã xóa nội dung của ${editableSelected.length} ô.`, 'success', 2000);
+                    }
+                    updateSelectionSummary();
+                }
+            }
+        });
     }
 
     // --- HÀM TẢI FILE EXCEL (CSV) ---
@@ -674,7 +747,6 @@
             return displayColumns.map(col => { 
                 const dataKey = columnMapping[col] || col; 
                 let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? ''; 
-                // *** UPDATED LOGIC for export ***
                 if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
                     value = formatDate(value);
                 } else if (col === "Ngày Kế toán đối soát với FFM lần 2") {
