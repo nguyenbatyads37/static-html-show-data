@@ -720,7 +720,7 @@
             isInitialized: false, rawData: [], groupChildren: { 'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US', 'Canada'] },
             init: function() { this.addEventListeners(); this.setDefaultDates(); this.fetchData(); this.isInitialized = true; },
             addEventListeners: function() { document.getElementById('CostReport').addEventListener('change', e => e.target.matches('input')&&this.handleFilters(e.target)); },
-            setDefaultDates: function() { const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),1),e=new Date(t.getFullYear(),t.getMonth()+1,0),f=d=>d.toISOString().split('T'); document.getElementById('start-date-tab1').value=f(s);document.getElementById('end-date-tab1').value=f(e);},
+            setDefaultDates: function() { const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),1),e=new Date(t.getFullYear(),t.getMonth()+1,0),f=d=>d.toISOString().split('T')[0]; document.getElementById('start-date-tab1').value=f(s);document.getElementById('end-date-tab1').value=f(e);},
             fetchData: function() {
                 showLoader();
                 fetch('https://script.google.com/macros/s/AKfycbwGwSBxeXplEzAM-jJDPaXPkiWjNyKmpR70o6nCY5_ynqoF-3WA1gvF91RIQQfDZ9fvAQ/exec')
@@ -746,8 +746,53 @@
             isInitialized: false, rawData: [],
             init: function() { this.addEventListeners(); this.setDefaultDates(); this.fetchAndProcessData(); this.isInitialized = true; },
             addEventListeners: function() { document.getElementById('SaleReport').addEventListener('change', e => e.target.matches('input')&&this.handleFilters(e.target)); document.getElementById('SaleReport').addEventListener('click', e => { const r=e.target.closest('tbody tr');if(!r||r.classList.contains('total-row'))return;const s=r.classList.contains('row-selected');document.querySelectorAll('#SaleReport tbody tr.row-selected').forEach(R=>R.classList.remove('row-selected'));if(!s)r.classList.add('row-selected');});},
-            setDefaultDates: function() { const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),1),e=new Date(t.getFullYear(),t.getMonth()+1,0),f=d=>d.toISOString().split('T');document.getElementById('start-date-sale').value=f(s);document.getElementById('end-date-sale').value=f(e);},
-            fetchAndProcessData: function() { showLoader(); fetch('https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec').then(res=>res.json()).then(rS=>{this.rawData=rS.filter(r=>r.trangThai&&String(r.trangThai).trim()!==''&&r.ten&&String(r.ten).trim()!==''&&r.team&&String(r.team).trim()!=='').map(r=>({...r,ten:(r.ten||'').trim(),team:(r.team||'').trim(),soMessCmt:+r.soMess||0,soDon:+r.donMess||0,dsChot:+r.doanhSoMess||0,phanHoi:+r.phanHoi||0}));this.populateAllFilters(this.rawData);this.applyFilters();}).catch(err=>{console.error("Lỗi Sale Data:",err);alert('Không thể tải dữ liệu Sale.');}).finally(hideLoader);},
+            setDefaultDates: function() { const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),1),e=new Date(t.getFullYear(),t.getMonth()+1,0),f=d=>d.toISOString().split('T')[0];document.getElementById('start-date-sale').value=f(s);document.getElementById('end-date-sale').value=f(e);},
+            fetchAndProcessData: function() {
+                showLoader();
+                const url = 'https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec';
+
+                window.handleSaleData = (rS) => {
+                    try {
+                        this.rawData = rS.filter(r =>
+                            r.trangThai && String(r.trangThai).trim() !== '' &&
+                            r.ten && String(r.ten).trim() !== '' &&
+                            r.team && String(r.team).trim() !== ''
+                        ).map(r => ({
+                            ...r,
+                            ten: (r.ten || '').trim(),
+                            team: (r.team || '').trim(),
+                            soMessCmt: +r.soMess || 0,
+                            soDon: +r.donMess || 0,
+                            dsChot: +r.doanhSoMess || 0,
+                            phanHoi: +r.phanHoi || 0
+                        }));
+                        this.populateAllFilters(this.rawData);
+                        this.applyFilters();
+                    } catch (err) {
+                        console.error("Lỗi xử lý dữ liệu Sale:", err);
+                        alert('Lỗi xử lý dữ liệu Sale.');
+                    } finally {
+                        hideLoader();
+                        delete window.handleSaleData;
+                    }
+                };
+
+                const script = document.createElement('script');
+                script.src = `${url}?callback=handleSaleData&rand=${Math.random()}`;
+                script.onerror = () => {
+                    console.error("Lỗi tải script Sale Data:", url);
+                    alert('Không thể tải dữ liệu Sale. Vui lòng kiểm tra kết nối mạng và thử lại.');
+                    hideLoader();
+                    delete window.handleSaleData;
+                    const saleBody = document.getElementById('summary-body-sale');
+                    if (saleBody) saleBody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:red;">Tải dữ liệu thất bại. Vui lòng kiểm tra lại.</td></tr>`;
+                };
+                script.onload = () => {
+                    // It's good practice to remove the script tag after it has loaded and executed.
+                    document.body.removeChild(script);
+                };
+                document.body.appendChild(script);
+            },
             populateAllFilters: function(d){const p=(k,c,n)=>{const C=document.getElementById(c),u=[...new Set(d.map(r=>r[k]).filter(v=>v!=null&&v!==''))].sort();C.innerHTML=u.map(v=>`<label><input type='checkbox' class='${n}' value='${v}' checked> ${v}</label>`).join('');};p('sanPham','product-options-sale','filter-product-sale');p('thiTruong','market-options-sale','filter-market-sale');p('ca','ca-options-sale','filter-ca-sale');p('team','team-options-sale','filter-team-sale');},
             getFilteredData: function(){const sV=document.getElementById('start-date-sale').value,eV=document.getElementById('end-date-sale').value,s=sV?new Date(sV+'T00:00:00'):null,e=eV?new Date(eV+'T23:59:59'):null;const g=(m,c)=>document.getElementById(m).checked?null:[...document.querySelectorAll(`.${c}:checked`)].map(b=>b.value);const sP=g('product-all-sale','filter-product-sale'),sM=g('market-all-sale','filter-market-sale'),sC=g('ca-all-sale','filter-ca-sale'),sT=g('team-all-sale','filter-team-sale');return this.rawData.filter(r=>{const d=new Date(r.ngay);return((!s||d>=s)&&(!e||d<=e))&&(!sP||sP.includes(r.sanPham))&&(!sM||sM.includes(r.thiTruong))&&(!sC||sC.includes(String(r.ca)))&&(!sT||sT.includes(String(r.team)));});},
             handleFilters: function(t){showLoader();setTimeout(()=>{handleCheckbox('product-all-sale','filter-product-sale',t);handleCheckbox('ca-all-sale','filter-ca-sale',t);handleCheckbox('team-all-sale','filter-team-sale',t);handleCheckbox('market-all-sale','filter-market-sale',t);this.applyFilters();hideLoader();},10);},
@@ -771,7 +816,7 @@
                 this.isInitialized = true;
             },
 
-            parseDateString: function(dateString) { if (!dateString || typeof dateString !== 'string') return null; const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, ''); if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) { const d = new Date(cleanedDateString); if (!isNaN(d.getTime())) return d; } const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/); if (parts) { const month = parseInt(parts, 10); const day = parseInt(parts, 10); const year = parseInt(parts, 10); if (year > 1000 && month > 0 && month <= 12 && day > 0 && day <= 31) { const d = new Date(Date.UTC(year, month - 1, day)); if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1) return d; } } return null; },
+            parseDateString: function(dateString) { if (!dateString || typeof dateString !== 'string') return null; const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, ''); if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) { const d = new Date(cleanedDateString); if (!isNaN(d.getTime())) return d; } const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/); if (parts) { const month = parseInt(parts[2], 10); const day = parseInt(parts[1], 10); const year = parseInt(parts[3], 10); if (year > 1000 && month > 0 && month <= 12 && day > 0 && day <= 31) { const d = new Date(Date.UTC(year, month - 1, day)); if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1) return d; } } return null; },
             showError: function(message, containerId = 'summaryTableBody') { const container = document.getElementById(containerId); if(container) container.innerHTML = `<tr><td colspan="17" class="no-data">${message}</td></tr>`; hideLoader(); },
 
             handleData: function(response) { 
@@ -1040,7 +1085,7 @@
             groupChildren: { 'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US', 'Canada'] },
             init: function() { this.addEventListeners(); this.setDefaultDates(); this.fetchData(); this.isInitialized = true; },
             addEventListeners: function() { document.getElementById('ChartReport').addEventListener('change', e => e.target.matches('input')&&this.handleFilters(e.target)); },
-            setDefaultDates: function() { const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),1),e=new Date(t.getFullYear(),t.getMonth()+1,0),f=d=>d.toISOString().split('T');document.getElementById('start-date-tab3').value=f(s);document.getElementById('end-date-tab3').value=f(e);},
+            setDefaultDates: function() { const t=new Date(),s=new Date(t.getFullYear(),t.getMonth(),1),e=new Date(t.getFullYear(),t.getMonth()+1,0),f=d=>d.toISOString().split('T')[0];document.getElementById('start-date-tab3').value=f(s);document.getElementById('end-date-tab3').value=f(e);},
             fetchData: function() {
                 showLoader();
                 const mktUrl = 'https://script.google.com/macros/s/AKfycbwGwSBxeXplEzAM-jJDPaXPkiWjNyKmpR70o6nCY5_ynqoF-3WA1gvF91RIQQfDZ9fvAQ/exec';
@@ -1163,16 +1208,17 @@
                     if (r.sanPham) pS[r.sanPham] = (pS[r.sanPham] || 0) + dsChotValue;
                     if (r.thiTruong) mS[r.thiTruong] = (mS[r.thiTruong] || 0) + dsChotValue;
                 });
-                const sP = Object.entries(pS).sort(([, valA], [, valB]) => valB - valA);
-                const sM = Object.entries(mS).sort(([, valA], [, valB]) => valB - valA);
+                const sP = Object.entries(pS).sort(([, valA], [, valB]) => valB - valA).slice(0, 10); // Show top 10
+                const sM = Object.entries(mS).sort(([, valA], [, valB]) => valB - valA).slice(0, 10);
                 
-                this.updateChart(this.charts.productSalesChart, 'DS theo SP (Tổng)', sP.map(p => p), sP.map(p => p), chartColorPalette.getColorPair(10), 'bar');
-                this.updateChart(this.charts.marketSalesChart, 'DS theo TT (Tổng)', sM.map(m => m), sM.map(m => m), chartColorPalette.getColorPair(11), 'bar');
+                this.updateBarChart(this.charts.productSalesChart, 'DS theo SP (Tổng)', sP.map(p => p[0]), sP.map(p => p[1]), chartColorPalette.getColorPair(10));
+                this.updateBarChart(this.charts.marketSalesChart, 'DS theo TT (Tổng)', sM.map(m => m[0]), sM.map(m => m[1]), chartColorPalette.getColorPair(11));
+
             },
             getLineChartConfig: function(y,f=formatUtils.formatPriceShort){return{type:'line',options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'top'},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${f(c.raw)}`}},datalabels:{display: false}},scales:{y:{ticks:{callback:f}}}}};},
-            getBarChartConfig: function(){return{type:'bar',options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${c.parsed.x.toLocaleString()} VND`}},datalabels:{anchor:'end',align:'right',offset:8,color:'#333',font:{weight:'600'},formatter:formatUtils.formatPriceShort}},scales:{x:{ticks: {display: false}},y:{grid:{display:false}}}}};},
-            updateChart: function(c,l,L,d,C,t='line'){c.data.labels=L;c.data.datasets=[this.createDataset(l,d,C,t)];c.update('none');},
-            createDataset: function(l,d,c,t='line'){const i=t==='line';return{label:l,data:d,backgroundColor:i?c.f:c.b,borderColor:c.b,type:t,fill:i,tension:0.4,borderWidth:i?3:1,pointRadius:i?5:undefined,pointBackgroundColor:'#fff',pointBorderWidth:2,borderRadius:i?0:4};}
+            getBarChartConfig: function(){return{type:'bar',options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>`${formatUtils.formatCurrency(c.raw)}`}},datalabels:{anchor:'end',align:'right',offset:8,color:'#333',font:{weight:'600'},formatter:formatUtils.formatPriceShort}},scales:{x:{ticks: {display: false}},y:{grid:{display:false}}}}};},
+            updateChart: function(c,l,L,d,C){c.data.labels=L;c.data.datasets=[{label:l,data:d,backgroundColor:C.f,borderColor:C.b,type:'line',fill:true,tension:0.4,borderWidth:3,pointRadius:5,pointBackgroundColor:'#fff',pointBorderWidth:2}];c.update('none');},
+            updateBarChart: function(chart, label, labels, data, color) { chart.data.labels = labels; chart.data.datasets = [{ label: label, data: data, backgroundColor: color.b, borderColor: color.b, borderWidth: 1, borderRadius: 4 }]; chart.update('none');}
         };
 
         // ===================================================================
@@ -1268,7 +1314,7 @@
 
                 const updateChartData = (chart, data) => {
                     chart.data.labels = labels;
-                    chart.data.datasets.data = data;
+                    chart.data.datasets[0].data = data;
                     chart.update();
                 };
                 
@@ -1445,7 +1491,7 @@
                 Chart.register(ChartDataLabels);
                 Object.values(this.charts).forEach(c => c.destroy && c.destroy());
                 const baseOptions = { responsive: true, maintainAspectRatio: false };
-                this.charts.doughnut = new Chart(document.getElementById('teamDoughnutChart'), { type: 'doughnut', data: { datasets: [{ backgroundColor: chartColorPalette.border }] }, options: { ...baseOptions, cutout: '70%', plugins: { legend: { position: 'bottom' }, datalabels: { color: '#fff', font: { weight: 'bold' }, formatter: (v, ctx) => { const sum = ctx.chart.data.datasets.data.reduce((a, b) => a + b, 0); return sum > 0 ? `${((v / sum) * 100).toFixed(0)}%` : '0%'; } } } } });
+                this.charts.doughnut = new Chart(document.getElementById('teamDoughnutChart'), { type: 'doughnut', data: { datasets: [{ backgroundColor: chartColorPalette.border }] }, options: { ...baseOptions, cutout: '70%', plugins: { legend: { position: 'bottom' }, datalabels: { color: '#fff', font: { weight: 'bold' }, formatter: (v, ctx) => { const sum = ctx.chart.data.datasets[0].data.reduce((a, b) => a + b, 0); return sum > 0 ? `${((v / sum) * 100).toFixed(0)}%` : '0%'; } } } } });
                 this.charts.line = new Chart(document.getElementById('staffLineChart'), { type: 'line', data: {}, options: { ...baseOptions, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } } });
                 this.charts.combo = new Chart(document.getElementById('staffComboChart'), { type: 'bar', data: {}, options: { ...baseOptions, scales: { y: { type: 'linear', position: 'left', title: { display: true, text: 'Doanh số' } }, y1: { type: 'linear', position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Tỉ lệ chốt (%)' } } } } });
                 this.charts.teamTrend = new Chart(document.getElementById('teamDailyTrendChart'), { type: 'line', data: {}, options: { ...baseOptions, plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `DS Chốt: ${formatUtils.formatCurrency(ctx.raw)}` } } }, scales: { y: { ticks: { callback: (val) => new Intl.NumberFormat('vi-VN', { notation: "compact", maximumFractionDigits: 1 }).format(val) } } } } });
@@ -1466,7 +1512,7 @@
                 if (mode === 'daily') { memberMetrics = Object.entries(data).map(([name, records]) => ({ name, metrics: this.calculateMetrics(records) })); titleEl.innerHTML = `<i class="fas fa-search-dollar" style="color: ${chartColorPalette.border[3]};"></i> Phân tích DS Chốt ngày ${formatUtils.formatDate(dateKey)}`; } 
                 else { memberMetrics = Object.entries(data.reduce((acc, r) => { (acc[r.ten] = acc[r.ten] || []).push(r); return acc; }, {})).map(([name, records]) => ({ name, metrics: this.calculateMetrics(records) })); titleEl.innerHTML = `<i class="fas fa-chart-pie" style="color: ${chartColorPalette.border[4]};"></i>Tỉ Lệ Đóng Góp Doanh Số`; }
                 memberMetrics = memberMetrics.filter(item => item.metrics.chot > 0).sort((a, b) => b.metrics.chot - a.metrics.chot);
-                const chart = this.charts.doughnut; chart.data.labels = memberMetrics.map(m => m.name); chart.data.datasets.data = memberMetrics.map(m => m.metrics.chot); chart.data.datasets.backgroundColor = chartColorPalette.border; chart.update();
+                const chart = this.charts.doughnut; chart.data.labels = memberMetrics.map(m => m.name); chart.data.datasets[0].data = memberMetrics.map(m => m.metrics.chot); chart.data.datasets[0].backgroundColor = chartColorPalette.border; chart.update();
             },
             
             renderTeamTrendChart: function(data) { 
@@ -1480,8 +1526,8 @@
             
             renderSummaryTable: function(data, isFullTeamView, allStaffInTeam = [], sortKey = 'chot', sortDir = 'desc') {
                 const table = document.getElementById('staff-summary-table');
-                const createRowHtml = (metrics, label, staffName, rowClass) => { const rateClass = metrics.tiLeChot > 0.1 ? 'bg-green' : (metrics.tiLeChot > 0.05 ? 'bg-yellow' : ''); return `<tr class="${rowClass}" data-staff-name="${staffName || ''}"><td>${label}</td><td>${formatUtils.formatNumber(metrics.mess)}</td><td>${formatUtils.formatCurrency(metrics.cpqc)}</td><td>${formatUtils.formatNumber(metrics.don)}</td><td>${formatUtils.formatCurrency(metrics.chot)}</td><td class="${rateClass}">${formatUtils.formatPercent(metrics.tiLeChot)}</td><td>${formatUtils.formatCurrency(metrics.giaMess)}</td><td>${formatUtils.formatCurrency(metrics.cps)}</td><td>${formatUtils.formatPercent(metrics.cpDsRatio)}</td><td>${formatUtils.formatCurrency(metrics.giaTbDon)}</td></tr>`; };
-                const headerHtml = `<thead><tr><th class="sortable-header" data-sort="name">Thành viên</th><th class="sortable-header" data-sort="mess">Số Mess</th><th class="sortable-header" data-sort="cpqc">CPQC</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th><th class="sortable-header" data-sort="giaMess">Giá Mess</th><th class="sortable-header" data-sort="cps">CPS</th><th class="sortable-header" data-sort="cpDsRatio">%CP/DS</th><th class="sortable-header" data-sort="giaTbDon">Giá TB Đơn</th></tr></thead>`;
+                const createRowHtml = (metrics, label, staffName, rowClass) => { const rateClass = metrics.tiLeChot > 0.1 ? 'bg-green' : (metrics.tiLeChot > 0.05 ? 'bg-yellow' : ''); return `<tr class="${rowClass}" data-staff-name="${staffName || ''}"><td class="text-left">${label}</td><td>${formatUtils.formatNumber(metrics.mess)}</td><td>${formatUtils.formatCurrency(metrics.cpqc)}</td><td>${formatUtils.formatNumber(metrics.don)}</td><td>${formatUtils.formatCurrency(metrics.chot)}</td><td class="${rateClass}">${formatUtils.formatPercent(metrics.tiLeChot)}</td><td>${formatUtils.formatCurrency(metrics.giaMess)}</td><td>${formatUtils.formatCurrency(metrics.cps)}</td><td>${formatUtils.formatPercent(metrics.cpDsRatio)}</td><td>${formatUtils.formatCurrency(metrics.giaTbDon)}</td></tr>`; };
+                const headerHtml = `<thead><tr><th class="sortable-header text-left" data-sort="name">Thành viên</th><th class="sortable-header" data-sort="mess">Số Mess</th><th class="sortable-header" data-sort="cpqc">CPQC</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th><th class="sortable-header" data-sort="giaMess">Giá Mess</th><th class="sortable-header" data-sort="cps">CPS</th><th class="sortable-header" data-sort="cpDsRatio">%CP/DS</th><th class="sortable-header" data-sort="giaTbDon">Giá TB Đơn</th></tr></thead>`;
                 let bodyHtml = '';
 
                 if (isFullTeamView) {
@@ -1509,18 +1555,18 @@
             
             renderDailyBreakdownTable: function(data, isFullTeamView, sortKey = 'dateObj', sortDir = 'desc') {
                 const wrapper = document.getElementById('daily-breakdown-table-wrapper');
-                const createHeader = (isTeamView) => `<thead><tr><th class="sortable-header" data-sort="dateObj">${isTeamView ? 'Ngày' : 'Ngày'}</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="mess">Số Mess</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th><th class="sortable-header" data-sort="cpqc">CPQC</th><th class="sortable-header" data-sort="cps">CPS</th></tr></thead>`;
+                const createHeader = (isTeamView) => `<thead><tr><th class="sortable-header text-left" data-sort="dateObj">${isTeamView ? 'Ngày' : 'Ngày'}</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="mess">Số Mess</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th><th class="sortable-header" data-sort="cpqc">CPQC</th><th class="sortable-header" data-sort="cps">CPS</th></tr></thead>`;
                 const createRowContent = (metrics) => { const rateClass = metrics.tiLeChot > 0.1 ? 'bg-green' : (metrics.tiLeChot > 0.05 ? 'bg-yellow' : ''); return `<td>${formatUtils.formatCurrency(metrics.chot)}</td><td>${formatUtils.formatNumber(metrics.don)}</td><td>${formatUtils.formatNumber(metrics.mess)}</td><td class="${rateClass}">${formatUtils.formatPercent(metrics.tiLeChot)}</td><td>${formatUtils.formatCurrency(metrics.cpqc)}</td><td>${formatUtils.formatCurrency(metrics.cps)}</td>`; };
-                const dailyGroupedData = data.reduce((acc, r) => { const dateKey = new Date(r.ngay).toISOString().split('T'); if (!acc[dateKey]) acc[dateKey] = { members: {}, dateObj: new Date(r.ngay) }; if (!acc[dateKey].members[r.ten]) acc[dateKey].members[r.ten] = []; acc[dateKey].members[r.ten].push(r); return acc; }, {});
+                const dailyGroupedData = data.reduce((acc, r) => { const dateKey = new Date(r.ngay).toISOString().split('T')[0]; if (!acc[dateKey]) acc[dateKey] = { members: {}, dateObj: new Date(r.ngay) }; if (!acc[dateKey].members[r.ten]) acc[dateKey].members[r.ten] = []; acc[dateKey].members[r.ten].push(r); return acc; }, {});
                 this.currentDailyData = dailyGroupedData; let dailyArray = Object.entries(dailyGroupedData).map(([dateKey, value]) => ({ dateKey, dateObj: value.dateObj, metrics: this.calculateMetrics(Object.values(value.members).flat()) }));
                 dailyArray.sort((a, b) => { const valA = sortKey === 'dateObj' ? a.dateObj.getTime() : a.metrics[sortKey]; const valB = sortKey === 'dateObj' ? b.dateObj.getTime() : b.metrics[sortKey]; return sortDir === 'desc' ? valB - valA : valA - valB; });
-                let bodyHtml = dailyArray.map(item => { const rowHtml = `<tr class="daily-summary-row" data-date="${item.dateKey}"><td><i class="fas fa-chevron-right expand-icon"></i> ${formatUtils.formatDate(item.dateKey)}</td>${createRowContent(item.metrics)}</tr>`; const detailsRow = `<tr class="details-container-row" data-date="${item.dateKey}"><td colspan="7"></td></tr>`; return isFullTeamView ? rowHtml + detailsRow : rowHtml.replace('<tr class="daily-summary-row"', '<tr'); }).join('');
+                let bodyHtml = dailyArray.map(item => { const rowHtml = `<tr class="daily-summary-row" data-date="${item.dateKey}"><td class="text-left"><i class="fas fa-chevron-right expand-icon"></i> ${formatUtils.formatDate(item.dateKey)}</td>${createRowContent(item.metrics)}</tr>`; const detailsRow = `<tr class="details-container-row" data-date="${item.dateKey}"><td colspan="7"></td></tr>`; return isFullTeamView ? rowHtml + detailsRow : rowHtml.replace('<tr class="daily-summary-row"', '<tr'); }).join('');
                 wrapper.innerHTML = `<table>${createHeader(isFullTeamView)}<tbody>${bodyHtml}</tbody></table>`; wrapper.querySelector(`#StaffReport th[data-sort="${sortKey}"]`)?.classList.add(sortDir === 'desc' ? 'sorted-desc' : 'sorted-asc');
             },
             
             renderNestedTable: function(container, dateKey, memberData, sortKey = 'chot', sortDir = 'desc') {
-                const createNestedHeader = () => `<thead><tr><th class="sortable-header" data-sort="name">Thành viên</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th></tr></thead>`;
-                const createNestedRow = (metrics, name) => { const rateClass = metrics.tiLeChot > 0.1 ? 'bg-green' : (metrics.tiLeChot > 0.05 ? 'bg-yellow' : ''); return `<td>${name}</td><td>${formatUtils.formatCurrency(metrics.chot)}</td><td>${formatUtils.formatNumber(metrics.don)}</td><td class="${rateClass}">${formatUtils.formatPercent(metrics.tiLeChot)}</td>`; };
+                const createNestedHeader = () => `<thead><tr><th class="sortable-header text-left" data-sort="name">Thành viên</th><th class="sortable-header" data-sort="chot">DS Chốt</th><th class="sortable-header" data-sort="don">Số Đơn</th><th class="sortable-header" data-sort="tiLeChot">Tỉ lệ chốt</th></tr></thead>`;
+                const createNestedRow = (metrics, name) => { const rateClass = metrics.tiLeChot > 0.1 ? 'bg-green' : (metrics.tiLeChot > 0.05 ? 'bg-yellow' : ''); return `<td class="text-left">${name}</td><td>${formatUtils.formatCurrency(metrics.chot)}</td><td>${formatUtils.formatNumber(metrics.don)}</td><td class="${rateClass}">${formatUtils.formatPercent(metrics.tiLeChot)}</td>`; };
                 let memberArray = Object.entries(memberData).map(([name, records]) => ({ name, metrics: this.calculateMetrics(records) }));
                 memberArray.sort((a, b) => { const valA = sortKey === 'name' ? a.name : a.metrics[sortKey]; const valB = sortKey === 'name' ? b.name : b.metrics[sortKey]; if (typeof valA === 'string') return sortDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA); return sortDir === 'asc' ? valA - valB : valB - valA; });
                 const bodyHtml = memberArray.map(item => `<tr>${createNestedRow(item.metrics, item.name)}</tr>`).join('');
@@ -1535,9 +1581,9 @@
                 showLoader(); 
                 setTimeout(() => { 
                     if (tableType === 'staff-summary-table') { 
-                        this.renderSummaryTable(this.fullReportData, true, this.currentTeamMembers, sortKey, currentSortDir); 
+                        this.renderSummaryTable(this.fullReportData, document.getElementById('staff-filter-staff').value === '__FULL_TEAM__', this.currentTeamMembers, sortKey, currentSortDir); 
                     } else if (tableType === 'daily-breakdown') { 
-                        this.renderDailyBreakdownTable(this.fullReportData, true, sortKey, currentSortDir); 
+                        this.renderDailyBreakdownTable(this.fullReportData, document.getElementById('staff-filter-staff').value === '__FULL_TEAM__', sortKey, currentSortDir); 
                     } else if (tableType === 'nested' && dateKey) { 
                         const detailsRow = document.querySelector(`#StaffReport .details-container-row[data-date='${dateKey}'] td`); 
                         this.renderNestedTable(detailsRow, dateKey, this.currentDailyData[dateKey].members, sortKey, currentSortDir); 
@@ -1547,7 +1593,7 @@
             },
             
             renderIndividualCharts: function(data) { 
-                const dailyData = Object.entries(data.reduce((acc,r) => { const date = formatUtils.formatDate(r.ngay); if (!acc[date]) acc[date] = { mess: 0, don: 0, chot: 0, dateObj: new Date(r.ngay) }; acc[date].chot += r.dsChot; acc[date].don += r.soDon; acc[date].mess += r.soMessCmt; return acc; }, {})).sort((a,b) => a.dateObj - b.dateObj).reduce((acc,[key,val]) => ({...acc, [key]:val}), {}); 
+                const dailyData = Object.entries(data.reduce((acc,r) => { const date = formatUtils.formatDate(r.ngay); if (!acc[date]) acc[date] = { mess: 0, don: 0, chot: 0, dateObj: new Date(r.ngay) }; acc[date].chot += r.dsChot; acc[date].don += r.soDon; acc[date].mess += r.soMessCmt; return acc; }, {})).sort((a,b) => a[1].dateObj - b[1].dateObj).reduce((acc,[key,val]) => ({...acc, [key]:val}), {}); 
                 const sortedDates = Object.keys(dailyData);
                 const lineCP = chartColorPalette.getColorPair(1);
                 const barCP = chartColorPalette.getColorPair(2);
@@ -1571,7 +1617,7 @@
         
             populateTeamFilter: function() { const teams = [...new Set(this.allData.map(r => r.team))].sort(); document.getElementById('team-filter-staff').innerHTML = teams.map(t => `<option value="${t}">${t}</option>`).join(''); },
             updateStaffFilter: function() { const selectedTeams = Array.from(document.getElementById('team-filter-staff').selectedOptions).map(opt => opt.value); const staffSelect = document.getElementById('staff-filter-staff'); staffSelect.innerHTML = ''; if (selectedTeams.length === 0) { staffSelect.innerHTML = '<option value="">-- Vui lòng chọn Team --</option>'; return; } staffSelect.innerHTML = '<option value="__FULL_TEAM__">-- XEM BÁO CÁO TOÀN TEAM --</option>'; const staffInTeams = this.allData.filter(r => selectedTeams.includes(r.team)); const staffNames = [...new Set(staffInTeams.map(r => r.ten))].sort(); staffSelect.innerHTML += staffNames.map(name => `<option value="${name}">${name}</option>`).join(''); },
-            setDefaultDates: function() { const today = new Date(); const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1); const formatDate = d => d.toISOString().split('T'); document.getElementById('start-date-staff').value = formatDate(firstDayOfMonth); document.getElementById('end-date-staff').value = formatDate(today); },
+            setDefaultDates: function() { const today = new Date(); const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1); const formatDate = d => d.toISOString().split('T')[0]; document.getElementById('start-date-staff').value = formatDate(firstDayOfMonth); document.getElementById('end-date-staff').value = formatDate(today); },
         };
         
         document.getElementById("defaultOpen").click();
