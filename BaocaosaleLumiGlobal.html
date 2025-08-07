@@ -88,7 +88,6 @@
     tr:nth-child(even) { background-color: var(--light-gray); }
     tr:hover { background-color: #e9ecef; }
 
-    /* === THAY ĐỔI: CỠ CHỮ TO VÀ IN ĐẬM === */
     input, textarea, button, select {
       box-sizing: border-box;
       padding: 0.5rem 0.75rem;
@@ -247,7 +246,6 @@
         "Phạm Hải Yến", "Trần Thị Nhung", "Lê Ngọc Đài Trang", "Đỗ Thị Thu Hằng", "Mai Thị Lý"
       ],
       shiftList: ["Hết ca", "Cuối ca"],
-      // *** DANH SÁCH SẢN PHẨM CỐ ĐỊNH THEO YÊU CẦU CỦA BẠN ***
       productList:["Fitgum CAFE 20X","Kem Body","Bakuchiol Retinol","Serum sâm","Glutathione Collagen","Glutathione Collagen NEW","DG","Nám DR Hancy","Kẹo Táo"],
       marketList: ["Nhật Bản","Hàn Quốc","Canada","US","Úc","Anh"],
     };
@@ -311,7 +309,6 @@
       const row = document.createElement('tr');
       row.dataset.rowId = rowId;
 
-      // === THAY ĐỔI: THÊM autocomplete="off" VÀO CÁC TRƯỜNG TEXT ===
       row.innerHTML = `
         <td class="action-buttons">
           <button type="button" class="removeRow" onclick="removeRow(this)">❌</button>
@@ -384,18 +381,23 @@
     window.removeRow = removeRow;
     window.addSimilarRow = addSimilarRow;
 
+    // === THAY ĐỔI QUAN TRỌNG BẮT ĐẦU TỪ ĐÂY ===
     function validateForm() {
+      // Xóa các lỗi cũ
       document.querySelectorAll('.error-cell').forEach(cell => cell.classList.remove('error-cell'));
       let isValid = true;
       const rows = tableBody.querySelectorAll('tr');
+
       if (rows.length === 0) {
         respMsg.className = 'error';
         respMsg.textContent = 'Chưa có dòng nào để gửi!';
         return false;
       }
 
-      const requiredFields = ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường', 'Số Mess', 'Phản hồi'];
+      const requiredFields = ['Tên', 'Ngày', 'Ca', 'Số Mess', 'Phản hồi']; // Tách riêng để kiểm tra rỗng
+
       rows.forEach(row => {
+        // 1. Kiểm tra các trường bắt buộc nhập (trừ Sản phẩm và Thị trường)
         requiredFields.forEach(fieldName => {
           const input = row.querySelector(`[name="${fieldName}"]`);
           if (input && !input.value.trim()) {
@@ -403,17 +405,48 @@
             input.closest('td').classList.add('error-cell');
           }
         });
+
+        // 2. Kiểm tra đặc biệt cho Sản phẩm (phải chọn từ danh sách)
+        const productInput = row.querySelector(`[name="Sản phẩm"]`);
+        if (productInput) {
+            const productValue = productInput.value;
+            // Báo lỗi nếu rỗng HOẶC không có trong danh sách cho phép
+            if (!productValue || !appData.productList.includes(productValue)) {
+                isValid = false;
+                productInput.closest('td').classList.add('error-cell');
+            }
+        }
+
+        // 3. Kiểm tra đặc biệt cho Thị trường (phải chọn từ danh sách)
+        const marketInput = row.querySelector(`[name="Thị trường"]`);
+        if (marketInput) {
+            const marketValue = marketInput.value;
+            // Báo lỗi nếu rỗng HOẶC không có trong danh sách cho phép
+            if (!marketValue || !appData.marketList.includes(marketValue)) {
+                isValid = false;
+                marketInput.closest('td').classList.add('error-cell');
+            }
+        }
       });
+
       if (!isValid) {
         respMsg.className = 'error';
-        respMsg.textContent = 'Vui lòng điền đầy đủ thông tin vào các ô được đánh dấu màu đỏ';
+        // Thông báo lỗi chung cho cả trường hợp bỏ trống và chọn sai giá trị
+        respMsg.textContent = 'Lỗi: Vui lòng điền đầy đủ và chọn đúng giá trị cho các ô được đánh dấu màu đỏ.';
+      } else {
+        // Xóa thông báo lỗi nếu form hợp lệ
+        respMsg.textContent = '';
+        respMsg.className = '';
       }
       return isValid;
     }
+    // === KẾT THÚC THAY ĐỔI QUAN TRỌNG ===
 
     function handleSubmit(e) {
       e.preventDefault();
-      if (!validateForm()) return;
+      // Hàm validateForm() đã được cập nhật sẽ được gọi ở đây
+      if (!validateForm()) return; 
+      
       submitBtn.disabled = true;
       submitBtn.textContent = 'Đang gửi...';
       const allRows = [];
@@ -479,12 +512,7 @@
                 throw new Error(`Lỗi mạng: ${response.status} ${response.statusText}`);
             }
             const loadedData = await response.json();
-
-            // *** THAY ĐỔI QUAN TRỌNG: Vô hiệu hóa dòng dưới để không ghi đè danh sách sản phẩm ***
-            // Dữ liệu tải về sẽ không ảnh hưởng đến danh sách sản phẩm trong dropdown.
-            // if(loadedData.productList && loadedData.productList.length > 0) appData.productList = loadedData.productList;
             
-            // Dòng này vẫn được giữ để cho phép "ghi đè" danh sách thị trường
             if(loadedData.marketList && loadedData.marketList.length > 0) appData.marketList = loadedData.marketList;
 
             populateEmployeeDatalist();
