@@ -95,7 +95,7 @@
     }
     #loading-overlay.visible { visibility: visible; opacity: 1; }
 
-    /* --- MỚI: CSS CHO MODAL CHI TIẾT NGÀY --- */
+    /* --- CSS CHO MODAL CHI TIẾT NGÀY --- */
     .modal {
       display: none; position: fixed; z-index: 10000; left: 0; top: 0;
       width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
@@ -112,7 +112,7 @@
     .close-button:hover, .close-button:focus { color: black; text-decoration: none; }
     .modal-body { overflow-y: auto; }
 
-    /* MỚI: CSS cho sắp xếp bảng trong modal */
+    /* CSS cho sắp xếp bảng trong modal */
     #modal-summary-table th {
       cursor: pointer;
       position: relative;
@@ -293,6 +293,8 @@
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let masterData = []; 
     let employeeData = [];
+    // MỚI: Biến chứa dữ liệu cơ sở đã được lọc theo ID từ URL (nếu có)
+    let baseDataForReport = []; 
     let charts = {};
     const groupChildren = { 'Châu Á': ['Hàn Quốc','Nhật Bản','VN'], 'Ngoài Châu Á': ['Úc','US', 'Canada'] };
 
@@ -300,24 +302,21 @@
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
 
-    // MỚI: Biến lưu trữ dữ liệu và trạng thái sắp xếp của bảng trong modal
     let currentModalSummaryList = [];
-    let modalSortState = { column: null, direction: 'asc' }; // null: không sắp xếp, 'asc': tăng dần, 'desc': giảm dần
+    let modalSortState = { column: null, direction: 'asc' };
 
-    // MỚI: Ánh xạ cột của bảng modal với các thuộc tính hoặc hàm tính toán
     const columnSortKeys = {
-        // STT (index 0) không sắp xếp
-        1: { prop: 'team', type: 'string' },        // Team
-        2: { prop: 'name', type: 'string' },        // Marketing
-        3: { prop: 'mess', type: 'number' },        // Số Mess
-        4: { prop: 'cpqc', type: 'number' },        // CPQC
-        5: { prop: 'don', type: 'number' },         // Số Đơn
-        6: { prop: 'chot', type: 'number' },        // DS Chốt
-        7: { prop: (s) => s.mess ? s.don / s.mess : 0, type: 'number' }, // Tỉ lệ chốt
-        8: { prop: (s) => s.mess ? s.cpqc / s.mess : 0, type: 'number' }, // Giá Mess
-        9: { prop: (s) => s.don ? s.cpqc / s.don : 0, type: 'number' },   // CPS
-        10: { prop: (s) => s.chot ? s.cpqc / s.chot : 0, type: 'number' },  // %CP/DS
-        11: { prop: (s) => s.don ? s.chot / s.don : 0, type: 'number' }, // Giá TB Đơn (Doanh số chốt / Số đơn)
+        1: { prop: 'team', type: 'string' },
+        2: { prop: 'name', type: 'string' },
+        3: { prop: 'mess', type: 'number' },
+        4: { prop: 'cpqc', type: 'number' },
+        5: { prop: 'don', type: 'number' },
+        6: { prop: 'chot', type: 'number' },
+        7: { prop: (s) => s.mess ? s.don / s.mess : 0, type: 'number' },
+        8: { prop: (s) => s.mess ? s.cpqc / s.mess : 0, type: 'number' },
+        9: { prop: (s) => s.don ? s.cpqc / s.don : 0, type: 'number' },
+        10: { prop: (s) => s.chot ? s.cpqc / s.chot : 0, type: 'number' },
+        11: { prop: (s) => s.don ? s.chot / s.don : 0, type: 'number' },
     };
     
     // --- KHỞI TẠO & TẢI DỮ LIỆU ---
@@ -351,7 +350,7 @@
         if (e.target.closest('#DetailedReport')) { handleTab1Filters(e.target); }
         else if (e.target.closest('#DailyReport')) { handleTab2Filters(e.target); }
       });
-      addModalEventListeners(); // Kích hoạt sự kiện cho modal
+      addModalEventListeners();
     }
     
     function addModalEventListeners() {
@@ -369,10 +368,9 @@
           showDailyDetailModal(dateString);
       });
 
-      // MỚI: Thêm sự kiện click cho tiêu đề cột trong modal
       document.getElementById('modal-summary-table').querySelector('thead').addEventListener('click', (e) => {
           const th = e.target.closest('th');
-          if (th && th.cellIndex !== 0) { // Bỏ qua cột STT
+          if (th && th.cellIndex !== 0) {
               sortModalTable(th.cellIndex);
           }
       });
@@ -407,7 +405,8 @@
             
             employeeData = employeeResult;
             
-            let dataForFilters = masterData;
+            // MỚI: Xử lý bộ lọc cấp cao từ URL và gán vào baseDataForReport
+            let dataForPopulatingFilters;
             const idFromUrl = new URLSearchParams(window.location.search).get('id');
 
             if (idFromUrl) {
@@ -419,22 +418,26 @@
                     
                     if ((currentUser.vi_tri || '').trim().toLowerCase() === 'leader') {
                         document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${teamName}`;
-                        dataForFilters = masterData.filter(r => (r.team || '').trim() === teamName);
+                        baseDataForReport = masterData.filter(r => (r.team || '').trim() === teamName);
                     } else {
-                        document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHN - ${memberName}`;
-                        dataForFilters = masterData.filter(r => (r.ten || '').trim() === memberName);
+                        document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${memberName}`;
+                        baseDataForReport = masterData.filter(r => (r.ten || '').trim() === memberName);
                     }
                 } else {
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại trong danh sách nhân sự.`);
                     document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
-                    dataForFilters = [];
+                    baseDataForReport = [];
                 }
             } else {
                 document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS';
+                baseDataForReport = masterData;
             }
-            
-            populateAllFilters(dataForFilters);
-            applyTab1Filters(dataForFilters);
+
+            // Populate filters dựa trên tập dữ liệu đã lọc (hoặc toàn bộ nếu không có ID)
+            dataForPopulatingFilters = baseDataForReport.length > 0 ? baseDataForReport : masterData;
+            populateAllFilters(dataForPopulatingFilters);
+            applyTab1Filters(); // Áp dụng bộ lọc cho tab 1 lần đầu
+
         }).catch(err => { 
             console.error("Lỗi khi tải dữ liệu:", err); 
             alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
@@ -443,6 +446,7 @@
         });
     }
     
+    // Hàm này nhận vào một bộ dữ liệu cơ sở và áp dụng các bộ lọc từ sidebar
     function getFilteredData(initialData) {
         let dataToFilter = initialData;
         const filterIds = {
@@ -521,7 +525,6 @@
     function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
     function handleCheckbox(masterId, childClass, target) { const allCheckbox = document.getElementById(masterId); if (!allCheckbox) return; if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { allCheckbox.checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
     
-    // Hàm này phải phụ thuộc vào bộ lọc thị trường đang active (tab1 hoặc tab2)
     function getCpsCellStyle(cps, selectedMarkets) { 
         const hasChauA = selectedMarkets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m)); 
         const hasNgoaiChauA = selectedMarkets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m)); 
@@ -530,7 +533,7 @@
         if (isChauAOnly) { 
             if (cps > 1000000) return 'bg-lightred'; 
             if (cps > 700000) return 'bg-yellow'; 
-        } else { // Bao gồm cả Ngoài Châu Á hoặc hỗn hợp
+        } else {
             if (cps > 1500000) return 'bg-lightred'; 
             if (cps > 1000000) return 'bg-yellow'; 
         } 
@@ -539,33 +542,14 @@
 
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
     
-    function applyTab1Filters(baseData = null) {
-        if (baseData === null) {
-            const idFromUrl = new URLSearchParams(window.location.search).get('id');
-            if (idFromUrl) {
-                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
-                if (currentUser) {
-                    const memberName = (currentUser.ho_va_ten || '').trim();
-                    const teamName = (currentUser.team || '').trim();
-                    if ((currentUser.vi_tri || '').trim().toLowerCase() === 'leader') {
-                        baseData = masterData.filter(r => (r.team || '').trim() === teamName);
-                    } else {
-                        baseData = masterData.filter(r => (r.ten || '').trim() === memberName);
-                    }
-                } else {
-                    baseData = [];
-                }
-            } else {
-                baseData = masterData;
-            }
-        }
-        const filtered = getFilteredData(baseData);
+    // MỚI: Hàm này giờ đây luôn lấy nguồn từ baseDataForReport
+    function applyTab1Filters() {
+        const filtered = getFilteredData(baseDataForReport);
         renderSummary(filtered); 
         renderKpiSummary(filtered); 
         renderDailyBreakdown(filtered);
     }
     
-    // MỚI: Tách logic tổng hợp dữ liệu thành một hàm riêng
     function generateSummaryTableData(data) {
         const summaryData = {};
         data.forEach(r => {
@@ -576,19 +560,17 @@
             summaryData[name].chot += r.dsChot; 
             summaryData[name].cpqc += r.cpqc;
         });
-        // Chuyển đối tượng thành mảng và tính toán các chỉ số
         return Object.keys(summaryData).map(name => {
             const s = summaryData[name];
             s.rate = s.mess ? s.don / s.mess : 0;
             s.pm = s.mess ? s.cpqc / s.mess : 0;
             s.pd = s.don ? s.cpqc / s.don : 0;
             s.pc = s.chot ? s.cpqc / s.chot : 0;
-            s.pdt = s.don ? s.chot / s.don : 0; // Giá TB Đơn (Doanh số chốt / Số đơn)
+            s.pdt = s.don ? s.chot / s.don : 0;
             return { name, team: s.team, data: s };
         });
     }
 
-    // MỚI: Hàm tạo HTML từ dữ liệu tổng hợp
     function generateSummaryTableHTML(flatList, selectedMarkets) {
         let total = { mess: 0, don: 0, chot: 0, cpqc: 0 };
         
@@ -621,11 +603,9 @@
         return { bodyHtml, footHtml };
     }
 
-    // renderSummary hiện tại cho tab1
     function renderSummary(data) {
         const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
         let flatList = generateSummaryTableData(data);
-        // Sắp xếp mặc định cho bảng chính là theo team rồi đến tên
         flatList.sort((a,b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.name.localeCompare(b.name));
         
         const { bodyHtml, footHtml } = generateSummaryTableHTML(flatList, selectedMarkets);
@@ -696,8 +676,9 @@
       if (tabName === 'DailyReport' && !charts.cpqcChart) { initAllCharts(); applyDailyFilters(); }
     }
     
+    // MỚI: Hàm này giờ lấy nguồn từ baseDataForReport
     function getFilteredDataTab2() {
-        let dataToFilter = masterData;
+        let dataToFilter = baseDataForReport; // Thay đổi quan trọng ở đây
         const filterIds = {
             startDateId: 'start-date-tab2', endDateId: 'end-date-tab2',
             productCbId: 'product-all-tab2', productOptionsClass: 'filter-product-tab2',
@@ -734,18 +715,13 @@
     function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td class="text-left"><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
     function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) { wrapper.style.display = checkbox.checked ? 'block' : 'none'; } }); }
     
-    // MỚI: Hàm hiển thị modal chi tiết ngày
     function showDailyDetailModal(dateString) {
         document.getElementById('modal-title').textContent = `Báo cáo chi tiết ngày ${dateString}`;
-
-        // Lọc dữ liệu cho ngày được chọn từ bộ dữ liệu đã được lọc theo sidebar của tab 2
         const currentFilteredData = getFilteredDataTab2();
         const dataForDay = currentFilteredData.filter(r => formatDate(r.ngay) === dateString);
 
-        // MỚI: Tổng hợp dữ liệu và lưu vào biến toàn cục để có thể sắp xếp
         currentModalSummaryList = generateSummaryTableData(dataForDay);
 
-        // MỚI: Reset trạng thái sắp xếp khi mở modal mới, và sắp xếp mặc định theo team rồi tên
         modalSortState = { column: null, direction: 'asc' };
         currentModalSummaryList.sort((a,b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.name.localeCompare(b.name));
 
@@ -754,11 +730,8 @@
         document.getElementById('daily-detail-modal').style.display = 'flex';
     }
 
-    // MỚI: Hàm render lại bảng trong modal
     function renderModalSummaryTable(dataList) {
-        // Lấy các thị trường đang được chọn trong bộ lọc của tab 2 (để áp dụng màu CPS)
         const selectedMarkets = [...document.querySelectorAll('.filter-market-tab2:checked')].map(cb => cb.value);
-
         const { bodyHtml, footHtml } = generateSummaryTableHTML(dataList, selectedMarkets);
         
         document.getElementById('modal-summary-body').innerHTML = bodyHtml;
@@ -767,25 +740,20 @@
         updateSortIcons(modalSortState.column, modalSortState.direction);
     }
 
-    // MỚI: Hàm sắp xếp dữ liệu trong modal
     function sortModalTable(columnIndex) {
         const sortInfo = columnSortKeys[columnIndex];
 
         if (!sortInfo) {
-            // Nếu cột không có thông tin sắp xếp (ví dụ: cột STT)
-            // Có thể đặt lại về sắp xếp mặc định hoặc không làm gì cả
             if (modalSortState.column !== null) {
                 modalSortState = { column: null, direction: 'asc' };
-                // Sắp xếp mặc định ban đầu: theo team, sau đó theo tên
                 currentModalSummaryList.sort((a,b) => (a.team || 'zzz').localeCompare(b.team || 'zzz') || a.name.localeCompare(b.name));
             } else {
-                return; // Đã ở trạng thái mặc định, không làm gì
+                return;
             }
         } else {
-            // Nếu click lại vào cùng một cột, đổi hướng sắp xếp
             if (modalSortState.column === columnIndex) {
                 modalSortState.direction = modalSortState.direction === 'asc' ? 'desc' : 'asc';
-            } else { // Click vào cột mới, sắp xếp mặc định là tăng dần
+            } else {
                 modalSortState.column = columnIndex;
                 modalSortState.direction = 'asc';
             }
@@ -800,7 +768,6 @@
                     valB = b.data[sortInfo.prop];
                 }
 
-                // Xử lý giá trị null/undefined để chúng luôn ở cuối hoặc đầu
                 if (valA === null || valA === undefined) valA = sortInfo.type === 'string' ? '' : -Infinity;
                 if (valB === null || valB === undefined) valB = sortInfo.type === 'string' ? '' : -Infinity;
 
@@ -808,7 +775,7 @@
                 let comparison = 0;
                 if (sortInfo.type === 'string') {
                     comparison = String(valA).localeCompare(String(valB));
-                } else { // number
+                } else {
                     comparison = valA - valB;
                 }
 
@@ -819,13 +786,12 @@
         renderModalSummaryTable(currentModalSummaryList);
     }
 
-    // MỚI: Cập nhật icon sắp xếp
     function updateSortIcons(sortedColumnIndex, direction) {
         const headers = document.querySelectorAll('#modal-summary-table thead th');
         headers.forEach((th, index) => {
             const icon = th.querySelector('.sort-icon');
             if (icon) {
-                icon.className = 'sort-icon'; // Reset classes
+                icon.className = 'sort-icon';
                 th.classList.remove('sorted');
                 if (index === sortedColumnIndex) {
                     th.classList.add('sorted');
