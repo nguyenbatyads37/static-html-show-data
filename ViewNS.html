@@ -92,6 +92,30 @@
     }
     .chart-wrapper canvas { width: 100% !important; height: 400px !important; }
 
+    /* *** THAY ĐỔI: CSS CHO TÍNH NĂNG MỚI - SỔ CHI TIẾT NGÀY *** */
+    #date-summary-body tr.summary-row {
+        cursor: pointer;
+    }
+    .daily-detail-row td {
+        padding: 20px 25px !important;
+        background-color: #fafcff !important;
+        border-left: 5px solid #2d7c2d !important;
+        border-right: 1px solid #e0e0e0 !important;
+        border-bottom: 1px solid #e0e0e0 !important;
+    }
+    .daily-detail-row:hover, .daily-detail-row td:hover {
+        background-color: #fafcff !important; /* Ngăn hiệu ứng hover */
+    }
+    .daily-detail-table {
+        margin: 0;
+    }
+    .daily-detail-table th {
+        background-color: #f1f1f1;
+        color: #333;
+    }
+    /* *** KẾT THÚC THAY ĐỔI CSS *** */
+
+
     /* --- CHỈ BÁO ĐANG TẢI --- */
     #loading-overlay {
       position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -242,15 +266,12 @@
         const today = new Date();
         const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
         const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-
-        // *** FIX: Hàm định dạng ngày đáng tin cậy hơn, tránh lỗi timezone của toISOString() ***
         const formatDateForInput = (date) => {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
             const day = String(date.getDate()).padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
-        
         document.getElementById('start-date-tab1').value = formatDateForInput(firstDay);
         document.getElementById('end-date-tab1').value = formatDateForInput(lastDay);
         document.getElementById('start-date-tab2').value = formatDateForInput(firstDay);
@@ -278,7 +299,6 @@
                 .filter(r => r.ten && String(r.ten).trim() !== '')
                 .map(r => ({
                     ...r,
-                    // *** FIX: Chuyển đổi ngày thành đối tượng Date ngay từ đầu, xử lý múi giờ địa phương ***
                     ngay: new Date(r.ngay), 
                     ten: (r.ten || 'N/A').trim(),
                     team: (r.team || 'Khác').trim(),
@@ -341,12 +361,9 @@
         };
         const sdVal = document.getElementById(filterIds.startDateId).value;
         const edVal = document.getElementById(filterIds.endDateId).value;
-
-        // *** FIX: Tạo Date object một cách đáng tin cậy. new Date('YYYY-MM-DD') sẽ được hiểu là midnight giờ địa phương ***
-        // Bằng cách thêm T00:00:00, ta chỉ định rõ là giờ địa phương.
         const sd = sdVal ? new Date(sdVal + 'T00:00:00') : null;
         const ed = edVal ? new Date(edVal + 'T00:00:00') : null;
-        if(ed) ed.setHours(23, 59, 59, 999); // Đặt thời gian của ngày kết thúc là cuối ngày
+        if(ed) ed.setHours(23, 59, 59, 999);
 
         const getSelected = (allId, cbClass) => {
             const allCheckbox = document.getElementById(allId);
@@ -359,10 +376,8 @@
         const selT = filterIds.teamCbId ? getSelected(filterIds.teamCbId, filterIds.teamOptionsClass) : null;
         
         return dataToFilter.filter(r => {
-            // *** FIX: Dữ liệu ngày đã là đối tượng Date sẵn nên không cần new Date() nữa ***
             const d = r.ngay;
-            if (!(d instanceof Date) || isNaN(d)) return false; // Bỏ qua nếu dữ liệu ngày không hợp lệ
-
+            if (!(d instanceof Date) || isNaN(d)) return false; 
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
             const isProductOk = !selP || selP.includes(r.sanPham);
             const marketGroup = getGroup(normalize(r.thiTruong));
@@ -397,23 +412,12 @@
     function normalize(s) { return (s||'').trim().toLowerCase(); }
     function capitalize(s) { return s.charAt(0).toUpperCase()+s.slice(1); }
     function getGroup(norm) { for (let g in groupChildren) { if (groupChildren[g].map(normalize).includes(norm)) return g; } return capitalize(norm); }
-    
-    // *** FIX: Đã sửa hàm formatDate để sử dụng giờ địa phương của trình duyệt ***
-    function formatDate(v) { 
-        if (!(v instanceof Date) || isNaN(v)) return String(v);
-        // Sử dụng getDate(), getMonth(), getFullYear() để lấy ngày theo múi giờ địa phương
-        const day = String(v.getDate()).padStart(2,'0');
-        const month = String(v.getMonth() + 1).padStart(2,'0'); // Tháng trong JS bắt đầu từ 0
-        const year = v.getFullYear();
-        return `${day}/${month}/${year}`;
-    }
-
+    function formatDate(v) { if (!(v instanceof Date) || isNaN(v)) return String(v); const day = String(v.getDate()).padStart(2,'0'); const month = String(v.getMonth() + 1).padStart(2,'0'); const year = v.getFullYear(); return `${day}/${month}/${year}`; }
     function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
     function formatPriceShort(v) { const num = Number(v || 0); if (v === null || v === undefined) return ''; if (num >= 1000000) return (num / 1000000).toFixed(1) + 'tr'; if (num >= 1000) return (num / 1000).toFixed(0) + 'k'; return num.toLocaleString('vi-VN'); }
     function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
     function handleCheckbox(masterId, childClass, target) { const allCheckbox = document.getElementById(masterId); if (!allCheckbox) return; if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { allCheckbox.checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
     function getCpsCellStyle(cps, selectedMarkets) { const hasChauA = selectedMarkets.some(m => m === 'Châu Á' || groupChildren['Châu Á'].includes(m)); const hasNgoaiChauA = selectedMarkets.some(m => m === 'Ngoài Châu Á' || groupChildren['Ngoài Châu Á'].includes(m)); const isChauAOnly = hasChauA && !hasNgoaiChauA && selectedMarkets.length > 0; if (isChauAOnly) { if (cps > 1000000) return 'bg-lightred'; if (cps > 700000) return 'bg-yellow'; } else { if (cps > 1500000) return 'bg-lightred'; if (cps > 1000000) return 'bg-yellow'; } return ''; }
-
     function handleTab1Filters(target) { showLoader(); setTimeout(() => { handleCheckbox('product-all-tab1', 'filter-product-tab1', target); handleCheckbox('ca-all-tab1', 'filter-ca-tab1', target); handleCheckbox('team-all-tab1', 'filter-team-tab1', target); handleCheckbox('market-all-tab1', 'filter-market-tab1', target); applyTab1Filters(); hideLoader(); }, 10); }
     
     function applyTab1Filters(baseData = null) {
@@ -579,7 +583,114 @@
     
     function handleTab2Filters(target) { showLoader(); setTimeout(() => { if (target.id === 'toggle-all-charts' || target.classList.contains('chart-toggle')) { if (target.id === 'toggle-all-charts') document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked); else document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked); toggleChartVisibility(); hideLoader(); return; } handleCheckbox('product-all-tab2', 'filter-product-tab2', target); handleCheckbox('market-all-tab2', 'filter-market-tab2', target); applyDailyFilters(); hideLoader(); }, 10); }
     function applyDailyFilters() { if (!masterData.length) return; const filtered = getFilteredDataTab2(); renderDailyTable(filtered); renderAllDailyCharts(filtered); }
-    function renderDailyTable(data) { const daily = {}; data.forEach(r => { const dateKey = formatDate(r.ngay); if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 }; daily[dateKey].cpqc += r.cpqc; daily[dateKey].don += r.soDon; daily[dateKey].mess += r.soMessCmt; daily[dateKey].chot += r.dsChot; }); let tbodyHtml = Object.keys(daily).sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-'))).map(d => { const day = daily[d]; const avg = day.mess ? day.don / day.mess : 0; const giaMess = day.mess ? day.cpqc / day.mess : 0; const cps = day.don ? day.cpqc / day.don : 0; const cpqcRatio = day.chot ? day.cpqc / day.chot : 0; return `<tr><td class="text-left"><b>${d}</b></td><td>${formatPriceShort(day.cpqc)}</td><td>${formatPriceShort(day.chot)}</td><td>${formatPercent(avg)}</td><td>${formatPriceShort(giaMess)}</td><td>${formatPriceShort(cps)}</td><td>${formatPercent(cpqcRatio)}</td></tr>`; }).join(''); document.getElementById('date-summary-body').innerHTML = tbodyHtml; }
+    
+    // *** THAY ĐỔI: Chỉnh sửa hàm renderDailyTable ***
+    function renderDailyTable(data) {
+        const daily = {};
+        data.forEach(r => {
+            const dateKey = formatDate(r.ngay);
+            if (!daily[dateKey]) daily[dateKey] = { cpqc: 0, don: 0, mess: 0, chot: 0 };
+            daily[dateKey].cpqc += r.cpqc;
+            daily[dateKey].don += r.soDon;
+            daily[dateKey].mess += r.soMessCmt;
+            daily[dateKey].chot += r.dsChot;
+        });
+        let tbodyHtml = Object.keys(daily)
+            .sort((a,b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')))
+            .map(d => {
+                const day = daily[d];
+                const avg = day.mess ? day.don / day.mess : 0;
+                const giaMess = day.mess ? day.cpqc / day.mess : 0;
+                const cps = day.don ? day.cpqc / day.don : 0;
+                const cpqcRatio = day.chot ? day.cpqc / day.chot : 0;
+                // Thêm class 'summary-row', data-date và onclick
+                return `<tr class="summary-row" data-date="${d}" onclick="toggleDailyDetail(this)">
+                            <td class="text-left"><b>${d}</b></td>
+                            <td>${formatPriceShort(day.cpqc)}</td>
+                            <td>${formatPriceShort(day.chot)}</td>
+                            <td>${formatPercent(avg)}</td>
+                            <td>${formatPriceShort(giaMess)}</td>
+                            <td>${formatPriceShort(cps)}</td>
+                            <td>${formatPercent(cpqcRatio)}</td>
+                        </tr>`;
+            }).join('');
+        document.getElementById('date-summary-body').innerHTML = tbodyHtml;
+    }
+
+    // *** THAY ĐỔI: Thêm hàm mới để xử lý việc sổ chi tiết ***
+    function toggleDailyDetail(row) {
+        const dateKey = row.dataset.date;
+        const nextRow = row.nextElementSibling;
+
+        // Nếu hàng tiếp theo là hàng chi tiết, xóa nó đi (đóng lại)
+        if (nextRow && nextRow.classList.contains('daily-detail-row')) {
+            nextRow.remove();
+            return;
+        }
+
+        // Đóng tất cả các hàng chi tiết khác đang mở
+        const existingDetailRows = document.querySelectorAll('.daily-detail-row');
+        existingDetailRows.forEach(detailRow => detailRow.remove());
+
+        // Lọc dữ liệu cho ngày đã chọn, tuân theo bộ lọc hiện tại của tab 2
+        const currentFilteredData = getFilteredDataTab2();
+        const dataForDay = currentFilteredData.filter(r => formatDate(r.ngay) === dateKey);
+
+        if (dataForDay.length === 0) return; // Không có gì để hiển thị
+
+        // Tạo bảng chi tiết
+        let m = 0, d = 0, ch = 0, pc = 0;
+        const sortedDailyData = dataForDay.sort((a, b) => (a.team || 'zzz').localeCompare(b.team || 'zzz'));
+        const rowsHtml = sortedDailyData.map(r => {
+            m += r.soMessCmt; d += r.soDon; ch += r.dsChot; pc += r.cpqc;
+            return `<tr>
+                        <td class="text-center">${r.idNS || ''}</td>
+                        <td class="text-left">${r.ten}</td>
+                        <td class="text-left">${r.ca}</td>
+                        <td class="text-left">${r.page}</td>
+                        <td class="text-left">${r.sanPham}</td>
+                        <td class="text-left">${r.thiTruong}</td>
+                        <td>${r.soMessCmt.toLocaleString('vi-VN')}</td>
+                        <td>${r.soDon.toLocaleString('vi-VN')}</td>
+                        <td>${formatCurrency(r.dsChot)}</td>
+                        <td>${formatCurrency(r.cpqc)}</td>
+                        <td class="text-left">${r.team}</td>
+                    </tr>`;
+        }).join('');
+        const footHtml = `<tr class='total-row'>
+                            <td colspan='6' class='total-label'>Tổng cộng ngày ${dateKey}</td>
+                            <td class='total-value'>${m.toLocaleString('vi-VN')}</td>
+                            <td class='total-value'>${d.toLocaleString('vi-VN')}</td>
+                            <td class='total-value'>${formatCurrency(ch)}</td>
+                            <td class='total-value'>${formatCurrency(pc)}</td>
+                            <td></td>
+                         </tr>`;
+
+        const detailTableHtml = `
+            <div class="table-responsive-container daily-detail-table">
+                <table>
+                    <thead>
+                        <tr><th>ID</th><th>Tên</th><th>Ca</th><th>Page</th><th>Sản phẩm</th><th>Thị trường</th><th>Mess</th><th>Đơn</th><th>DS Chốt</th><th>CPQC</th><th>Team</th></tr>
+                    </thead>
+                    <tbody>${rowsHtml}</tbody>
+                    <tfoot>${footHtml}</tfoot>
+                </table>
+            </div>`;
+        
+        // Tạo hàng và ô mới để chứa bảng chi tiết
+        const detailRow = document.createElement('tr');
+        detailRow.classList.add('daily-detail-row');
+        const detailCell = document.createElement('td');
+        detailCell.colSpan = row.cells.length; // Cho ô chiếm toàn bộ chiều rộng
+        detailCell.innerHTML = detailTableHtml;
+        
+        detailRow.appendChild(detailCell);
+
+        // Chèn hàng chi tiết vào ngay sau hàng được click
+        row.parentNode.insertBefore(detailRow, row.nextSibling);
+    }
+    // *** KẾT THÚC THAY ĐỔI JS ***
+
     function toggleChartVisibility() { document.querySelectorAll('.chart-toggle').forEach(checkbox => { const chartName = checkbox.dataset.chart; const wrapper = document.querySelector(`.chart-wrapper[data-chart="${chartName}"]`); if (wrapper) { wrapper.style.display = checkbox.checked ? 'block' : 'none'; } }); }
     
     function initAllCharts() {
