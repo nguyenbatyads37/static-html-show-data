@@ -71,12 +71,24 @@
     .text-center { text-align: center !important; }
 
     tbody tr { cursor: pointer; transition: all 0.2s ease; }
-    tbody tr:not(.row-selected):hover { background-color: rgba(139, 195, 74, 0.08); }
+    tbody tr:not(.row-selected):not(.total-row):hover { background-color: rgba(139, 195, 74, 0.08); }
     tbody tr.row-selected, tbody tr.row-selected:hover { background-color: #FFF59D !important; color: var(--text-dark) !important; font-weight: 600; }
     
-    tr.total-row, tr.total-row:hover, tfoot tr, tfoot tr:hover { background: #fffde7; font-size: 1.05em; color: var(--text-dark); border-top: 2px solid var(--primary-light); font-weight: 600; cursor: default; }
-    .total-label, tfoot td[colspan] { text-align: left !important; font-weight: 700; }
-    .total-value, tfoot td:not([colspan]) { text-align: right !important; font-weight: 700; }
+    /* MODIFIED: Highlighting for Total Row */
+    tr.total-row, tr.total-row:hover { 
+        background: var(--primary-color) !important; 
+        color: white !important;
+        font-size: 1.1em; 
+        font-weight: 700; 
+        cursor: default; 
+        border-bottom: 3px solid var(--primary-dark);
+    }
+    .total-row .total-label, .total-row .total-value {
+        color: white !important;
+        font-weight: 700;
+    }
+    .total-label { text-align: left !important; }
+    .total-value { text-align: right !important; }
     
     .bg-green { background-color: var(--success-color) !important; color: white; font-weight: 600; }
     .bg-yellow { background-color: var(--warning-color) !important; color: var(--text-dark); font-weight: 600; }
@@ -191,8 +203,10 @@
                   <th>Số Mess</th><th>Số Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Tỉ lệ chốt</th>
                 </tr>
               </thead>
+              <!-- MODIFIED: tbody for total row added -->
+              <tbody id="summary-total-body"></tbody>
               <tbody id="summary-body"></tbody>
-              <tfoot id="summary-foot"></tfoot>
+              <!-- tfoot removed -->
             </table>
           </div>
           <div id="daily-breakdown"></div>
@@ -286,8 +300,10 @@
                     <th>Tỉ lệ chốt <span class="sort-icon"></span></th> 
                 </tr>
               </thead>
+              <!-- MODIFIED: tbody for total row added -->
+              <tbody id="modal-summary-total-body"></tbody>
               <tbody id="modal-summary-body"></tbody>
-              <tfoot id="modal-summary-foot"></tfoot>
+              <!-- tfoot removed -->
             </table>
           </div>
         </div>
@@ -390,7 +406,7 @@ function addEventListeners() {
 
   document.getElementById('summary-body').addEventListener('click', function(e) {
       const row = e.target.closest('tbody tr');
-      if (!row) return;
+      if (!row || row.classList.contains('total-row')) return; // Ignore total row
       const isAlreadySelected = row.classList.contains('row-selected');
       document.querySelectorAll('#summary-body tr.row-selected').forEach(selectedRow => {
           selectedRow.classList.remove('row-selected');
@@ -550,7 +566,9 @@ function renderSummary(data) {
     }).join('');
     
     const total = flatList.reduce((acc, item) => ({ mess: acc.mess + item.data.mess, don: acc.don + item.data.don, chot: acc.chot + item.data.chot, phanHoi: acc.phanHoi + item.data.phanHoi }), { mess: 0, don: 0, chot: 0, phanHoi: 0 });
-    document.getElementById('summary-foot').innerHTML = `<tr class="total-row">
+    
+    // MODIFIED: Render total row in its dedicated tbody
+    document.getElementById('summary-total-body').innerHTML = `<tr class="total-row">
         <td class="total-label" colspan="4">TỔNG CỘNG</td> <td class="total-value">${formatNumber(total.mess)}</td> <td class="total-value">${formatNumber(total.don)}</td>
         <td class="total-value">${formatNumber(total.phanHoi)}</td> <td class="total-value">${formatCurrency(total.chot)}</td> <td class="total-value">${formatPercent(total.mess ? total.don / total.mess : 0)}</td>
     </tr>`;
@@ -574,15 +592,23 @@ function renderDailyBreakdown(data) {
             </tr>`;
         }).join('');
         
-        const footHtml=`<tr class='total-row'>
+        // MODIFIED: Total row HTML is now separate
+        const totalRowHtml =`<tbody class='total-row-container'><tr class='total-row'>
             <td colspan='5' class='total-label'>Tổng</td> <td class='total-value'>${formatNumber(total.mess)}</td>
             <td class='total-value'>${formatNumber(total.don)}</td> <td class='total-value'>${formatNumber(total.phanHoi)}</td> <td class='total-value'>${formatCurrency(total.chot)}</td> <td></td>
-        </tr>`;
+        </tr></tbody>`;
         
-        return `<h3>Chi tiết ngày: ${date}</h3><div class="table-responsive-container"><table><thead><tr>
+        const headerHtml = `<thead><tr>
             <th>Tên</th><th>Chi nhánh</th><th>Ca</th><th>Sản phẩm</th><th>Thị trường</th>
             <th>Mess</th><th>Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Team</th>
-        </tr></thead><tbody>${rowsHtml}</tbody><tfoot>${footHtml}</tfoot></table></div>`;
+        </tr></thead>`;
+
+        // MODIFIED: Assemble table with total row at the top
+        return `<h3>Chi tiết ngày: ${date}</h3><div class="table-responsive-container"><table>
+            ${headerHtml}
+            ${totalRowHtml}
+            <tbody>${rowsHtml}</tbody>
+        </table></div>`;
     }).join('');
 }
 
@@ -729,7 +755,8 @@ function renderModalSummaryTable(dataList) {
     }).join('');
     
     const totalRate = total.mess ? total.don / total.mess : 0;
-    const footHtml = `<tr>
+    // MODIFIED: Total row HTML to be placed in its dedicated tbody
+    const totalHtml = `<tr class="total-row">
         <td colspan="5" class="total-label">TỔNG CỘNG</td>
         <td class="total-value">${formatNumber(total.mess)}</td> <td class="total-value">${formatNumber(total.don)}</td>
         <td class="total-value">${formatNumber(total.phanHoi)}</td> <td class="total-value">${formatCurrency(total.chot)}</td>
@@ -737,7 +764,7 @@ function renderModalSummaryTable(dataList) {
     </tr>`;
     
     document.getElementById('modal-summary-body').innerHTML = bodyHtml;
-    document.getElementById('modal-summary-foot').innerHTML = footHtml;
+    document.getElementById('modal-summary-total-body').innerHTML = totalHtml;
     updateSortIcons(modalSortState.column, modalSortState.direction);
 }
 
