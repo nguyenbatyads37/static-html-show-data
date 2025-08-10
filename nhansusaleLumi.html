@@ -106,7 +106,7 @@
         transition: all 0.2s ease;
     }
     
-    tbody tr:not(.row-selected):hover {
+    tbody tr:not(.row-selected):not(.total-row):hover {
         background-color: rgba(139, 195, 74, 0.08);
     }
     
@@ -117,19 +117,20 @@
         font-weight: 600; 
     }
     
-    /* --- SUMMARY ROW STYLES --- */
+    /* --- SUMMARY ROW STYLES (MODIFIED) --- */
     tr.total-row, tr.total-row:hover { 
-        background: #fffde7; 
-        font-size: 1.05em; 
-        color: var(--text-dark);
-        border-top: 2px solid var(--primary-light);
-        font-weight: 600;
+        background: var(--primary-dark); 
+        color: white;
+        font-size: 1.1em; 
+        font-weight: 700;
+        border-bottom: 3px solid var(--primary-light);
         cursor: default;
     }
     
     .total-label { 
         text-align: left !important; 
         font-weight: 700;
+        text-transform: uppercase;
     }
     
     .total-value { 
@@ -348,7 +349,7 @@
         opacity: 0;
     }
     
-    table tbody tr:nth-child(odd):not(.top-1):not(.top-2):not(.top-3) {
+    table tbody tr:nth-child(odd):not(.top-1):not(.top-2):not(.top-3):not(.total-row) {
         background-color: rgba(0,0,0,0.015);
     }
 </style>
@@ -452,7 +453,7 @@
 
       document.body.addEventListener('click', function(e) {
           const row = e.target.closest('tbody tr');
-          if (!row) return;
+          if (!row || row.classList.contains('total-row')) return; // Không cho chọn dòng tổng
           
           const isAlreadySelected = row.classList.contains('row-selected');
           
@@ -493,7 +494,6 @@
             // 2. Xử lý dữ liệu bán hàng và gán chi nhánh đã tra cứu
             rawData = salesResult
                 .filter(r => 
-                    // [MODIFIED] Đã loại bỏ điều kiện lọc theo `trangThai`
                     r.ten && String(r.ten).trim() !== '' &&       
                     r.team && String(r.team).trim() !== ''      
                 )
@@ -645,6 +645,7 @@
         renderDailyBreakdown(filtered);
     }
 
+    // --- MODIFIED FUNCTION ---
     function renderSummary(data) {
         const summaryData = {};
         data.forEach(r => {
@@ -677,7 +678,28 @@
             return a.name.localeCompare(b.name);
         });
         
-        let bodyHtml = flatList.map((item, index) => {
+        // --- TÍNH TỔNG TRƯỚC ---
+        const totalSummary = flatList.reduce((acc, item) => {
+            acc.mess += item.data.mess;
+            acc.don += item.data.don;
+            acc.chot += item.data.chot;
+            acc.phanHoi += item.data.phanHoi;
+            return acc;
+        }, { mess: 0, don: 0, chot: 0, phanHoi: 0 });
+
+        const totalRate = totalSummary.mess ? totalSummary.don / totalSummary.mess : 0;
+        
+        // --- TẠO DÒNG TỔNG HTML ---
+        const totalRowHtml = `<tr class="total-row">
+                <td class="total-label" colspan="4">TỔNG CỘNG</td>
+                <td class="total-value">${formatNumber(totalSummary.mess)}</td>
+                <td class="total-value">${formatNumber(totalSummary.don)}</td>
+                <td class="total-value">${formatNumber(totalSummary.phanHoi)}</td>
+                <td class="total-value">${formatCurrency(totalSummary.chot)}</td>
+                <td class="total-value">${formatPercent(totalRate)}</td></tr>`;
+
+        // --- TẠO CÁC DÒNG DỮ LIỆU CHI TIẾT ---
+        const bodyRowsHtml = flatList.map((item, index) => {
             const s = item.data;
             const rate = s.mess ? s.don / s.mess : 0;
             const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
@@ -700,26 +722,9 @@
             </tr>`;
         }).join('');
         
-        const totalSummary = flatList.reduce((acc, item) => {
-            acc.mess += item.data.mess;
-            acc.don += item.data.don;
-            acc.chot += item.data.chot;
-            acc.phanHoi += item.data.phanHoi;
-            return acc;
-        }, { mess: 0, don: 0, chot: 0, phanHoi: 0 });
-
-        const totalRate = totalSummary.mess ? totalSummary.don / totalSummary.mess : 0;
-        
-        const footerHtml = `<tr class="total-row">
-                <td class="total-label" colspan="4">TỔNG CỘNG</td>
-                <td class="total-value">${formatNumber(totalSummary.mess)}</td>
-                <td class="total-value">${formatNumber(totalSummary.don)}</td>
-                <td class="total-value">${formatNumber(totalSummary.phanHoi)}</td>
-                <td class="total-value">${formatCurrency(totalSummary.chot)}</td>
-                <td class="total-value">${formatPercent(totalRate)}</td></tr>`;
-        
-        document.getElementById('summary-body').innerHTML = bodyHtml;
-        document.getElementById('summary-foot').innerHTML = footerHtml;
+        // --- KẾT HỢP VÀ HIỂN THỊ ---
+        document.getElementById('summary-body').innerHTML = totalRowHtml + bodyRowsHtml;
+        document.getElementById('summary-foot').innerHTML = ''; // Xóa nội dung footer cũ
     }
     
     function renderDailyBreakdown(data) { 
@@ -792,8 +797,8 @@
                                        <th>Team</th>
                                      </tr>
                                    </thead>
-                                   <tbody>${rowsHtml}</tbody>
-                                   <tfoot>${footHtml}</tfoot>
+                                   <tbody>${footHtml + rowsHtml}</tbody>
+                                   
                                  </table>
                                </div>`;
             container.innerHTML += `<h3>Chi tiết ngày: ${date}</h3>${tableHtml}`;
