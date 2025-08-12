@@ -746,15 +746,29 @@
           if (paymentStatus === "Có bill") { stats["Đã Thanh Toán (có bill)"].count++; stats["Đã Thanh Toán (có bill)"].amount += numericAmount; }
           if (paymentStatus === "Có bill 1 phần") { stats["Bill 1 phần"].count++; }
           if (checkResult === "OK") { stats["Tổng đơn đủ đkien đẩy vh"].count++; }
-          if (trackingCode) { stats["Tổng đơn lên vận hành"].count++; }
-          switch (deliveryStatus) {
-            case "Giao Thành Công": stats["Giao Thành Công"].count++; break;
-            case "Đang Giao": stats["Đang Giao"].count++; break;
-            case "Chưa Giao": stats["Chưa Giao"].count++; break;
-            case "Hoàn": stats["Hoàn"].count++; break;
-            case "chờ check": stats["chờ check"].count++; break;
-            case "": stats["Trống trạng thái"].count++; break;
+
+          // [EDIT START] - Áp dụng logic mới cho báo cáo
+          // 1. "Tổng đơn lên vận hành" đếm các đơn có "Đơn vị vận chuyển"
+          if (shippingCompany && shippingCompany !== "Không xác định") {
+            stats["Tổng đơn lên vận hành"].count++;
           }
+          
+          // 2. Phân loại trạng thái giao hàng với logic mới cho "Đang Giao"
+          if (deliveryStatus === "Giao Thành Công") {
+              stats["Giao Thành Công"].count++;
+          } else if (deliveryStatus === "Hoàn") {
+              stats["Hoàn"].count++;
+          } else if (trackingCode) { // Nếu có tracking và không phải GTC/Hoàn, thì là "Đang Giao"
+              stats["Đang Giao"].count++;
+          } else if (deliveryStatus === "Chưa Giao") {
+              stats["Chưa Giao"].count++;
+          } else if (deliveryStatus === "chờ check") {
+              stats["chờ check"].count++;
+          } else if (!deliveryStatus) { // Trạng thái trống
+              stats["Trống trạng thái"].count++;
+          }
+          // Các trạng thái khác không có trong cột báo cáo (vd: Hủy) sẽ được bỏ qua, tương tự logic cũ
+          // [EDIT END]
         });
       });
       const grandTotalRow = renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal);
