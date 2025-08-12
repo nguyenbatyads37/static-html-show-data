@@ -1,3 +1,4 @@
+html
 <!DOCTYPE html>
 <html lang="vi">
 <head>
@@ -124,6 +125,13 @@
     #MktReport .filter-group { display: flex; align-items: center; gap: 10px; }
     #MktReport label { font-weight: 500; color: var(--text-dark); }
     #MktReport input[type="date"], #MktReport select { padding: 8px 12px; border: 1px solid var(--border-color); border-radius: 4px; font-family: inherit; background-color: #fff; }
+    
+    /* === CẬP NHẬT: STYLE CHO BỘ LỌC CHỌN NHIỀU GIÁ TRỊ === */
+    #MktReport select[multiple] {
+        height: 120px; /* Hiển thị dưới dạng listbox để chọn nhiều */
+        padding: 5px; /* Điều chỉnh padding cho phù hợp */
+    }
+    
     #MktReport button { background-color: var(--primary-color); color: white; border: none; cursor: pointer; font-weight: 600; transition: background-color 0.2s; padding: 8px 15px; border-radius: 4px; }
     #MktReport button:hover { background-color: var(--primary-dark); }
     #MktReport th { background-color: var(--primary-light); color: white; }
@@ -503,9 +511,9 @@
       <div class="filter-container">
           <div class="filter-group"> <label for="start-date-mkt">Từ ngày:</label> <input type="date" id="start-date-mkt"> </div>
           <div class="filter-group"> <label for="end-date-mkt">Đến ngày:</label> <input type="date" id="end-date-mkt"> </div>
-          <div class="filter-group"> <label for="market-filter-mkt">Thị trường:</label> <select id="market-filter-mkt"></select> </div>
-          <div class="filter-group"> <label for="team-filter-mkt">Team:</label> <select id="team-filter-mkt"></select> </div>
-          <div class="filter-group"> <label for="ca-filter-mkt">Ca:</label> <select id="ca-filter-mkt"></select> </div>
+          <div class="filter-group"> <label for="market-filter-mkt">Thị trường:</label> <select id="market-filter-mkt" multiple></select> </div>
+          <div class="filter-group"> <label for="team-filter-mkt">Team:</label> <select id="team-filter-mkt" multiple></select> </div>
+          <div class="filter-group"> <label for="ca-filter-mkt">Ca:</label> <select id="ca-filter-mkt" multiple></select> </div>
           <button id="apply-filter-mkt">Áp dụng</button>
       </div>
       <div id="loading-mkt" class="loading">Đang tải dữ liệu...</div>
@@ -833,19 +841,41 @@
                     }).catch(err => { console.error('Error fetching Mkt data:', err); if (loadingElement) loadingElement.style.display = 'none'; if (errorElement) { errorElement.textContent = `Lỗi khi tải dữ liệu: ${err.message}`; errorElement.style.display = 'block'; } });
             },
             populateFilters: function() {
-                const markets = [...new Set(this.allData.map(r => r.thiTruong).filter(Boolean))].sort(), teams = [...new Set(this.allData.map(r => r.team).filter(Boolean))].sort(), shifts = [...new Set(this.allData.map(r => r.ca).filter(ca => ca != null && ca !== ''))].sort((a, b) => a - b);
-                const marketSelect = document.getElementById('market-filter-mkt'), teamSelect = document.getElementById('team-filter-mkt'), shiftSelect = document.getElementById('ca-filter-mkt');
-                marketSelect.innerHTML = '<option value="">Tất cả Thị trường</option>' + markets.map(m => `<option value="${m}">${m}</option>`).join('');
-                teamSelect.innerHTML = '<option value="">Tất cả Team</option>' + teams.map(t => `<option value="${t}">${t}</option>`).join('');
-                shiftSelect.innerHTML = '<option value="">Tất cả Ca</option>' + shifts.map(s => `<option value="${s}">${s}</option>`).join('');
+                const markets = [...new Set(this.allData.map(r => r.thiTruong).filter(Boolean))].sort(), 
+                      teams = [...new Set(this.allData.map(r => r.team).filter(Boolean))].sort(), 
+                      shifts = [...new Set(this.allData.map(r => r.ca).filter(ca => ca != null && ca !== ''))].sort((a, b) => a - b);
+                const marketSelect = document.getElementById('market-filter-mkt'), 
+                      teamSelect = document.getElementById('team-filter-mkt'), 
+                      shiftSelect = document.getElementById('ca-filter-mkt');
+                      
+                // For multi-select, we don't need an 'All' option. No selection will mean 'All'.
+                marketSelect.innerHTML = markets.map(m => `<option value="${m}">${m}</option>`).join('');
+                teamSelect.innerHTML = teams.map(t => `<option value="${t}">${t}</option>`).join('');
+                shiftSelect.innerHTML = shifts.map(s => `<option value="${s}">${s}</option>`).join('');
             },
             applyFilters: function() {
-                const startDateInput = document.getElementById('start-date-mkt').value, endDateInput = document.getElementById('end-date-mkt').value, selectedMarket = document.getElementById('market-filter-mkt').value, selectedTeam = document.getElementById('team-filter-mkt').value, selectedCa = document.getElementById('ca-filter-mkt').value;
+                const getSelectedValues = (selectId) => Array.from(document.getElementById(selectId).selectedOptions).map(opt => opt.value);
+
+                const startDateInput = document.getElementById('start-date-mkt').value, 
+                      endDateInput = document.getElementById('end-date-mkt').value, 
+                      selectedMarkets = getSelectedValues('market-filter-mkt'), 
+                      selectedTeams = getSelectedValues('team-filter-mkt'), 
+                      selectedCas = getSelectedValues('ca-filter-mkt');
+
                 document.getElementById('report-date-mkt').textContent = `Từ ngày ${formatUtils.formatDate(startDateInput)} đến ngày ${formatUtils.formatDate(endDateInput)}`;
                 const startDate = startDateInput ? new Date(startDateInput + 'T00:00:00') : null, endDate = endDateInput ? new Date(endDateInput + 'T23:59:59') : null;
+                
                 const filteredData = this.allData.filter(record => {
-                    if (!record.ngay) return false; const recordDate = new Date(record.ngay); if (isNaN(recordDate.getTime())) return false;
-                    const dateMatch = (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate), marketMatch = !selectedMarket || record.thiTruong === selectedMarket, teamMatch = !selectedTeam || record.team === selectedTeam, caMatch = !selectedCa || String(record.ca) === selectedCa;
+                    if (!record.ngay) return false; 
+                    const recordDate = new Date(record.ngay); 
+                    if (isNaN(recordDate.getTime())) return false;
+                    
+                    const dateMatch = (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
+                    // If the array of selected values is empty, it means 'All' are selected. Otherwise, check if the record's value is in the array.
+                    const marketMatch = selectedMarkets.length === 0 || selectedMarkets.includes(record.thiTruong);
+                    const teamMatch = selectedTeams.length === 0 || selectedTeams.includes(record.team);
+                    const caMatch = selectedCas.length === 0 || selectedCas.includes(String(record.ca));
+                    
                     return dateMatch && marketMatch && teamMatch && caMatch;
                 });
                 this.processAndDisplayData(filteredData);
