@@ -2,7 +2,7 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8">
-  <title>Báo cáo Team CKHS-Lý</title>
+  <title>Báo cáo tổng hợp chi tiết</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
@@ -386,7 +386,7 @@
       <div class="main-detailed">
         <div class="header"> 
             <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg" alt="Logo"> 
-            <h2 id="report-title">BÁO CÁO TEAM CKHS-LÝ</h2> 
+            <h2 id="report-title">DỮ LIỆU TỔNG HỢP</h2> 
         </div>
         
         <div class="table-responsive-container">
@@ -417,9 +417,7 @@
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
     let rawData = [];
     let employeeData = [];
-    let isRestrictedView = false;
-    let allowedNames = [];
-
+    
     const loader = document.getElementById('loading-overlay');
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
@@ -453,7 +451,7 @@
 
       document.body.addEventListener('click', function(e) {
           const row = e.target.closest('tbody tr');
-          if (!row || row.classList.contains('total-row')) return; // Không cho chọn dòng tổng
+          if (!row || row.classList.contains('total-row')) return;
           
           const isAlreadySelected = row.classList.contains('row-selected');
           
@@ -489,11 +487,9 @@
                 }
             });
 
-            rawData = salesResult
-                .filter(r => 
-                    r.ten && String(r.ten).trim() !== '' &&       
-                    r.team && String(r.team).trim() !== ''      
-                )
+            // 1. Chuẩn bị toàn bộ dữ liệu bán hàng
+            const allSalesData = salesResult
+                .filter(r => r.ten && String(r.ten).trim() !== '' && r.team && String(r.team).trim() !== '')
                 .map(r => {
                     const saleName = (r.ten || '').trim();
                     return {
@@ -509,52 +505,47 @@
                 });
 
             // =================================================================
-            // === THAY ĐỔI CHÍNH: LỌC DỮ LIỆU CHỈ DÀNH CHO TEAM "CKHS-Lý" ===
+            // === LOGIC PHÂN QUYỀN DỰA TRÊN ID VÀ VAI TRÒ (LEADER/NV) ===
             // =================================================================
-            const targetTeam = 'CKHS-Lý';
-            rawData = rawData.filter(r => r.team === targetTeam);
-            // =================================================================
-
             const idFromUrl = getUrlParameter('id');
-            let restrictedChiNhanh = null;
-
             if (idFromUrl) {
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
+                
                 if (currentUser) {
-                    isRestrictedView = true; 
-                    const cleanName = (currentUser.ho_va_ten || '').trim();
-                    restrictedChiNhanh = (currentUser.chi_nhanh || '').trim();
-                    
-                    if (currentUser.vi_tri === "Leader") {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CHI NHÁNH ${restrictedChiNhanh}`;
-                        allowedNames = employeeData
-                            .filter(emp => (emp.chi_nhanh || '').trim() === restrictedChiNhanh)
-                            .map(emp => (emp.ho_va_ten || '').trim());
+                    const userName = (currentUser.ho_va_ten || '').trim();
+                    const userRole = (currentUser.vi_tri || '').trim();
+
+                    if (userRole === 'Leader') {
+                        // LEADER: Xem toàn bộ team của mình
+                        const userSaleRecord = allSalesData.find(sale => sale.ten === userName);
+                        if (userSaleRecord && userSaleRecord.team) {
+                            const targetTeam = userSaleRecord.team;
+                            rawData = allSalesData.filter(sale => sale.team === targetTeam);
+                            document.getElementById('report-title').textContent = `BÁO CÁO TEAM ${targetTeam}`;
+                        } else {
+                            alert(`Không thể xác định team cho Leader: ${userName}. Báo cáo sẽ trống.`);
+                            rawData = [];
+                            document.getElementById('report-title').textContent = 'LỖI XÁC ĐỊNH TEAM';
+                        }
                     } else {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
-                        allowedNames = [cleanName];
+                        // NHÂN VIÊN: Chỉ xem dữ liệu của chính mình
+                        rawData = allSalesData.filter(sale => sale.ten === userName);
+                        document.getElementById('report-title').textContent = `BÁO CÁO CÁ NHÂN - ${userName}`;
                     }
                 } else {
-                    isRestrictedView = true; 
-                    allowedNames = [];
-                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
+                    // ID không hợp lệ
+                    alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại. Báo cáo sẽ trống.`);
+                    rawData = [];
+                    document.getElementById('report-title').textContent = 'ID KHÔNG HỢP LỆ';
                 }
             } else {
-                isRestrictedView = false;
-                allowedNames = [];
-                // Cập nhật tiêu đề mặc định
-                document.getElementById('report-title').textContent = `BÁO CÁO TEAM ${targetTeam}`;
+                // KHÔNG CÓ ID: Xem tổng hợp tất cả
+                rawData = allSalesData;
+                document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
-            
-            let dataForFilters;
-            if (isRestrictedView) {
-                dataForFilters = rawData.filter(r => allowedNames.includes(r.ten));
-            } else {
-                dataForFilters = rawData;
-            }
-            
-            populateAllFilters(dataForFilters); 
-            
+            // =================================================================
+
+            populateAllFilters(rawData);
             applyFilters();
 
         }).catch(err => { 
@@ -599,9 +590,6 @@
         const selT = getSelectedOptions('team-all', 'filter-team');
 
         return rawData.filter(r => {
-            const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
-            if (!isUserAllowed) return false; 
-            
             const d = new Date(r.ngay); 
             
             const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
@@ -721,7 +709,7 @@
             </tr>`;
         }).join('');
         
-        document.getElementById('summary-body').innerHTML = totalRowHtml + bodyRowsHtml;
+        document.getElementById('summary-body').innerHTML = data.length > 0 ? (totalRowHtml + bodyRowsHtml) : '';
         document.getElementById('summary-foot').innerHTML = '';
     }
     
