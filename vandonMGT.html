@@ -47,6 +47,26 @@
       border: 1px solid #ccc;
       font-size: 14px;
     }
+    /* Thêm style cho dropdown trong bảng */
+    td select.editable-select {
+        width: 100%;
+        border: none;
+        background: transparent;
+        font-family: inherit;
+        font-size: inherit;
+        padding: 0;
+        margin: 0;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        appearance: none;
+        cursor: pointer;
+    }
+    td.editable-dropdown-cell {
+        padding: 0; /* Xóa padding của td để select chiếm toàn bộ */
+    }
+    td.editable-dropdown-cell select.editable-select {
+        padding: 8px 12px; /* Di chuyển padding vào select */
+    }
     .tab-container {
       margin-bottom: 15px;
       padding: 5px;
@@ -327,11 +347,12 @@
     
     const displayColumns = ["Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ghi chú vận đơn", "Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
     const columnMapping = { "Ghi chú vận đơn": "ngày hẹn đẩy đơn", "Kết quả check": "Kết quả Check" };
-    const editableCols = ["Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
+    
+    const editableCols = ["Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
+    const checkStatusOptions = ["", "OK", "Huỷ", "Chờ check lại", "Sai SĐT", "Sai địa chỉ", "Khác"];
+
 
     // ===== STATE MANAGEMENT REFACTORED =====
-    // state: Nguồn dữ liệu duy nhất, không bao giờ thay đổi trực tiếp
-    // pendingChanges: "Bộ nhớ đệm" độc lập, lưu {orderId: {columnName: newValue}}
     let state = {
         allData: [],
         pendingChanges: new Map(),
@@ -339,7 +360,7 @@
         showTrackingOrders: false,
         filterValues: {},
     };
-    let pasteAnchorCell = null; // Biến này chỉ liên quan đến UI, không thuộc state chính
+    let pasteAnchorCell = null;
 
     // --- HÀM THÔNG BÁO TÙY CHỈNH ---
     function showCustomAlert(message, type = 'info', duration = 4000) {
@@ -396,20 +417,26 @@
     }
     
     function getFilteredData() {
-        // Tạo một bản sao "lai" của dữ liệu để lọc, không ảnh hưởng đến dữ liệu gốc.
         const mergedData = state.allData.map(originalRow => {
-            const changes = state.pendingChanges.get(originalRow["Mã đơn hàng"]);
-            return changes ? { ...originalRow, ...Object.fromEntries(changes) } : originalRow;
+            const orderId = originalRow["Mã đơn hàng"];
+            const changes = state.pendingChanges.get(orderId);
+            if (changes) {
+                const changeObject = {};
+                changes.forEach((value, key) => { changeObject[key] = value; });
+                return { ...originalRow, ...changeObject };
+            }
+            return originalRow;
         });
 
         const mgtData = filterByCarrier(mergedData);
 
         let dataToRender = mgtData.filter(row => {
+            // ===== SỬA LỖI HIỂN THỊ SỐ =====
+            // Luôn xử lý mã tracking như một chuỗi
             const trackingCode = String(row["Mã Tracking"] || row["Mã_Tracking"] || '');
             return state.showTrackingOrders ? trackingCode.trim() !== '' : !trackingCode.trim();
         });
 
-        // Áp dụng các bộ lọc chính
         const market = document.getElementById('filterMarket').value;
         const product = document.getElementById('filterProduct').value;
         const dateFrom = document.getElementById('filterDateFrom').value;
@@ -421,7 +448,6 @@
         if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
         if (state.activeRegion !== 'all') { dataToRender = dataToRender.filter(row => row["Khu vực"] === state.activeRegion); }
         
-        // Áp dụng các bộ lọc cột
         const trackingIncludeRaw = state.filterValues['tracking_include'] || '';
         const trackingExcludeRaw = state.filterValues['tracking_exclude'] || '';
         const otherColumnFilters = Object.entries(state.filterValues).filter(([key, val]) => val.trim() !== '' && !key.startsWith('tracking_'));
@@ -440,6 +466,7 @@
             const lowerInclude = trackingIncludeRaw.toLowerCase();
             const lowerExclude = trackingExcludeRaw.toLowerCase();
             dataToRender = dataToRender.filter(row => {
+                // ===== SỬA LỖI HIỂN THỊ SỐ =====
                 const cellValue = String(row['Mã Tracking'] || ''); 
                 const lowerCellValue = cellValue.toLowerCase();
                 if (lowerExclude && lowerCellValue.includes(lowerExclude)) { return false; }
@@ -455,7 +482,6 @@
             });
         }
         
-        // Sắp xếp
         const sortKey = 'Ngày lên đơn'; 
         dataToRender.sort((a, b) => {
             const parseDate = (val) => { if (!val) return null; const date = new Date(val); return isNaN(date.getTime()) ? null : date; };
@@ -490,15 +516,19 @@
             displayColumns.forEach(col => {
                 const td = document.createElement('td');
                 const dataKey = columnMapping[col] || col;
-                let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '';
+                // ===== SỬA LỖI HIỂN THỊ SỐ =====
+                // Luôn chuyển giá trị thành chuỗi để tránh lỗi hiển thị số khoa học
+                let value = String(row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '');
                 
                 if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) { value = formatDate(value); }
                 if (col === "Mã đơn hàng") td.classList.add('fixed-column');
                 if (col === "Ghi chú vận đơn" && value) { td.classList.add('note-highlight'); }
-                const checkValue = String(value).trim().toUpperCase();
+                const checkValue = String(value).trim().toLowerCase();
+                
+                td.classList.remove('status-ok', 'status-cancel');
                 if (col === "Kết quả check") {
-                    if (checkValue === 'OK') td.classList.add('status-ok');
-                    else if (checkValue.includes('HỦY')) td.classList.add('status-cancel');
+                    if (checkValue === 'ok') td.classList.add('status-ok');
+                    else if (checkValue.includes('huỷ')) td.classList.add('status-cancel');
                 }
 
                 if (editableCols.includes(col)) {
@@ -509,14 +539,42 @@
                         if (!state.pendingChanges.has(orderId)) {
                             state.pendingChanges.set(orderId, new Map());
                         }
-                        const finalValue = (col === "Ngày đóng hàng") ? parseDateToISO(newValue) : newValue;
+                        const finalValue = (col === "Ngày đóng hàng") ? parseDateToISO(newValue) : String(newValue); // Luôn lưu là string
                         state.pendingChanges.get(orderId).set(dataKey, finalValue);
                         td.classList.add('highlight');
                     };
 
-                    if (col === "Ngày đóng hàng") {
+                    if (col === "Kết quả check") {
+                        td.classList.add('editable-dropdown-cell');
+                        const select = document.createElement('select');
+                        select.className = 'editable-select';
+                        
+                        const currentVal = String(value);
+                        if (!checkStatusOptions.some(opt => opt.toLowerCase() === currentVal.toLowerCase())) {
+                            if (currentVal) { checkStatusOptions.push(currentVal); }
+                        }
+                        
+                        checkStatusOptions.forEach(opt => {
+                            const option = document.createElement('option');
+                            option.value = opt;
+                            option.textContent = opt;
+                            if (opt.toLowerCase() === currentVal.toLowerCase()) { option.selected = true; }
+                            select.appendChild(option);
+                        });
+                        
+                        select.addEventListener('change', () => {
+                            handleInput(select.value);
+                            const selectedVal = select.value.toLowerCase();
+                            td.classList.remove('status-ok', 'status-cancel');
+                            if (selectedVal === 'ok') td.classList.add('status-ok');
+                            else if (selectedVal.includes('huỷ')) td.classList.add('status-cancel');
+                        });
+                        td.innerHTML = '';
+                        td.appendChild(select);
+                    } else if (col === "Ngày đóng hàng") {
                         const input = document.createElement('input'); 
                         input.type = 'text'; input.className = 'date-input'; input.value = value; input.placeholder = 'dd/mm/yyyy';
+                        td.style.padding = '0'; input.style.padding = '8px 12px';
                         input.addEventListener('input', () => handleInput(input.value));
                         input.addEventListener('blur', () => { if (!/^\d{2}\/\d{2}\/\d{4}$/.test(input.value) && input.value !== '') { showCustomAlert('Vui lòng nhập ngày theo định dạng dd/mm/yyyy.', 'error'); input.focus(); } });
                         td.innerHTML = ''; td.appendChild(input);
@@ -583,7 +641,9 @@
       state.pendingChanges.forEach((changes, orderId) => {
           const originalRow = state.allData.find(row => row["Mã đơn hàng"] === orderId);
           if(originalRow){
-              const updatedRow = { ...originalRow, ...Object.fromEntries(changes) };
+              const changeObject = {};
+              changes.forEach((value, key) => { changeObject[key] = value; });
+              const updatedRow = { ...originalRow, ...changeObject };
               rowsToSend.push(updatedRow);
           }
       });
@@ -598,12 +658,9 @@
       .then(json => {
           if (json.message) { 
               showCustomAlert(`Cập nhật thành công ${rowsToSend.length} đơn hàng!`, 'success'); 
-              // Cập nhật lại state gốc với những thay đổi đã thành công
               rowsToSend.forEach(updatedRow => {
                   const index = state.allData.findIndex(r => r["Mã đơn hàng"] === updatedRow["Mã đơn hàng"]);
-                  if (index !== -1) {
-                      state.allData[index] = updatedRow;
-                  }
+                  if (index !== -1) { state.allData[index] = updatedRow; }
               });
               state.pendingChanges.clear(); 
               render();
@@ -614,8 +671,26 @@
       .finally(() => { updateBtn.disabled = false; updateBtn.textContent = 'Cập nhật tất cả thay đổi'; });
     }
     
-    function getCellValue(cell) { if (!cell) return ''; const input = cell.querySelector('input.date-input'); return input ? input.value : cell.textContent; }
-    function setCellValue(cell, value) { if (!cell) return; const input = cell.querySelector('input.date-input'); if (input) { input.value = value; } else if (cell.isContentEditable) { cell.textContent = value; } if(cell.isContentEditable || input) { cell.dispatchEvent(new Event('input', { bubbles: true })); } }
+    function getCellValue(cell) { 
+        if (!cell) return ''; 
+        const select = cell.querySelector('select');
+        if (select) return select.value;
+        const input = cell.querySelector('input'); 
+        return input ? input.value : cell.textContent; 
+    }
+    function setCellValue(cell, value) { 
+        if (!cell) return; 
+        const select = cell.querySelector('select');
+        if (select) {
+            select.value = value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+        }
+        const input = cell.querySelector('input'); 
+        if (input) { input.value = value; } 
+        else if (cell.isContentEditable) { cell.textContent = value; } 
+        if(cell.isContentEditable || input) { cell.dispatchEvent(new Event('input', { bubbles: true })); } 
+    }
 
     function updateSelectionSummary() { const summaryEl = document.getElementById('selectionSummary'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; if (selectedCells.length <= 1) { return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d.-]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); }
 
@@ -671,7 +746,6 @@
         const sanitizeCsvCell = (cell, colName) => {
             if (cell === null || cell === undefined) return '';
             let str = String(cell);
-            // Ép Excel coi các cột này là TEXT bằng cách thêm công thức ="VALUE"
             if ((colName === "Mã Tracking" || colName === "Phone*") && str) {
                 return `="${str.replace(/"/g, '""')}"`;
             }
