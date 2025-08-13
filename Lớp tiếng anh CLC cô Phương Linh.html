@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nộp bài tập</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px 0;
+        }
+        .container {
+            background: white;
+            padding: 30px 40px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            text-align: center;
+            width: 90%;
+            max-width: 500px;
+        }
+        h1 { color: #333; margin-bottom: 25px; }
+        .form-group { margin-bottom: 15px; text-align: left; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-group input[type="text"],
+        .form-group input[type="date"],
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        input[type="file"] { padding: 5px; }
+        .section-divider {
+            border: 0;
+            height: 1px;
+            background-image: linear-gradient(to right, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0));
+            margin: 40px 0;
+        }
+        .section-title { font-size: 1.2em; color: #333; margin-bottom: 20px; }
+        button {
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        button:hover:not(:disabled) { transform: scale(1.05); }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; transform: none; }
+        #recordButton { background-color: #28a745; font-size: 18px; padding: 15px 30px; border-radius: 50px; }
+        #recordButton.recording { background-color: #dc3545; animation: pulse 1.5s infinite; }
+        #submitButton { background-color: #007bff; margin-top: 30px; width: 100%; font-size: 18px; padding: 15px; }
+        #status { margin-top: 20px; font-size: 16px; color: #555; min-height: 50px; line-height: 1.5; word-wrap: break-word; }
+        audio { margin-top: 20px; width: 100%; }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+        .submission-section { margin-bottom: 20px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Nộp bài tập</h1>
+
+        <!-- THÔNG TIN CHUNG -->
+        <div class="form-group">
+            <label for="hoTenInput">Họ và tên</label>
+            <input type="text" id="hoTenInput" placeholder="Ví dụ: Nguyễn Văn An" required>
+        </div>
+        <div class="form-group">
+            <label for="lopInput">Lớp</label>
+            <input type="text" id="lopInput" placeholder="Ví dụ: 10A1" required>
+        </div>
+        <div class="form-group">
+            <label for="ngayNopInput">Ngày nộp bài</label>
+            <input type="date" id="ngayNopInput" required>
+        </div>
+
+        <hr class="section-divider">
+
+        <!-- KHU VỰC NỘP BÀI HỢP NHẤT -->
+        <h2 class="section-title">Nội dung bài nộp</h2>
+        <p style="color: #666; margin-top: -15px; margin-bottom: 25px;">Bạn có thể nộp bằng ghi âm, tệp đính kèm, hoặc cả hai.</p>
+
+        <!-- GHI ÂM -->
+        <div class="submission-section">
+            <label class="form-group label"><strong>File ghi âm</strong></label>
+            <button id="recordButton">Bắt đầu Ghi âm</button>
+            <audio id="audioPlayer" controls style="display:none;"></audio>
+        </div>
+
+        <!-- NỘP FILE -->
+        <div class="submission-section">
+            <label for="fileInput" class="form-group label"><strong>File đính kèm (PDF, Word,...)</strong></label>
+            <input type="file" id="fileInput">
+        </div>
+
+        <!-- NÚT NỘP BÀI CHUNG -->
+        <button id="submitButton" disabled>Nộp Bài</button>
+
+        <!-- TRẠNG THÁI -->
+        <div id="status">Vui lòng điền đủ thông tin, sau đó ghi âm hoặc chọn file để nộp.</div>
+    </div>
+
+    <script>
+        // --- CẤU HÌNH API APPSHEET ---
+        const APPSHEET_API_URL = 'https://www.appsheet.com/api/v2/apps/b3a614d3-666b-4cc4-ab85-f79e74411840/tables/Nộp bài tập/Action';
+        const APPSHEET_ACCESS_KEY = 'V2-Mh5rl-fa8SP-2wcZV-RpXvn-GmTbz-Kszei-DeWPO-VpCr3';
+
+        // --- LẤY CÁC ELEMENT TỪ DOM ---
+        const hoTenInput = document.getElementById('hoTenInput');
+        const lopInput = document.getElementById('lopInput');
+        const ngayNopInput = document.getElementById('ngayNopInput');
+        const statusDiv = document.getElementById('status');
+        const recordButton = document.getElementById('recordButton');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const fileInput = document.getElementById('fileInput');
+        const submitButton = document.getElementById('submitButton');
+
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob = null;
+        let isRecording = false;
+
+        // --- KHỞI TẠO ---
+        window.onload = () => { ngayNopInput.valueAsDate = new Date(); };
+
+        // --- HÀM KIỂM TRA & KÍCH HOẠT NÚT NỘP BÀI ---
+        const checkSubmissionReady = () => {
+            const isReady = audioBlob || fileInput.files.length > 0;
+            submitButton.disabled = !isReady;
+        };
+        
+        const resetAudio = () => {
+            audioBlob = null;
+            audioChunks = [];
+            audioPlayer.style.display = 'none';
+            audioPlayer.src = '';
+            recordButton.textContent = 'Bắt đầu Ghi âm';
+            recordButton.classList.remove('recording');
+        };
+
+        // --- LOGIC GHI ÂM ---
+        recordButton.addEventListener('click', async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+                    mediaRecorder.ondataavailable = event => audioChunks.push(event.data);
+                    mediaRecorder.onstop = () => {
+                        audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        audioPlayer.src = URL.createObjectURL(audioBlob);
+                        audioPlayer.style.display = 'block';
+                        checkSubmissionReady();
+                    };
+                    audioChunks = []; // Xóa chunk cũ trước khi bắt đầu
+                    mediaRecorder.start();
+                    isRecording = true;
+                    recordButton.textContent = 'Dừng Ghi âm';
+                    recordButton.classList.add('recording');
+                    statusDiv.textContent = 'Đang ghi âm...';
+                } catch (err) {
+                    statusDiv.textContent = 'Lỗi: Không thể truy cập micro. Vui lòng cấp quyền.';
+                    console.error(err);
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                recordButton.textContent = 'Ghi âm lại';
+                recordButton.classList.remove('recording');
+                statusDiv.textContent = 'Đã ghi xong. Bạn có thể nộp bài ngay.';
+            }
+        });
+        
+        fileInput.addEventListener('change', checkSubmissionReady);
+
+        // --- LOGIC NỘP BÀI ---
+        submitButton.addEventListener('click', async () => {
+            const studentInfo = getStudentInfo();
+            if (!studentInfo) return;
+
+            if (!audioBlob && !fileInput.files[0]) {
+                alert('Vui lòng ghi âm hoặc chọn một file để nộp!');
+                return;
+            }
+
+            setLoadingState(true);
+            statusDiv.textContent = 'Đang xử lý và tải lên, vui lòng chờ...';
+
+            try {
+                // Đọc cả hai file thành base64 song song
+                const [audioBase64, fileBase64] = await Promise.all([
+                    getBase64(audioBlob),
+                    getBase64(fileInput.files[0])
+                ]);
+
+                // Gửi dữ liệu đến AppSheet
+                await submitToAppSheet(studentInfo, audioBase64, fileBase64);
+                
+                statusDiv.innerHTML = `Nộp bài thành công cho học sinh <strong>${studentInfo.hoTen}</strong>.`;
+                
+                // Đặt lại form sau khi nộp thành công
+                resetAudio();
+                fileInput.value = '';
+                checkSubmissionReady();
+
+            } catch (error) {
+                statusDiv.textContent = `Đã xảy ra lỗi: ${error.message}. Vui lòng thử lại.`;
+                console.error('Submission Error:', error);
+            } finally {
+                setLoadingState(false);
+            }
+        });
+
+        // --- HÀM HỖ TRỢ ---
+
+        const getStudentInfo = () => {
+            const hoTen = hoTenInput.value.trim();
+            const lop = lopInput.value.trim();
+            const ngayNop = ngayNopInput.value;
+            if (!hoTen || !lop || !ngayNop) {
+                alert('Vui lòng điền đầy đủ Họ và tên, Lớp và Ngày nộp bài.');
+                return null;
+            }
+            const dateParts = ngayNop.split('-'); // dd/MM/yyyy
+            const ngayNopFormatted = `${dateParts[0]}/${dateParts[1]}/${dateParts[2]}`; // dd/MM/yyyy
+            return { hoTen, lop, ngayNopFormatted };
+        };
+
+        const getBase64 = (file) => {
+            return new Promise((resolve, reject) => {
+                if (!file) {
+                    resolve(""); // Trả về chuỗi rỗng nếu không có file
+                    return;
+                }
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        };
+
+        const submitToAppSheet = async (studentInfo, audioBase64, fileBase64) => {
+            const rowData = {
+                "Họ và tên": studentInfo.hoTen,
+                "Lớp": studentInfo.lop,
+                "Ngày nộp bài": studentInfo.ngayNopFormatted,
+                "File ghi âm": audioBase64,
+                "File đính kèm": fileBase64
+            };
+
+            const payload = {
+                "Action": "Add",
+                "Properties": {},
+                "Rows": [rowData]
+            };
+
+            const response = await fetch(APPSHEET_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'ApplicationAccessKey': APPSHEET_ACCESS_KEY
+                },
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API trả về lỗi ${response.status}: ${errorText}`);
+            }
+            
+            return response.json();
+        };
+
+        const setLoadingState = (isLoading) => {
+            submitButton.disabled = isLoading;
+            recordButton.disabled = isLoading;
+            fileInput.disabled = isLoading;
+            hoTenInput.disabled = isLoading;
+            lopInput.disabled = isLoading;
+            ngayNopInput.disabled = isLoading;
+            submitButton.textContent = isLoading ? 'Đang xử lý...' : 'Nộp Bài';
+        };
+
+    </script>
+</body>
+</html>
