@@ -500,45 +500,6 @@
       height: 400px;
       /* Chiều cao cố định */
     }
-
-    /* === CSS MỚI CHO DROPDOWN ĐVVC === */
-    .ffm-dropdown {
-        position: relative;
-        display: inline-block;
-    }
-
-    .ffm-dropdown-content {
-        display: none;
-        position: absolute;
-        background-color: #f9f9f9;
-        min-width: 160px;
-        box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
-        z-index: 101;
-        border-radius: 5px;
-        border: 1px solid #ddd;
-    }
-
-    .ffm-dropdown-content button {
-        color: black;
-        background-color: white;
-        padding: 12px 16px;
-        text-decoration: none;
-        display: block;
-        width: 100%;
-        text-align: left;
-        font-size: 16px; /* Giảm kích thước font cho vừa vặn */
-        box-shadow: none;
-    }
-
-    .ffm-dropdown-content button:hover {
-        background-color: #f1f1f1;
-        transform: none; /* Bỏ hiệu ứng transform */
-    }
-
-    .ffm-dropdown.show .ffm-dropdown-content {
-        display: block;
-    }
-    /* === KẾT THÚC CSS MỚI === */
   </style>
 </head>
 
@@ -559,8 +520,6 @@
         <span id="userInfo"></span>
         <button id="refreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
         <button id="updateAll" class="update-btn">Cập nhật</button>
-        <!-- DIV GIỮ CHỖ CHO CÁC NÚT HÀNH ĐỘNG CỦA FFM -->
-        <div id="ffmActionsContainer" style="display: inline-block;"></div>
         <div class="fixed-col-control">
           <span>Cột cố định:</span>
           <input type="number" id="fixedColumnCountInput" value="1" min="0" style="width: 70px;">
@@ -728,8 +687,7 @@
 
     // === CẤU HÌNH CỘT ===
     const columnDisplayMapping = {};
-    // THÊM "Đơn vị vận chuyển" VÀO DANH SÁCH CỘT CÓ THỂ CHỈNH SỬA
-    const editableCols = ["Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền", "Ghi chú của VĐ", "Đơn vị vận chuyển"];
+    const editableCols = ["Kết quả Check", "Trạng thái giao hàng NB", "Lý do", "Trạng thái thu tiền", "Ghi chú của VĐ"];
     const dropdownCols = {
       "Kết quả Check": ["", "OK", "Huỷ", "Treo", "Vận đơn XL", "Đợi hàng", "Khách hẹn"],
       "Trạng thái giao hàng NB": ["", "Giao Thành Công", "Đang Giao", "Chưa Giao", "Hủy", "Hoàn", "chờ check", "Giao không thành công", "Bom_Thất Lạc"],
@@ -805,23 +763,28 @@
           if (paymentStatus === "Có bill 1 phần") { stats["Bill 1 phần"].count++; }
           if (checkResult === "OK") { stats["Tổng đơn đủ đkien đẩy vh"].count++; }
 
+          // [EDIT START] - Áp dụng logic mới cho báo cáo
+          // 1. "Tổng đơn lên vận hành" đếm các đơn có "Đơn vị vận chuyển"
           if (shippingCompany && shippingCompany !== "Không xác định") {
             stats["Tổng đơn lên vận hành"].count++;
           }
 
+          // 2. Phân loại trạng thái giao hàng với logic mới cho "Đang Giao"
           if (deliveryStatus === "Giao Thành Công") {
             stats["Giao Thành Công"].count++;
           } else if (deliveryStatus === "Hoàn") {
             stats["Hoàn"].count++;
-          } else if (trackingCode) { 
+          } else if (trackingCode) { // Nếu có tracking và không phải GTC/Hoàn, thì là "Đang Giao"
             stats["Đang Giao"].count++;
           } else if (deliveryStatus === "Chưa Giao") {
             stats["Chưa Giao"].count++;
           } else if (deliveryStatus === "chờ check") {
             stats["chờ check"].count++;
-          } else if (!deliveryStatus) { 
+          } else if (!deliveryStatus) { // Trạng thái trống
             stats["Trống trạng thái"].count++;
           }
+          // Các trạng thái khác không có trong cột báo cáo (vd: Hủy) sẽ được bỏ qua, tương tự logic cũ
+          // [EDIT END]
         });
       });
       const grandTotalRow = renderSummaryRow("TỔNG TOÀN BỘ", "Tất cả NV & DVVC", grandTotal);
@@ -834,10 +797,13 @@
         summaryTableBody.appendChild(totalRow);
       });
 
+      // GỌI HÀM VẼ BIỂU ĐỒ
       renderReportCharts(staffStats, grandTotal);
     }
 
+    // HÀM VẼ/CẬP NHẬT BIỂU ĐỒ BÁO CÁO
     function renderReportCharts(staffStats, grandTotal) {
+      // Hủy các biểu đồ cũ trước khi vẽ mới
       if (staffChartInstance) {
         staffChartInstance.destroy();
       }
@@ -845,6 +811,7 @@
         deliveryStatusChartInstance.destroy();
       }
 
+      // 1. Biểu đồ cột: Tổng đơn lên vận hành theo nhân viên
       const staffCtx = document.getElementById('staffOrderChart').getContext('2d');
       const sortedStaffNames = Object.keys(staffStats).sort((a, b) => staffStats[b]._total["Tổng đơn lên vận hành"].count - staffStats[a]._total["Tổng đơn lên vận hành"].count);
 
@@ -885,6 +852,7 @@
         }
       });
 
+      // 2. Biểu đồ tròn: Tổng quan trạng thái giao hàng
       const statusCtx = document.getElementById('deliveryStatusChart').getContext('2d');
       const statusData = grandTotal["Tổng đơn lên nội bộ"] ? [
         grandTotal["Giao Thành Công"].count,
@@ -903,12 +871,12 @@
             label: 'Trạng thái đơn hàng',
             data: statusData,
             backgroundColor: [
-              '#2ecc71',
-              '#e74c3c',
-              '#3498db',
-              '#f1c40f',
-              '#9b59b6',
-              '#95a5a6'
+              '#2ecc71', // Giao Thành Công
+              '#e74c3c', // Hoàn
+              '#3498db', // Đang Giao
+              '#f1c40f', // Chưa Giao
+              '#9b59b6', // Chờ check
+              '#95a5a6'  // Trống
             ],
             hoverOffset: 4
           }]
@@ -940,7 +908,7 @@
     function pasteToSelectedCells(text) { if (selectedCells.size === 0) return; const dataGrid = text.split('\n').map(row => row.split('\t')); const sortedCells = Array.from(selectedCells).sort((a, b) => a.parentNode.rowIndex - b.parentNode.rowIndex || a.cellIndex - b.cellIndex); const firstCell = sortedCells[0]; const table = firstCell.closest('table'); if (!table) return; const startRowIndex = Array.from(table.rows).indexOf(firstCell.closest('tr')); const startColIndex = firstCell.cellIndex; let pasteCount = 0; if (dataGrid.length === 1 && dataGrid[0].length === 1) { const value = dataGrid[0][0]; sortedCells.forEach(cell => { if (updateCellValue(cell, value)) { pasteCount++; } }); } else { dataGrid.forEach((row, r) => { row.forEach((value, c) => { const targetRow = table.rows[startRowIndex + r]; if (targetRow) { const targetCell = targetRow.cells[startColIndex + c]; if (targetCell) { if (updateCellValue(targetCell, value)) { pasteCount++; } } } }); }); } showTempMessage(`Đã dán ${pasteCount} giá trị`); updateSelectionSummary(); }
     function clearSelectedCells() { if (selectedCells.size === 0) return; let clearCount = 0; selectedCells.forEach(cell => { if (updateCellValue(cell, '')) { clearCount++; } }); if (clearCount > 0) { showTempMessage(`Đã xóa nội dung ${clearCount} ô`); } }
     function updateCellValue(cell, value) { if (!cell || !cell.classList.contains('editable')) return false; const select = cell.querySelector('select'); const dateInput = cell.querySelector('input.date-input'); const rowIndex = cell.closest('tr').dataset.rowIndex; const config = allTabConfigs.find(c => c.table.body === cell.closest('tbody').id); let changed = false; if (select) { const optionExists = [...select.options].some(opt => opt.value === value); if (optionExists && select.value !== value) { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); changed = true; } } else if (dateInput) { if (dateInput.value !== value) { dateInput.value = value; dateInput.dispatchEvent(new Event('input', { bubbles: true })); changed = true; } } else { if (cell.textContent !== value) { cell.textContent = value; cell.classList.add('highlight'); if (rowIndex && config) { config.changedRows.add(parseInt(rowIndex)); } changed = true; } } return changed; }
-    function showTempMessage(message) { const existingMsg = document.querySelector('.temp-message'); if (existingMsg) existingMsg.remove(); const tempMsg = document.createElement('div'); tempMsg.className = 'temp-message'; tempMsg.textContent = message; Object.assign(tempMsg.style, { position: 'fixed', bottom: '20px', right: '20px', backgroundColor: 'rgba(39, 174, 96, 0.9)', color: 'white', padding: '12px 20px', borderRadius: '5px', zIndex: '2000', transition: 'opacity 0.5s', opacity: '1', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }); document.body.appendChild(tempMsg); setTimeout(() => { tempMsg.style.opacity = '0'; setTimeout(() => tempMsg.remove(), 500); }, 3000); }
+    function showTempMessage(message) { const existingMsg = document.querySelector('.temp-message'); if (existingMsg) existingMsg.remove(); const tempMsg = document.createElement('div'); tempMsg.className = 'temp-message'; tempMsg.textContent = message; Object.assign(tempMsg.style, { position: 'fixed', bottom: '20px', right: '20px', backgroundColor: 'rgba(39, 174, 96, 0.9)', color: 'white', padding: '12px 20px', borderRadius: '5px', zIndex: '2000', transition: 'opacity 0.5s', opacity: '1', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }); document.body.appendChild(tempMsg); setTimeout(() => { tempMsg.style.opacity = '0'; setTimeout(() => tempMsg.remove(), 500); }, 2000); }
 
     async function handleData(response) {
       allTabConfigs.forEach(config => {
@@ -971,22 +939,14 @@
           if (staffId1 && staffId1 !== staffId) { staffInfo += ` và ${teamMembers.find(name => name !== currentStaff.ho_va_ten) || ''}`; }
           if (currentStaff.vi_tri === "Leader") staffInfo += ` (Leader - Team ${currentStaff.team})`;
           document.getElementById('userInfo').textContent = staffInfo;
-          
+
+          // **LOGIC CHÍNH: KIỂM TRA VAI TRÒ LEADER ĐỂ HIỂN THỊ TAB**
           const allRegionsTabButton = document.getElementById('tabAllRegions');
           if (currentStaff && currentStaff.vi_tri === "Leader") {
-            allRegionsTabButton.style.display = '';
+            allRegionsTabButton.style.display = ''; // Hiển thị nút tab
           } else {
-            allRegionsTabButton.style.display = 'none';
+            allRegionsTabButton.style.display = 'none'; // Ẩn nút tab
           }
-          
-          // === BẮT ĐẦU: LOGIC MỚI CHO VAI TRÒ "Lên đơn FFM" ===
-          // Giả sử API trả về vai trò trong trường `vi_tri` hoặc `vi_tri_van_don`
-          const userRole = currentStaff.vi_tri || currentStaff.vi_tri_van_don;
-          if (userRole === "Lên đơn FFM") {
-              addFFMControls(); // Hàm thêm nút "Chọn ĐVVC"
-              setTimeout(() => applyInitialFFMFilter(), 500); // Áp dụng bộ lọc sau khi bảng đã render
-          }
-          // === KẾT THÚC: LOGIC MỚI CHO VAI TRÒ "Lên đơn FFM" ===
 
           staffFilteredData = allData.filter(row => { const deliveryStaff = row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''; return teamMembers.includes(deliveryStaff); });
           initializeTab(mainTabConfig, staffFilteredData);
@@ -1002,115 +962,6 @@
       populateReportFilters();
       applyReportFilters();
     }
-    
-    // === CÁC HÀM MỚI CHO VAI TRÒ "Lên đơn FFM" ===
-    /**
-     * Thêm nút "Chọn ĐVVC" và dropdown vào giao diện.
-     */
-    function addFFMControls() {
-        const container = document.getElementById('ffmActionsContainer');
-        if (!container) return;
-
-        container.innerHTML = `
-            <div class="ffm-dropdown">
-                <button id="ffmAssignBtn" class="update-btn" style="background-color: #e67e22;">Chọn ĐVVC</button>
-                <div id="ffmDropdownContent" class="ffm-dropdown-content">
-                    <button data-shipper="BEE">BEE</button>
-                    <button data-shipper="T&T">T&T</button>
-                    <button data-shipper="MGT">MGT</button>
-                </div>
-            </div>
-        `;
-
-        const btn = document.getElementById('ffmAssignBtn');
-        const dropdown = document.getElementById('ffmDropdownContent');
-        const dropdownContainer = dropdown.parentElement;
-
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownContainer.classList.toggle('show');
-        });
-
-        dropdown.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON') {
-                const shipper = e.target.dataset.shipper;
-                assignShipperToSelected(shipper);
-                dropdownContainer.classList.remove('show');
-            }
-        });
-
-        // Đóng dropdown nếu click ra ngoài
-        window.addEventListener('click', (e) => {
-            if (!dropdownContainer.contains(e.target)) {
-                 dropdownContainer.classList.remove('show');
-            }
-        });
-    }
-
-    /**
-     * Tự động lọc bảng để hiển thị các đơn hàng có Kết quả Check = "OK".
-     */
-    function applyInitialFFMFilter() {
-        const mainTabHeader = document.getElementById(mainTabConfig.table.head);
-        if (!mainTabHeader) return;
-        
-        // Tìm bộ lọc cho cột "Kết quả Check"
-        const checkResultFilter = mainTabHeader.querySelector('select[data-column="Kết quả Check"]');
-        if (checkResultFilter) {
-            checkResultFilter.value = 'OK';
-            // Kích hoạt sự kiện 'change' để áp dụng bộ lọc
-            checkResultFilter.dispatchEvent(new Event('change', { bubbles: true }));
-             showTempMessage('Đã tự động lọc các đơn "OK".');
-        }
-    }
-
-    /**
-     * Gán ĐVVC được chỉ định cho các ô đã chọn.
-     * @param {string} shipper - Tên của đơn vị vận chuyển (ví dụ: 'BEE').
-     */
-    function assignShipperToSelected(shipper) {
-        if (selectedCells.size === 0) {
-            alert("Vui lòng chọn ít nhất một đơn hàng để gán Đơn vị vận chuyển.");
-            return;
-        }
-
-        // Tìm chỉ số của cột "Đơn vị vận chuyển"
-        const shipperColIndex = displayColumns.indexOf("Đơn vị vận chuyển");
-        if (shipperColIndex === -1) {
-            console.error("Cột 'Đơn vị vận chuyển' không được tìm thấy trong displayColumns.");
-            alert("Lỗi: Cấu hình cột 'Đơn vị vận chuyển' bị thiếu.");
-            return;
-        }
-
-        let updatedCount = 0;
-        const processedRows = new Set(); // Để tránh xử lý cùng một hàng nhiều lần
-
-        selectedCells.forEach(cell => {
-            const row = cell.closest('tr');
-            if (row && !processedRows.has(row)) {
-                const shipperCell = row.cells[shipperColIndex];
-                const rowIndex = parseInt(row.dataset.rowIndex, 10);
-
-                if (shipperCell && !isNaN(rowIndex)) {
-                    // Cập nhật giá trị trong ô
-                    shipperCell.textContent = shipper;
-                    // Đánh dấu ô đã thay đổi
-                    shipperCell.classList.add('highlight');
-                    
-                    // Thêm chỉ số hàng vào danh sách cần cập nhật
-                    mainTabConfig.changedRows.add(rowIndex);
-
-                    processedRows.add(row);
-                    updatedCount++;
-                }
-            }
-        });
-
-        if (updatedCount > 0) {
-            showTempMessage(`Đã gán "${shipper}" cho ${updatedCount} đơn hàng. Nhấn "Cập nhật" để lưu.`);
-        }
-    }
-    // === KẾT THÚC HÀM MỚI ===
 
     function initializeTab(config, data) { generateDynamicOptions(config, data); populateExternalFilters(config); renderHeader(config); applyAllFilters(config); setupCellSelection(config.table.body); }
 
@@ -1298,7 +1149,7 @@
       }, 5000);
     }
 
-    function updateAllChangedRows(config) { if (config.changedRows.size === 0) { alert('Không có thay đổi nào để cập nhật'); return; } const updateBtn = document.getElementById(config.controls.updateBtn); const statusEl = document.createElement('span'); statusEl.className = 'status'; statusEl.textContent = 'Đang xử lý...'; updateBtn.appendChild(statusEl); updateBtn.disabled = true; const rowsToSend = []; const tableBody = document.getElementById(config.table.body); config.changedRows.forEach(rowIndex => { const originalData = config.data()[rowIndex]; if (!originalData) return; const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`); if (!tr) return; const updatedRowData = { ...originalData }; editableCols.forEach(dataKey => { const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; const cell = tr.cells[colIndex]; let valueFromDOM = getDOMCellValue(cell); updatedRowData[dataKey.replace(/ /g, '_')] = valueFromDOM; // Gửi đi với key có gạch dưới }); allDateColumns.forEach(dataKey => { if (editableCols.indexOf(dataKey) === -1) { const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; const cell = tr.cells[colIndex]; updatedRowData[dataKey] = cell.dataset.originalValue || cell.textContent.trim(); } }); delete updatedRowData["Thời gian lên đơn"]; rowsToSend.push(updatedRowData); }); if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if (statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) }).then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Yêu cầu cập nhật ${rowsToSend.length} dòng đã được gửi đi. \n\nVui lòng nhấn "Load" để kiểm tra và xem kết quả mới nhất.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if (statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 1500); }).catch(e => { statusEl.textContent = 'Lỗi mạng: ' + e.message; statusEl.classList.add('error-status'); setTimeout(() => { if (statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); }); }
+    function updateAllChangedRows(config) { if (config.changedRows.size === 0) { alert('Không có thay đổi nào để cập nhật'); return; } const updateBtn = document.getElementById(config.controls.updateBtn); const statusEl = document.createElement('span'); statusEl.className = 'status'; statusEl.textContent = 'Đang xử lý...'; updateBtn.appendChild(statusEl); updateBtn.disabled = true; const rowsToSend = []; const tableBody = document.getElementById(config.table.body); config.changedRows.forEach(rowIndex => { const originalData = config.data()[rowIndex]; if (!originalData) return; const tr = tableBody.querySelector(`tr[data-row-index="${rowIndex}"]`); if (!tr) return; const updatedRowData = { ...originalData }; editableCols.forEach(dataKey => { const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; const cell = tr.cells[colIndex]; let valueFromDOM = getDOMCellValue(cell); updatedRowData[dataKey] = valueFromDOM; }); allDateColumns.forEach(dataKey => { if (editableCols.indexOf(dataKey) === -1) { const displayKey = Object.keys(columnDisplayMapping).find(k => columnDisplayMapping[k] === dataKey) || dataKey; const colIndex = displayColumns.indexOf(displayKey); if (colIndex === -1) return; const cell = tr.cells[colIndex]; updatedRowData[dataKey] = cell.dataset.originalValue || cell.textContent.trim(); } }); delete updatedRowData["Thời gian lên đơn"]; rowsToSend.push(updatedRowData); }); if (rowsToSend.length === 0) { statusEl.textContent = 'Không có dòng nào hợp lệ để gửi.'; setTimeout(() => { if (statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 3000); return; } fetch(POST_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) }).then(() => { statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`; setTimeout(() => { alert(`Yêu cầu cập nhật ${rowsToSend.length} dòng đã được gửi đi. \n\nVui lòng nhấn "Load" để kiểm tra và xem kết quả mới nhất.`); config.changedRows.clear(); document.querySelectorAll(`#${config.table.body} .highlight`).forEach(cell => cell.classList.remove('highlight')); if (statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 1500); }).catch(e => { statusEl.textContent = 'Lỗi mạng: ' + e.message; statusEl.classList.add('error-status'); setTimeout(() => { if (statusEl.parentElement) updateBtn.removeChild(statusEl); updateBtn.disabled = false; }, 4000); }); }
     function populateReportFilters() { const { controls } = reportTabConfig; const productFilter = document.getElementById(controls.product); const marketFilter = document.getElementById(controls.market); const staffDropdown = document.getElementById(controls.staffDropdown); const allProducts = [...new Set(allData.map(r => r["Mặt hàng"]).filter(Boolean))].sort(); const allMarkets = [...new Set(allData.map(r => r["khu vực"] || r["Khu vực"]).filter(Boolean))].sort(); const allStaff = [...new Set(allData.map(r => r["NV Vận đơn"] || r["NV_Vận_đơn"]).filter(Boolean))].sort(); productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>'; allProducts.forEach(opt => productFilter.add(new Option(opt, opt))); marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>'; allMarkets.forEach(opt => marketFilter.add(new Option(opt, opt))); staffDropdown.innerHTML = ''; const allLabel = document.createElement('label'); allLabel.innerHTML = `<input type="checkbox" id="reportStaffSelectAll"> <b>Chọn tất cả</b>`; staffDropdown.appendChild(allLabel); allStaff.forEach(staffName => { const label = document.createElement('label'); const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = staffName; checkbox.addEventListener('change', () => { updateStaffFilterButtonText(); applyReportFilters(); }); label.appendChild(checkbox); label.appendChild(document.createTextNode(` ${staffName}`)); staffDropdown.appendChild(label); }); document.getElementById('reportStaffSelectAll').addEventListener('change', (e) => { const isChecked = e.target.checked; staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = isChecked); updateStaffFilterButtonText(); applyReportFilters(); }); }
     function updateStaffFilterButtonText() { const { controls } = reportTabConfig; const staffBtn = document.getElementById(controls.staffBtn); const staffDropdown = document.getElementById(controls.staffDropdown); const allStaffCheckboxes = staffDropdown.querySelectorAll('input[type="checkbox"]:not(#reportStaffSelectAll)'); const selectedCount = Array.from(allStaffCheckboxes).filter(cb => cb.checked).length; if (selectedCount === 0) { staffBtn.textContent = 'Tất cả NV Vận đơn'; } else if (selectedCount === allStaffCheckboxes.length) { staffBtn.textContent = 'Tất cả NV đã chọn'; document.getElementById('reportStaffSelectAll').checked = true; } else { staffBtn.textContent = `${selectedCount} NV đã chọn`; document.getElementById('reportStaffSelectAll').checked = false; } }
     function applyReportFilters() { let filteredReportData = [...allData]; const { controls } = reportTabConfig; const startDate = document.getElementById(controls.startDate).value; const endDate = document.getElementById(controls.endDate).value; const product = document.getElementById(controls.product).value; const market = document.getElementById(controls.market).value; const selectedStaff = Array.from(document.querySelectorAll(`#${controls.staffDropdown} input:checked:not(#reportStaffSelectAll)`)).map(cb => cb.value); if (startDate || endDate) { const start = startDate ? new Date(startDate) : null; const end = endDate ? new Date(endDate) : null; if (start) start.setHours(0, 0, 0, 0); if (end) end.setHours(23, 59, 59, 999); filteredReportData = filteredReportData.filter(row => { const orderDate = parseDateString(row["Ngày lên đơn"] || row["Thời gian lên đơn"]); return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end); }); } if (product) { filteredReportData = filteredReportData.filter(row => row["Mặt hàng"] === product); } if (market) { filteredReportData = filteredReportData.filter(row => (row["khu vực"] || row["Khu vực"]) === market); } if (selectedStaff.length > 0) { const staffSet = new Set(selectedStaff); filteredReportData = filteredReportData.filter(row => staffSet.has(row["NV Vận đơn"] || row["NV_Vận_đơn"])); } updateDetailedSummaryTable(filteredReportData); }
