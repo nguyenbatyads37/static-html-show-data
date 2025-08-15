@@ -623,7 +623,7 @@
             if (!dateString || typeof dateString !== 'string') return false;
             const parts = dateString.split('/');
             if (parts.length !== 3) return false;
-            const d = new Date(parts[2], parts[0] - 1, parts[1]);
+            const d = new Date(parts[2], parts[1] - 1, parts[0]);
             if (isNaN(d.getTime())) return false;
 
             const saleName = (order['Nhân viên Sale'] || '').trim();
@@ -687,23 +687,27 @@
             createInitialStats(saleName);
 
             const s = summary[saleName];
-            // Luôn chuyển trạng thái về chữ thường để so sánh, đảm bảo tính đúng cho cả "Hoàn" và "hoàn"
+            // *** LOGIC MỚI: TÍNH LÀ H/H NẾU KHÁC 'ok' ***
             const status = String(order['Kết quả Check'] || '').toLowerCase().trim();
             const amount = +order['Tổng tiền VNĐ'] || 0;
             
             s.doanhSoDi += amount;
-            
-            if (status === 'ok') {
-                s.soDonThanhCong++;
-                s.doanhSoThanhCong += amount;
-            } 
-            // Logic linh hoạt, kiểm tra xem trạng thái CÓ CHỨA 'hoàn' hoặc 'hủy' không.
-            // Đây là cách làm tốt nhất, bao gồm cả "Hoàn", "Hủy", "Bị hoàn", "Hủy đơn"...
-            else if (status.includes('hoàn') || status.includes('hủy')) {
-                s.soDonHoanHuy++;
-                s.doanhSoHoanHuy += amount;
+
+            // Chỉ xử lý các đơn hàng có trạng thái (không phải ô trống)
+            if (status) {
+              if (status === 'ok') {
+                  s.soDonThanhCong++;
+                  s.doanhSoThanhCong += amount;
+              } else {
+                  // Bất kỳ trạng thái nào khác 'ok' đều được coi là Hoàn/Hủy
+                  s.soDonHoanHuy++;
+                  s.doanhSoHoanHuy += amount;
+              }
             }
         });
+        
+        // Đảm bảo tất cả sale từ salesData đều có trong summary, ngay cả khi họ không có đơn hàng nào
+        salesData.forEach(r => createInitialStats(r.ten));
 
         return Object.keys(summary).map(name => ({
             ...summary[name],
@@ -713,8 +717,16 @@
 
     // --- RENDERING FUNCTIONS ---
     function renderSummary(salesData, orderData) {
-        const aggregatedList = aggregateData(salesData, orderData);
+        const fullAggregatedList = aggregateData(salesData, orderData);
         
+        // LỌC THEO YÊU CẦU: Chỉ hiển thị những nhân viên có đơn hàng H/H (khác 'ok')
+        const aggregatedList = fullAggregatedList.filter(item => item.soDonHoanHuy > 0);
+
+        if (aggregatedList.length === 0) {
+             document.getElementById('summary-body').innerHTML = `<tr><td colspan="14" style="text-align:center; padding: 20px;">Không có nhân viên nào có đơn hàng thất bại trong khoảng thời gian đã chọn.</td></tr>`;
+             return;
+        }
+
         const total = aggregatedList.reduce((acc, item) => {
             Object.keys(acc).forEach(key => acc[key] += item[key] || 0);
             return acc;
@@ -725,7 +737,7 @@
         });
 
         const totalRate = total.mess ? total.don / total.mess : 0;
-        const totalRowHtml = `<tr class="total-row"><td class="total-label" colspan="4">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatNumber(total.don)}</td><td class="total-value">${formatNumber(total.phanHoi)}</td><td class="total-value">${formatCurrency(total.chot)}</td><td class="total-value">${formatCurrency(total.doanhSoDi)}</td><td class="total-value">${formatNumber(total.soDonThanhCong)}</td><td class="total-value">${formatCurrency(total.doanhSoThanhCong)}</td><td class="total-value text-danger">${formatNumber(total.soDonHoanHuy)}</td><td class="total-value text-danger">${formatCurrency(total.doanhSoHoanHuy)}</td><td class="total-value">${formatPercent(totalRate)}</td></tr>`;
+        const totalRowHtml = `<tr class="total-row"><td class="total-label" colspan="4">TỔNG CỘNG (CHỈ TÍNH NHỮNG SALE CÓ ĐƠN THẤT BẠI)</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatNumber(total.don)}</td><td class="total-value">${formatNumber(total.phanHoi)}</td><td class="total-value">${formatCurrency(total.chot)}</td><td class="total-value">${formatCurrency(total.doanhSoDi)}</td><td class="total-value">${formatNumber(total.soDonThanhCong)}</td><td class="total-value">${formatCurrency(total.doanhSoThanhCong)}</td><td class="total-value text-danger">${formatNumber(total.soDonHoanHuy)}</td><td class="total-value text-danger">${formatCurrency(total.doanhSoHoanHuy)}</td><td class="total-value">${formatPercent(totalRate)}</td></tr>`;
         
         const bodyRowsHtml = aggregatedList.map((item, index) => {
             const rate = item.mess ? item.don / item.mess : 0;
@@ -753,10 +765,10 @@
         
         const groupedOrders = orderData.reduce((acc, r) => {
             const dateString = r['Ngày lên đơn'];
-             if (!dateString || typeof dateString !== 'string') return acc;
+            if (!dateString || typeof dateString !== 'string') return acc;
             const parts = dateString.split('/');
             if (parts.length !== 3) return acc;
-            const d = new Date(parts[2], parts[0] - 1, parts[1]);
+            const d = new Date(parts[2], parts[1] - 1, parts[0]);
             const dateKey = formatDate(d);
             if (dateKey) (acc[dateKey] = acc[dateKey] || []).push(r);
             return acc;
@@ -766,12 +778,18 @@
         const sortedDates = allDates.sort((a, b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
         
         let allTablesHtml = '';
+        let hasAnyDataToShow = false;
         sortedDates.forEach(date => {
             const dailySales = groupedSales[date] || [];
             const dailyOrders = groupedOrders[date] || [];
-            const dailyAggregatedList = aggregateData(dailySales, dailyOrders);
+            const fullDailyAggregatedList = aggregateData(dailySales, dailyOrders);
+            
+            // LỌC THEO YÊU CẦU: Chỉ hiển thị những nhân viên có đơn hàng H/H trong ngày
+            const dailyAggregatedList = fullDailyAggregatedList.filter(item => item.soDonHoanHuy > 0);
 
-            if (dailyAggregatedList.length === 0) return;
+            if (dailyAggregatedList.length === 0) return; // Bỏ qua ngày này nếu không có ai có đơn thất bại
+
+            hasAnyDataToShow = true;
 
             const total = dailyAggregatedList.reduce((acc, item) => {
                 Object.keys(acc).forEach(key => acc[key] += item[key] || 0);
@@ -790,7 +808,12 @@
 
             allTablesHtml += `<h3>Chi tiết ngày: ${date}</h3><div class="table-responsive-container"><table><thead><tr><th>STT</th><th>Chi nhánh</th><th>Team</th><th>Sale</th><th>Số Mess</th><th>Số Đơn</th><th>Phản hồi</th><th>DS Chốt</th><th>Doanh số đi</th><th>Số đơn TC</th><th>DS Thành công</th><th>Số đơn H/H</th><th>DS Hoàn huỷ</th><th>Tỉ lệ chốt</th></tr></thead><tbody>${totalRowHtml + rowsHtml}</tbody></table></div>`;
         });
-        container.innerHTML = allTablesHtml;
+        
+        if (!hasAnyDataToShow) {
+            container.innerHTML = '<h3>Không có dữ liệu chi tiết để hiển thị.</h3>';
+        } else {
+            container.innerHTML = allTablesHtml;
+        }
     }
   </script>
 </body>
