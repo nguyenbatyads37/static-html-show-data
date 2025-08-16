@@ -1274,12 +1274,18 @@
                         <thead>
                             <tr>
                                 <th>STT</th>
+                                <th>Chi nhánh</th>
                                 <th>Team</th>
                                 <th>Sale</th>
                                 <th class="sortable-header">Số Mess</th>
                                 <th class="sortable-header">Số Đơn</th>
                                 <th class="sortable-header">Phản hồi</th>
                                 <th class="sortable-header">DS Chốt</th>
+                                <th class="sortable-header">Doanh số đi</th>
+                                <th class="sortable-header">Số đơn hủy</th>
+                                <th class="sortable-header">Doanh số Hủy</th>
+                                <th class="sortable-header">Số đơn thành công</th>
+                                <th class="sortable-header">Doanh số thành công</th>
                                 <th class="sortable-header">Tỉ lệ chốt</th>
                             </tr>
                         </thead>
@@ -1889,7 +1895,7 @@
                     const key = (row[keyField] ?? '').trim();
                     if (!map.has(key)) {
                         // Khởi tạo object cho nhóm mới, bao gồm keyField và team
-                        map.set(key, { [keyField]: key, team: row.team ?? '' });
+                        map.set(key, { [keyField]: key, team: row.team ?? '', chiNhanh: row.chiNhanh });
                     }
 
                     const agg = map.get(key);
@@ -2212,6 +2218,7 @@
             const saleReportApp = {
                 isInitialized: false,
                 rawData: [],
+                employeeData: [], // Thêm biến này
                 init: function () {
                     this.addEventListeners();
                     this.setDefaultDates();
@@ -2239,21 +2246,55 @@
                 },
                 fetchAndProcessData: function () {
                     showLoader();
-                    fetch('https://script.google.com/macros/s/AKfycbzd8KdWC7PVuv7ttnQLV7oIxmAgWWdLfs3laMDoL7w5GhvCWd_71_Xc33e-GaUSiG_3/exec').then(res => res.json()).then(rS => {
-                        this.rawData = rS.filter(r => r.trangThai && String(r.trangThai).trim() !== '' && r.ten && String(r.ten).trim() !== '' && r.team && String(r.team).trim() !== '').map(r => ({
-                            ...r,
-                            ten: (r.ten || '').trim(),
-                            team: (r.team || '').trim(),
-                            soMessCmt: +r.soMess || 0,
-                            soDon: +r.donMess || 0,
-                            dsChot: +r.doanhSoMess || 0,
-                            phanHoi: +r.phanHoi || 0
-                        }));
+                    
+                    // URL mới lấy từ file nhansusaleLumi.html
+                    const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzEtz-i1rrnUXO4mRu6GlPN3gVtONZT5sbS1B0-tbCWsb0-LIYSWtJr3uTNfC9pVbns/exec';
+                    const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
+
+                    Promise.all([
+                        fetch(salesDataUrl).then(res => res.json()),
+                        fetch(employeeDataUrl).then(res => res.json())
+                    ])
+                    .then(([salesResult, employeeResult]) => {
+                        this.employeeData = employeeResult;
+
+                        const employeeBranchMap = {};
+                        this.employeeData.forEach(emp => {
+                            const name = (emp.ho_va_ten || '').trim();
+                            const branch = (emp.chi_nhanh || '').trim();
+                            if (name) {
+                                employeeBranchMap[name] = branch;
+                            }
+                        });
+
+                        this.rawData = salesResult
+                            .filter(r => r.ten && String(r.ten).trim() !== '' && r.team && String(r.team).trim() !== '')
+                            .map(r => {
+                                const saleName = (r.ten || '').trim();
+                                return {
+                                    ...r, 
+                                    ten: saleName, 
+                                    team: (r.team || '').trim(),
+                                    chiNhanh: employeeBranchMap[saleName] || 'Không xác định',
+                                    soMessCmt: +r.soMess || 0,
+                                    soDon: +r.donMess || 0,
+                                    dsChot: +r.doanhSoMess || 0,
+                                    phanHoi: +r.phanHoi || 0,
+                                    // Map các trường dữ liệu mới
+                                    doanhSoDi: +r.doanhSoDi || 0,
+                                    soDonHuy: +r.soDonHuy || 0,
+                                    doanhSoHuy: +r.doanhSoHuy || 0,
+                                    soDonThanhCong: +r.soDonThanhCong || 0,
+                                    doanhSoThanhCong: +r.doanhSoThanhCong || 0
+                                };
+                            });
+                        
                         this.populateAllFilters(this.rawData);
                         this.applyFilters();
-                    }).catch(err => {
-                        console.error("Lỗi Sale Data:", err);
-                        alert('Không thể tải dữ liệu Sale.');
+
+                    }).catch(err => { 
+                        console.error("Lỗi Sale Data:", err); 
+                        alert('Không thể tải dữ liệu Sale. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.'); 
                     }).finally(hideLoader);
                 },
                 populateAllFilters: function (d) {
@@ -2299,47 +2340,80 @@
                     this.renderDailyBreakdownSale(f);
                 },
                 renderSummarySale: function (d) {
-                    const sD = {};
+                    const summaryData = {};
                     d.forEach(r => {
                         const n = r.ten;
-                        if (!sD[n]) sD[n] = {
-                            team: r.team,
-                            mess: 0,
-                            don: 0,
-                            chot: 0,
-                            phanHoi: 0
-                        };
-                        sD[n].mess += r.soMessCmt;
-                        sD[n].don += r.soDon;
-                        sD[n].chot += r.dsChot;
-                        sD[n].phanHoi += r.phanHoi;
+                        if (!summaryData[n]) {
+                            summaryData[n] = { 
+                                team: r.team, 
+                                chiNhanh: r.chiNhanh,
+                                mess: 0, don: 0, chot: 0, phanHoi: 0,
+                                // Khởi tạo các trường mới
+                                doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0
+                            };
+                        }
+                        summaryData[n].mess += r.soMessCmt;
+                        summaryData[n].don += r.soDon;
+                        summaryData[n].chot += r.dsChot;
+                        summaryData[n].phanHoi += r.phanHoi;
+                        // Cộng dồn các trường mới
+                        summaryData[n].doanhSoDi += r.doanhSoDi;
+                        summaryData[n].soDonHuy += r.soDonHuy;
+                        summaryData[n].doanhSoHuy += r.doanhSoHuy;
+                        summaryData[n].soDonThanhCong += r.soDonThanhCong;
+                        summaryData[n].doanhSoThanhCong += r.doanhSoThanhCong;
                     });
-                    const fL = Object.keys(sD).map(n => ({
+
+                    const fL = Object.keys(summaryData).map(n => ({
                         name: n,
-                        team: sD[n].team,
-                        data: sD[n]
+                        team: summaryData[n].team,
+                        chiNhanh: summaryData[n].chiNhanh,
+                        data: summaryData[n]
                     })).sort((a, b) => b.data.chot - a.data.chot || a.name.localeCompare(b.name));
+                    
+                    let totalSummary = { mess: 0, don: 0, chot: 0, phanHoi: 0, doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0 };
+                    fL.forEach(item => {
+                        Object.keys(totalSummary).forEach(key => totalSummary[key] += item.data[key] || 0);
+                    });
+
+                    const tR = totalSummary.mess ? totalSummary.don / totalSummary.mess : 0;
+                    const fH = `<tr class="total-row">
+                            <td class="total-label" colspan="4">TỔNG CỘNG</td>
+                            <td>${formatUtils.formatNumber(totalSummary.mess)}</td>
+                            <td>${formatUtils.formatNumber(totalSummary.don)}</td>
+                            <td>${formatUtils.formatNumber(totalSummary.phanHoi)}</td>
+                            <td>${formatUtils.formatCurrency(totalSummary.chot)}</td>
+                            <td>${formatUtils.formatCurrency(totalSummary.doanhSoDi)}</td>
+                            <td>${formatUtils.formatNumber(totalSummary.soDonHuy)}</td>
+                            <td>${formatUtils.formatCurrency(totalSummary.doanhSoHuy)}</td>
+                            <td>${formatUtils.formatNumber(totalSummary.soDonThanhCong)}</td>
+                            <td>${formatUtils.formatCurrency(totalSummary.doanhSoThanhCong)}</td>
+                            <td>${formatUtils.formatPercent(tR)}</td>
+                        </tr>`;
+
                     let bH = fL.map((i, x) => {
                         const s = i.data;
                         const r = s.mess ? s.don / s.mess : 0;
                         let R = x === 0 ? 'top-1' : (x === 1 ? 'top-2' : (x === 2 ? 'top-3' : ''));
-                        return `<tr class="${R}"><td class="text-center">${x + 1}</td><td class="text-left">${i.team}</td><td class="text-left">${i.name}</td><td>${formatUtils.formatNumber(s.mess)}</td><td>${formatUtils.formatNumber(s.don)}</td><td>${formatUtils.formatNumber(s.phanHoi)}</td><td>${formatUtils.formatCurrency(s.chot)}</td><td class="${r >= 0.1 ? 'bg-green' : (r > 0.05 ? 'bg-yellow' : '')}">${formatUtils.formatPercent(r)}</td></tr>`;
+                        return `<tr class="${R}">
+                                <td class="text-center">${x + 1}</td>
+                                <td class="text-left">${i.chiNhanh}</td>
+                                <td class="text-left">${i.team}</td>
+                                <td class="text-left">${i.name}</td>
+                                <td>${formatUtils.formatNumber(s.mess)}</td>
+                                <td>${formatUtils.formatNumber(s.don)}</td>
+                                <td>${formatUtils.formatNumber(s.phanHoi)}</td>
+                                <td>${formatUtils.formatCurrency(s.chot)}</td>
+                                <td>${formatUtils.formatCurrency(s.doanhSoDi)}</td>
+                                <td>${formatUtils.formatNumber(s.soDonHuy)}</td>
+                                <td>${formatUtils.formatCurrency(s.doanhSoHuy)}</td>
+                                <td>${formatUtils.formatNumber(s.soDonThanhCong)}</td>
+                                <td>${formatUtils.formatCurrency(s.doanhSoThanhCong)}</td>
+                                <td class="${r >= 0.1 ? 'bg-green' : (r > 0.05 ? 'bg-yellow' : '')}">${formatUtils.formatPercent(r)}</td>
+                            </tr>`;
                     }).join('');
-                    const t = fL.reduce((a, i) => ({
-                        mess: a.mess + i.data.mess,
-                        don: a.don + i.data.don,
-                        chot: a.chot + i.data.chot,
-                        phanHoi: a.phanHoi + i.data.phanHoi
-                    }), {
-                        mess: 0,
-                        don: 0,
-                        chot: 0,
-                        phanHoi: 0
-                    });
-                    const tR = t.mess ? t.don / t.mess : 0;
-                    const fH = `<tr class="total-row"><td class="total-label" colspan="3">TỔNG CỘNG</td><td>${formatUtils.formatNumber(t.mess)}</td><td>${formatUtils.formatNumber(t.don)}</td><td>${formatUtils.formatNumber(t.phanHoi)}</td><td>${formatUtils.formatCurrency(t.chot)}</td><td>${formatUtils.formatPercent(tR)}</td></tr>`;
+                    
                     document.getElementById('summary-body-sale').innerHTML = fH + bH;
-                    document.getElementById('summary-foot-sale').innerHTML = '';
                 },
                 renderDailyBreakdownSale: function (d) {
                     const c = document.getElementById('daily-breakdown-sale');
@@ -2352,57 +2426,66 @@
                         (g[D] = g[D] || []).push(r);
                     });
 
-                    const sD = Object.keys(g).sort(
-                        (a, b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-'))
-                    );
+                    const sD = Object.keys(g).sort((a, b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
 
                     sD.forEach(dt => {
                         const raw = g[dt];
-                        const grouped = groupSumByName(raw, 'ten', ['soMessCmt', 'soDon', 'phanHoi', 'dsChot']);
+                        const numericFields = ['soMessCmt', 'soDon', 'phanHoi', 'dsChot', 'doanhSoDi', 'soDonHuy', 'doanhSoHuy', 'soDonThanhCong', 'doanhSoThanhCong'];
+                        const grouped = groupSumByName(raw, 'ten', numericFields);
                         const SD = grouped.sort((a, b) => (b.dsChot - a.dsChot));
 
                         const t = SD.reduce((acc, r) => {
-                            acc.mess += Number(r.soMessCmt) || 0;
-                            acc.don += Number(r.soDon) || 0;
-                            acc.phanHoi += Number(r.phanHoi) || 0;
-                            acc.chot += Number(r.dsChot) || 0;
+                            numericFields.forEach(field => acc[field] = (acc[field] || 0) + (r[field] || 0));
                             return acc;
-                        }, { mess: 0, don: 0, phanHoi: 0, chot: 0 });
+                        }, {});
 
-                        const totalTiLeChot = t.mess > 0 ? t.don / t.mess : 0;
+                        const totalTiLeChot = (t.soMessCmt || 0) > 0 ? (t.soDon || 0) / t.soMessCmt : 0;
 
                         const rH = SD.map((r, i) => {
                             const tiLeChot = (r.soMessCmt || 0) > 0 ? (r.soDon || 0) / r.soMessCmt : 0;
                             const rateClass = tiLeChot >= 0.1 ? 'bg-green' : (tiLeChot > 0.05 ? 'bg-yellow' : '');
                             return `<tr>
                                 <td class="text-center">${i + 1}</td>                     
+                                <td class="text-left">${r.chiNhanh || 'Không xác định'}</td>
                                 <td class="text-left">${r.team}</td>
                                 <td class="text-left">${r.ten}</td>
                                 <td>${formatUtils.formatNumber(r.soMessCmt)}</td>
                                 <td>${formatUtils.formatNumber(r.soDon)}</td>
                                 <td>${formatUtils.formatNumber(r.phanHoi)}</td>
                                 <td>${formatUtils.formatCurrency(r.dsChot)}</td>
+                                <td>${formatUtils.formatCurrency(r.doanhSoDi)}</td>
+                                <td>${formatUtils.formatNumber(r.soDonHuy)}</td>
+                                <td>${formatUtils.formatCurrency(r.doanhSoHuy)}</td>
+                                <td>${formatUtils.formatNumber(r.soDonThanhCong)}</td>
+                                <td>${formatUtils.formatCurrency(r.doanhSoThanhCong)}</td>
                                 <td class="${rateClass}">${formatUtils.formatPercent(tiLeChot)}</td>
-                            </tr>`
+                            </tr>`;
                         }).join('');
 
-                        const fH = `
-                        <tr class='total-row'>
-                            <td colspan='3' class='total-label'>Tổng</td>
-                            <td>${formatUtils.formatNumber(t.mess)}</td>
-                            <td>${formatUtils.formatNumber(t.don)}</td>
+                        const fH = `<tr class='total-row'>
+                            <td colspan='4' class='total-label'>Tổng ngày ${dt}</td>
+                            <td>${formatUtils.formatNumber(t.soMessCmt)}</td>
+                            <td>${formatUtils.formatNumber(t.soDon)}</td>
                             <td>${formatUtils.formatNumber(t.phanHoi)}</td>
-                            <td>${formatUtils.formatCurrency(t.chot)}</td>
+                            <td>${formatUtils.formatCurrency(t.dsChot)}</td>
+                            <td>${formatUtils.formatCurrency(t.doanhSoDi)}</td>
+                            <td>${formatUtils.formatNumber(t.soDonHuy)}</td>
+                            <td>${formatUtils.formatCurrency(t.doanhSoHuy)}</td>
+                            <td>${formatUtils.formatNumber(t.soDonThanhCong)}</td>
+                            <td>${formatUtils.formatCurrency(t.doanhSoThanhCong)}</td>
                             <td>${formatUtils.formatPercent(totalTiLeChot)}</td>
                         </tr>`;
 
-                        const tH = `
-                        <div class="table-responsive-container">
+                        const tH = `<div class="table-responsive-container">
                             <table>
-                            <thead>
-                                <tr><th>STT</th><th>Team</th><th>Tên</th><th class="sortable-header">Mess</th><th class="sortable-header">Đơn</th><th class="sortable-header">Phản hồi</th><th class="sortable-header">DS Chốt</th><th class="sortable-header">Tỉ lệ chốt</th></tr>
-                            </thead>
-                            <tbody>${fH}${rH}</tbody>
+                                <thead>
+                                    <tr>
+                                        <th>STT</th><th>Chi nhánh</th><th>Team</th><th>Sale</th><th>Số Mess</th><th>Số Đơn</th>
+                                        <th>Phản hồi</th><th>DS Chốt</th><th>Doanh số đi</th><th>Số đơn hủy</th>
+                                        <th>Doanh số Hủy</th><th>Số đơn thành công</th><th>Doanh số thành công</th><th>Tỉ lệ chốt</th>
+                                    </tr>
+                                </thead>
+                                <tbody>${fH}${rH}</tbody>
                             </table>
                         </div>`;
 
@@ -3331,7 +3414,7 @@
                 return isNaN(num) ? -Infinity : num;
             }
 
-            document.body.addEventListener('click', function(e) {
+            document.body.addEventListener('click', function (e) {
                 const header = e.target.closest('.sortable-header');
                 if (!header) return;
 
