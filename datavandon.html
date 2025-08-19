@@ -684,6 +684,8 @@
 
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx_rU4gsMXugPUK9ZoTczyWpKdsPVO3QcXzdpswFKVQmnsMU6B6J9lirCO_7NvET78/exec';
+    // [THAY ĐỔI] URL API mới để cập nhật tức thì
+    const IMMEDIATE_UPDATE_URL = 'https://script.google.com/macros/s/AKfycbwtoLqG0p-HBsjpyMqqER4YRQ-B7x_qEGlL5_ZjNaIAaxKUXmHO5Weam3_E9ZUMPawy/exec';
 
     // === CẤU HÌNH CỘT ===
     const columnDisplayMapping = {};
@@ -1542,8 +1544,8 @@
       return changed;
     }
 
-
-    function showTempMessage(message) {
+    // [THAY ĐỔI] Hàm hiển thị thông báo được cập nhật để xử lý thông báo lỗi
+    function showTempMessage(message, isError = false) {
       const existingMsg = document.querySelector('.temp-message');
       if (existingMsg) existingMsg.remove();
       const tempMsg = document.createElement('div');
@@ -1553,7 +1555,7 @@
         position: 'fixed',
         bottom: '20px',
         right: '20px',
-        backgroundColor: 'rgba(39, 174, 96, 0.9)',
+        backgroundColor: isError ? 'rgba(231, 76, 60, 0.9)' : 'rgba(39, 174, 96, 0.9)',
         color: 'white',
         padding: '12px 20px',
         borderRadius: '5px',
@@ -1566,8 +1568,30 @@
       setTimeout(() => {
         tempMsg.style.opacity = '0';
         setTimeout(() => tempMsg.remove(), 500);
-      }, 2000);
+      }, 3000);
     }
+
+    // [THAY ĐỔI] Hàm mới để gửi cập nhật trạng thái tức thì
+    async function sendImmediateUpdate(rowData) {
+      try {
+
+        // Sử dụng fetch để gửi yêu cầu POST
+        const response = await fetch(IMMEDIATE_UPDATE_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: new URLSearchParams({
+            rows: JSON.stringify([rowData])
+          })
+        });
+      } catch (error) {
+        console.error('Lỗi khi cập nhật tức thì:', error);
+        showTempMessage(`Lỗi cập nhật: ${error.message}`, true);
+      }
+    }
+
 
     async function handleData(response) {
       allTabConfigs.forEach(config => {
@@ -1833,13 +1857,37 @@
               const select = document.createElement('select');
               dropdownCols[col].forEach(opt => select.add(new Option(opt, opt)));
               select.value = value;
-              // [THAY ĐỔI 2] - Lưu chi tiết thay đổi vào Map thay vì chỉ lưu rowIndex
-              select.addEventListener('change', () => {
+              // [THAY ĐỔI] Trình nghe sự kiện được cập nhật
+              select.addEventListener('change', (e) => {
+                // --- Logic cũ: Lưu thay đổi để cập nhật hàng loạt ---
                 td.classList.add('highlight');
                 const newValue = select.value;
                 const currentChanges = config.changedRows.get(originalRowIndex) || {};
-                currentChanges[col] = newValue; // 'col' là tên cột từ vòng lặp forEach bên ngoài
+                currentChanges[col] = newValue;
                 config.changedRows.set(originalRowIndex, currentChanges);
+
+                // --- Logic MỚI: Gửi cập nhật tức thì ---
+                if (col === "Trạng thái giao hàng NB" || col === "Trạng thái thu tiền") {
+                  const currentRow = e.target.closest('tr');
+                  if (!currentRow) return;
+
+                  // Tìm chỉ mục cột dựa trên tên hiển thị
+                  const deliveryStatusColIndex = displayColumns.indexOf("Trạng thái giao hàng NB");
+                  const paymentStatusColIndex = displayColumns.indexOf("Trạng thái thu tiền");
+
+                  // Lấy giá trị hiện tại của cả hai ô select từ DOM
+                  const deliveryStatusCell = currentRow.cells[deliveryStatusColIndex];
+                  const paymentStatusCell = currentRow.cells[paymentStatusColIndex];
+
+                  const updatePayload = {
+                    "Mã đơn hàng": row["Mã đơn hàng"] || row["Mã_đơn_hàng"],
+                    "Trạng thái giao hàng NB": deliveryStatusCell ? getDOMCellValue(deliveryStatusCell) : '',
+                    "Trạng thái thu tiền": paymentStatusCell ? getDOMCellValue(paymentStatusCell) : ''
+                  };
+
+                  // Gọi hàm API mới
+                  sendImmediateUpdate(updatePayload);
+                }
               });
               td.appendChild(select);
             } else {
@@ -2019,7 +2067,8 @@
         }
 
         // Tạo một bản sao của dữ liệu gốc để sửa đổi
-        const updatedRowData = { ...originalData
+        const updatedRowData = {
+          ...originalData
         };
 
         // Áp dụng các thay đổi đã được lưu vào bản sao này
@@ -2044,15 +2093,15 @@
       }
 
       fetch(POST_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
-          },
-          body: new URLSearchParams({
-            rows: JSON.stringify(rowsToSend)
-          })
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          rows: JSON.stringify(rowsToSend)
         })
+      })
         .then(() => {
           statusEl.textContent = `Đã gửi ${rowsToSend.length} thay đổi.`;
           setTimeout(() => {
