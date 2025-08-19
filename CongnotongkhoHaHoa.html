@@ -8,6 +8,7 @@
         :root {
             --primary-color: #4CAF50; --hover-color: #45a049; --text-color: #333;
             --border-color: #e0e0e0; --error-color: #d32f2f; --input-bg: #fffbe6;
+            --button-excel-color: #007bff; --button-excel-hover: #0056b3;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
         body { background-color: #f4f7f6; line-height: 1.6; }
@@ -28,7 +29,13 @@
         tbody tr:hover { background-color: #e8f5e9; }
         .input-row { background-color: var(--input-bg) !important; }
         .input-row td { padding: 8px; vertical-align: middle;}
-        .input-row input, .input-row select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .input-row input, .input-row select {
+            padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px;
+        }
+        .input-row input[type="text"], .input-row input[type="date"] {
+            min-width: 15ch;
+            transition: width 0.2s ease-in-out;
+        }
         .input-row input:focus, .input-row select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2); outline: none; }
         .input-row input:read-only { background-color: #f0f0f0; cursor: not-allowed; }
         .status-indicator { text-align: center; padding: 20px; font-size: 16px; color: #777; font-style: italic; }
@@ -42,18 +49,23 @@
         footer { text-align: center; margin-top: 30px; color: #888; font-size: 13px; }
         .delete-btn { cursor: pointer; color: var(--error-color); font-weight: bold; font-size: 1.4em; line-height: 1; }
         .delete-btn:hover { color: #a02020; }
-
-        /* CSS cũ đã bị xóa để tránh xung đột, nhưng giữ lại một số class cần thiết từ JS */
         .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
         .dashboard-card { background-color: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
         .dashboard-card h3 { margin: 0 0 10px; font-size: 1em; color: #333; }
         .dashboard-card p { margin: 0; font-size: 1.5em; font-weight: bold; color: #0056b3; }
-        .table-header-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+        .table-header-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px; }
         .filters { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
         .filter-btn, .date-filter-btn { background: #e7e7e7; border: 1px solid #ccc; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.9em; }
         .filter-btn.active { background: #007bff; color: white; border-color: #007bff; }
         .date-filter-inputs { display: flex; align-items: center; gap: 5px; border-left: 1px solid #ccc; padding-left: 10px; margin-left: 5px; }
         .date-filter-inputs input[type="date"] { padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
+        .export-btn {
+            background-color: var(--button-excel-color);
+            color: white; border: none; padding: 8px 15px; border-radius: 4px;
+            cursor: pointer; font-weight: 500; font-size: 0.9em;
+            transition: background-color 0.3s ease;
+        }
+        .export-btn:hover { background-color: var(--button-excel-hover); }
     </style>
 </head>
 <body>
@@ -75,49 +87,55 @@
         </div>
     </div>
 
-    <div class="tabs">
-        <div id="tab-btn-khn" class="tab active">Khách Hàng Nợ</div>
-        <div id="tab-btn-khtn" class="tab">Khách hàng trả nợ</div>
-        <div id="tab-btn-hth" class="tab">Hàng thu hồi</div>
-    </div>
-    
-    <!-- Tab Khách Hàng Nợ -->
-    <div id="tab-content-khn" class="tab-content active">
-        <div class="table-header-controls">
-            <div class="table-title">
-                <h2>Bảng Khách Hàng Nợ</h2>
-                <span id="count-khn" class="record-count">...</span>
-            </div>
+<div class="tabs">
+    <div id="tab-btn-khn" class="tab active">Khách Hàng Nợ</div>
+    <div id="tab-btn-khtn" class="tab">Khách hàng trả nợ</div>
+    <div id="tab-btn-hth" class="tab">Hàng thu hồi</div>
+</div>
+
+<!-- Tab Khách Hàng Nợ -->
+<div id="tab-content-khn" class="tab-content active">
+    <div class="table-header-controls">
+        <div class="table-title">
+            <h2>Bảng Khách Hàng Nợ</h2>
+            <span id="count-khn" class="record-count">...</span>
+        </div>
+        <div class="filters-container" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <div class="filters" id="filters-khn"></div>
         </div>
-        <div class="table-container" id="container-khn"><p class="status-indicator">Đang tải dữ liệu...</p></div>
     </div>
-    
-    <!-- Tab Khách hàng trả nợ -->
-    <div id="tab-content-khtn" class="tab-content">
-        <div class="table-header-controls">
-            <div class="table-title">
-                <h2>Bảng Khách hàng trả nợ</h2>
-                <span id="count-khtn" class="record-count">...</span>
-            </div>
-            <div class="filters" id="filters-khtn"></div>
+    <div class="table-container" id="container-khn"><p class="status-indicator">Đang tải dữ liệu...</p></div>
+</div>
+
+<!-- Tab Khách hàng trả nợ -->
+<div id="tab-content-khtn" class="tab-content">
+    <div class="table-header-controls">
+        <div class="table-title">
+            <h2>Bảng Khách hàng trả nợ</h2>
+            <span id="count-khtn" class="record-count">...</span>
         </div>
-        <div class="table-container" id="container-khtn"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
+        <div class="filters-container" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+             <div class="filters" id="filters-khtn"></div>
+        </div>
     </div>
-    
-    <!-- Tab Hàng thu hồi -->
-    <div id="tab-content-hth" class="tab-content">
-         <div class="table-header-controls">
-            <div class="table-title">
-                <h2>Bảng Hàng thu hồi</h2>
-                <span id="count-hth" class="record-count">...</span>
-            </div>
+    <div class="table-container" id="container-khtn"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
+</div>
+
+<!-- Tab Hàng thu hồi -->
+<div id="tab-content-hth" class="tab-content">
+     <div class="table-header-controls">
+        <div class="table-title">
+            <h2>Bảng Hàng thu hồi</h2>
+            <span id="count-hth" class="record-count">...</span>
+        </div>
+        <div class="filters-container" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
             <div class="filters" id="filters-hth"></div>
         </div>
-        <div class="table-container" id="container-hth"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
     </div>
-    
-    <footer><p>&copy; 2023 - Hệ thống quản lý Tổng kho Hà Hòa</p></footer>
+    <div class="table-container" id="container-hth"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
+</div>
+
+<footer><p>&copy; 2023 - Hệ thống quản lý Tổng kho Hà Hòa</p></footer>
 </div>
 
 <script>
@@ -132,8 +150,67 @@
     const HIDDEN_COLUMNS = ['ID'];
     let originalTableData = {};
     let filteredTableData = {};
+    
+    function autoResizeInput(event) {
+        const input = event.target;
+        const minWidth = 15;
+        const newWidth = input.value.length > minWidth ? input.value.length : minWidth;
+        input.style.width = `${newWidth + 2}ch`;
+    }
 
-    // --- HÀM XỬ LÝ DASHBOARD ---
+    function escapeCsvCell(cell) {
+        if (cell == null) return '';
+        cell = String(cell);
+        if (cell.search(/("|,|\n)/g) >= 0) {
+            cell = `"${cell.replace(/"/g, '""')}"`;
+        }
+        return cell;
+    }
+
+    function exportTableToExcel(tableKey) {
+        const config = TABLE_CONFIG[tableKey];
+        const data = filteredTableData[tableKey] || originalTableData[tableKey];
+
+        if (!data || !data.rows || data.rows.length === 0) {
+            alert("Không có dữ liệu để xuất.");
+            return;
+        }
+
+        const headers = data.headers.filter(h => !HIDDEN_COLUMNS.includes(h));
+        const csvRows = [];
+        csvRows.push(headers.map(escapeCsvCell).join(','));
+
+        data.rows.forEach(row => {
+            const values = headers.map(header => {
+                let cellValue = row[header];
+                if (header === 'Hạn trả nợ' && row['Ngày nợ'] && row['Ngày phải trả']) {
+                     try {
+                        const dateNo = new Date(row['Ngày nợ']);
+                        const datePhaiTra = new Date(row['Ngày phải trả']);
+                        const diffTime = datePhaiTra - dateNo;
+                        cellValue = !isNaN(diffTime) ? `${Math.round(diffTime / (1000 * 60 * 60 * 24))} Ngày` : 'N/A';
+                    } catch (e) { cellValue = 'Lỗi'; }
+                }
+                return escapeCsvCell(cellValue);
+            });
+            csvRows.push(values.join(','));
+        });
+
+        const csvString = csvRows.join('\n');
+        const blob = new Blob(['\uFEFF' + csvString], { type: 'text/csv;charset=utf-8;' });
+        
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const fileName = `${config.name.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.csv`;
+        link.setAttribute('download', fileName);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+
     function updateDashboard() {
         Object.keys(TABLE_CONFIG).forEach(key => {
             const config = TABLE_CONFIG[key];
@@ -152,21 +229,16 @@
         });
     }
 
-    // --- HÀM ĐỊNH DẠNG TIỀN TỆ KHI NHẬP ---
     function formatCurrencyInput(event) {
         const input = event.target;
         let value = input.value;
-        // Bỏ tất cả ký tự không phải số
         let numValue = value.replace(/[^0-9]/g, '');
         if (numValue) {
-            // Định dạng lại với dấu chấm
             input.value = parseInt(numValue, 10).toLocaleString('vi-VN');
         } else {
             input.value = '';
         }
     }
-    
-    // --- CÁC HÀM XỬ LÝ BỘ LỌC NGÀY ---
     
     function renderFilterButtons(tableKey) {
         const filterContainer = document.getElementById(`filters-${tableKey}`);
@@ -192,8 +264,16 @@
         `;
 
         filterContainer.innerHTML = quickFiltersHtml + customDateFilterHtml;
+        
+        const exportBtnContainer = filterContainer.parentElement;
+        if (exportBtnContainer && !exportBtnContainer.querySelector('.export-btn')) {
+            const exportButton = document.createElement('button');
+            exportButton.className = 'export-btn';
+            exportButton.textContent = 'Tải Excel';
+            exportButton.onclick = () => exportTableToExcel(tableKey);
+            exportBtnContainer.appendChild(exportButton);
+        }
 
-        // Gán sự kiện cho các nút lọc nhanh
         filterContainer.querySelectorAll('.filter-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 applyFilter(tableKey, btn.dataset.filter);
@@ -202,7 +282,6 @@
             });
         });
 
-        // Gán sự kiện cho nút lọc theo khoảng ngày
         document.getElementById(`btn-filter-range-${tableKey}`).addEventListener('click', () => {
              applyCustomDateFilter(tableKey);
         });
@@ -261,7 +340,6 @@
             return;
         }
 
-        // Đặt giờ để bao gồm cả ngày kết thúc
         startDate.setHours(0, 0, 0, 0);
         endDate.setHours(23, 59, 59, 999);
 
@@ -270,14 +348,12 @@
             return;
         }
         
-        // Hủy kích hoạt các nút lọc nhanh
         document.querySelectorAll(`#filters-${tableKey} .filter-btn`).forEach(b => b.classList.remove('active'));
 
         filterDataByDateRange(tableKey, { startDate, endDate });
     }
 
     function applyFilter(tableKey, filterType) {
-        // Xóa giá trị trong bộ lọc ngày tùy chỉnh
         document.getElementById(`date-from-${tableKey}`).value = '';
         document.getElementById(`date-to-${tableKey}`).value = '';
 
@@ -323,9 +399,6 @@
         renderTable(tableKey, filteredData, false);
         updateDashboard();
     }
-
-
-    // --- CÁC HÀM CỐT LÕI ---
     
     function formatCellData(value, header) {
         if (header === 'Hạn trả nợ' && value && !isNaN(Number(value))) {
@@ -340,7 +413,7 @@
         if (typeof value === 'number' && (header.toLowerCase().includes('tiền') || header.toLowerCase().includes('đơn giá'))) {
             return value.toLocaleString('vi-VN');
         }
-        return value;
+        return value ?? '';
     }
     
     async function deleteRow(buttonEl) {
@@ -397,7 +470,6 @@
             const headerIndex = Array.from(input.closest('tr').children).indexOf(input.closest('td')) - 1;
             const header = headers[headerIndex];
             if (header && !HIDDEN_COLUMNS.includes(header)) {
-                // Loại bỏ dấu chấm ở các trường tiền tệ trước khi gửi
                 if (header.toLowerCase().includes('tiền') || header.toLowerCase().includes('đơn giá')) {
                     rowData[header] = input.value.replace(/\./g, '');
                 } else {
@@ -473,6 +545,7 @@
         }
     }
 
+    // *** HÀM renderTable ĐÃ ĐƯỢC CẬP NHẬT ***
     function renderTable(tableKey, data, shouldCreateInputRow = true) {
         const config = TABLE_CONFIG[tableKey];
         if (!config) return;
@@ -489,6 +562,7 @@
         ).join('')}</tr></thead>`;
         
         let inputRowHtml = '';
+        let datalistsHtml = ''; // Biến mới để lưu trữ các datalist
         if (shouldCreateInputRow) {
              inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${
                 headers.map(h => {
@@ -496,13 +570,35 @@
                     let fieldHtml;
                     const hLower = h.toLowerCase();
                     switch (true) {
-                        case h === 'ID': fieldHtml = `<input type="hidden" data-field="${h}">`; break;
-                        case hLower.includes('ngày'): fieldHtml = `<input type="date" data-field="${h}">`; break;
+                        case h === 'ID': 
+                            fieldHtml = `<input type="hidden" data-field="${h}">`; 
+                            break;
+                        case hLower.includes('ngày'): 
+                            fieldHtml = `<input type="date" data-field="${h}">`; 
+                            break;
                         case hLower.includes('tiền') || hLower.includes('đơn giá'):
-                            fieldHtml = `<input type="text" inputmode="numeric" placeholder="0" data-field="${h}">`; break;
+                            fieldHtml = `<input type="text" inputmode="numeric" placeholder="0" data-field="${h}">`; 
+                            break;
                         case hLower.includes('hạn trả nợ'):
-                            fieldHtml = `<input type="text" placeholder="Tự động" readonly data-field="${h}">`; break;
-                        default: fieldHtml = `<input type="text" placeholder="${h}..." data-field="${h}">`; break;
+                            fieldHtml = `<input type="text" placeholder="Tự động" readonly data-field="${h}">`; 
+                            break;
+                        default:
+                            // ===== LOGIC THÊM GỢI Ý (AUTOCOMPLETE) BẮT ĐẦU TẠI ĐÂY =====
+                            const datalistId = `datalist-${tableKey}-${h.replace(/[^a-zA-Z0-9]/g, '-')}`;
+                            const uniqueValues = [...new Set(data.rows.map(row => row[h]).filter(val => val != null && String(val).trim() !== ''))];
+                            
+                            if (uniqueValues.length > 0) {
+                                datalistsHtml += `<datalist id="${datalistId}">`;
+                                uniqueValues.forEach(value => {
+                                    datalistsHtml += `<option value="${String(value).replace(/"/g, '&quot;')}"></option>`;
+                                });
+                                datalistsHtml += `</datalist>`;
+                                fieldHtml = `<input type="text" placeholder="${h}..." data-field="${h}" list="${datalistId}">`;
+                            } else {
+                                fieldHtml = `<input type="text" placeholder="${h}..." data-field="${h}">`;
+                            }
+                            // ===== KẾT THÚC LOGIC THÊM GỢI Ý =====
+                            break;
                     }
                     return `<td ${style}>${fieldHtml}</td>`;
                 }).join('')
@@ -520,29 +616,31 @@
                         const diffTime = datePhaiTra - dateNo;
                         cellContent = !isNaN(diffTime) ? `${Math.round(diffTime / (1000 * 60 * 60 * 24))} Ngày` : 'N/A';
                     } catch (e) { cellContent = 'Lỗi'; }
-                } else { cellContent = formatCellData(row[h] ?? '', h); }
+                } else { cellContent = formatCellData(row[h], h); }
                 return `<td style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${cellContent}</td>`;
             }).join('');
             return `<tr>${deleteButtonHtml}${cellsHtml}</tr>`;
         }).join('')}</tbody>`;
 
-        container.innerHTML = `<table>${headerHtml}${bodyHtml}</table>`;
+        container.innerHTML = `<table>${headerHtml}${bodyHtml}</table>${datalistsHtml}`; // Thêm datalistsHtml vào cuối
         
         if (shouldCreateInputRow) {
             const inputRow = document.getElementById(`input-row-${tableKey}`);
             
-            // Tính toán ngày
             const ngayNoInput = inputRow.querySelector('input[data-field="Ngày nợ"]');
             const ngayPhaiTraInput = inputRow.querySelector('input[data-field="Ngày phải trả"]');
             if (ngayNoInput) ngayNoInput.addEventListener('change', () => calculateDays(tableKey));
             if (ngayPhaiTraInput) ngayPhaiTraInput.addEventListener('change', () => calculateDays(tableKey));
 
-            // Định dạng tiền tệ
             inputRow.querySelectorAll('input[data-field*="tiền"], input[data-field*="giá"]').forEach(input => {
                 input.addEventListener('input', formatCurrencyInput);
             });
 
-            // Gửi khi nhấn Enter
+            inputRow.querySelectorAll('input[type="text"]:not([readonly]), input[type="date"]').forEach(input => {
+                input.addEventListener('input', autoResizeInput);
+                autoResizeInput({ target: input });
+            });
+
             inputRow.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
