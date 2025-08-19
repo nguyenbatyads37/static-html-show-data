@@ -3,9 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Báo Cáo Công Nợ | Tổng kho Hà Hòa</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <title>Hệ thống quản lý Tổng kho Hà Hòa</title>
     <style>
         :root {
             --primary-color: #4CAF50; --hover-color: #45a049; --text-color: #333;
@@ -24,7 +22,7 @@
         .tab-content.active { display: block; }
         .table-container { overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
-        th, td { padding: 12px 15px; text-align: left; border: 1px solid var(--border-color); white-space: nowrap; }
+        th, td { padding: 12px 15px; text-align: center; border: 1px solid var(--border-color); white-space: nowrap; vertical-align: middle; }
         th { background-color: var(--primary-color); color: white; position: sticky; top: 0; z-index: 10; }
         tbody tr:nth-child(even) { background-color: #f9f9f9; }
         tbody tr:hover { background-color: #e8f5e9; }
@@ -38,228 +36,513 @@
         .table-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px; }
         .table-title h2 { color: #333; }
         .table-title .record-count { font-size: 14px; color: #555; background-color: #e0e0e0; padding: 4px 10px; border-radius: 12px; font-weight: 500; }
-        .han-tra-no-container { display: flex; gap: 5px; align-items: center; }
+        .han-tra-no-container { display: flex; gap: 5px; align-items: center; justify-content: center; }
         .han-tra-no-container select { flex-shrink: 0; width: auto; }
         .han-tra-no-container input { flex-grow: 1; }
         footer { text-align: center; margin-top: 30px; color: #888; font-size: 13px; }
+        .delete-btn { cursor: pointer; color: var(--error-color); font-weight: bold; font-size: 1.4em; line-height: 1; }
+        .delete-btn:hover { color: #a02020; }
+
+        /* CSS cũ đã bị xóa để tránh xung đột, nhưng giữ lại một số class cần thiết từ JS */
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 20px; }
+        .dashboard-card { background-color: #f9f9f9; border: 1px solid #ddd; padding: 15px; border-radius: 5px; }
+        .dashboard-card h3 { margin: 0 0 10px; font-size: 1em; color: #333; }
+        .dashboard-card p { margin: 0; font-size: 1.5em; font-weight: bold; color: #0056b3; }
+        .table-header-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+        .filters { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+        .filter-btn, .date-filter-btn { background: #e7e7e7; border: 1px solid #ccc; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 0.9em; }
+        .filter-btn.active { background: #007bff; color: white; border-color: #007bff; }
+        .date-filter-inputs { display: flex; align-items: center; gap: 5px; border-left: 1px solid #ccc; padding-left: 10px; margin-left: 5px; }
+        .date-filter-inputs input[type="date"] { padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <img alt="Logo" src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff6c823b5.%E1%BA%A2nh.094646.jpg" />
-            <h1>Hệ thống Báo cáo Công nợ</h1>
-        </header>
-        <div class="tabs">
-            <div id="tab-btn-khn" class="tab active">Khách Hàng Nợ</div>
-            <div id="tab-btn-khtn" class="tab">Khách hàng trả nợ</div>
-            <div id="tab-btn-hth" class="tab">Hàng thu hồi</div>
+
+<div class="container">
+    <!-- Bảng điều khiển (Dashboard) -->
+    <div class="dashboard">
+        <div class="dashboard-card">
+            <h3>Tổng Tiền Nợ (Đang lọc)</h3>
+            <p id="dashboard-total-no">0</p>
         </div>
-        <div id="tab-content-khn" class="tab-content active">
+        <div class="dashboard-card">
+            <h3>Tổng Tiền Đã Trả (Đang lọc)</h3>
+            <p id="dashboard-total-tra">0</p>
+        </div>
+        <div class="dashboard-card">
+            <h3>Giá Trị Hàng Thu Hồi (Đang lọc)</h3>
+            <p id="dashboard-total-thuhoi">0</p>
+        </div>
+    </div>
+
+    <div class="tabs">
+        <div id="tab-btn-khn" class="tab active">Khách Hàng Nợ</div>
+        <div id="tab-btn-khtn" class="tab">Khách hàng trả nợ</div>
+        <div id="tab-btn-hth" class="tab">Hàng thu hồi</div>
+    </div>
+    
+    <!-- Tab Khách Hàng Nợ -->
+    <div id="tab-content-khn" class="tab-content active">
+        <div class="table-header-controls">
             <div class="table-title">
                 <h2>Bảng Khách Hàng Nợ</h2>
                 <span id="count-khn" class="record-count">...</span>
             </div>
-            <div class="table-container" id="container-khn"><p class="status-indicator">Đang tải dữ liệu...</p></div>
+            <div class="filters" id="filters-khn"></div>
         </div>
-        <div id="tab-content-khtn" class="tab-content">
+        <div class="table-container" id="container-khn"><p class="status-indicator">Đang tải dữ liệu...</p></div>
+    </div>
+    
+    <!-- Tab Khách hàng trả nợ -->
+    <div id="tab-content-khtn" class="tab-content">
+        <div class="table-header-controls">
             <div class="table-title">
                 <h2>Bảng Khách hàng trả nợ</h2>
                 <span id="count-khtn" class="record-count">...</span>
             </div>
-            <div class="table-container" id="container-khtn"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
+            <div class="filters" id="filters-khtn"></div>
         </div>
-        <div id="tab-content-hth" class="tab-content">
+        <div class="table-container" id="container-khtn"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
+    </div>
+    
+    <!-- Tab Hàng thu hồi -->
+    <div id="tab-content-hth" class="tab-content">
+         <div class="table-header-controls">
             <div class="table-title">
                 <h2>Bảng Hàng thu hồi</h2>
                 <span id="count-hth" class="record-count">...</span>
             </div>
-            <div class="table-container" id="container-hth"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
+            <div class="filters" id="filters-hth"></div>
         </div>
-        <footer><p>&copy; 2023 - Hệ thống quản lý Tổng kho Hà Hòa</p></footer>
+        <div class="table-container" id="container-hth"><p class="status-indicator">Vui lòng chọn tab để xem</p></div>
     </div>
     
-    <script>
-        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz_PGa2OLPSmaGs-xVCEBNRCK8w59cVfE73sgTzPo5nkW9Rpg0P8TFneHNW8GSdpZLh/exec'; 
+    <footer><p>&copy; 2023 - Hệ thống quản lý Tổng kho Hà Hòa</p></footer>
+</div>
+
+<script>
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz_PGa2OLPSmaGs-xVCEBNRCK8w59cVfE73sgTzPo5nkW9Rpg0P8TFneHNW8GSdpZLh/exec'; 
+    
+    const TABLE_CONFIG = {
+        'khn': { name: 'Khách Hàng Nợ', containerId: 'container-khn', countId: 'count-khn', loaded: false, totalField: 'Số tiền nợ', dashboardId: 'dashboard-total-no' },
+        'khtn': { name: 'Khách hàng trả nợ', containerId: 'container-khtn', countId: 'count-khtn', loaded: false, totalField: 'Số tiền nợ', dashboardId: 'dashboard-total-tra' },
+        'hth': { name: 'Hàng thu hồi', containerId: 'container-hth', countId: 'count-hth', loaded: false, totalField: 'Thành tiền', dashboardId: 'dashboard-total-thuhoi' }
+    };
+    
+    const HIDDEN_COLUMNS = ['ID'];
+    let originalTableData = {};
+    let filteredTableData = {};
+
+    // --- HÀM XỬ LÝ DASHBOARD ---
+    function updateDashboard() {
+        Object.keys(TABLE_CONFIG).forEach(key => {
+            const config = TABLE_CONFIG[key];
+            const data = filteredTableData[key] || originalTableData[key];
+            const dashboardEl = document.getElementById(config.dashboardId);
+            
+            if (data && data.rows && dashboardEl) {
+                const total = data.rows.reduce((sum, row) => {
+                    const value = parseFloat(row[config.totalField]) || 0;
+                    return sum + value;
+                }, 0);
+                dashboardEl.textContent = total.toLocaleString('vi-VN') + ' đ';
+            } else if (dashboardEl) {
+                dashboardEl.textContent = '0 đ';
+            }
+        });
+    }
+
+    // --- HÀM ĐỊNH DẠNG TIỀN TỆ KHI NHẬP ---
+    function formatCurrencyInput(event) {
+        const input = event.target;
+        let value = input.value;
+        // Bỏ tất cả ký tự không phải số
+        let numValue = value.replace(/[^0-9]/g, '');
+        if (numValue) {
+            // Định dạng lại với dấu chấm
+            input.value = parseInt(numValue, 10).toLocaleString('vi-VN');
+        } else {
+            input.value = '';
+        }
+    }
+    
+    // --- CÁC HÀM XỬ LÝ BỘ LỌC NGÀY ---
+    
+    function renderFilterButtons(tableKey) {
+        const filterContainer = document.getElementById(`filters-${tableKey}`);
+        if (!filterContainer) return;
         
-        const TABLE_CONFIG = {
-            'khn': { name: 'Khách Hàng Nợ', containerId: 'container-khn', countId: 'count-khn', loaded: false },
-            'khtn': { name: 'Khách hàng trả nợ', containerId: 'container-khtn', countId: 'count-khtn', loaded: false },
-            'hth': { name: 'Hàng thu hồi', containerId: 'container-hth', countId: 'count-hth', loaded: false }
-        };
+        const filters = [
+            { label: 'Tất cả', type: 'all' }, { label: 'Hôm nay', type: 'today' },
+            { label: 'Hôm qua', type: 'yesterday' }, { label: 'Tuần này', type: 'this_week' },
+            { label: 'Tuần trước', type: 'last_week' }, { label: 'Tháng này', type: 'this_month' },
+            { label: 'Tháng trước', type: 'last_month' },
+        ];
 
-        // *** THAY ĐỔI: Danh sách các cột cần ẩn hoàn toàn khỏi giao diện ***
-        const HIDDEN_COLUMNS = ['ID', 'Ngày phải trả'];
+        const quickFiltersHtml = filters.map(f => 
+            `<button class="filter-btn ${f.type === 'all' ? 'active' : ''}" data-filter="${f.type}">${f.label}</button>`
+        ).join('');
+        
+        const customDateFilterHtml = `
+            <div class="date-filter-inputs">
+                <input type="date" id="date-from-${tableKey}" title="Từ ngày">
+                <input type="date" id="date-to-${tableKey}" title="Đến ngày">
+                <button id="btn-filter-range-${tableKey}" class="date-filter-btn">Lọc</button>
+            </div>
+        `;
 
-        function formatCellData(value, header) {
-            if (header === 'Hạn trả nợ' && value && !isNaN(Number(value))) {
-                return `${value} Ngày`;
-            }
-            if (typeof value === 'string' && (value.includes('T') && value.endsWith('Z') || /^\d{4}-\d{2}-\d{2}$/.test(value))) {
-                try {
-                    const date = new Date(value);
-                    return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
-                } catch (e) { return value; }
-            }
-            return value;
+        filterContainer.innerHTML = quickFiltersHtml + customDateFilterHtml;
+
+        // Gán sự kiện cho các nút lọc nhanh
+        filterContainer.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                applyFilter(tableKey, btn.dataset.filter);
+                filterContainer.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
+        // Gán sự kiện cho nút lọc theo khoảng ngày
+        document.getElementById(`btn-filter-range-${tableKey}`).addEventListener('click', () => {
+             applyCustomDateFilter(tableKey);
+        });
+    }
+
+    function getFilterDateRange(filterType) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        let startDate, endDate;
+
+        switch (filterType) {
+            case 'today':
+                startDate = today;
+                endDate = new Date(today);
+                endDate.setDate(endDate.getDate() + 1);
+                break;
+            case 'yesterday':
+                startDate = new Date(today);
+                startDate.setDate(startDate.getDate() - 1);
+                endDate = today;
+                break;
+            case 'this_week':
+                const dayOfWeek = today.getDay();
+                const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+                startDate = new Date(today.getFullYear(), today.getMonth(), diff);
+                endDate = new Date(startDate);
+                endDate.setDate(endDate.getDate() + 7);
+                break;
+            case 'last_week':
+                startDate = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() - 6);
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 7);
+                break;
+            case 'this_month':
+                startDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                endDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+                break;
+            case 'last_month':
+                startDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                endDate = new Date(today.getFullYear(), today.getMonth(), 1);
+                break;
+            default: return null;
+        }
+        return { startDate, endDate };
+    }
+    
+    function applyCustomDateFilter(tableKey) {
+        const fromDateEl = document.getElementById(`date-from-${tableKey}`);
+        const toDateEl = document.getElementById(`date-to-${tableKey}`);
+        
+        const startDate = fromDateEl.value ? new Date(fromDateEl.value) : null;
+        const endDate = toDateEl.value ? new Date(toDateEl.value) : null;
+
+        if (!startDate || !endDate) {
+            alert("Vui lòng chọn cả ngày bắt đầu và ngày kết thúc.");
+            return;
         }
 
-        async function submitNewRow(tableKey) {
-            const config = TABLE_CONFIG[tableKey];
-            const inputRow = document.getElementById(`input-row-${tableKey}`);
-            if (!config || !inputRow) return;
+        // Đặt giờ để bao gồm cả ngày kết thúc
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
 
-            const inputs = Array.from(inputRow.querySelectorAll('input'));
-            const headers = Array.from(document.querySelectorAll(`#${config.containerId} th`)).map(th => th.textContent.trim());
-            const rowData = {};
-            let hasValue = false;
-            
-            const hanTraNoSelect = inputRow.querySelector('.han-tra-no-select');
-            const hanTraNoInput = inputRow.querySelector('.han-tra-no-input');
-            
-            inputs.forEach((input, index) => {
-                const header = headers[index];
-                if (!HIDDEN_COLUMNS.includes(header)) {
-                    rowData[header] = input.value;
-                }
-            });
-            
-            if (hanTraNoSelect) {
-                 const hanTraNoValue = hanTraNoSelect.value === 'custom' ? hanTraNoInput.value : hanTraNoSelect.value;
-                 rowData['Hạn trả nợ'] = hanTraNoValue;
-            }
+        if (startDate > endDate) {
+            alert("Ngày bắt đầu không được lớn hơn ngày kết thúc.");
+            return;
+        }
+        
+        // Hủy kích hoạt các nút lọc nhanh
+        document.querySelectorAll(`#filters-${tableKey} .filter-btn`).forEach(b => b.classList.remove('active'));
 
-            Object.values(rowData).forEach(value => {
-                 if (String(value).trim() !== '') hasValue = true;
-            });
+        filterDataByDateRange(tableKey, { startDate, endDate });
+    }
 
-            if (!hasValue) {
-                alert('Vui lòng nhập ít nhất một trường thông tin.');
-                return;
-            }
-            
-            const dataToSend = { ...rowData };
+    function applyFilter(tableKey, filterType) {
+        // Xóa giá trị trong bộ lọc ngày tùy chỉnh
+        document.getElementById(`date-from-${tableKey}`).value = '';
+        document.getElementById(`date-to-${tableKey}`).value = '';
 
-            // *** THAY ĐỔI: Tự động tạo ID ngẫu nhiên (UID) cho mỗi bản ghi mới ***
-            dataToSend['ID'] = crypto.randomUUID();
+        if (filterType === 'all') {
+            const originalData = originalTableData[tableKey];
+            filteredTableData[tableKey] = { ...originalData };
+            renderTable(tableKey, originalData, true);
+            updateDashboard();
+            return;
+        }
 
-            if (dataToSend['Ngày nợ']) dataToSend['Ngày nợ'] = `${dataToSend['Ngày nợ']}T00:00:00.000Z`;
-            
-            // Khóa các ô nhập liệu trong khi gửi
-            inputs.forEach(input => input.disabled = true);
-            if(hanTraNoSelect) hanTraNoSelect.disabled = true;
+        const dateRange = getFilterDateRange(filterType);
+        if (dateRange) {
+            filterDataByDateRange(tableKey, dateRange);
+        }
+    }
+
+    function filterDataByDateRange(tableKey, dateRange) {
+        const originalData = originalTableData[tableKey];
+        if (!originalData) return;
+
+        const dateColumn = originalData.headers.find(h => h.toLowerCase().includes('ngày')) || null;
+        if (!dateColumn) {
+             console.warn("Không tìm thấy cột ngày để lọc.");
+             filteredTableData[tableKey] = { ...originalData };
+             renderTable(tableKey, originalData, false);
+             updateDashboard();
+             return;
+        }
+        
+        const filteredRows = originalData.rows.filter(row => {
+            const cellValue = row[dateColumn];
+            if (!cellValue) return false;
+            try {
+                const rowDate = new Date(cellValue);
+                return rowDate >= dateRange.startDate && rowDate <= dateRange.endDate;
+            } catch (e) { return false; }
+        });
+        
+        const filteredData = { ...originalData, rows: filteredRows, total: filteredRows.length };
+        
+        filteredTableData[tableKey] = filteredData;
+        renderTable(tableKey, filteredData, false);
+        updateDashboard();
+    }
+
+
+    // --- CÁC HÀM CỐT LÕI ---
+    
+    function formatCellData(value, header) {
+        if (header === 'Hạn trả nợ' && value && !isNaN(Number(value))) {
+            return `${value} Ngày`;
+        }
+        if (typeof value === 'string' && (value.includes('T') && value.endsWith('Z'))) {
+            try {
+                const date = new Date(value);
+                return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            } catch (e) { return value; }
+        }
+        if (typeof value === 'number' && (header.toLowerCase().includes('tiền') || header.toLowerCase().includes('đơn giá'))) {
+            return value.toLocaleString('vi-VN');
+        }
+        return value;
+    }
+    
+    async function deleteRow(buttonEl) {
+        const tableKey = buttonEl.dataset.tableKey;
+        const rowId = buttonEl.dataset.id;
+        const config = TABLE_CONFIG[tableKey];
+
+        if (!rowId || !config) {
+            alert('Lỗi: Không tìm thấy thông tin để xóa.');
+            return;
+        }
+
+        if (confirm('Bạn có chắc chắn muốn xóa dòng này không?')) {
+            const row = buttonEl.closest('tr');
+            row.style.opacity = '0.5';
 
             try {
-                // Gửi dữ liệu đi (không cần chờ phản hồi)
                 fetch(API_BASE_URL, {
-                    method: 'POST', mode: 'no-cors', 
-                    body: JSON.stringify({ action: 'addRow', table: config.name, data: dataToSend }),
+                    method: 'POST', mode: 'no-cors',
+                    body: JSON.stringify({ action: 'deleteRow', table: config.name, id: rowId }),
                 });
-
-                // Thêm dòng mới vào bảng ngay lập tức để người dùng thấy
-                const newRow = document.createElement('tr');
-                headers.forEach(header => {
-                    const cell = document.createElement('td');
-                    if (HIDDEN_COLUMNS.includes(header)) {
-                        cell.style.display = 'none';
-                    }
-                    // Dùng dataToSend để lấy ID đã tạo, còn lại dùng rowData
-                    const cellValue = header === 'ID' ? dataToSend['ID'] : rowData[header];
-                    cell.textContent = formatCellData(cellValue ?? '', header);
-                    newRow.appendChild(cell);
-                });
-                inputRow.insertAdjacentElement('afterend', newRow);
-
-                // Cập nhật số lượng bản ghi
-                const countSpan = document.getElementById(config.countId);
-                const currentCount = parseInt(countSpan.textContent) || 0;
-                countSpan.textContent = `${currentCount + 1} bản ghi`;
-
-                // Xóa dữ liệu trong dòng nhập liệu
-                inputs.forEach(input => { if (!input.readOnly && input.type !== 'hidden') input.value = ''; });
-                if (hanTraNoSelect) {
-                    hanTraNoSelect.value = '';
-                    hanTraNoInput.value = '';
-                    hanTraNoInput.style.display = 'none';
-                }
                 
-                // Focus vào ô nhập liệu đầu tiên
-                inputs.find(input => !input.readOnly && input.type !== 'hidden')?.focus();
+                row.remove();
+                
+                originalTableData[tableKey].rows = originalTableData[tableKey].rows.filter(r => r.ID !== rowId);
+                originalTableData[tableKey].total--;
+                if (filteredTableData[tableKey]) {
+                    filteredTableData[tableKey].rows = filteredTableData[tableKey].rows.filter(r => r.ID !== rowId);
+                    filteredTableData[tableKey].total--;
+                }
+
+                const countSpan = document.getElementById(config.countId);
+                countSpan.textContent = `${(filteredTableData[tableKey] || originalTableData[tableKey]).total} bản ghi`;
+                updateDashboard();
 
             } catch (error) {
-                console.error('Lỗi khi gửi dữ liệu:', error);
-                alert(`Đã có lỗi xảy ra: ${error.message}`);
-            } finally {
-                // Mở lại các ô nhập liệu
-                inputs.forEach(input => input.disabled = false);
-                if(hanTraNoSelect) hanTraNoSelect.disabled = false;
+                alert('Đã có lỗi xảy ra khi xóa.');
+                row.style.opacity = '1';
             }
         }
+    }
 
-        function renderTable(tableKey, data) {
-            const config = TABLE_CONFIG[tableKey];
-            if (!config) return;
+    async function submitNewRow(tableKey) {
+        const config = TABLE_CONFIG[tableKey];
+        const inputRow = document.getElementById(`input-row-${tableKey}`);
+        if (!config || !inputRow) return;
 
-            const container = document.getElementById(config.containerId);
-            document.getElementById(config.countId).textContent = `${data.total || 0} bản ghi`;
+        const inputs = Array.from(inputRow.querySelectorAll('input, select'));
+        const headers = Array.from(document.querySelectorAll(`#${config.containerId} th`)).map(th => th.textContent.trim()).filter(h => h !== 'Xóa');
+        const rowData = {};
+        let hasValue = false;
+        
+        inputs.forEach(input => {
+            const headerIndex = Array.from(input.closest('tr').children).indexOf(input.closest('td')) - 1;
+            const header = headers[headerIndex];
+            if (header && !HIDDEN_COLUMNS.includes(header)) {
+                // Loại bỏ dấu chấm ở các trường tiền tệ trước khi gửi
+                if (header.toLowerCase().includes('tiền') || header.toLowerCase().includes('đơn giá')) {
+                    rowData[header] = input.value.replace(/\./g, '');
+                } else {
+                    rowData[header] = input.value;
+                }
+            }
+        });
+        
+        Object.values(rowData).forEach(value => {
+             if (String(value).trim() !== '') hasValue = true;
+        });
 
-            if (data.error) { container.innerHTML = `<p class="status-indicator error">Lỗi: ${data.error}</p>`; return; }
-            if (data.rows.length === 0 && !data.headers) { container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>'; return; }
+        if (!hasValue) {
+            alert('Vui lòng nhập ít nhất một trường thông tin.');
+            return;
+        }
+        
+        const dataToSend = { ...rowData };
+        dataToSend['ID'] = crypto.randomUUID();
 
-            const headers = data.headers || Object.keys(data.rows[0] || {});
-            const headerHtml = `<thead><tr>${headers.map(h => 
-                `<th style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${h}</th>`
-            ).join('')}</tr></thead>`;
+        headers.forEach(h => {
+            if (h.toLowerCase().includes('ngày') && dataToSend[h]) {
+                try {
+                    const [year, month, day] = dataToSend[h].split('-');
+                    dataToSend[h] = new Date(year, month - 1, day).toISOString();
+                } catch (e) { console.warn(`Invalid date format for ${h}: ${dataToSend[h]}`); }
+            }
+        });
+        
+        inputRow.querySelectorAll('input, select').forEach(input => input.disabled = true);
+
+        try {
+            fetch(API_BASE_URL, {
+                method: 'POST', mode: 'no-cors', 
+                body: JSON.stringify({ action: 'addRow', table: config.name, data: dataToSend }),
+            });
+
+            originalTableData[tableKey].rows.unshift(dataToSend);
+            originalTableData[tableKey].total++;
             
-            const inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row">${
+            document.querySelector(`#filters-${tableKey} .filter-btn[data-filter='all']`).click();
+            
+            inputRow.querySelectorAll('input:not([type=hidden]):not([readonly])').forEach(input => input.value = '');
+            const firstInput = inputRow.querySelector('input:not([type=hidden]):not([readonly])');
+            if (firstInput) firstInput.focus();
+
+        } catch (error) {
+            alert(`Đã có lỗi xảy ra: ${error.message}`);
+        } finally {
+            inputRow.querySelectorAll('input, select').forEach(input => input.disabled = false);
+        }
+    }
+    
+    function calculateDays(tableKey) {
+        const inputRow = document.getElementById(`input-row-${tableKey}`);
+        if (!inputRow) return;
+
+        const ngayNoInput = inputRow.querySelector('input[data-field="Ngày nợ"]');
+        const ngayPhaiTraInput = inputRow.querySelector('input[data-field="Ngày phải trả"]');
+        const hanTraNoInput = inputRow.querySelector('input[data-field="Hạn trả nợ"]');
+
+        if (ngayNoInput && ngayPhaiTraInput && hanTraNoInput) {
+            const startDate = new Date(ngayNoInput.value);
+            const endDate = new Date(ngayPhaiTraInput.value);
+
+            if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && endDate >= startDate) {
+                const diffTime = Math.abs(endDate - startDate);
+                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                hanTraNoInput.value = diffDays;
+            } else {
+                hanTraNoInput.value = '';
+            }
+        }
+    }
+
+    function renderTable(tableKey, data, shouldCreateInputRow = true) {
+        const config = TABLE_CONFIG[tableKey];
+        if (!config) return;
+
+        const container = document.getElementById(config.containerId);
+        document.getElementById(config.countId).textContent = `${data.total || 0} bản ghi`;
+
+        if (data.error) { container.innerHTML = `<p class="status-indicator error">Lỗi: ${data.error}</p>`; return; }
+        if (!data.rows && !data.headers) { container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>'; return; }
+
+        const headers = data.headers || Object.keys(data.rows[0] || {});
+        const headerHtml = `<thead><tr><th style="width: 50px;">Xóa</th>${headers.map(h => 
+            `<th style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${h}</th>`
+        ).join('')}</tr></thead>`;
+        
+        let inputRowHtml = '';
+        if (shouldCreateInputRow) {
+             inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${
                 headers.map(h => {
-                    const headerText = h.trim();
-                    const style = HIDDEN_COLUMNS.includes(headerText) ? 'style="display: none;"' : '';
-                    let fieldHtml = '';
-                    // *** THAY ĐỔI: Logic tạo ô nhập liệu đã được đơn giản hóa ***
-                    switch (headerText) {
-                        case 'ID':
-                        case 'Ngày phải trả':
-                            fieldHtml = `<input type="hidden">`; break;
-                        case 'Ngày nợ': fieldHtml = `<input type="date">`; break;
-                        case 'Số tiền nợ': fieldHtml = `<input type="number" placeholder="0">`; break;
-                        case 'Hạn trả nợ':
-                            fieldHtml = `<div class="han-tra-no-container">
-                                    <select class="han-tra-no-select">
-                                        <option value="" selected disabled>Chọn...</option>
-                                        <option value="15">15 ngày</option>
-                                        <option value="30">30 ngày</option>
-                                        <option value="custom">Tự nhập...</option>
-                                    </select>
-                                    <input type="number" class="han-tra-no-input" placeholder="số ngày" style="display: none;">
-                                </div>`; break;
-                        default: fieldHtml = `<input type="text" placeholder="${h}...">`; break;
+                    const style = HIDDEN_COLUMNS.includes(h) ? 'style="display: none;"' : '';
+                    let fieldHtml;
+                    const hLower = h.toLowerCase();
+                    switch (true) {
+                        case h === 'ID': fieldHtml = `<input type="hidden" data-field="${h}">`; break;
+                        case hLower.includes('ngày'): fieldHtml = `<input type="date" data-field="${h}">`; break;
+                        case hLower.includes('tiền') || hLower.includes('đơn giá'):
+                            fieldHtml = `<input type="text" inputmode="numeric" placeholder="0" data-field="${h}">`; break;
+                        case hLower.includes('hạn trả nợ'):
+                            fieldHtml = `<input type="text" placeholder="Tự động" readonly data-field="${h}">`; break;
+                        default: fieldHtml = `<input type="text" placeholder="${h}..." data-field="${h}">`; break;
                     }
                     return `<td ${style}>${fieldHtml}</td>`;
                 }).join('')
             }</tr>`;
-            
-            const bodyHtml = `<tbody>${inputRowHtml}${data.rows.map(row => 
-                `<tr>${headers.map(h => 
-                    `<td style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${formatCellData(row[h] ?? '', h)}</td>`
-                ).join('')}</tr>`
-            ).join('')}</tbody>`;
+        }
+        
+        const bodyHtml = `<tbody>${inputRowHtml}${data.rows.map(row => {
+            const deleteButtonHtml = `<td><span class="delete-btn" data-id="${row['ID']}" data-table-key="${tableKey}">&#10006;</span></td>`;
+            const cellsHtml = headers.map(h => {
+                let cellContent;
+                if (h === 'Hạn trả nợ' && row['Ngày nợ'] && row['Ngày phải trả']) {
+                    try {
+                        const dateNo = new Date(row['Ngày nợ']);
+                        const datePhaiTra = new Date(row['Ngày phải trả']);
+                        const diffTime = datePhaiTra - dateNo;
+                        cellContent = !isNaN(diffTime) ? `${Math.round(diffTime / (1000 * 60 * 60 * 24))} Ngày` : 'N/A';
+                    } catch (e) { cellContent = 'Lỗi'; }
+                } else { cellContent = formatCellData(row[h] ?? '', h); }
+                return `<td style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${cellContent}</td>`;
+            }).join('');
+            return `<tr>${deleteButtonHtml}${cellsHtml}</tr>`;
+        }).join('')}</tbody>`;
 
-            container.innerHTML = `<table>${headerHtml}${bodyHtml}</table>`;
-
-            const hanTraNoSelect = document.querySelector(`#input-row-${tableKey} .han-tra-no-select`);
-            if (hanTraNoSelect) {
-                const hanTraNoInput = document.querySelector(`#input-row-${tableKey} .han-tra-no-input`);
-                hanTraNoSelect.addEventListener('change', () => {
-                    hanTraNoInput.style.display = hanTraNoSelect.value === 'custom' ? 'block' : 'none';
-                    if (hanTraNoSelect.value === 'custom') {
-                        hanTraNoInput.value = '';
-                        hanTraNoInput.focus();
-                    }
-                });
-            }
-            
+        container.innerHTML = `<table>${headerHtml}${bodyHtml}</table>`;
+        
+        if (shouldCreateInputRow) {
             const inputRow = document.getElementById(`input-row-${tableKey}`);
+            
+            // Tính toán ngày
+            const ngayNoInput = inputRow.querySelector('input[data-field="Ngày nợ"]');
+            const ngayPhaiTraInput = inputRow.querySelector('input[data-field="Ngày phải trả"]');
+            if (ngayNoInput) ngayNoInput.addEventListener('change', () => calculateDays(tableKey));
+            if (ngayPhaiTraInput) ngayPhaiTraInput.addEventListener('change', () => calculateDays(tableKey));
+
+            // Định dạng tiền tệ
+            inputRow.querySelectorAll('input[data-field*="tiền"], input[data-field*="giá"]').forEach(input => {
+                input.addEventListener('input', formatCurrencyInput);
+            });
+
+            // Gửi khi nhấn Enter
             inputRow.addEventListener('keydown', (event) => {
                 if (event.key === 'Enter') {
                     event.preventDefault();
@@ -267,38 +550,52 @@
                 }
             });
         }
+    }
 
-        function loadDataViaJSONP(tableKey) {
-            const config = TABLE_CONFIG[tableKey];
-            if (!config || config.loaded) return;
-            document.getElementById(config.containerId).innerHTML = `<p class="status-indicator">Đang tải dữ liệu...</p>`;
-            const callbackName = `handleData_${tableKey}`;
-            window[callbackName] = function(data) {
-                renderTable(tableKey, data);
-                config.loaded = true;
-                const scriptEl = document.getElementById(`jsonp-script-${tableKey}`);
-                if (scriptEl) scriptEl.remove();
-            };
-            const script = document.createElement('script');
-            script.id = `jsonp-script-${tableKey}`;
-            script.src = `${API_BASE_URL}?table=${encodeURIComponent(config.name)}&callback=${callbackName}`;
-            script.onerror = () => { window[callbackName]({ error: "Không thể kết nối tới máy chủ." }); };
-            document.body.appendChild(script);
-        }
+    function loadDataViaJSONP(tableKey) {
+        const config = TABLE_CONFIG[tableKey];
+        if (!config || config.loaded) return;
+        document.getElementById(config.containerId).innerHTML = `<p class="status-indicator">Đang tải dữ liệu...</p>`;
+        const callbackName = `handleData_${tableKey}_${Date.now()}`;
+        
+        window[callbackName] = function(data) {
+            originalTableData[tableKey] = data;
+            filteredTableData[tableKey] = { ...data };
+            renderTable(tableKey, data);
+            renderFilterButtons(tableKey);
+            updateDashboard();
+            config.loaded = true;
+            document.getElementById(`jsonp-script-${tableKey}`).remove();
+            delete window[callbackName];
+        };
 
-        document.addEventListener('DOMContentLoaded', () => {
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', (e) => {
-                    const targetKey = e.currentTarget.id.replace('tab-btn-', '');
-                    document.querySelectorAll('.tab, .tab-content').forEach(el => el.classList.remove('active'));
-                    e.currentTarget.classList.add('active');
-                    document.getElementById(`tab-content-${targetKey}`).classList.add('active');
-                    Object.values(TABLE_CONFIG).forEach(cfg => cfg.loaded = false);
-                    loadDataViaJSONP(targetKey);
-                });
+        const script = document.createElement('script');
+        script.id = `jsonp-script-${tableKey}`;
+        script.src = `${API_BASE_URL}?table=${encodeURIComponent(config.name)}&callback=${callbackName}`;
+        script.onerror = () => { window[callbackName]({ error: "Không thể kết nối tới máy chủ." }); };
+        document.body.appendChild(script);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', (e) => {
+                const targetKey = e.currentTarget.id.replace('tab-btn-', '');
+                document.querySelectorAll('.tab, .tab-content').forEach(el => el.classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                document.getElementById(`tab-content-${targetKey}`).classList.add('active');
+                loadDataViaJSONP(targetKey);
             });
-            loadDataViaJSONP('khn');
         });
-    </script>
+        
+        document.querySelector('.container').addEventListener('click', (event) => {
+            if (event.target && event.target.classList.contains('delete-btn')) {
+                deleteRow(event.target);
+            }
+        });
+
+        loadDataViaJSONP('khn');
+    });
+</script>
+
 </body>
 </html>
