@@ -362,6 +362,9 @@
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_rU4gsMXugPUK9ZoTczyWpKdsPVO3QcXzdpswFKVQmnsMU6B6J9lirCO_7NvET78/exec';
     const POST_URL = SCRIPT_URL;
     
+    // *** THAY ĐỔI 1: Định nghĩa tên cột để tạo Tab. Bạn có thể thay đổi "Team" thành tên cột khác nếu cần. ***
+    const TEAM_COLUMN_NAME = "Team"; 
+
     const displayColumns = ["Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ghi chú vận đơn", "Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Ngày Kế toán đối soát với FFM lần 2", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
     const columnMapping = { "Ghi chú vận đơn": "ngày hẹn đẩy đơn", "Kết quả check": "Kết quả Check" };
     
@@ -373,7 +376,7 @@
     let state = {
         allData: [],
         pendingChanges: new Map(),
-        activeRegion: 'all',
+        activeTeam: 'all', // *** THAY ĐỔI 2: Đổi tên biến để rõ nghĩa hơn ***
         showTrackingOrders: false,
         filterValues: {},
     };
@@ -411,7 +414,7 @@
       
       const initialDataForFilters = filterByCarrier(state.allData);
       populateMainFilters(initialDataForFilters);
-      createTabs(initialDataForFilters);
+      createTabs(initialDataForFilters); // *** THAY ĐỔI 3: Gọi lại hàm createTabs với dữ liệu để nó tự tạo tab ***
       setupColumnFilters();
       render();
     }
@@ -462,7 +465,11 @@
         if (product) { dataToRender = dataToRender.filter(row => row["Mặt hàng"] === product); }
         if (dateFrom) { const from = new Date(dateFrom); from.setHours(0, 0, 0, 0); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) >= from); }
         if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
-        if (state.activeRegion !== 'all') { dataToRender = dataToRender.filter(row => row["Khu vực"] === state.activeRegion); }
+        
+        // *** THAY ĐỔI 4: Logic lọc theo tab dựa trên cột "Team" (hoặc tên cột bạn định nghĩa ở TEAM_COLUMN_NAME) ***
+        if (state.activeTeam !== 'all') { 
+            dataToRender = dataToRender.filter(row => row[TEAM_COLUMN_NAME] === state.activeTeam); 
+        }
         
         const trackingIncludeRaw = state.filterValues['tracking_include'] || '';
         const trackingExcludeRaw = state.filterValues['tracking_exclude'] || '';
@@ -497,16 +504,15 @@
             });
         }
         
-        // Sắp xếp theo "Ngày Kế toán đối soát với FFM lần 2" tăng dần
         const sortKey = 'Ngày Kế toán đối soát với FFM lần 2';
         dataToRender.sort((a, b) => {
             const parseDate = (val) => { if (!val) return null; const date = new Date(val); return isNaN(date.getTime()) ? null : date; };
             const dateA = parseDate(a[sortKey]);
             const dateB = parseDate(b[sortKey]);
             if (dateA === null && dateB === null) return 0;
-            if (dateA === null) return 1; // đẩy null về cuối
-            if (dateB === null) return -1; // đẩy null về cuối
-            return dateA.getTime() - dateB.getTime(); // sắp xếp tăng dần
+            if (dateA === null) return 1;
+            if (dateB === null) return -1;
+            return dateA.getTime() - dateB.getTime();
         });
         
         return dataToRender;
@@ -517,30 +523,21 @@
         const numFixed = parseInt(document.getElementById('fixedColumns').value, 10);
         const table = document.querySelector('.table-wrapper table');
         if (!table) return;
-
         const rows = Array.from(table.rows);
-        
-        // Xóa các style cố định cũ trước khi áp dụng style mới
         rows.forEach(row => {
             Array.from(row.cells).forEach(cell => {
                 cell.classList.remove('fixed-column');
                 cell.style.left = '';
             });
         });
-
-        if (numFixed <= 0 || rows.length < 2) return; // Không làm gì nếu số cột <= 0 hoặc không có đủ dòng
-
-        // Tính toán độ rộng của các cột dựa trên dòng header chính (dòng thứ 2 trong thead)
+        if (numFixed <= 0 || rows.length < 2) return;
         const headerCells = rows[1].cells;
         const offsets = [0];
         for (let i = 1; i < numFixed; i++) {
             if (headerCells[i - 1]) {
-                // offset của cột hiện tại = offset cột trước + độ rộng cột trước
                 offsets[i] = offsets[i - 1] + headerCells[i - 1].offsetWidth;
             }
         }
-
-        // Áp dụng class và style left cho các cột cần cố định
         rows.forEach(row => {
             for (let i = 0; i < numFixed; i++) {
                 const cell = row.cells[i];
@@ -562,15 +559,12 @@
             updateOrderCounter(0);
             return;
         }
-
         updateOrderCounter(filteredData.length);
-
         filteredData.forEach((row) => {
             const tr = document.createElement('tr');
             const orderId = row["Mã đơn hàng"];
             tr.dataset.orderId = orderId; 
             const isRowChanged = state.pendingChanges.has(orderId);
-
             displayColumns.forEach(col => {
                 const td = document.createElement('td');
                 const dataKey = columnMapping[col] || col;
@@ -581,20 +575,16 @@
                 } else if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
                     value = formatDate(value);
                 }
-
                 if (col === "Ghi chú vận đơn" && value) { td.classList.add('note-highlight'); }
                 const checkValue = String(value).trim().toLowerCase();
-                
                 td.classList.remove('status-ok', 'status-cancel');
                 if (col === "Kết quả check") {
                     if (checkValue === 'ok') td.classList.add('status-ok');
                     else if (checkValue.includes('huỷ')) td.classList.add('status-cancel');
                 }
-
                 if (editableCols.includes(col)) {
                     td.classList.add('editable');
                     if (isRowChanged) { td.classList.add('highlight'); }
-                    
                     const handleInput = (newValue) => {
                         if (!state.pendingChanges.has(orderId)) {
                             state.pendingChanges.set(orderId, new Map());
@@ -603,25 +593,20 @@
                         state.pendingChanges.get(orderId).set(dataKey, finalValue);
                         td.classList.add('highlight');
                     };
-
                     if (col === "Kết quả check") {
                         td.classList.add('editable-dropdown-cell');
                         const select = document.createElement('select');
                         select.className = 'editable-select';
-                        
                         const currentVal = String(value);
                         if (!checkStatusOptions.some(opt => opt.toLowerCase() === currentVal.toLowerCase())) {
                             if (currentVal) { checkStatusOptions.push(currentVal); }
                         }
-                        
                         checkStatusOptions.forEach(opt => {
                             const option = document.createElement('option');
-                            option.value = opt;
-                            option.textContent = opt;
+                            option.value = opt; option.textContent = opt;
                             if (opt.toLowerCase() === currentVal.toLowerCase()) { option.selected = true; }
                             select.appendChild(option);
                         });
-                        
                         select.addEventListener('change', () => {
                             handleInput(select.value);
                             const selectedVal = select.value.toLowerCase();
@@ -650,12 +635,35 @@
             });
             container.appendChild(tr);
         });
-
-        // Áp dụng lại chức năng cố định cột sau khi bảng được vẽ lại
         updateFixedColumns();
     }
-
-    function createTabs(data) { const tabContainer = document.getElementById('tabContainer'); tabContainer.innerHTML = ''; const regions = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort(); const createTab = (name, value) => { const button = document.createElement('button'); button.className = 'tab-btn'; button.textContent = name; button.dataset.region = value; if (value === state.activeRegion) button.classList.add('active'); button.addEventListener('click', () => { state.activeRegion = value; document.querySelectorAll('#tabContainer .tab-btn').forEach(btn => btn.classList.remove('active')); button.classList.add('active'); render(); }); return button; }; tabContainer.appendChild(createTab('Tất cả', 'all')); regions.forEach(region => tabContainer.appendChild(createTab(region, region))); }
+    
+    // *** THAY ĐỔI 5: Viết lại hàm createTabs để tự động tạo tab từ cột "Team" ***
+    function createTabs(data) {
+        const tabContainer = document.getElementById('tabContainer');
+        tabContainer.innerHTML = '';
+        const teams = [...new Set(data.map(row => row[TEAM_COLUMN_NAME]).filter(Boolean))].sort();
+        
+        const createTab = (name, value) => {
+            const button = document.createElement('button');
+            button.className = 'tab-btn';
+            button.textContent = name;
+            button.dataset.team = value;
+            if (value === state.activeTeam) {
+                button.classList.add('active');
+            }
+            button.addEventListener('click', () => {
+                state.activeTeam = value;
+                document.querySelectorAll('#tabContainer .tab-btn').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+                render();
+            });
+            return button;
+        };
+        
+        tabContainer.appendChild(createTab('Tất cả', 'all'));
+        teams.forEach(team => tabContainer.appendChild(createTab(team, team)));
+    }
     
     function setupColumnFilters() {
         const filterRow = document.getElementById('filterRow');
@@ -690,7 +698,7 @@
         document.getElementById('fixedColumns').addEventListener('change', updateFixedColumns);
     }
     
-    function refreshData() { const btn = document.getElementById('refreshData'); btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Đang tải...'; state.activeRegion = 'all'; state.filterValues = {}; document.getElementById('tabContainer').innerHTML = ''; document.getElementById('filterRow').innerHTML = ''; document.getElementById('mainFilters').querySelectorAll('input, select').forEach(el => { if(el.id !== 'fixedColumns') el.value = ''; }); updateOrderCounter(0); loadData(); }
+    function refreshData() { const btn = document.getElementById('refreshData'); btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Đang tải...'; state.activeTeam = 'all'; state.filterValues = {}; document.getElementById('tabContainer').innerHTML = ''; document.getElementById('filterRow').innerHTML = ''; document.getElementById('mainFilters').querySelectorAll('input, select').forEach(el => { if(el.id !== 'fixedColumns') el.value = ''; }); updateOrderCounter(0); loadData(); }
     function toggleTrackingView() { const btn = document.getElementById('toggleTrackingView'); state.showTrackingOrders = !state.showTrackingOrders; if (state.showTrackingOrders) { btn.textContent = 'Xem đơn chưa có mã Tracking'; btn.classList.add('active'); } else { btn.textContent = 'Xem đơn có mã Tracking'; btn.classList.remove('active'); } render(); }
     function loadData() { document.getElementById('tableBody').innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center;">Đang tải...</td></tr>`; const script = document.createElement('script'); script.src = SCRIPT_URL + '?callback=handleData&rand=' + Math.random(); const oldScript = document.querySelector('script[src^="' + SCRIPT_URL + '"]'); if (oldScript) document.body.removeChild(oldScript); document.body.appendChild(script); }
 
@@ -699,7 +707,6 @@
       if (state.pendingChanges.size === 0) { showCustomAlert('Không có thay đổi cần cập nhật.', 'info'); return; }
       const updateBtn = document.getElementById('updateAll');
       updateBtn.disabled = true; updateBtn.textContent = 'Đang gửi...';
-      
       const rowsToSend = [];
       state.pendingChanges.forEach((changes, orderId) => {
           const originalRow = state.allData.find(row => row["Mã đơn hàng"] === orderId);
@@ -710,12 +717,10 @@
               rowsToSend.push(updatedRow);
           }
       });
-      
       if (rowsToSend.length === 0) { 
           updateBtn.disabled = false; updateBtn.textContent = 'Cập nhật tất cả thay đổi'; 
           return; 
       }
-
       fetch(POST_URL, { method: 'POST', mode: 'cors', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ rows: JSON.stringify(rowsToSend) }) })
       .then(r => r.json())
       .then(json => {
@@ -734,29 +739,9 @@
       .finally(() => { updateBtn.disabled = false; updateBtn.textContent = 'Cập nhật tất cả thay đổi'; });
     }
     
-    function getCellValue(cell) { 
-        if (!cell) return ''; 
-        const select = cell.querySelector('select');
-        if (select) return select.value;
-        const input = cell.querySelector('input'); 
-        return input ? input.value : cell.textContent; 
-    }
-    function setCellValue(cell, value) { 
-        if (!cell) return; 
-        const select = cell.querySelector('select');
-        if (select) {
-            select.value = value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-            return;
-        }
-        const input = cell.querySelector('input'); 
-        if (input) { input.value = value; } 
-        else if (cell.isContentEditable) { cell.textContent = value; } 
-        if(cell.isContentEditable || input) { cell.dispatchEvent(new Event('input', { bubbles: true })); } 
-    }
-
+    function getCellValue(cell) { if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); return input ? input.value : cell.textContent; }
+    function setCellValue(cell, value) { if (!cell) return; const select = cell.querySelector('select'); if (select) { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); return; } const input = cell.querySelector('input'); if (input) { input.value = value; } else if (cell.isContentEditable) { cell.textContent = value; } if(cell.isContentEditable || input) { cell.dispatchEvent(new Event('input', { bubbles: true })); } }
     function updateSelectionSummary() { const summaryEl = document.getElementById('selectionSummary'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; if (selectedCells.length <= 1) { return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d.-]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); }
-
     function setupInteractionHandlers() {
         const tableBody = document.getElementById('tableBody'); if (!tableBody) return;
         let isSelecting = false, startCell = null;
@@ -767,7 +752,6 @@
         document.addEventListener('mouseup', () => { if (isSelecting) { isSelecting = false; updateSelectionSummary(); } });
         tableBody.addEventListener('dblclick', e => { const cell = e.target.closest('td.editable'); if (!cell) return; const input = cell.querySelector('input, select'); if (input) { input.focus(); } else if (cell.isContentEditable) { cell.focus(); document.execCommand('selectAll', false, null); document.getSelection().collapseToEnd(); } });
         document.addEventListener('copy', e => { const selectedCells = document.querySelectorAll('td.cell-selected'); if (selectedCells.length === 0) return; e.preventDefault(); const rows = new Map(); selectedCells.forEach(cell => { const rowIndex = cell.parentElement.rowIndex; if (!rows.has(rowIndex)) rows.set(rowIndex, []); rows.get(rowIndex).push({ colIndex: cell.cellIndex, text: getCellValue(cell) }); }); const sortedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]); const copyText = sortedRows.map(([, cells]) => cells.sort((a, b) => a.colIndex - b[0]).map(cell => cell.text).join('\t')).join('\n'); e.clipboardData.setData('text/plain', copyText); showCustomAlert(`Đã sao chép ${selectedCells.length} ô.`, 'info', 2000); });
-        
         document.addEventListener('paste', e => {
             const activeEl = document.activeElement; if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) { return; }
             if (!pasteAnchorCell) return;
@@ -792,7 +776,6 @@
             showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000);
             updateSelectionSummary();
         });
-
         document.addEventListener('keydown', e => {
             const activeEl = document.activeElement; if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) { return; }
             if (e.key === 'Delete' || e.key === 'Backspace') {
