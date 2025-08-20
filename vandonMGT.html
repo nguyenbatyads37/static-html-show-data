@@ -740,7 +740,32 @@
     }
     
     function getCellValue(cell) { if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); return input ? input.value : cell.textContent; }
-    function setCellValue(cell, value) { if (!cell) return; const select = cell.querySelector('select'); if (select) { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); return; } const input = cell.querySelector('input'); if (input) { input.value = value; } else if (cell.isContentEditable) { cell.textContent = value; } if(cell.isContentEditable || input) { cell.dispatchEvent(new Event('input', { bubbles: true })); } }
+    
+    // ===== BẮT ĐẦU PHẦN SỬA LỖI =====
+    function setCellValue(cell, value) {
+        if (!cell) return;
+        const select = cell.querySelector('select');
+        if (select) {
+            select.value = value;
+            // Kích hoạt sự kiện 'change' trên select để ghi nhận thay đổi
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            return;
+        }
+        const input = cell.querySelector('input');
+        if (input) {
+            input.value = value;
+            // Kích hoạt sự kiện 'input' trên chính thẻ input
+            input.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
+        if (cell.isContentEditable) {
+            cell.textContent = value;
+            // Kích hoạt sự kiện 'input' trên ô có thể chỉnh sửa
+            cell.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+    // ===== KẾT THÚC PHẦN SỬA LỖI =====
+
     function updateSelectionSummary() { const summaryEl = document.getElementById('selectionSummary'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; if (selectedCells.length <= 1) { return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d.-]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); }
     function setupInteractionHandlers() {
         const tableBody = document.getElementById('tableBody'); if (!tableBody) return;
