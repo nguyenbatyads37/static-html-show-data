@@ -57,11 +57,15 @@
         #container-tonghop th { background-color: var(--secondary-color); }
         tbody tr:nth-child(even) { background-color: #f9f9f9; }
         tbody tr:hover { background-color: #e8f5e9; }
-        .input-row { background-color: var(--input-bg) !important; }
+       
+        /* UPDATED: In đậm dòng nhập */
+        .input-row { background-color: var(--input-bg) !important; font-weight: bold; }
         .input-row td { padding: 8px; vertical-align: middle;}
-        .input-row input, .input-row select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .input-row input, .input-row select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-weight: bold; }
+        .input-row input::placeholder { font-weight: normal; color: #999; }
         .input-row input:focus, .input-row select:focus { border-color: var(--primary-color); box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2); outline: none; }
         .input-row input:read-only { background-color: #f0f0f0; cursor: not-allowed; }
+
         .status-indicator { text-align: center; padding: 20px; font-size: 16px; color: #777; font-style: italic; }
         .status-indicator.error { color: var(--error-color); font-weight: 500; }
         .table-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px; }
@@ -195,7 +199,7 @@
     </div>
     
     <script>
-        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbz_PGa2OLPSmaGs-xVCEBNRCK8w59cVfE73sgTzPo5nkW9Rpg0P8TFneHNW8GSdpZLh/exec'; 
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwueKpfmNJZ9eq-3JELQqbRoHxG0pKF0Cz8FjTjQ9RgHuqjjm6YMlMo7-KI5IMvUTRv/exec'; 
         
         const TABLE_CONFIG = {
             'khn': { name: 'Khách Hàng Nợ', containerId: 'container-khn', countId: 'count-khn', loaded: false, totalField: 'Số tiền nợ', dashboardId: 'dashboard-total-no' },
@@ -203,11 +207,20 @@
             'hth': { name: 'Hàng thu hồi', containerId: 'container-hth', countId: 'count-hth', loaded: false, totalField: 'Thành tiền', dashboardId: 'dashboard-total-thuhoi' },
             'tonghop': { name: 'Tổng hợp', containerId: 'container-tonghop', countId: 'count-tonghop', loaded: false }
         };
+
+        const headerMapping = {
+            'Giao hàng cho nợ': 'NV Giao hàng cho nợ',
+            'Người chịu trách nhiệm': 'NV Kinh doanh'
+        };
+        const reverseHeaderMapping = {
+            'NV Giao hàng cho nợ': 'Giao hàng cho nợ',
+            'NV Kinh doanh': 'Người chịu trách nhiệm'
+        };
         
         const HIDDEN_COLUMNS = ['ID'];
-        let originalTableData = {}; // Lưu trữ dữ liệu gốc
-        let filteredTableData = {}; // Lưu trữ dữ liệu đã lọc
-        let activeFilterType = 'all'; // Lưu trữ bộ lọc hiện tại
+        let originalTableData = {};
+        let filteredTableData = {};
+        let activeFilterType = 'all';
 
         // --- HÀM XỬ LÝ DASHBOARD ---
         function updateDashboard() {
@@ -224,9 +237,10 @@
                         const value = parseFloat(row[config.totalField]) || 0;
                         return sum + value;
                     }, 0);
-                    dashboardEl.textContent = total.toLocaleString('vi-VN') + ' đ';
+                    // UPDATED: Thêm VNĐ
+                    dashboardEl.textContent = total.toLocaleString('vi-VN') + ' VNĐ';
                 } else if (dashboardEl) {
-                    dashboardEl.textContent = '0 đ';
+                    dashboardEl.textContent = '0 VNĐ';
                 }
 
                 if (key === 'khn') totalNo = total;
@@ -235,7 +249,8 @@
             });
             
             const totalConLai = totalNo - totalTra - totalThuHoi;
-            document.getElementById('dashboard-total-conlai').textContent = totalConLai.toLocaleString('vi-VN') + ' đ';
+             // UPDATED: Thêm VNĐ
+            document.getElementById('dashboard-total-conlai').textContent = totalConLai.toLocaleString('vi-VN') + ' VNĐ';
         }
         
         // --- CÁC HÀM XỬ LÝ BỘ LỌC NGÀY ---
@@ -257,10 +272,7 @@
             filterContainer.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     activeFilterType = btn.dataset.filter;
-                    // Áp dụng bộ lọc cho tất cả các bảng
                     Object.keys(TABLE_CONFIG).forEach(key => applyFilter(key, activeFilterType));
-                    
-                    // Cập nhật trạng thái active cho tất cả các bộ lọc trên các tab
                     document.querySelectorAll('.filter-btn').forEach(b => {
                         b.classList.toggle('active', b.dataset.filter === activeFilterType);
                     });
@@ -360,10 +372,10 @@
                 <tr>
                     <td>${c.maKH}</td>
                     <td style="text-align: left;">${c.tenKH}</td>
-                    <td>${c.tongNo.toLocaleString('vi-VN')}</td>
-                    <td>${c.daTra.toLocaleString('vi-VN')}</td>
-                    <td>${c.thuHoi.toLocaleString('vi-VN')}</td>
-                    <td><b>${c.conLai.toLocaleString('vi-VN')}</b></td>
+                    <td>${c.tongNo.toLocaleString('vi-VN')} VNĐ</td>
+                    <td>${c.daTra.toLocaleString('vi-VN')} VNĐ</td>
+                    <td>${c.thuHoi.toLocaleString('vi-VN')} VNĐ</td>
+                    <td><b>${c.conLai.toLocaleString('vi-VN')} VNĐ</b></td>
                 </tr>
             `).join('')}</tbody>`;
 
@@ -371,12 +383,11 @@
         }
 
         function calculateAndRenderCombinedData(filterType) {
-            const customerData = {}; // { maKH: { tenKH, tongNo, daTra, thuHoi, conLai } }
+            const customerData = {}; 
             const dateRange = getFilterDateRange(filterType);
 
-            // Hàm trợ giúp để lọc một hàng theo ngày
             const isRowInDateRange = (row, dateColumnName) => {
-                if (!dateRange || !dateColumnName) return true; // Nếu không có bộ lọc ngày, bao gồm tất cả
+                if (!dateRange || !dateColumnName) return true;
                 const dateValue = row[dateColumnName];
                 if (!dateValue) return false;
                 try {
@@ -385,7 +396,6 @@
                 } catch (e) { return false; }
             };
 
-            // 1. Tổng hợp nợ
             if (originalTableData['khn']?.rows) {
                 const dateCol = originalTableData['khn'].headers.find(h => h.toLowerCase().includes('ngày'));
                 originalTableData['khn'].rows.forEach(row => {
@@ -399,7 +409,6 @@
                 });
             }
 
-            // 2. Trừ tiền đã trả
             if (originalTableData['khtn']?.rows) {
                  const dateCol = originalTableData['khtn'].headers.find(h => h.toLowerCase().includes('ngày'));
                 originalTableData['khtn'].rows.forEach(row => {
@@ -413,7 +422,6 @@
                 });
             }
 
-            // 3. Trừ hàng thu hồi
             if (originalTableData['hth']?.rows) {
                  const dateCol = originalTableData['hth'].headers.find(h => h.toLowerCase().includes('ngày'));
                 originalTableData['hth'].rows.forEach(row => {
@@ -427,7 +435,6 @@
                 });
             }
             
-            // 4. Tính công nợ cuối cùng
             Object.keys(customerData).forEach(maKH => {
                 const c = customerData[maKH];
                 c.conLai = c.tongNo - c.daTra - c.thuHoi;
@@ -446,8 +453,9 @@
                     return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
                 } catch (e) { return value; }
             }
+            // UPDATED: Thêm VNĐ vào cuối
             if (typeof value === 'number' && (header.toLowerCase().includes('tiền') || header.toLowerCase().includes('đơn giá'))) {
-                return value.toLocaleString('vi-VN');
+                return value.toLocaleString('vi-VN') + ' VNĐ';
             }
             return value ?? '';
         }
@@ -495,20 +503,28 @@
             if (!config || !inputRow) return;
 
             const inputs = Array.from(inputRow.querySelectorAll('input, select'));
-            const headers = Array.from(document.querySelectorAll(`#${config.containerId} th`)).map(th => th.textContent.trim()).filter(h => h !== 'Xóa');
+            const displayedHeaders = Array.from(document.querySelectorAll(`#${config.containerId} th`)).map(th => th.textContent.trim()).filter(h => h !== 'Xóa');
             const rowData = {};
-            let hasValue = false;
             
             inputs.forEach(input => {
                 const headerIndex = Array.from(input.closest('tr').children).indexOf(input.closest('td')) - 1;
-                const header = headers[headerIndex];
-                if (header && !HIDDEN_COLUMNS.includes(header)) rowData[header] = input.value;
+                const displayedHeader = displayedHeaders[headerIndex];
+                const originalHeader = reverseHeaderMapping[displayedHeader] || displayedHeader;
+                
+                if (originalHeader && !HIDDEN_COLUMNS.includes(originalHeader)) {
+                    // UPDATED: Loại bỏ dấu chấm trước khi gửi đi
+                    if (['Số tiền nợ', 'Đơn giá', 'Thành tiền'].includes(originalHeader)) {
+                        rowData[originalHeader] = input.value.replace(/\./g, '');
+                    } else {
+                        rowData[originalHeader] = input.value;
+                    }
+                }
             });
             
             if (!Object.values(rowData).some(value => String(value).trim() !== '')) return alert('Vui lòng nhập ít nhất một trường thông tin.');
             
             const dataToSend = { ...rowData, ID: crypto.randomUUID() };
-            headers.forEach(h => {
+            Object.keys(dataToSend).forEach(h => {
                 if (h.toLowerCase().includes('ngày') && dataToSend[h]) {
                     try { dataToSend[h] = new Date(dataToSend[h]).toISOString(); } catch (e) {}
                 }
@@ -556,6 +572,33 @@
             }
         }
 
+        // --- NEW: HÀM ĐỂ THIẾT LẬP Ô NHẬP TIỀN TỆ ---
+        function setupCurrencyInput(input) {
+            if (!input) return;
+            
+            input.setAttribute('size', (input.placeholder.length || 10) + 2);
+
+            input.addEventListener('input', function(e) {
+                const cursorPosition = this.selectionStart;
+                const originalLength = this.value.length;
+                const rawValue = this.value.replace(/\./g, '');
+
+                if (isNaN(rawValue) || rawValue.trim() === '') {
+                    this.value = '';
+                    this.size = (this.placeholder.length || 10) + 2;
+                    return;
+                }
+
+                const formattedValue = Number(rawValue).toLocaleString('vi-VN');
+                this.value = formattedValue;
+                const newLength = this.value.length;
+                const newCursorPosition = cursorPosition + (newLength - originalLength);
+                this.setSelectionRange(newCursorPosition, newCursorPosition);
+                this.size = this.value.length > 0 ? this.value.length + 1 : (this.placeholder.length || 10) + 2;
+            });
+        }
+
+
         function renderTable(tableKey, data, shouldCreateInputRow = true) {
             const config = TABLE_CONFIG[tableKey];
             if (!config) return;
@@ -567,7 +610,7 @@
             if (!data.rows && !data.headers) { container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>'; return; }
 
             const headers = data.headers || Object.keys(data.rows[0] || {});
-            const headerHtml = `<thead><tr><th style="width: 50px;">Xóa</th>${headers.map(h => `<th style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${h}</th>`).join('')}</tr></thead>`;
+            const headerHtml = `<thead><tr><th style="width: 50px;">Xóa</th>${headers.map(h => `<th style="${HIDDEN_COLUMNS.includes(h) ? 'display: none;' : ''}">${headerMapping[h] || h}</th>`).join('')}</tr></thead>`;
             
             let inputRowHtml = '';
             if (shouldCreateInputRow) {
@@ -575,15 +618,17 @@
                     headers.map(h => {
                         const style = HIDDEN_COLUMNS.includes(h) ? 'style="display: none;"' : '';
                         let fieldHtml;
+                        const displayedHeader = headerMapping[h] || h;
                         switch (h) {
                             case 'ID': fieldHtml = `<input type="hidden" data-field="${h}">`; break;
                             case 'Ngày nợ': case 'Ngày trả': case 'Ngày phải trả': case 'Ngày thu hồi':
                                 fieldHtml = `<input type="date" data-field="${h}">`; break;
+                            // UPDATED: Đổi type="number" thành type="text" để cho phép dấu chấm
                             case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền':
-                                fieldHtml = `<input type="number" placeholder="0" data-field="${h}">`; break;
+                                fieldHtml = `<input type="text" inputmode="decimal" placeholder="0" data-field="${h}">`; break;
                             case 'Hạn trả nợ':
                                 fieldHtml = `<input type="text" placeholder="Tự động" readonly data-field="${h}">`; break;
-                            default: fieldHtml = `<input type="text" placeholder="${h}..." data-field="${h}">`; break;
+                            default: fieldHtml = `<input type="text" placeholder="${displayedHeader}..." data-field="${h}">`; break;
                         }
                         return `<td ${style}>${fieldHtml}</td>`;
                     }).join('')
@@ -603,6 +648,27 @@
             
             if (shouldCreateInputRow) {
                 const inputRow = document.getElementById(`input-row-${tableKey}`);
+                
+                inputRow.querySelectorAll('input[type="text"]').forEach(input => {
+                    if (input.readOnly) return;
+                    input.addEventListener('input', () => {
+                        if (input.value.length > 0) {
+                            const start = input.selectionStart;
+                            const end = input.selectionEnd;
+                            input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1);
+                            input.setSelectionRange(start, end);
+                        }
+                    });
+                });
+                
+                // UPDATED: Gọi hàm thiết lập cho các ô nhập tiền tệ
+                const currencyFields = ['Số tiền nợ', 'Đơn giá', 'Thành tiền'];
+                currencyFields.forEach(field => {
+                    const input = inputRow.querySelector(`input[data-field="${field}"]`);
+                    setupCurrencyInput(input);
+                });
+
+
                 const ngayNoInput = inputRow.querySelector('input[data-field="Ngày nợ"]');
                 const ngayPhaiTraInput = inputRow.querySelector('input[data-field="Ngày phải trả"]');
                 
@@ -645,7 +711,6 @@
             document.body.appendChild(script);
         }
 
-        // --- HÀM MỚI ĐỂ XUẤT EXCEL ---
         function exportToExcel() {
             const activeTabEl = document.querySelector('.tab.active');
             if (!activeTabEl) {
@@ -673,14 +738,11 @@
                     alert('Không có dữ liệu trong tab này để xuất.');
                     return;
                 }
-                headers = data.headers.filter(h => !HIDDEN_COLUMNS.includes(h) && h.toLowerCase() !== 'xóa');
-                // Bỏ qua cột 'Xóa' khỏi tiêu đề
-                headers.unshift(...data.headers.filter(h => h.toLowerCase() === 'xóa'));
                 
-                headers = data.headers.filter(h => !HIDDEN_COLUMNS.includes(h));
+                headers = data.headers.filter(h => !HIDDEN_COLUMNS.includes(h)).map(h => headerMapping[h] || h);
 
                 dataRows = data.rows.map(row => {
-                    return headers.map(header => {
+                    return data.headers.filter(h => !HIDDEN_COLUMNS.includes(h)).map(header => {
                         return row[header] ?? ''; 
                     });
                 });
@@ -696,6 +758,8 @@
             const escapeCsvCell = (cell) => {
                 if (cell === null || cell === undefined) return '';
                 let cellString = String(cell);
+                // UPDATED: Xử lý giá trị tiền tệ trước khi xuất, loại bỏ VNĐ và dấu chấm
+                cellString = cellString.replace(/\sVNĐ/g, '').replace(/\./g, '');
                 if (cellString.search(/("|,|\n)/g) >= 0) {
                     cellString = '"' + cellString.replace(/"/g, '""') + '"';
                 }
@@ -732,7 +796,6 @@
                     document.getElementById(`tab-content-${targetKey}`).classList.add('active');
                     
                     if (targetKey === 'tonghop') {
-                        // Tải tất cả dữ liệu cần thiết trước khi tính toán
                         Promise.all([
                             new Promise(resolve => loadDataViaJSONP('khn', resolve)),
                             new Promise(resolve => loadDataViaJSONP('khtn', resolve)),
@@ -742,7 +805,7 @@
                                 renderFilterButtons('tonghop');
                                 TABLE_CONFIG.tonghop.loaded = true;
                             }
-                            applyFilter('tonghop', activeFilterType); // Áp dụng bộ lọc hiện tại
+                            applyFilter('tonghop', activeFilterType);
                         });
                     } else {
                         loadDataViaJSONP(targetKey);
@@ -757,7 +820,6 @@
                 }
             });
 
-            // Thêm trình xử lý sự kiện cho các nút Tải Excel
             document.querySelectorAll('.export-btn').forEach(button => {
                 button.addEventListener('click', exportToExcel);
             });
