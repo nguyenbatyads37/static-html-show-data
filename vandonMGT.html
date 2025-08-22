@@ -504,16 +504,37 @@
             });
         }
         
-        const sortKey = 'Ngày Kế toán đối soát với FFM lần 2';
+        // ===== START: MODIFIED SORTING LOGIC (Đã kiểm tra và thấy logic này hoạt động đúng) =====
+        const primarySortKey = 'Ngày Kế toán đối soát với FFM lần 2';
+        const secondarySortKey = 'Mã đơn hàng';
+        
         dataToRender.sort((a, b) => {
             const parseDate = (val) => { if (!val) return null; const date = new Date(val); return isNaN(date.getTime()) ? null : date; };
-            const dateA = parseDate(a[sortKey]);
-            const dateB = parseDate(b[sortKey]);
-            if (dateA === null && dateB === null) return 0;
-            if (dateA === null) return 1;
-            if (dateB === null) return -1;
-            return dateA.getTime() - dateB.getTime();
+            const dateA = parseDate(a[primarySortKey]);
+            const dateB = parseDate(b[primarySortKey]);
+
+            // So sánh theo khóa chính (ngày đối soát)
+            if (dateA === null && dateB === null) {
+                // Cả hai đều null, chuyển sang sắp xếp theo khóa phụ
+            } else if (dateA === null) {
+                return 1; // Đẩy giá trị null của A xuống cuối
+            } else if (dateB === null) {
+                return -1; // Đẩy giá trị null của B xuống cuối
+            } else {
+                const dateComparison = dateA.getTime() - dateB.getTime();
+                if (dateComparison !== 0) {
+                    return dateComparison; // Trả về kết quả nếu ngày khác nhau (bao gồm giờ, phút, giây)
+                }
+                // Nếu ngày giờ giống hệt nhau, sẽ chuyển sang sắp xếp theo khóa phụ
+            }
+            
+            // So sánh theo khóa phụ (Mã đơn hàng) khi khóa chính bằng nhau
+            const orderIdA = a[secondarySortKey] || '';
+            const orderIdB = b[secondarySortKey] || '';
+            // Sử dụng localeCompare để sắp xếp chuỗi một cách chính xác
+            return orderIdA.localeCompare(orderIdB);
         });
+        // ===== END: MODIFIED SORTING LOGIC =====
         
         return dataToRender;
     }
@@ -674,7 +695,7 @@
             if (col === "Mã Tracking") {
                 const container = document.createElement('div'); container.className = 'dual-filter-container';
                 const includeInput = document.createElement('input'); includeInput.type = 'text'; includeInput.className = 'filter-input'; includeInput.placeholder = 'Bao gồm...'; includeInput.addEventListener('input', () => { state.filterValues['tracking_include'] = includeInput.value; render(); });
-                const excludeInput = document.createElement('input'); excludeInput.type = 'text'; excludeInput.className = 'filter-input'; excludeInput.placeholder = 'Loại trừ...'; excludeInput.addEventListener('input', () => { state.filterValues['tracking_exclude'] = excludeInput.value; render(); });
+                const excludeInput = document.createElement('input'); excludeInput.type = 'text'; includeInput.className = 'filter-input'; excludeInput.placeholder = 'Loại trừ...'; excludeInput.addEventListener('input', () => { state.filterValues['tracking_exclude'] = excludeInput.value; render(); });
                 container.appendChild(includeInput); container.appendChild(excludeInput); th.appendChild(container);
             } else {
                 const input = document.createElement('input'); input.type = 'text'; input.className = 'filter-input'; input.placeholder = `Lọc ${col}`; input.dataset.column = col;
