@@ -420,45 +420,104 @@
 
 <script>
     // --- KHAI BÁO BIẾN TOÀN CỤC ---
-    let rawData = [];
-    let employeeData = [];
-    let isRestrictedView = false;
-    let allowedNames = [];
+    let rawData = []; // Mảng chứa toàn bộ dữ liệu sale đã được xử lý và làm sạch
+    let isRestrictedView = false; // Cờ để xác định chế độ xem bị giới hạn (xem theo ID nhân viên)
+    let allowedNames = []; // Mảng chứa tên các nhân viên được phép hiển thị trong chế độ xem giới hạn
 
     const loader = document.getElementById('loading-overlay');
+
+    // --- CÁC HÀM TIỆN ÍCH ---
+
+    /**
+     * Hiển thị màn hình loading
+     */
     const showLoader = () => loader.classList.add('visible');
+
+    /**
+     * Ẩn màn hình loading
+     */
     const hideLoader = () => loader.classList.remove('visible');
     
+    /**
+     * Lấy tham số từ URL (ví dụ: ?id=abc)
+     * @param {string} name - Tên của tham số cần lấy
+     * @returns {string|null} - Giá trị của tham số hoặc null nếu không tồn tại
+     */
     function getUrlParameter(name) {
         const urlParams = new URLSearchParams(window.location.search);
         return urlParams.get(name);
     }
 
+    /**
+     * Định dạng một giá trị thành chuỗi tiền tệ Việt Nam (VND)
+     * @param {number} value - Số cần định dạng
+     * @returns {string} - Chuỗi đã định dạng (ví dụ: "1.234.567 ₫")
+     */
+    function formatCurrency(value) { 
+        return Number(value || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }); 
+    }
+
+    /**
+     * Định dạng một số với dấu phân cách hàng nghìn
+     * @param {number} value - Số cần định dạng
+     * @returns {string} - Chuỗi đã định dạng (ví dụ: "1.234.567")
+     */
+    function formatNumber(value) { 
+        return Number(value || 0).toLocaleString('vi-VN'); 
+    }
+
+    /**
+     * Định dạng một số thành chuỗi phần trăm
+     * @param {number} value - Số cần định dạng (ví dụ: 0.1 tương ứng 10%)
+     * @returns {string} - Chuỗi đã định dạng (ví dụ: "10.00%")
+     */
+    function formatPercent(value) { 
+        if (value === null || value === undefined || !isFinite(value)) return '0.00%'; 
+        return `${(Number(value || 0) * 100).toFixed(2)}%`; 
+    }
+    
+    /**
+     * Định dạng ngày tháng từ chuỗi hoặc đối tượng Date sang "dd/mm/yyyy"
+     * @param {string|Date} dateValue - Giá trị ngày cần định dạng
+     * @returns {string} - Chuỗi ngày đã định dạng
+     */
+    function formatDate(dateValue) {
+        const d = new Date(dateValue);
+        if (isNaN(d.getTime())) return dateValue; // Trả về giá trị gốc nếu không phải ngày hợp lệ
+        
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+
+        return `${day}/${month}/${year}`;
+    }
+
+    // --- KHỞI TẠO ỨNG DỤNG ---
+
+    /**
+     * Hàm chính được chạy khi trang tải xong
+     */
     document.addEventListener('DOMContentLoaded', () => {
       addEventListeners();
       setDefaultDates();
       fetchAndProcessData(); 
     });
 
-    function setDefaultDates() {
-        const today = new Date();
-        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-        const formatDateForInput = (date) => date.toISOString().split('T')[0];
-        document.getElementById('start-date').value = formatDateForInput(firstDay);
-        document.getElementById('end-date').value = formatDateForInput(lastDay);
-    }
-
+    /**
+     * Gán các sự kiện lắng nghe cho các element trên trang
+     */
     function addEventListeners() {
+      // Lắng nghe sự kiện thay đổi trên các bộ lọc (checkbox, ngày tháng)
       document.body.addEventListener('change', (e) => {
         if (e.target.matches('input[type="checkbox"], input[type="date"]')) {
-          handleFilters(e.target);
+          handleFilterChange(e.target);
         }
       });
 
+      // Lắng nghe sự kiện click để chọn (highlight) một hàng trong bảng
       document.body.addEventListener('click', function(e) {
           const row = e.target.closest('tbody tr');
-          if (!row || row.classList.contains('total-row')) return; // Không cho chọn dòng tổng
+          if (!row || row.classList.contains('total-row')) return;
           
           const isAlreadySelected = row.classList.contains('row-selected');
           
@@ -471,76 +530,46 @@
           }
       });
     }
-    
+
+    /**
+     * Thiết lập ngày bắt đầu và kết thúc mặc định là ngày đầu và ngày cuối của tháng hiện tại
+     */
+    function setDefaultDates() {
+        const today = new Date();
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+        const formatDateForInput = (date) => date.toISOString().split('T')[0];
+        document.getElementById('start-date').value = formatDateForInput(firstDay);
+        document.getElementById('end-date').value = formatDateForInput(lastDay);
+    }
+
+    // --- XỬ LÝ DỮ LIỆU ---
+
+    /**
+     * Tải dữ liệu từ API, xử lý và khởi tạo trang
+     */
     function fetchAndProcessData() {
         showLoader();
         
-        // ---!!! URL ĐÃ ĐƯỢC CẬP NHẬT THEO YÊU CẦU CỦA BẠN !!!---
-        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbzEtz-i1rrnUXO4mRu6GlPN3gVtONZT5sbS1B0-tbCWsb0-LIYSWtJr3uTNfC9pVbns/exec';
-        const employeeDataUrl = 'https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec';
+        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwjj_z-ecjDQk3panKBY1l-Iv3A8hrKCdVKILmlEAb2U6_Pwm_NpdhiGGqZRJByKTJ2/exec?tableName=B%C3%A1o%20c%C3%A1o%20sale';
 
-        Promise.all([
-            fetch(salesDataUrl).then(res => res.json()),
-            fetch(employeeDataUrl).then(res => res.json())
-        ])
-        .then(([salesResult, employeeResult]) => {
-            employeeData = employeeResult;
+        fetch(salesDataUrl)
+        .then(res => res.json())
+        .then(result => {
+            const apiData = result.data;
 
-            const employeeBranchMap = {};
-            employeeData.forEach(emp => {
-                const name = (emp.ho_va_ten || '').trim();
-                const branch = (emp.chi_nhanh || '').trim();
-                if (name) {
-                    employeeBranchMap[name] = branch;
-                }
-            });
-
-            rawData = salesResult
-                .filter(r => 
-                    r.ten && String(r.ten).trim() !== '' &&       
-                    r.team && String(r.team).trim() !== ''      
-                )
-                .map(r => {
-                    const saleName = (r.ten || '').trim();
-                    return {
-                        ...r, 
-                        ten: saleName, 
-                        team: (r.team || '').trim(),
-                        chiNhanh: employeeBranchMap[saleName] || 'Không xác định',
-                        soMessCmt: +r.soMess || 0,
-                        soDon: +r.donMess || 0,
-                        dsChot: +r.doanhSoMess || 0,
-                        phanHoi: +r.phanHoi || 0,
-                        // --- DỮ LIỆU CỘT MỚI ---
-                        doanhSoDi: +r.doanhSoDi || 0,
-                        soDonHuy: +r.soDonHuy || 0,
-                        doanhSoHuy: +r.doanhSoHuy || 0,
-                        soDonThanhCong: +r.soDonThanhCong || 0,
-                        doanhSoThanhCong: +r.doanhSoThanhCong || 0
-                    };
-                });
-
+            // Xử lý chế độ xem giới hạn nếu có tham số `id` trên URL
             const idFromUrl = getUrlParameter('id');
-            let restrictedChiNhanh = null;
-
             if (idFromUrl) {
-                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
-                if (currentUser) {
-                    isRestrictedView = true; 
-                    const cleanName = (currentUser.ho_va_ten || '').trim();
-                    restrictedChiNhanh = (currentUser.chi_nhanh || '').trim();
-                    
-                    if (currentUser.vi_tri === "Leader") {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CHI NHÁNH ${restrictedChiNhanh}`;
-                        allowedNames = employeeData
-                            .filter(emp => (emp.chi_nhanh || '').trim() === restrictedChiNhanh)
-                            .map(emp => (emp.ho_va_ten || '').trim());
-                    } else {
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
-                        allowedNames = [cleanName];
-                    }
+                const currentUserRecord = apiData.find(record => record['id_NS'] === idFromUrl);
+                isRestrictedView = true; 
+
+                if (currentUserRecord) {
+                    const cleanName = (currentUserRecord['Tên'] || '').trim();
+                    document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
+                    allowedNames = [cleanName];
                 } else {
-                    isRestrictedView = true; 
+                    document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
                     allowedNames = [];
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                 }
@@ -550,15 +579,35 @@
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            let dataForFilters;
-            if (isRestrictedView) {
-                dataForFilters = rawData.filter(r => allowedNames.includes(r.ten));
-            } else {
-                dataForFilters = rawData;
-            }
+            // Chuyển đổi và làm sạch dữ liệu từ API
+            rawData = apiData
+                .filter(r => r['Tên'] && String(r['Tên']).trim() !== '' && r['Team'] && String(r['Team']).trim() !== '')
+                .map(r => ({
+                    ten: (r['Tên'] || '').trim(),
+                    team: (r['Team'] || '').trim(),
+                    chiNhanh: (r['Chi nhánh'] || '').trim() || 'Không xác định',
+                    ngay: r['Ngày'],
+                    ca: r['Ca'],
+                    sanPham: r['Sản phẩm'],
+                    thiTruong: r['Thị trường'],
+                    soMessCmt: Number(r['Số Mess']) || 0,
+                    soDon: Number(r['Đơn Mess']) || 0,
+                    dsChot: Number(r['Doanh số Mess']) || 0,
+                    phanHoi: Number(r['Phản hồi']) || 0,
+                    doanhSoDi: Number(r['Doanh số đi']) || 0,
+                    soDonHuy: Number(r['Số đơn Hoàn huỷ']) || 0,
+                    doanhSoHuy: Number(r['Doanh số hoàn huỷ']) || 0,
+                    soDonThanhCong: Number(r['Số đơn thành công']) || 0,
+                    doanhSoThanhCong: Number(r['Doanh số thành công']) || 0
+                }));
             
+            // Lấy dữ liệu để điền vào các bộ lọc (sidebar)
+            // Nếu là xem giới hạn, chỉ lấy các lựa chọn từ dữ liệu của người đó
+            const dataForFilters = isRestrictedView
+                ? rawData.filter(r => allowedNames.includes(r.ten))
+                : rawData;
+
             populateAllFilters(dataForFilters); 
-            
             applyFilters();
 
         }).catch(err => { 
@@ -569,90 +618,12 @@
         });
     }
 
-    function populateAllFilters(data) {
-        const populate = (key, containerId, className) => {
-            const container = document.getElementById(containerId);
-            const uniqueValues = [...new Set(data.map(r => r[key]).filter(val => val !== null && val !== undefined && val !== ''))].sort();
-            
-            container.innerHTML = uniqueValues.map(val => {
-                return `<label><input type='checkbox' class='${className}' value='${val}' checked> ${val}</label>`;
-            }).join('');
-        };
-        
-        populate('sanPham', 'product-options', 'filter-product');
-        populate('thiTruong', 'market-options', 'filter-market');
-        populate('ca', 'ca-options', 'filter-ca');
-        populate('team', 'team-options', 'filter-team');
-    }
-    
-    function getFilteredData() {
-        const sdVal = document.getElementById('start-date').value;
-        const edVal = document.getElementById('end-date').value;
-
-        const sd = sdVal ? new Date(sdVal + 'T00:00:00') : null; 
-        const ed = edVal ? new Date(edVal + 'T23:59:59') : null;
-
-        const getSelectedOptions = (masterId, childClass) => {
-          if (document.getElementById(masterId).checked) return null;
-          return [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
-        };
-
-        const selP = getSelectedOptions('product-all', 'filter-product');
-        const selM = getSelectedOptions('market-all', 'filter-market');
-        const selCa = getSelectedOptions('ca-all', 'filter-ca');
-        const selT = getSelectedOptions('team-all', 'filter-team');
-
-        return rawData.filter(r => {
-            const isUserAllowed = !isRestrictedView || allowedNames.includes(r.ten);
-            if (!isUserAllowed) return false; 
-            
-            const d = new Date(r.ngay); 
-            
-            const isDateOk = (!sd || d >= sd) && (!ed || d <= ed);
-            const isProductOk = !selP || selP.includes(r.sanPham);
-            const isMarketOk = !selM || selM.includes(r.thiTruong);
-            const isCaOk = !selCa || selCa.includes(String(r.ca));
-            const isTeamOk = !selT || selT.includes(String(r.team));
-            
-            return isDateOk && isProductOk && isMarketOk && isCaOk && isTeamOk;
-        });
-    }
-    
-    function formatDate(v) {
-        const d = new Date(v);
-        if (isNaN(d.getTime())) return v;
-        
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
-
-        return `${day}/${month}/${year}`;
-    }
-
-    function formatCurrency(v) { return Number(v||0).toLocaleString('vi-VN',{style:'currency',currency:'VND'}); }
-    function formatNumber(v) { return Number(v||0).toLocaleString('vi-VN'); }
-    function formatPercent(v) { if (v === null || v === undefined || !isFinite(v)) return '0.00%'; return `${(Number(v||0) * 100).toFixed(2)}%`; }
-    function handleCheckbox(masterId, childClass, target) { if (target.id === masterId) { document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked); } else if (target.classList.contains(childClass)) { document.getElementById(masterId).checked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked); } }
-
-    function handleFilters(target) { 
-        showLoader(); 
-        setTimeout(() => { 
-            handleCheckbox('product-all', 'filter-product', target); 
-            handleCheckbox('ca-all', 'filter-ca', target); 
-            handleCheckbox('team-all', 'filter-team', target); 
-            handleCheckbox('market-all', 'filter-market', target); 
-            applyFilters(); 
-            hideLoader(); 
-        }, 10); 
-    }
-    
-    function applyFilters() {
-        const filtered = getFilteredData();
-        renderSummary(filtered); 
-        renderDailyBreakdown(filtered);
-    }
-
-    function renderSummary(data) {
+    /**
+     * Tổng hợp dữ liệu bán hàng, nhóm theo nhân viên và tính tổng.
+     * @param {Array<Object>} data - Mảng dữ liệu bán hàng cần tổng hợp.
+     * @returns {{flatList: Array<Object>, total: Object}} - Trả về danh sách nhân viên đã tổng hợp và số liệu tổng cộng.
+     */
+    function summarizeAndSortSalesData(data) {
         const summaryData = {};
         data.forEach(r => {
             const name = r.ten;
@@ -660,15 +631,14 @@
                 summaryData[name] = { 
                     chiNhanh: r.chiNhanh, team: r.team, 
                     mess: 0, don: 0, chot: 0, phanHoi: 0,
-                    // --- KHỞI TẠO DỮ LIỆU MỚI ---
-                    doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0
+                    doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, 
+                    soDonThanhCong: 0, doanhSoThanhCong: 0
                 };
             }
             summaryData[name].mess += r.soMessCmt;
             summaryData[name].don += r.soDon;
             summaryData[name].chot += r.dsChot;
             summaryData[name].phanHoi += r.phanHoi;
-            // --- TÍNH TỔNG DỮ LIỆU MỚI ---
             summaryData[name].doanhSoDi += r.doanhSoDi;
             summaryData[name].soDonHuy += r.soDonHuy;
             summaryData[name].doanhSoHuy += r.doanhSoHuy;
@@ -678,49 +648,147 @@
 
         const flatList = Object.keys(summaryData).map(name => ({ 
             name, 
-            chiNhanh: summaryData[name].chiNhanh,
-            team: summaryData[name].team, 
-            data: summaryData[name] 
+            ...summaryData[name]
         }))
-        .sort((a, b) => {
-            const chotDiff = b.data.chot - a.data.chot;
-            if (chotDiff !== 0) return chotDiff;
-            return a.name.localeCompare(b.name);
-        });
+        .sort((a, b) => b.chot - a.chot || a.name.localeCompare(b.name));
         
-        const totalSummary = flatList.reduce((acc, item) => {
-            acc.mess += item.data.mess;
-            acc.don += item.data.don;
-            acc.chot += item.data.chot;
-            acc.phanHoi += item.data.phanHoi;
-            // --- TÍNH TỔNG CUỐI CÙNG DỮ LIỆU MỚI ---
-            acc.doanhSoDi += item.data.doanhSoDi;
-            acc.soDonHuy += item.data.soDonHuy;
-            acc.doanhSoHuy += item.data.doanhSoHuy;
-            acc.soDonThanhCong += item.data.soDonThanhCong;
-            acc.doanhSoThanhCong += item.data.doanhSoThanhCong;
+        const total = flatList.reduce((acc, item) => {
+            acc.mess += item.mess;
+            acc.don += item.don;
+            acc.chot += item.chot;
+            acc.phanHoi += item.phanHoi;
+            acc.doanhSoDi += item.doanhSoDi;
+            acc.soDonHuy += item.soDonHuy;
+            acc.doanhSoHuy += item.doanhSoHuy;
+            acc.soDonThanhCong += item.soDonThanhCong;
+            acc.doanhSoThanhCong += item.doanhSoThanhCong;
             return acc;
         }, { mess: 0, don: 0, chot: 0, phanHoi: 0, doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0 });
 
-        const totalRate = totalSummary.mess ? totalSummary.don / totalSummary.mess : 0;
+        return { flatList, total };
+    }
+
+    // --- BỘ LỌC (SIDEBAR) ---
+
+    /**
+     * Điền các lựa chọn (checkbox) vào sidebar từ dữ liệu
+     * @param {Array<Object>} data - Dữ liệu để trích xuất các giá trị duy nhất
+     */
+    function populateAllFilters(data) {
+        const populate = (key, containerId, className) => {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            const uniqueValues = [...new Set(data.map(r => r[key]).filter(Boolean))].sort();
+            
+            container.innerHTML = uniqueValues.map(val => 
+                `<label><input type='checkbox' class='${className}' value='${val}' checked> ${val}</label>`
+            ).join('');
+        };
+        
+        populate('sanPham', 'product-options', 'filter-product');
+        populate('thiTruong', 'market-options', 'filter-market');
+        populate('ca', 'ca-options', 'filter-ca');
+        populate('team', 'team-options', 'filter-team');
+    }
+
+    /**
+     * Xử lý logic khi một checkbox "Tất cả" hoặc checkbox con được thay đổi
+     * @param {string} masterId - ID của checkbox "Tất cả"
+     * @param {string} childClass - Class của các checkbox con
+     * @param {HTMLElement} target - Element đã kích hoạt sự kiện
+     */
+    function handleCheckboxLogic(masterId, childClass, target) {
+        if (target.id === masterId) {
+            document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked);
+        } else if (target.classList.contains(childClass)) {
+            const allChecked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked);
+            document.getElementById(masterId).checked = allChecked;
+        }
+    }
+
+    /**
+     * Hàm điều phối khi có bất kỳ thay đổi nào trên bộ lọc
+     * @param {HTMLElement} target - Element đã kích hoạt sự kiện
+     */
+    function handleFilterChange(target) { 
+        showLoader(); 
+        setTimeout(() => { 
+            handleCheckboxLogic('product-all', 'filter-product', target); 
+            handleCheckboxLogic('ca-all', 'filter-ca', target); 
+            handleCheckboxLogic('team-all', 'filter-team', target); 
+            handleCheckboxLogic('market-all', 'filter-market', target); 
+            applyFilters(); 
+            hideLoader(); 
+        }, 10); // setTimeout để loader kịp hiển thị
+    }
+
+    /**
+     * Áp dụng tất cả các bộ lọc hiện tại và render lại dữ liệu
+     */
+    function applyFilters() {
+        const sdVal = document.getElementById('start-date').value;
+        const edVal = document.getElementById('end-date').value;
+
+        const startDate = sdVal ? new Date(sdVal + 'T00:00:00') : null; 
+        const endDate = edVal ? new Date(edVal + 'T23:59:59') : null;
+
+        const getSelectedOptions = (masterId, childClass) => {
+          if (document.getElementById(masterId).checked) return null; // Nếu "Tất cả" được chọn, trả về null
+          return [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
+        };
+
+        const selectedProducts = getSelectedOptions('product-all', 'filter-product');
+        const selectedMarkets = getSelectedOptions('market-all', 'filter-market');
+        const selectedShifts = getSelectedOptions('ca-all', 'filter-ca');
+        const selectedTeams = getSelectedOptions('team-all', 'filter-team');
+
+        const filtered = rawData.filter(r => {
+            if (isRestrictedView && !allowedNames.includes(r.ten)) {
+                return false;
+            }
+            
+            const recordDate = new Date(r.ngay); 
+            
+            const isDateOk = (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
+            const isProductOk = !selectedProducts || selectedProducts.includes(r.sanPham);
+            const isMarketOk = !selectedMarkets || selectedMarkets.includes(r.thiTruong);
+            const isShiftOk = !selectedShifts || selectedShifts.includes(String(r.ca));
+            const isTeamOk = !selectedTeams || selectedTeams.includes(String(r.team));
+            
+            return isDateOk && isProductOk && isMarketOk && isShiftOk && isTeamOk;
+        });
+        
+        renderSummary(filtered); 
+        renderDailyBreakdown(filtered);
+    }
+    
+    // --- HIỂN THỊ DỮ LIỆU (RENDERING) ---
+
+    /**
+     * Hiển thị bảng tổng hợp chính
+     * @param {Array<Object>} data - Dữ liệu đã được lọc để hiển thị
+     */
+    function renderSummary(data) {
+        const { flatList, total } = summarizeAndSortSalesData(data);
+        const totalRate = total.mess ? total.don / total.mess : 0;
         
         const totalRowHtml = `<tr class="total-row">
-                <td class="total-label" colspan="4">TỔNG CỘNG</td>
-                <td class="total-value">${formatNumber(totalSummary.mess)}</td>
-                <td class="total-value">${formatNumber(totalSummary.don)}</td>
-                <td class="total-value">${formatNumber(totalSummary.phanHoi)}</td>
-                <td class="total-value">${formatCurrency(totalSummary.chot)}</td>
-                <!-- HIỂN THỊ DÒNG TỔNG CỘNG CHO CỘT MỚI -->
-                <td class="total-value">${formatCurrency(totalSummary.doanhSoDi)}</td>
-                <td class="total-value">${formatNumber(totalSummary.soDonHuy)}</td>
-                <td class="total-value">${formatCurrency(totalSummary.doanhSoHuy)}</td>
-                <td class="total-value">${formatNumber(totalSummary.soDonThanhCong)}</td>
-                <td class="total-value">${formatCurrency(totalSummary.doanhSoThanhCong)}</td>
-                <td class="total-value">${formatPercent(totalRate)}</td></tr>`;
+            <td class="total-label" colspan="4">TỔNG CỘNG</td>
+            <td class="total-value">${formatNumber(total.mess)}</td>
+            <td class="total-value">${formatNumber(total.don)}</td>
+            <td class="total-value">${formatNumber(total.phanHoi)}</td>
+            <td class="total-value">${formatCurrency(total.chot)}</td>
+            <td class="total-value">${formatCurrency(total.doanhSoDi)}</td>
+            <td class="total-value">${formatNumber(total.soDonHuy)}</td>
+            <td class="total-value">${formatCurrency(total.doanhSoHuy)}</td>
+            <td class="total-value">${formatNumber(total.soDonThanhCong)}</td>
+            <td class="total-value">${formatCurrency(total.doanhSoThanhCong)}</td>
+            <td class="total-value">${formatPercent(totalRate)}</td>
+        </tr>`;
 
         const bodyRowsHtml = flatList.map((item, index) => {
-            const s = item.data;
-            const rate = s.mess ? s.don / s.mess : 0;
+            const rate = item.mess ? item.don / item.mess : 0;
             const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
             
             let rowClass = '';
@@ -733,86 +801,48 @@
                 <td class="text-left">${item.chiNhanh}</td>
                 <td class="text-left">${item.team}</td>
                 <td class="text-left">${item.name}</td>
-                <td>${formatNumber(s.mess)}</td>
-                <td>${formatNumber(s.don)}</td>
-                <td>${formatNumber(s.phanHoi)}</td>
-                <td>${formatCurrency(s.chot)}</td>
-                <!-- HIỂN THỊ DỮ LIỆU CÁC CỘT MỚI -->
-                <td>${formatCurrency(s.doanhSoDi)}</td>
-                <td>${formatNumber(s.soDonHuy)}</td>
-                <td>${formatCurrency(s.doanhSoHuy)}</td>
-                <td>${formatNumber(s.soDonThanhCong)}</td>
-                <td>${formatCurrency(s.doanhSoThanhCong)}</td>
+                <td>${formatNumber(item.mess)}</td>
+                <td>${formatNumber(item.don)}</td>
+                <td>${formatNumber(item.phanHoi)}</td>
+                <td>${formatCurrency(item.chot)}</td>
+                <td>${formatCurrency(item.doanhSoDi)}</td>
+                <td>${formatNumber(item.soDonHuy)}</td>
+                <td>${formatCurrency(item.doanhSoHuy)}</td>
+                <td>${formatNumber(item.soDonThanhCong)}</td>
+                <td>${formatCurrency(item.doanhSoThanhCong)}</td>
                 <td class="${rateClass}">${formatPercent(rate)}</td>
             </tr>`;
         }).join('');
         
         document.getElementById('summary-body').innerHTML = totalRowHtml + bodyRowsHtml;
-        document.getElementById('summary-foot').innerHTML = '';
     }
     
+    /**
+     * Hiển thị các bảng chi tiết theo từng ngày
+     * @param {Array<Object>} data - Dữ liệu đã được lọc để hiển thị
+     */
     function renderDailyBreakdown(data) { 
         const container = document.getElementById('daily-breakdown'); 
-        container.innerHTML = '';
-        if (data.length === 0) {
+        if (!data.length) {
             container.innerHTML = '<h3>Không có dữ liệu chi tiết để hiển thị.</h3>';
             return;
         }
 
-        const groupedByDate = {};
-        data.forEach(r => {
+        // Nhóm dữ liệu theo ngày
+        const groupedByDate = data.reduce((acc, r) => {
             const dateKey = formatDate(r.ngay);
-            if (!groupedByDate[dateKey]) groupedByDate[dateKey] = [];
-            groupedByDate[dateKey].push(r);
-        });
+            if (!acc[dateKey]) acc[dateKey] = [];
+            acc[dateKey].push(r);
+            return acc;
+        }, {});
         
-        const sortedDates = Object.keys(groupedByDate).sort((a,b)=>new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
+        // Sắp xếp các ngày từ mới nhất đến cũ nhất
+        const sortedDates = Object.keys(groupedByDate).sort((a,b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
 
+        let finalHtml = '';
         sortedDates.forEach(date => {
-            const dailyRawData = groupedByDate[date];
-
-            const dailyEmployeeSummary = {};
-            dailyRawData.forEach(r => {
-                const name = r.ten;
-                if (!dailyEmployeeSummary[name]) {
-                    dailyEmployeeSummary[name] = { 
-                        chiNhanh: r.chiNhanh, team: r.team, 
-                        mess: 0, don: 0, chot: 0, phanHoi: 0,
-                        doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0
-                    };
-                }
-                dailyEmployeeSummary[name].mess += r.soMessCmt;
-                dailyEmployeeSummary[name].don += r.soDon;
-                dailyEmployeeSummary[name].chot += r.dsChot;
-                dailyEmployeeSummary[name].phanHoi += r.phanHoi;
-                dailyEmployeeSummary[name].doanhSoDi += r.doanhSoDi;
-                dailyEmployeeSummary[name].soDonHuy += r.soDonHuy;
-                dailyEmployeeSummary[name].doanhSoHuy += r.doanhSoHuy;
-                dailyEmployeeSummary[name].soDonThanhCong += r.soDonThanhCong;
-                dailyEmployeeSummary[name].doanhSoThanhCong += r.doanhSoThanhCong;
-            });
-
-            const dailyFlatList = Object.keys(dailyEmployeeSummary).map(name => ({ 
-                name, 
-                chiNhanh: dailyEmployeeSummary[name].chiNhanh,
-                team: dailyEmployeeSummary[name].team, 
-                data: dailyEmployeeSummary[name] 
-            }))
-            .sort((a, b) => b.data.chot - a.data.chot);
-
-            const total = dailyFlatList.reduce((acc, item) => {
-                acc.mess += item.data.mess;
-                acc.don += item.data.don;
-                acc.chot += item.data.chot;
-                acc.phanHoi += item.data.phanHoi;
-                acc.doanhSoDi += item.data.doanhSoDi;
-                acc.soDonHuy += item.data.soDonHuy;
-                acc.doanhSoHuy += item.data.doanhSoHuy;
-                acc.soDonThanhCong += item.data.soDonThanhCong;
-                acc.doanhSoThanhCong += item.data.doanhSoThanhCong;
-                return acc;
-            }, { mess: 0, don: 0, chot: 0, phanHoi: 0, doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0 });
-
+            const dailyData = groupedByDate[date];
+            const { flatList, total } = summarizeAndSortSalesData(dailyData);
             const totalRate = total.mess ? total.don / total.mess : 0;
 
             const totalRowHtml = `<tr class='total-row'>
@@ -829,9 +859,8 @@
                 <td class='total-value'>${formatPercent(totalRate)}</td>
             </tr>`;
 
-            const rowsHtml = dailyFlatList.map((item, index) => {
-                const s = item.data;
-                const rate = s.mess ? s.don / s.mess : 0;
+            const rowsHtml = flatList.map((item, index) => {
+                const rate = item.mess ? item.don / item.mess : 0;
                 const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
 
                 let rowClass = '';
@@ -844,47 +873,37 @@
                     <td class="text-left">${item.chiNhanh}</td>
                     <td class="text-left">${item.team}</td>
                     <td class="text-left">${item.name}</td>
-                    <td>${formatNumber(s.mess)}</td>
-                    <td>${formatNumber(s.don)}</td>
-                    <td>${formatNumber(s.phanHoi)}</td>
-                    <td>${formatCurrency(s.chot)}</td>
-                    <td>${formatCurrency(s.doanhSoDi)}</td>
-                    <td>${formatNumber(s.soDonHuy)}</td>
-                    <td>${formatCurrency(s.doanhSoHuy)}</td>
-                    <td>${formatNumber(s.soDonThanhCong)}</td>
-                    <td>${formatCurrency(s.doanhSoThanhCong)}</td>
+                    <td>${formatNumber(item.mess)}</td>
+                    <td>${formatNumber(item.don)}</td>
+                    <td>${formatNumber(item.phanHoi)}</td>
+                    <td>${formatCurrency(item.chot)}</td>
+                    <td>${formatCurrency(item.doanhSoDi)}</td>
+                    <td>${formatNumber(item.soDonHuy)}</td>
+                    <td>${formatCurrency(item.doanhSoHuy)}</td>
+                    <td>${formatNumber(item.soDonThanhCong)}</td>
+                    <td>${formatCurrency(item.doanhSoThanhCong)}</td>
                     <td class="${rateClass}">${formatPercent(rate)}</td>
                 </tr>`;
             }).join('');
             
-            const tableHtml = `<div class="table-responsive-container">
+            const tableHtml = `<h3>Chi tiết ngày: ${date}</h3>
+            <div class="table-responsive-container">
                 <table>
                     <thead>
                         <tr>
-                            <th>STT</th>
-                            <th>Chi nhánh</th>
-                            <th>Team</th>
-                            <th>Sale</th>
-                            <th>Số Mess</th>
-                            <th>Số Đơn</th>
-                            <th>Phản hồi</th>
-                            <th>DS Chốt</th>
-                            <th>Doanh số đi</th>
-                            <th>Số đơn hủy</th>
-                            <th>Doanh số Hủy</th>
-                            <th>Số đơn thành công</th>
-                            <th>Doanh số thành công</th>
-                            <th>Tỉ lệ chốt</th>
+                            <th>STT</th><th>Chi nhánh</th><th>Team</th><th>Sale</th>
+                            <th>Số Mess</th><th>Số Đơn</th><th>Phản hồi</th><th>DS Chốt</th>
+                            <th>Doanh số đi</th><th>Số đơn hủy</th><th>Doanh số Hủy</th>
+                            <th>Số đơn thành công</th><th>Doanh số thành công</th><th>Tỉ lệ chốt</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        ${totalRowHtml + rowsHtml}
-                    </tbody>
+                    <tbody>${totalRowHtml + rowsHtml}</tbody>
                 </table>
             </div>`;
             
-            container.innerHTML += `<h3>Chi tiết ngày: ${date}</h3>${tableHtml}`;
+            finalHtml += tableHtml;
         }); 
+        container.innerHTML = finalHtml;
     }
 </script>
 </body>
