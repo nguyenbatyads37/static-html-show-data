@@ -130,8 +130,7 @@
     </div>
     
     <script>
-        // *** ĐÃ THAY LINK SCRIPT CỦA BẠN ***
-        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwueKpfmNJZ9eq-3JELQqbRoHxG0pKF0Cz8FjTjQ9RgHuqjjm6YMlMo7-KI5IMvUTRv/exec'; 
+        const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbxiN81b7MU5Rh3-QN577LalmntUHrei5ZheivYTz8TrbVIsb9JujXwUprmWGGBs1aUG/exec'; 
         
         const TABLE_CONFIG = {
             'khn': { name: 'Khách Hàng Nợ', containerId: 'container-khn', countId: 'count-khn', loaded: false, totalField: 'Số tiền nợ', dashboardId: 'dashboard-total-no' },
@@ -340,7 +339,13 @@
                 const result = await response.json();
                 if (result.success) {
                     TABLE_CONFIG[tableKey].loaded = false;
-                    loadDataViaJSONP(tableKey);
+                    loadDataViaJSONP(tableKey, () => {
+                        const newInputRow = document.getElementById(`input-row-${tableKey}`);
+                        if (newInputRow) {
+                            const firstVisibleInput = newInputRow.querySelector('td:not([style*="display: none"]) input:not([type="hidden"])');
+                            if (firstVisibleInput) firstVisibleInput.focus();
+                        }
+                    });
                 } else {
                     alert('Thêm dữ liệu thất bại: ' + (result.message || 'Lỗi không xác định.'));
                 }
@@ -361,6 +366,49 @@
                 if (startDate && !isNaN(days) && days > 0) { const resultDate = new Date(startDate); resultDate.setDate(resultDate.getDate() + days); ngayPhaiTraInput.value = resultDate.toISOString().slice(0, 10); } else { ngayPhaiTraInput.value = ''; }
             }
         }
+
+        // === SỬA ĐỔI: Cải tiến logic viết hoa tự động ===
+        function setupInputFormatting(inputRow) {
+            const fieldsToCapitalizeWords = ['Tên KH', 'Người chịu trách nhiệm', 'Giao hàng cho nợ', 'Tên sản phẩm'];
+            const fieldsToCapitalizeFirstLetter = ['Ghi chú'];
+
+            // Hàm viết hoa chữ cái đầu mỗi từ (VD: nguyễn văn a -> Nguyễn Văn A)
+            function capitalizeWords(str) {
+                if (!str) return '';
+                // Hỗ trợ tiếng Việt có dấu
+                return str.replace(/(^|\s)\S/g, char => char.toUpperCase());
+            }
+
+            // Hàm viết hoa chữ cái đầu mỗi câu (VD: đã trả. hẹn sau. -> Đã trả. Hẹn sau.)
+            function capitalizeSentences(str) {
+                 if (!str) return '';
+                 // Viết hoa ký tự đầu tiên của chuỗi VÀ ký tự đầu tiên sau mỗi dấu chấm
+                 return str.replace(/(^\w{1})|(\.\s*\w{1})/g, char => char.toUpperCase());
+            }
+
+            inputRow.querySelectorAll('input[type="text"]').forEach(input => {
+                const fieldName = input.dataset.field;
+                
+                input.addEventListener('input', function() {
+                    // Lưu vị trí con trỏ để không bị nhảy về cuối khi đang gõ
+                    const start = this.selectionStart;
+                    const end = this.selectionEnd;
+                    let value = this.value;
+
+                    // Áp dụng quy tắc viết hoa phù hợp với từng trường
+                    if (fieldsToCapitalizeWords.includes(fieldName)) {
+                        value = capitalizeWords(value);
+                    } else if (fieldsToCapitalizeFirstLetter.includes(fieldName)) {
+                        value = capitalizeSentences(value);
+                    }
+                    
+                    this.value = value;
+                    // Đặt lại vị trí con trỏ
+                    this.setSelectionRange(start, end);
+                });
+            });
+        }
+        // ==========================================================
 
         function renderTable(tableKey, data, shouldCreateInputRow = true) {
             const config = TABLE_CONFIG[tableKey]; if (!config) return;
@@ -410,6 +458,10 @@
                 const ngayNoInput = inputRow.querySelector('input[data-field="Ngày nợ"]'); const hanTraNoInput = inputRow.querySelector('input[data-field="Hạn trả nợ"]');
                 if (ngayNoInput) ngayNoInput.addEventListener('change', () => calculateDueDate(tableKey));
                 if (hanTraNoInput) hanTraNoInput.addEventListener('input', () => calculateDueDate(tableKey));
+
+                // Gọi hàm định dạng viết hoa tự động cho hàng nhập liệu
+                setupInputFormatting(inputRow);
+
                 inputRow.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitNewRow(tableKey); } });
             }
         }
