@@ -399,13 +399,19 @@
                 <th>Sale</th>
                 <th>Số Mess</th>
                 <th>Số Đơn</th>
+                <th>Số Đơn TT</th>
                 <th>Phản hồi</th>
                 <th>DS Chốt</th>
+                <th>DS Chốt TT</th>
                 <th>Doanh số đi</th>
+                <th>DS Đi TT</th>
                 <th>Số đơn hủy</th>
+                <th>Số Đơn Hủy TT</th>
                 <th>Doanh số Hủy</th>
+                <th>DS Hủy TT</th>
                 <th>Số đơn thành công</th>
                 <th>Doanh số thành công</th>
+                <th>DS Sau Hủy TT</th>
                 <th>Tỉ lệ chốt</th>
               </tr>
             </thead>
@@ -551,54 +557,60 @@
     function fetchAndProcessData() {
         showLoader();
         
-        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwjj_z-ecjDQk3panKBY1l-Iv3A8hrKCdVKILmlEAb2U6_Pwm_NpdhiGGqZRJByKTJ2/exec?tableName=B%C3%A1o%20c%C3%A1o%20sale';
-        const personnelDataUrl = 'https://script.google.com/macros/s/AKfycbwjj_z-ecjDQk3panKBY1l-Iv3A8hrKCdVKILmlEAb2U6_Pwm_NpdhiGGqZRJByKTJ2/exec?tableName=Nh%C3%A2n%20s%E1%BB%B1';
-        
-        const idFromUrl = getUrlParameter('id');
+        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwypYpciL58AYMiwqzXXe1PxkMlWRE9N42AJuI9WZy9RoWGBXFAtDfEcs7L8iuFtFhT/exec?tableName=B%C3%A1o%20c%C3%A1o%20sale';
 
-        // Tạo các promise để fetch dữ liệu
-        const salesPromise = fetch(salesDataUrl).then(res => res.json());
-        const personnelPromise = idFromUrl ? fetch(personnelDataUrl).then(res => res.json()) : Promise.resolve(null);
+        fetch(salesDataUrl)
+        .then(res => res.json())
+        .then(result => {
+            const apiData = result.data;
 
-        Promise.all([salesPromise, personnelPromise])
-        .then(([salesResult, personnelResult]) => {
-            const salesData = salesResult.data;
-            const personnelData = personnelResult ? personnelResult.data : [];
+            // --- START: LOGIC ĐÃ CẬP NHẬT ---
+            // Xử lý chế độ xem giới hạn nếu có tham số `id` trên URL
+            const idFromUrl = getUrlParameter('id');
+            if (idFromUrl) {
+                const currentUserRecord = apiData.find(record => record['id_NS'] === idFromUrl);
+                isRestrictedView = true; 
 
-            if (idFromUrl && personnelData.length > 0) {
-                // Dòng code quan trọng: Chuyển cả 2 giá trị về chuỗi và cắt bỏ khoảng trắng trước khi so sánh
-                const currentUser = personnelData.find(p => String(p['id'] || '').trim() === idFromUrl.trim());
+                if (currentUserRecord) {
+                    // Lấy chức vụ và team của người dùng, chuyển chức vụ về chữ thường để dễ so sánh
+                    const userPosition = (currentUserRecord['Chức vụ'] || '').trim().toLowerCase();
+                    const userTeam = (currentUserRecord['Team'] || '').trim();
 
-                isRestrictedView = true;
-
-                if (currentUser) {
-                    const position = (currentUser['Vị trí'] || '').trim();
-                    const userName = (currentUser['Tên'] || '').trim();
-                    
-                    if (position === 'Leader') {
-                        const leaderTeam = (currentUser['Team'] || '').trim();
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM - ${leaderTeam}`;
-                        // Lấy danh sách tất cả nhân viên trong team của Leader
-                        allowedNames = personnelData
-                            .filter(p => (p['Team'] || '').trim() === leaderTeam)
-                            .map(p => (p['Tên'] || '').trim());
-                    } else { // Mặc định là NV hoặc các vị trí khác
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${userName}`;
-                        allowedNames = [userName];
+                    // Kiểm tra nếu chức vụ là 'leader' hoặc 'trưởng nhóm'
+                    if (userPosition === 'leader' || userPosition === 'trưởng nhóm') {
+                        // Nếu là leader, hiển thị tên team và lấy danh sách tên của tất cả thành viên trong team
+                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM - ${userTeam}`;
+                        
+                        const teamMemberNames = apiData
+                            .filter(r => (r['Team'] || '').trim() === userTeam)
+                            .map(r => (r['Tên'] || '').trim())
+                            .filter(name => name !== ''); // Lọc ra các tên rỗng
+                            
+                        // Dùng Set để đảm bảo các tên là duy nhất
+                        allowedNames = [...new Set(teamMemberNames)]; 
+                        
+                    } else { 
+                        // Nếu không phải leader, chỉ hiển thị dữ liệu cá nhân của họ
+                        const cleanName = (currentUserRecord['Tên'] || '').trim();
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
+                        allowedNames = [cleanName];
                     }
                 } else {
+                    // Xử lý trường hợp không tìm thấy ID
                     document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
                     allowedNames = [];
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                 }
             } else {
+                // Nếu không có ID trên URL, hiển thị dữ liệu tổng hợp
                 isRestrictedView = false;
                 allowedNames = [];
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
+            // --- END: LOGIC ĐÃ CẬP NHẬT ---
             
-            // Chuyển đổi và làm sạch dữ liệu sales
-            rawData = salesData
+            // Chuyển đổi và làm sạch dữ liệu từ API
+            rawData = apiData
                 .filter(r => r['Tên'] && String(r['Tên']).trim() !== '' && r['Team'] && String(r['Team']).trim() !== '')
                 .map(r => ({
                     ten: (r['Tên'] || '').trim(),
@@ -616,10 +628,18 @@
                     soDonHuy: Number(r['Số đơn Hoàn huỷ']) || 0,
                     doanhSoHuy: Number(r['Doanh số hoàn huỷ']) || 0,
                     soDonThanhCong: Number(r['Số đơn thành công']) || 0,
-                    doanhSoThanhCong: Number(r['Doanh số thành công']) || 0
+                    doanhSoThanhCong: Number(r['Doanh số thành công']) || 0,
+                    // Dữ liệu mới
+                    soDonThucTe: Number(r['Số đơn thực tế']) || 0,
+                    doanhThuChotThucTe: Number(r['Doanh thu chốt thực tế']) || 0,
+                    doanhSoDiThucTe: Number(r['Doanh số đi thực tế']) || 0,
+                    soDonHoanHuyThucTe: Number(r['Số đơn hoàn hủy thực tế']) || 0,
+                    doanhSoHoanHuyThucTe: Number(r['Doanh số hoàn hủy thực tế']) || 0,
+                    doanhSoSauHoanHuyThucTe: Number(r['Doanh số sau hoàn hủy thực tế']) || 0
                 }));
             
-            // Nếu là xem giới hạn, chỉ lấy các lựa chọn bộ lọc từ dữ liệu được phép
+            // Lấy dữ liệu để điền vào các bộ lọc (sidebar)
+            // Nếu là xem giới hạn, chỉ lấy các lựa chọn từ dữ liệu của người đó/team đó
             const dataForFilters = isRestrictedView
                 ? rawData.filter(r => allowedNames.includes(r.ten))
                 : rawData;
@@ -635,7 +655,6 @@
         });
     }
 
-
     /**
      * Tổng hợp dữ liệu bán hàng, nhóm theo nhân viên và tính tổng.
      * @param {Array<Object>} data - Mảng dữ liệu bán hàng cần tổng hợp.
@@ -643,14 +662,20 @@
      */
     function summarizeAndSortSalesData(data) {
         const summaryData = {};
+        const initialSummary = { 
+            mess: 0, don: 0, chot: 0, phanHoi: 0,
+            doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, 
+            soDonThanhCong: 0, doanhSoThanhCong: 0,
+            soDonThucTe: 0, doanhThuChotThucTe: 0, doanhSoDiThucTe: 0,
+            soDonHoanHuyThucTe: 0, doanhSoHoanHuyThucTe: 0, doanhSoSauHoanHuyThucTe: 0
+        };
+
         data.forEach(r => {
             const name = r.ten;
             if (!summaryData[name]) {
                 summaryData[name] = { 
                     chiNhanh: r.chiNhanh, team: r.team, 
-                    mess: 0, don: 0, chot: 0, phanHoi: 0,
-                    doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, 
-                    soDonThanhCong: 0, doanhSoThanhCong: 0
+                    ...JSON.parse(JSON.stringify(initialSummary)) // Deep copy
                 };
             }
             summaryData[name].mess += r.soMessCmt;
@@ -662,6 +687,13 @@
             summaryData[name].doanhSoHuy += r.doanhSoHuy;
             summaryData[name].soDonThanhCong += r.soDonThanhCong;
             summaryData[name].doanhSoThanhCong += r.doanhSoThanhCong;
+            // Cộng dồn dữ liệu mới
+            summaryData[name].soDonThucTe += r.soDonThucTe;
+            summaryData[name].doanhThuChotThucTe += r.doanhThuChotThucTe;
+            summaryData[name].doanhSoDiThucTe += r.doanhSoDiThucTe;
+            summaryData[name].soDonHoanHuyThucTe += r.soDonHoanHuyThucTe;
+            summaryData[name].doanhSoHoanHuyThucTe += r.doanhSoHoanHuyThucTe;
+            summaryData[name].doanhSoSauHoanHuyThucTe += r.doanhSoSauHoanHuyThucTe;
         });
 
         const flatList = Object.keys(summaryData).map(name => ({ 
@@ -671,17 +703,11 @@
         .sort((a, b) => b.chot - a.chot || a.name.localeCompare(b.name));
         
         const total = flatList.reduce((acc, item) => {
-            acc.mess += item.mess;
-            acc.don += item.don;
-            acc.chot += item.chot;
-            acc.phanHoi += item.phanHoi;
-            acc.doanhSoDi += item.doanhSoDi;
-            acc.soDonHuy += item.soDonHuy;
-            acc.doanhSoHuy += item.doanhSoHuy;
-            acc.soDonThanhCong += item.soDonThanhCong;
-            acc.doanhSoThanhCong += item.doanhSoThanhCong;
+            Object.keys(initialSummary).forEach(key => {
+                acc[key] += item[key];
+            });
             return acc;
-        }, { mess: 0, don: 0, chot: 0, phanHoi: 0, doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0, soDonThanhCong: 0, doanhSoThanhCong: 0 });
+        }, JSON.parse(JSON.stringify(initialSummary)));
 
         return { flatList, total };
     }
@@ -795,13 +821,19 @@
             <td class="total-label" colspan="4">TỔNG CỘNG</td>
             <td class="total-value">${formatNumber(total.mess)}</td>
             <td class="total-value">${formatNumber(total.don)}</td>
+            <td class="total-value">${formatNumber(total.soDonThucTe)}</td>
             <td class="total-value">${formatNumber(total.phanHoi)}</td>
             <td class="total-value">${formatCurrency(total.chot)}</td>
+            <td class="total-value">${formatCurrency(total.doanhThuChotThucTe)}</td>
             <td class="total-value">${formatCurrency(total.doanhSoDi)}</td>
+            <td class="total-value">${formatCurrency(total.doanhSoDiThucTe)}</td>
             <td class="total-value">${formatNumber(total.soDonHuy)}</td>
+            <td class="total-value">${formatNumber(total.soDonHoanHuyThucTe)}</td>
             <td class="total-value">${formatCurrency(total.doanhSoHuy)}</td>
+            <td class="total-value">${formatCurrency(total.doanhSoHoanHuyThucTe)}</td>
             <td class="total-value">${formatNumber(total.soDonThanhCong)}</td>
             <td class="total-value">${formatCurrency(total.doanhSoThanhCong)}</td>
+            <td class="total-value">${formatCurrency(total.doanhSoSauHoanHuyThucTe)}</td>
             <td class="total-value">${formatPercent(totalRate)}</td>
         </tr>`;
 
@@ -821,13 +853,19 @@
                 <td class="text-left">${item.name}</td>
                 <td>${formatNumber(item.mess)}</td>
                 <td>${formatNumber(item.don)}</td>
+                <td>${formatNumber(item.soDonThucTe)}</td>
                 <td>${formatNumber(item.phanHoi)}</td>
                 <td>${formatCurrency(item.chot)}</td>
+                <td>${formatCurrency(item.doanhThuChotThucTe)}</td>
                 <td>${formatCurrency(item.doanhSoDi)}</td>
+                <td>${formatCurrency(item.doanhSoDiThucTe)}</td>
                 <td>${formatNumber(item.soDonHuy)}</td>
+                <td>${formatNumber(item.soDonHoanHuyThucTe)}</td>
                 <td>${formatCurrency(item.doanhSoHuy)}</td>
+                <td>${formatCurrency(item.doanhSoHoanHuyThucTe)}</td>
                 <td>${formatNumber(item.soDonThanhCong)}</td>
                 <td>${formatCurrency(item.doanhSoThanhCong)}</td>
+                <td>${formatCurrency(item.doanhSoSauHoanHuyThucTe)}</td>
                 <td class="${rateClass}">${formatPercent(rate)}</td>
             </tr>`;
         }).join('');
@@ -853,9 +891,13 @@
             acc[dateKey].push(r);
             return acc;
         }, {});
-        
+
         // Sắp xếp các ngày từ mới nhất đến cũ nhất
-        const sortedDates = Object.keys(groupedByDate).sort((a,b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
+        const sortedDates = Object.keys(groupedByDate).sort((a,b) => {
+            const dateA = a.split('/').reverse().join('-');
+            const dateB = b.split('/').reverse().join('-');
+            return new Date(dateB) - new Date(dateA);
+        });
 
         let finalHtml = '';
         sortedDates.forEach(date => {
@@ -867,13 +909,19 @@
                 <td colspan='4' class='total-label'>TỔNG NGÀY ${date}</td>
                 <td class='total-value'>${formatNumber(total.mess)}</td>
                 <td class='total-value'>${formatNumber(total.don)}</td>
+                <td class="total-value">${formatNumber(total.soDonThucTe)}</td>
                 <td class='total-value'>${formatNumber(total.phanHoi)}</td>
                 <td class='total-value'>${formatCurrency(total.chot)}</td>
+                <td class="total-value">${formatCurrency(total.doanhThuChotThucTe)}</td>
                 <td class='total-value'>${formatCurrency(total.doanhSoDi)}</td>
+                <td class="total-value">${formatCurrency(total.doanhSoDiThucTe)}</td>
                 <td class='total-value'>${formatNumber(total.soDonHuy)}</td>
+                <td class="total-value">${formatNumber(total.soDonHoanHuyThucTe)}</td>
                 <td class='total-value'>${formatCurrency(total.doanhSoHuy)}</td>
+                <td class="total-value">${formatCurrency(total.doanhSoHoanHuyThucTe)}</td>
                 <td class='total-value'>${formatNumber(total.soDonThanhCong)}</td>
                 <td class='total-value'>${formatCurrency(total.doanhSoThanhCong)}</td>
+                <td class="total-value">${formatCurrency(total.doanhSoSauHoanHuyThucTe)}</td>
                 <td class='total-value'>${formatPercent(totalRate)}</td>
             </tr>`;
 
@@ -893,13 +941,19 @@
                     <td class="text-left">${item.name}</td>
                     <td>${formatNumber(item.mess)}</td>
                     <td>${formatNumber(item.don)}</td>
+                    <td>${formatNumber(item.soDonThucTe)}</td>
                     <td>${formatNumber(item.phanHoi)}</td>
                     <td>${formatCurrency(item.chot)}</td>
+                    <td>${formatCurrency(item.doanhThuChotThucTe)}</td>
                     <td>${formatCurrency(item.doanhSoDi)}</td>
+                    <td>${formatCurrency(item.doanhSoDiThucTe)}</td>
                     <td>${formatNumber(item.soDonHuy)}</td>
+                    <td>${formatNumber(item.soDonHoanHuyThucTe)}</td>
                     <td>${formatCurrency(item.doanhSoHuy)}</td>
+                    <td>${formatCurrency(item.doanhSoHoanHuyThucTe)}</td>
                     <td>${formatNumber(item.soDonThanhCong)}</td>
                     <td>${formatCurrency(item.doanhSoThanhCong)}</td>
+                    <td>${formatCurrency(item.doanhSoSauHoanHuyThucTe)}</td>
                     <td class="${rateClass}">${formatPercent(rate)}</td>
                 </tr>`;
             }).join('');
@@ -910,9 +964,13 @@
                     <thead>
                         <tr>
                             <th>STT</th><th>Chi nhánh</th><th>Team</th><th>Sale</th>
-                            <th>Số Mess</th><th>Số Đơn</th><th>Phản hồi</th><th>DS Chốt</th>
-                            <th>Doanh số đi</th><th>Số đơn hủy</th><th>Doanh số Hủy</th>
-                            <th>Số đơn thành công</th><th>Doanh số thành công</th><th>Tỉ lệ chốt</th>
+                            <th>Số Mess</th><th>Số Đơn</th><th>Số Đơn TT</th>
+                            <th>Phản hồi</th><th>DS Chốt</th><th>DS Chốt TT</th>
+                            <th>Doanh số đi</th><th>DS Đi TT</th>
+                            <th>Số đơn hủy</th><th>Số Đơn Hủy TT</th>
+                            <th>Doanh số Hủy</th><th>DS Hủy TT</th>
+                            <th>Số đơn thành công</th><th>Doanh số thành công</th>
+                            <th>DS Sau Hủy TT</th><th>Tỉ lệ chốt</th>
                         </tr>
                     </thead>
                     <tbody>${totalRowHtml + rowsHtml}</tbody>
