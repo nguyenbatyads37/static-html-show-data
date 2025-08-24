@@ -557,14 +557,13 @@
     function fetchAndProcessData() {
         showLoader();
         
-        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwypYpciL58AYMiwqzXXe1PxkMlWRE9N42AJuI9WZy9RoWGBXFAtDfEcs7L8iuFtFhT/exec?tableName=B%C3%A1o%20c%C3%A1o%20sale';
+        const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwb5mPuZGEqhr3b4hJVeVgWGcQtBeuNmP_qjnRRyEYDc8t-axeX6jghKlYTgnEezGMX/exec?tableName=Báo cáo sale';
 
         fetch(salesDataUrl)
         .then(res => res.json())
         .then(result => {
             const apiData = result.data;
 
-            // --- START: LOGIC ĐÃ CẬP NHẬT ---
             // Xử lý chế độ xem giới hạn nếu có tham số `id` trên URL
             const idFromUrl = getUrlParameter('id');
             if (idFromUrl) {
@@ -572,42 +571,19 @@
                 isRestrictedView = true; 
 
                 if (currentUserRecord) {
-                    // Lấy chức vụ và team của người dùng, chuyển chức vụ về chữ thường để dễ so sánh
-                    const userPosition = (currentUserRecord['Chức vụ'] || '').trim().toLowerCase();
-                    const userTeam = (currentUserRecord['Team'] || '').trim();
-
-                    // Kiểm tra nếu chức vụ là 'leader' hoặc 'trưởng nhóm'
-                    if (userPosition === 'leader' || userPosition === 'trưởng nhóm') {
-                        // Nếu là leader, hiển thị tên team và lấy danh sách tên của tất cả thành viên trong team
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM - ${userTeam}`;
-                        
-                        const teamMemberNames = apiData
-                            .filter(r => (r['Team'] || '').trim() === userTeam)
-                            .map(r => (r['Tên'] || '').trim())
-                            .filter(name => name !== ''); // Lọc ra các tên rỗng
-                            
-                        // Dùng Set để đảm bảo các tên là duy nhất
-                        allowedNames = [...new Set(teamMemberNames)]; 
-                        
-                    } else { 
-                        // Nếu không phải leader, chỉ hiển thị dữ liệu cá nhân của họ
-                        const cleanName = (currentUserRecord['Tên'] || '').trim();
-                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
-                        allowedNames = [cleanName];
-                    }
+                    const cleanName = (currentUserRecord['Tên'] || '').trim();
+                    document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
+                    allowedNames = [cleanName];
                 } else {
-                    // Xử lý trường hợp không tìm thấy ID
                     document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
                     allowedNames = [];
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                 }
             } else {
-                // Nếu không có ID trên URL, hiển thị dữ liệu tổng hợp
                 isRestrictedView = false;
                 allowedNames = [];
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
-            // --- END: LOGIC ĐÃ CẬP NHẬT ---
             
             // Chuyển đổi và làm sạch dữ liệu từ API
             rawData = apiData
@@ -637,12 +613,17 @@
                     doanhSoHoanHuyThucTe: Number(r['Doanh số hoàn hủy thực tế']) || 0,
                     doanhSoSauHoanHuyThucTe: Number(r['Doanh số sau hoàn hủy thực tế']) || 0
                 }));
+
+                console.log('raw1--', rawData);
+                
             
             // Lấy dữ liệu để điền vào các bộ lọc (sidebar)
-            // Nếu là xem giới hạn, chỉ lấy các lựa chọn từ dữ liệu của người đó/team đó
+            // Nếu là xem giới hạn, chỉ lấy các lựa chọn từ dữ liệu của người đó
             const dataForFilters = isRestrictedView
                 ? rawData.filter(r => allowedNames.includes(r.ten))
                 : rawData;
+
+                console.log('dataForFilters:', dataForFilters);
 
             populateAllFilters(dataForFilters); 
             applyFilters();
@@ -787,6 +768,8 @@
         const selectedShifts = getSelectedOptions('ca-all', 'filter-ca');
         const selectedTeams = getSelectedOptions('team-all', 'filter-team');
 
+        console.log('rawData:', rawData);
+
         const filtered = rawData.filter(r => {
             if (isRestrictedView && !allowedNames.includes(r.ten)) {
                 return false;
@@ -883,6 +866,7 @@
             container.innerHTML = '<h3>Không có dữ liệu chi tiết để hiển thị.</h3>';
             return;
         }
+        console.log(`[DEBUG] Dữ liệu đã lọc: `, data);
 
         // Nhóm dữ liệu theo ngày
         const groupedByDate = data.reduce((acc, r) => {
@@ -891,13 +875,11 @@
             acc[dateKey].push(r);
             return acc;
         }, {});
+        console.log(`[DEBUG] Dữ liệu đã nhóm theo ngày: `, groupedByDate);
 
         // Sắp xếp các ngày từ mới nhất đến cũ nhất
-        const sortedDates = Object.keys(groupedByDate).sort((a,b) => {
-            const dateA = a.split('/').reverse().join('-');
-            const dateB = b.split('/').reverse().join('-');
-            return new Date(dateB) - new Date(dateA);
-        });
+        const sortedDates = Object.keys(groupedByDate).sort((a,b) => new Date(b) - new Date(a));
+        console.log(`[DEBUG] Ngày đã nhóm: `, sortedDates);
 
         let finalHtml = '';
         sortedDates.forEach(date => {
