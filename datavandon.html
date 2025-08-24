@@ -4,7 +4,6 @@
 <head>
   <meta charset="UTF-8" />
   <title>QUẢN LÝ VẬN ĐƠN LumiGlobal</title>
-  <!-- Đã xóa link Chart.js -->
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
@@ -513,7 +512,6 @@
     <button id="tabData" class="tab-btn active">Dữ liệu đơn hàng</button>
     <button id="tabAllRegions" class="tab-btn" style="display: none;">Tổng đơn 2 miền</button>
     <button id="tabJapan" class="tab-btn">Đơn Nhật</button>
-    <!-- Đã xóa nút Báo cáo tổng kết -->
   </div>
 
   <div id="contentData" class="content-tab active">
@@ -615,8 +613,6 @@
     </div>
   </div>
   
-  <!-- Đã xóa toàn bộ div contentReport -->
-
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbx_rU4gsMXugPUK9ZoTczyWpKdsPVO3QcXzdpswFKVQmnsMU6B6J9lirCO_7NvET78/exec';
     const IMMEDIATE_UPDATE_URL = 'https://script.google.com/macros/s/AKfycbwtoLqG0p-HBsjpyMqqER4YRQ-B7x_qEGlL5_ZjNaIAaxKUXmHO5Weam3_E9ZUMPawy/exec';
@@ -644,13 +640,10 @@
       datalistOptions = {},
       filterDebounceTimer;
     
-    // Đã xóa các biến cho Báo cáo
-    
     const mainTabConfig = { data: () => staffFilteredData, changedRows, controls: { refreshBtn: 'refreshData', updateBtn: 'updateAll', clearBtn: 'clearFilters', startDate: 'startDateFilter', endDate: 'endDateFilter', product: 'productFilter', market: 'marketFilter', summary: 'summaryInfo' }, table: { head: 'tableHead', body: 'tableBody' }, dynamicOptions: () => dynamicFilterOptions };
     const allRegionsTabConfig = { data: () => allData, changedRows: allRegionsChangedRows, controls: { refreshBtn: 'allRegionsRefreshData', updateBtn: 'allRegionsUpdateAll', clearBtn: 'allRegionsClearFilters', startDate: 'allRegionsStartDateFilter', endDate: 'allRegionsEndDateFilter', product: 'allRegionsProductFilter', market: 'allRegionsMarketFilter', staff: 'allRegionsStaffFilter', summary: 'allRegionsSummaryInfo' }, table: { head: 'allRegionsTableHead', body: 'allRegionsTableBody' }, dynamicOptions: () => allRegionsDynamicFilterOptions };
     const japanTabConfig = { data: () => japanData, changedRows: japanChangedRows, controls: { refreshBtn: 'japanRefreshData', updateBtn: 'japanUpdateAll', clearBtn: 'japanClearFilters', startDate: 'japanStartDateFilter', endDate: 'japanEndDateFilter', product: 'japanProductFilter', staff: 'japanStaffFilter', summary: 'japanSummaryInfo' }, table: { head: 'japanTableHead', body: 'japanTableBody' }, dynamicOptions: () => japanDynamicFilterOptions };
     
-    // Đã xóa reportTabConfig
     const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig];
 
     function getDateTimeVN(dateInput) { const date = new Date(dateInput) || new Date(); const options = { timeZone: "Asia/Ho_Chi_Minh", hour12: false }; const vnDate = new Date(date.toLocaleString("en-US", options)); const dd = String(vnDate.getDate()).padStart(2, "0"); const mm = String(vnDate.getMonth() + 1).padStart(2, "0"); const yyyy = vnDate.getFullYear(); const HH = String(vnDate.getHours()).padStart(2, "0"); const MM = String(vnDate.getMinutes()).padStart(2, "0"); const SS = String(vnDate.getSeconds()).padStart(2, "0"); return `${dd}/${mm}/${yyyy} ${HH}:${MM}:${SS}` }
@@ -847,39 +840,46 @@
         generateDynamicOptions(config, data); 
         populateExternalFilters(config); 
         renderHeader(config); 
-        renderTableBody(config, data); // Render toàn bộ bảng 1 lần
-        applyAllFilters(config); // Áp dụng bộ lọc (ẩn/hiện)
+        renderTableBody(config, data);
+        applyAllFilters(config);
         setupCellSelection(config.table.body);
     }
 
+    // *** CẬP NHẬT: Hàm này sẽ ưu tiên dùng danh sách chuẩn từ `dropdownCols` ***
     function generateDynamicOptions(config, data) {
         const options = {};
         columnsToMakeDynamic.forEach(colName => {
-            const dataKey = columnDisplayMapping[colName] || colName;
-            const valueMapper = row => {
-                const val = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? row['Khu vực'] || '' : '');
-                return typeof val === 'string' ? val.trim() : val;
-            };
-            const uniqueValues = new Set(data.map(valueMapper).filter(Boolean));
-            options[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b), 'vi'));
+            // Nếu cột này có danh sách dropdown được định nghĩa sẵn
+            if (dropdownCols[colName]) {
+                // Chỉ sử dụng danh sách chuẩn đó, bỏ qua giá trị rỗng đầu tiên
+                options[colName] = dropdownCols[colName].filter(opt => opt !== "").sort((a, b) => String(a).localeCompare(String(b), 'vi'));
+            } else {
+                // Nếu không, hoạt động như cũ: quét dữ liệu để tìm các giá trị duy nhất
+                const dataKey = columnDisplayMapping[colName] || colName;
+                const valueMapper = row => {
+                    const val = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? row['Khu vực'] || '' : '');
+                    return typeof val === 'string' ? val.trim() : val;
+                };
+                const uniqueValues = new Set(data.map(valueMapper).filter(Boolean));
+                options[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b), 'vi'));
+            }
         });
         if (config === mainTabConfig) dynamicFilterOptions = options;
         else if (config === japanTabConfig) japanDynamicFilterOptions = options;
         else if (config === allRegionsTabConfig) allRegionsDynamicFilterOptions = options;
     }
+
     function populateExternalFilters(config) {
       const options = config.dynamicOptions(); const productFilter = document.getElementById(config.controls.product); productFilter.innerHTML = '<option value="">Tất cả sản phẩm</option>'; (options['Mặt hàng'] || []).forEach(opt => productFilter.add(new Option(opt, opt))); if (config.controls.market) { const marketFilter = document.getElementById(config.controls.market); marketFilter.innerHTML = '<option value="">Tất cả khu vực</option>'; (options['khu vực'] || []).forEach(opt => marketFilter.add(new Option(opt, opt))) }
       if (config.controls.staff) { const staffFilter = document.getElementById(config.controls.staff); staffFilter.innerHTML = '<option value="">Tất cả NV Vận đơn</option>'; (options['NV Vận đơn'] || []).forEach(opt => staffFilter.add(new Option(opt, opt))) }
     }
     function generateDatalistOptions() { datalistOptions = {}; datalistFilterCols.forEach(colName => { const dataKey = columnDisplayMapping[colName] || colName; const uniqueValues = new Set(allData.map(row => row[dataKey] || row[dataKey.replace(/ /g, '_')]).filter(Boolean)); datalistOptions[colName] = Array.from(uniqueValues) }) }
     
-    // *** TỐI ƯU HÓA: Hàm lọc mới, chỉ ẩn/hiện hàng, không vẽ lại ***
     function applyAllFilters(config) {
         const tableHead = document.getElementById(config.table.head);
         const tableBody = document.getElementById(config.table.body);
         if (!tableHead.querySelector('tr') || !tableBody) return;
 
-        // 1. Lấy tất cả giá trị từ các bộ lọc
         const startDateVal = document.getElementById(config.controls.startDate).value;
         const endDateVal = document.getElementById(config.controls.endDate).value;
         const start = startDateVal ? new Date(startDateVal) : null;
@@ -909,7 +909,6 @@
 
         const originalData = config.data();
 
-        // 2. Lặp qua các hàng trong DOM và quyết định ẩn/hiện
         const rows = tableBody.querySelectorAll('tr');
         rows.forEach(tr => {
             const rowIndex = parseInt(tr.dataset.rowIndex, 10);
@@ -919,20 +918,16 @@
 
             let isVisible = true;
 
-            // Kiểm tra các bộ lọc
-            // Date filter
             if (start || end) {
                 const orderDate = parseDateString(rowData["Ngày lên đơn"] || rowData["Thời gian lên đơn"]);
                 if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) {
                     isVisible = false;
                 }
             }
-            // Product, market, staff filters
             if (isVisible && productValue && (rowData["Mặt hàng"] || '') !== productValue) isVisible = false;
             if (isVisible && marketValue && (rowData["Khu vực"] || rowData["khu vực"] || '') !== marketValue) isVisible = false;
             if (isVisible && staffValue && (rowData["NV Vận đơn"] || rowData["NV_Vận_đơn"] || '') !== staffValue) isVisible = false;
             
-            // Header filters
             if (isVisible) {
                  for (const colName in filterValues) {
                     const dataKey = columnDisplayMapping[colName] || colName;
@@ -953,11 +948,9 @@
                 }
             }
             
-            // 3. Cập nhật hiển thị của hàng
             tr.style.display = isVisible ? '' : 'none';
         });
 
-        // 4. Cập nhật lại thông tin tóm tắt
         updateSummaryInfo(config);
     }
     
@@ -1056,6 +1049,7 @@
         window.addEventListener('click', e => { if (!e.target.closest('.multi-select-container')) { document.querySelectorAll('.checkbox-dropdown.show').forEach(d => d.classList.remove('show')) } })
     }
 
+    // *** CẬP NHẬT: Hàm này sẽ xử lý dữ liệu không hợp lệ ***
     function renderTableBody(config, data) {
       const container = document.getElementById(config.table.body);
       container.innerHTML = '';
@@ -1064,7 +1058,7 @@
         return;
       }
       const fixedCount = getFixedColumnCount();
-      data.forEach((row, originalRowIndex) => { // Dùng index của mảng data làm originalRowIndex
+      data.forEach((row, originalRowIndex) => {
         const tr = document.createElement('tr');
         tr.dataset.rowIndex = originalRowIndex;
         displayColumns.forEach((col, index) => {
@@ -1072,6 +1066,7 @@
           if (index < fixedCount) td.classList.add('fixed-column');
           const dataKey = columnDisplayMapping[col] || col;
           let value;
+          // ... (phần lấy 'value' không đổi) ...
           if (allDateColumns.includes(dataKey)) {
             let dateSource = row[dataKey] || '';
             if (dataKey === "Ngày lên đơn") dateSource = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
@@ -1084,13 +1079,24 @@
           } else {
             value = row[dataKey] ?? (row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : ''));
           }
+
           if (editableCols.includes(col)) {
             td.classList.add('editable');
             if (dropdownCols[col]) {
               td.classList.add('has-dropdown');
               const select = document.createElement('select');
-              dropdownCols[col].forEach(opt => select.add(new Option(opt, opt)));
-              select.value = value;
+              const validOptions = dropdownCols[col];
+              validOptions.forEach(opt => select.add(new Option(opt, opt)));
+              
+              // *** THAY ĐỔI QUAN TRỌNG: Kiểm tra giá trị trước khi gán ***
+              // Nếu giá trị từ Sheet có trong danh sách chuẩn, hãy chọn nó.
+              if (validOptions.includes(value)) {
+                  select.value = value;
+              } else {
+                  // Nếu không, đặt dropdown về giá trị rỗng để báo hiệu cần sửa.
+                  select.value = "";
+              }
+
               select.addEventListener('change', (e) => {
                 td.classList.add('highlight');
                 const newValue = select.value;
