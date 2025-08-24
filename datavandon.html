@@ -280,7 +280,8 @@
 
     #tableBody tr:hover td,
     #japanTableBody tr:hover td,
-    #allRegionsTableBody tr:hover td {
+    #allRegionsTableBody tr:hover td,
+    #leaderTableBody tr:hover td { /* Thêm ID mới */
       background-color: var(--primary-color-light) !important;
       cursor: pointer;
     }
@@ -510,6 +511,7 @@
 
   <div class="tab-controls">
     <button id="tabData" class="tab-btn active">Dữ liệu đơn hàng</button>
+    <button id="tabLeader" class="tab-btn" style="display: none;">Đơn của Leader</button> <!-- TAB MỚI -->
     <button id="tabAllRegions" class="tab-btn" style="display: none;">Tổng đơn 2 miền</button>
     <button id="tabJapan" class="tab-btn">Đơn Nhật</button>
   </div>
@@ -546,6 +548,34 @@
       <table>
         <thead id="tableHead"></thead>
         <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- NỘI DUNG TAB LEADER MỚI -->
+  <div id="contentLeader" class="content-tab">
+    <div class="controls">
+      <div class="left-controls">
+        <span class="tab-info-text">Đơn hàng do bạn xử lý</span>
+        <button id="leaderRefreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+        <button id="leaderUpdateAll" class="update-btn">Cập nhật</button>
+        <div id="leaderSummaryInfo" class="summary-info"></div>
+      </div>
+      <div class="right-controls">
+        <div class="date-filter">
+          <span>Từ:</span><input type="date" id="leaderStartDateFilter" />
+          <span>Đến:</span><input type="date" id="leaderEndDateFilter" />
+        </div>
+        <select id="leaderProductFilter" class="filter-select">
+          <option value="">Sản phẩm</option>
+        </select>
+        <button id="leaderClearFilters" class="clear-filter-btn">Xóa lọc</button>
+      </div>
+    </div>
+    <div class="main-table-wrapper" id="leaderTableContainer">
+      <table>
+        <thead id="leaderTableHead"></thead>
+        <tbody id="leaderTableBody"></tbody>
       </table>
     </div>
   </div>
@@ -633,18 +663,20 @@
     const datalistFilterCols = ["Mã đơn hàng", "Name*", "Phone*", "Nhân viên Sale"];
     // === KẾT THÚC CẤU HÌNH ===
 
-    let allData = [], staffFilteredData = [], japanData = [],
-      changedRows = new Map(), japanChangedRows = new Map(), allRegionsChangedRows = new Map(),
+    let allData = [], staffFilteredData = [], japanData = [], leaderData = [], // Thêm leaderData
+      changedRows = new Map(), japanChangedRows = new Map(), allRegionsChangedRows = new Map(), leaderChangedRows = new Map(), // Thêm leaderChangedRows
       currentStaff = null, teamMembers = [], selectedCells = new Set(), isMouseDown = false, startCell = null,
-      dynamicFilterOptions = {}, japanDynamicFilterOptions = {}, allRegionsDynamicFilterOptions = {},
+      dynamicFilterOptions = {}, japanDynamicFilterOptions = {}, allRegionsDynamicFilterOptions = {}, leaderDynamicFilterOptions = {}, // Thêm leaderDynamicFilterOptions
       datalistOptions = {},
       filterDebounceTimer;
     
     const mainTabConfig = { data: () => staffFilteredData, changedRows, controls: { refreshBtn: 'refreshData', updateBtn: 'updateAll', clearBtn: 'clearFilters', startDate: 'startDateFilter', endDate: 'endDateFilter', product: 'productFilter', market: 'marketFilter', summary: 'summaryInfo' }, table: { head: 'tableHead', body: 'tableBody' }, dynamicOptions: () => dynamicFilterOptions };
     const allRegionsTabConfig = { data: () => allData, changedRows: allRegionsChangedRows, controls: { refreshBtn: 'allRegionsRefreshData', updateBtn: 'allRegionsUpdateAll', clearBtn: 'allRegionsClearFilters', startDate: 'allRegionsStartDateFilter', endDate: 'allRegionsEndDateFilter', product: 'allRegionsProductFilter', market: 'allRegionsMarketFilter', staff: 'allRegionsStaffFilter', summary: 'allRegionsSummaryInfo' }, table: { head: 'allRegionsTableHead', body: 'allRegionsTableBody' }, dynamicOptions: () => allRegionsDynamicFilterOptions };
     const japanTabConfig = { data: () => japanData, changedRows: japanChangedRows, controls: { refreshBtn: 'japanRefreshData', updateBtn: 'japanUpdateAll', clearBtn: 'japanClearFilters', startDate: 'japanStartDateFilter', endDate: 'japanEndDateFilter', product: 'japanProductFilter', staff: 'japanStaffFilter', summary: 'japanSummaryInfo' }, table: { head: 'japanTableHead', body: 'japanTableBody' }, dynamicOptions: () => japanDynamicFilterOptions };
-    
-    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig];
+    // Thêm config cho tab Leader
+    const leaderTabConfig = { data: () => leaderData, changedRows: leaderChangedRows, controls: { refreshBtn: 'leaderRefreshData', updateBtn: 'leaderUpdateAll', clearBtn: 'leaderClearFilters', startDate: 'leaderStartDateFilter', endDate: 'leaderEndDateFilter', product: 'leaderProductFilter', summary: 'leaderSummaryInfo' }, table: { head: 'leaderTableHead', body: 'leaderTableBody' }, dynamicOptions: () => leaderDynamicFilterOptions };
+
+    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig]; // Thêm leaderTabConfig vào mảng
 
     function getDateTimeVN(dateInput) { const date = new Date(dateInput) || new Date(); const options = { timeZone: "Asia/Ho_Chi_Minh", hour12: false }; const vnDate = new Date(date.toLocaleString("en-US", options)); const dd = String(vnDate.getDate()).padStart(2, "0"); const mm = String(vnDate.getMonth() + 1).padStart(2, "0"); const yyyy = vnDate.getFullYear(); const HH = String(vnDate.getHours()).padStart(2, "0"); const MM = String(vnDate.getMinutes()).padStart(2, "0"); const SS = String(vnDate.getSeconds()).padStart(2, "0"); return `${dd}/${mm}/${yyyy} ${HH}:${MM}:${SS}` }
     function getFixedColumnCount() { const e = document.getElementById("fixedColumnCountInput"), t = parseInt(e.value, 10); return isNaN(t) || t < 0 ? 0 : t }
@@ -792,8 +824,8 @@
     async function handleData(response) {
       document.getElementById('loader-overlay').style.display = 'none';
       allTabConfigs.forEach(config => { document.getElementById(config.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load' });
-      allData = [], staffFilteredData = [], japanData = [];
-      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear();
+      allData = [], staffFilteredData = [], japanData = [], leaderData = []; // Khởi tạo leaderData
+      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(); // Clear leaderChangedRows
 
       if (response.error || !Array.isArray(response.rows)) {
         const errorMsg = 'Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng');
@@ -821,6 +853,14 @@
 
           document.getElementById('tabAllRegions').style.display = currentStaff?.vi_tri === "Leader" ? '' : 'none';
 
+          // *** LOGIC MỚI: KIỂM TRA LEADER VÀ TẠO DỮ LIỆU/TAB ***
+          if (currentStaff?.vi_tri === "Leader") {
+            document.getElementById('tabLeader').style.display = ''; // Hiện nút tab
+            // Lọc dữ liệu chỉ của leader
+            leaderData = allData.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"]) === currentStaff.ho_va_ten);
+            initializeTab(leaderTabConfig, leaderData); // Khởi tạo tab mới
+          }
+
           staffFilteredData = allData.filter(row => {
             const isTeamMemberOrder = teamMembers.includes(row["NV Vận đơn"] || row["NV_Vận_đơn"] || '');
             return currentStaff.vi_tri_van_don === "Lên đơn FFM" ? isTeamMemberOrder || (row["Kết quả Check"] || "") === "OK" : isTeamMemberOrder;
@@ -845,16 +885,12 @@
         setupCellSelection(config.table.body);
     }
 
-    // *** CẬP NHẬT: Hàm này sẽ ưu tiên dùng danh sách chuẩn từ `dropdownCols` ***
     function generateDynamicOptions(config, data) {
         const options = {};
         columnsToMakeDynamic.forEach(colName => {
-            // Nếu cột này có danh sách dropdown được định nghĩa sẵn
             if (dropdownCols[colName]) {
-                // Chỉ sử dụng danh sách chuẩn đó, bỏ qua giá trị rỗng đầu tiên
                 options[colName] = dropdownCols[colName].filter(opt => opt !== "").sort((a, b) => String(a).localeCompare(String(b), 'vi'));
             } else {
-                // Nếu không, hoạt động như cũ: quét dữ liệu để tìm các giá trị duy nhất
                 const dataKey = columnDisplayMapping[colName] || colName;
                 const valueMapper = row => {
                     const val = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? row['Khu vực'] || '' : '');
@@ -867,6 +903,7 @@
         if (config === mainTabConfig) dynamicFilterOptions = options;
         else if (config === japanTabConfig) japanDynamicFilterOptions = options;
         else if (config === allRegionsTabConfig) allRegionsDynamicFilterOptions = options;
+        else if (config === leaderTabConfig) leaderDynamicFilterOptions = options; // Thêm case cho leader
     }
 
     function populateExternalFilters(config) {
@@ -1049,7 +1086,6 @@
         window.addEventListener('click', e => { if (!e.target.closest('.multi-select-container')) { document.querySelectorAll('.checkbox-dropdown.show').forEach(d => d.classList.remove('show')) } })
     }
 
-    // *** CẬP NHẬT: Hàm này sẽ xử lý dữ liệu không hợp lệ ***
     function renderTableBody(config, data) {
       const container = document.getElementById(config.table.body);
       container.innerHTML = '';
@@ -1066,7 +1102,6 @@
           if (index < fixedCount) td.classList.add('fixed-column');
           const dataKey = columnDisplayMapping[col] || col;
           let value;
-          // ... (phần lấy 'value' không đổi) ...
           if (allDateColumns.includes(dataKey)) {
             let dateSource = row[dataKey] || '';
             if (dataKey === "Ngày lên đơn") dateSource = row["Ngày lên đơn"] || row["Thời gian lên đơn"];
@@ -1088,12 +1123,9 @@
               const validOptions = dropdownCols[col];
               validOptions.forEach(opt => select.add(new Option(opt, opt)));
               
-              // *** THAY ĐỔI QUAN TRỌNG: Kiểm tra giá trị trước khi gán ***
-              // Nếu giá trị từ Sheet có trong danh sách chuẩn, hãy chọn nó.
               if (validOptions.includes(value)) {
                   select.value = value;
               } else {
-                  // Nếu không, đặt dropdown về giá trị rỗng để báo hiệu cần sửa.
                   select.value = "";
               }
 
