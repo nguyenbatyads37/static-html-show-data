@@ -552,22 +552,40 @@
         showLoader();
         
         const salesDataUrl = 'https://script.google.com/macros/s/AKfycbwjj_z-ecjDQk3panKBY1l-Iv3A8hrKCdVKILmlEAb2U6_Pwm_NpdhiGGqZRJByKTJ2/exec?tableName=B%C3%A1o%20c%C3%A1o%20sale';
+        const personnelDataUrl = 'https://script.google.com/macros/s/AKfycbwjj_z-ecjDQk3panKBY1l-Iv3A8hrKCdVKILmlEAb2U6_Pwm_NpdhiGGqZRJByKTJ2/exec?tableName=Nh%C3%A2n%20s%E1%BB%B1';
+        
+        const idFromUrl = getUrlParameter('id');
 
-        fetch(salesDataUrl)
-        .then(res => res.json())
-        .then(result => {
-            const apiData = result.data;
+        // Tạo các promise để fetch dữ liệu
+        const salesPromise = fetch(salesDataUrl).then(res => res.json());
+        const personnelPromise = idFromUrl ? fetch(personnelDataUrl).then(res => res.json()) : Promise.resolve(null);
 
-            // Xử lý chế độ xem giới hạn nếu có tham số `id` trên URL
-            const idFromUrl = getUrlParameter('id');
-            if (idFromUrl) {
-                const currentUserRecord = apiData.find(record => record['id_NS'] === idFromUrl);
-                isRestrictedView = true; 
+        Promise.all([salesPromise, personnelPromise])
+        .then(([salesResult, personnelResult]) => {
+            const salesData = salesResult.data;
+            const personnelData = personnelResult ? personnelResult.data : [];
 
-                if (currentUserRecord) {
-                    const cleanName = (currentUserRecord['Tên'] || '').trim();
-                    document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
-                    allowedNames = [cleanName];
+            if (idFromUrl && personnelData.length > 0) {
+                // Dòng code quan trọng: Chuyển cả 2 giá trị về chuỗi và cắt bỏ khoảng trắng trước khi so sánh
+                const currentUser = personnelData.find(p => String(p['id'] || '').trim() === idFromUrl.trim());
+
+                isRestrictedView = true;
+
+                if (currentUser) {
+                    const position = (currentUser['Vị trí'] || '').trim();
+                    const userName = (currentUser['Tên'] || '').trim();
+                    
+                    if (position === 'Leader') {
+                        const leaderTeam = (currentUser['Team'] || '').trim();
+                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM - ${leaderTeam}`;
+                        // Lấy danh sách tất cả nhân viên trong team của Leader
+                        allowedNames = personnelData
+                            .filter(p => (p['Team'] || '').trim() === leaderTeam)
+                            .map(p => (p['Tên'] || '').trim());
+                    } else { // Mặc định là NV hoặc các vị trí khác
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${userName}`;
+                        allowedNames = [userName];
+                    }
                 } else {
                     document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
                     allowedNames = [];
@@ -579,8 +597,8 @@
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
-            // Chuyển đổi và làm sạch dữ liệu từ API
-            rawData = apiData
+            // Chuyển đổi và làm sạch dữ liệu sales
+            rawData = salesData
                 .filter(r => r['Tên'] && String(r['Tên']).trim() !== '' && r['Team'] && String(r['Team']).trim() !== '')
                 .map(r => ({
                     ten: (r['Tên'] || '').trim(),
@@ -601,8 +619,7 @@
                     doanhSoThanhCong: Number(r['Doanh số thành công']) || 0
                 }));
             
-            // Lấy dữ liệu để điền vào các bộ lọc (sidebar)
-            // Nếu là xem giới hạn, chỉ lấy các lựa chọn từ dữ liệu của người đó
+            // Nếu là xem giới hạn, chỉ lấy các lựa chọn bộ lọc từ dữ liệu được phép
             const dataForFilters = isRestrictedView
                 ? rawData.filter(r => allowedNames.includes(r.ten))
                 : rawData;
@@ -617,6 +634,7 @@
             hideLoader();
         });
     }
+
 
     /**
      * Tổng hợp dữ liệu bán hàng, nhóm theo nhân viên và tính tổng.
