@@ -679,7 +679,32 @@
 
     const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig]; // Thêm leaderTabConfig vào mảng
 
-    function getDateTimeVN(dateInput) { const date = new Date(dateInput) || new Date(); const options = { timeZone: "Asia/Ho_Chi_Minh", hour12: false }; const vnDate = new Date(date.toLocaleString("en-US", options)); const dd = String(vnDate.getDate()).padStart(2, "0"); const mm = String(vnDate.getMonth() + 1).padStart(2, "0"); const yyyy = vnDate.getFullYear(); const HH = String(vnDate.getHours()).padStart(2, "0"); const MM = String(vnDate.getMinutes()).padStart(2, "0"); const SS = String(vnDate.getSeconds()).padStart(2, "0"); return `${dd}/${mm}/${yyyy} ${HH}:${MM}:${SS}` }
+    function getDateTimeVN(dateInput) {
+      let date;
+
+      if (!dateInput) {
+        date = new Date(); // nếu không có truyền vào, dùng thời gian hiện tại
+      } else {
+        date = new Date(dateInput);
+        if (isNaN(date.getTime())) {
+          console.warn("⚠️ Invalid dateInput:", dateInput);
+          return "Ngày không hợp lệ";
+        }
+      }
+
+      const options = { timeZone: "Asia/Ho_Chi_Minh", hour12: false };
+      const vnDate = new Date(date.toLocaleString("en-US", options));
+
+      const dd = String(vnDate.getDate()).padStart(2, "0");
+      const mm = String(vnDate.getMonth() + 1).padStart(2, "0");
+      const yyyy = vnDate.getFullYear();
+      const HH = String(vnDate.getHours()).padStart(2, "0");
+      const MM = String(vnDate.getMinutes()).padStart(2, "0");
+      const SS = String(vnDate.getSeconds()).padStart(2, "0");
+
+      return `${dd}/${mm}/${yyyy} ${HH}:${MM}:${SS}`;
+    }
+
     function getFixedColumnCount() { const e = document.getElementById("fixedColumnCountInput"), t = parseInt(e.value, 10); return isNaN(t) || t < 0 ? 0 : t }
     function handleFixedColumnCountChange() { const newCount = getFixedColumnCount(); const activeTab = document.querySelector(".content-tab.active"); if (!activeTab) return; const activeConfig = allTabConfigs.find(c => c.table.body === activeTab.querySelector("tbody")?.id); if (!activeConfig) return; const tableHead = document.getElementById(activeConfig.table.head); const tableBody = document.getElementById(activeConfig.table.body); if (!tableHead || !tableBody) return; const allRows = [...tableHead.querySelectorAll("tr"), ...tableBody.querySelectorAll("tr")]; allRows.forEach(row => { for (let i = 0; i < row.cells.length; i++) { const cell = row.cells[i]; if (i < newCount) { cell.classList.add("fixed-column") } else { cell.classList.remove("fixed-column"); cell.style.left = "" } } }); updateStickyColumns(activeConfig) }
     function updateStickyColumns(config) { const fixedCount = getFixedColumnCount(); const tableHead = document.getElementById(config.table.head); const tableBody = document.getElementById(config.table.body);[...tableHead.querySelectorAll(".fixed-column"), ...tableBody.querySelectorAll(".fixed-column")].forEach(c => c.style.left = ""); if (fixedCount <= 0) return; const headerRow = tableHead.querySelector("tr"); if (!headerRow) return; let leftOffset = 0; for (let i = 0; i < fixedCount; i++) { const th = headerRow.cells[i]; if (!th) continue; th.style.left = leftOffset + "px"; const rows = tableBody.querySelectorAll("tr"); rows.forEach(row => { if (row.cells[i]) { row.cells[i].style.left = leftOffset + "px" } }); leftOffset += th.offsetWidth } }
@@ -753,6 +778,7 @@
       const dateCell = tr.cells[dateColIndex];
       if (!dateCell) return;
       const newDateValue = getDateTimeVN();
+      console.log(`Updating date for row ${tr.dataset.rowIndex} to ${newDateValue}`);
       dateCell.textContent = newDateValue;
       dateCell.classList.add('highlight');
       const originalRowIndex = parseInt(tr.dataset.rowIndex);
