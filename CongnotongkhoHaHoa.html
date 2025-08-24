@@ -10,7 +10,6 @@
         :root {
             --primary-color: #4CAF50; --secondary-color: #ff9800; --hover-color: #45a049; --text-color: #333;
             --border-color: #e0e0e0; --error-color: #d32f2f; --input-bg: #fffbe6;
-            --filter-btn-bg: #f0f0f0; --filter-btn-hover-bg: #e0e0e0; --filter-btn-active-bg: #4CAF50;
             --summary-color: #1D6F42; --disabled-color: #ccc;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
@@ -35,18 +34,22 @@
         #tab-btn-tonghop.active { background-color: var(--secondary-color); border-color: var(--secondary-color); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        .table-container { overflow-x: auto; }
+        .table-container { overflow-x: auto; max-height: 60vh; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; }
         th, td { padding: 12px 15px; text-align: center; border: 1px solid var(--border-color); white-space: nowrap; vertical-align: middle; }
-        /* --- BẮT ĐẦU THAY ĐỔI: CSS cho input trong bảng --- */
-        td { padding: 0; } /* Loại bỏ padding của td để input chiếm toàn bộ không gian */
-        tbody td input {
+        td { padding: 0; } 
+        tbody td input, tbody td select {
             width: 100%; height: 100%; border: none; background-color: transparent;
-            padding: 12px 15px; font-size: 14px; text-align: center;
+            padding: 12px 15px; font-size: 14px; text-align: center; appearance: none;
         }
-        tbody td input:focus { outline: 2px solid var(--secondary-color); background-color: #fffbe6; }
-        /* --- KẾT THÚC THAY ĐỔI --- */
-        th { background-color: var(--primary-color); color: white; position: sticky; top: 0; z-index: 10; padding: 12px 15px; } /* Thêm lại padding cho th */
+        tbody td select { text-align: center; padding: 0 15px; }
+        tbody td select[data-field="Giao hàng cho nợ"],
+        tbody td select[data-field="Người chịu trách nhiệm"] { text-align: left; }
+        tbody td input:focus, tbody td select:focus { outline: 2px solid var(--secondary-color); background-color: #fffbe6; }
+        tbody td input[readonly] { background-color: #f0f0f0; cursor: not-allowed; }
+        th { background-color: var(--primary-color); color: white; position: sticky; top: 0; z-index: 10; padding: 12px 15px; }
+        thead .filter-row th { padding: 5px; background-color: #e8f5e9; top: 48px; z-index: 10; position: sticky;}
+        thead .filter-row input { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
         #container-tonghop th { background-color: var(--secondary-color); }
         tbody tr:nth-child(even) { background-color: #f9f9f9; }
         tbody tr:hover { background-color: #e8f5e9; }
@@ -151,6 +154,8 @@
     
     <div id="toast-container"></div>
 
+    <datalist id="customer-list-options"></datalist>
+
     <script>
         const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwZ73GdTFsSitoVqJKiZKIbU3wHM_qpjxQEbhlKTwi1V9GijNC8SPoRH9vVDD65xb9x/exec';
         
@@ -162,10 +167,15 @@
         };
 
         const headerMapping = { 'Giao hàng cho nợ': 'NV Giao hàng cho nợ', 'Người chịu trách nhiệm': 'NV Kinh doanh' };
-        const HIDDEN_COLUMNS = ['id', 'Ngày phải trả']; 
+        // --- START: SỬA ĐỔI - Hiển thị lại cột Hạn trả nợ ---
+        const HIDDEN_COLUMNS = ['id']; 
+        // --- END: SỬA ĐỔI ---
+
         let originalTableData = {};
         let changeSet = { create: {}, update: {}, delete: {} };
-        
+        let nhanSuList = [];
+        let customerList = []; 
+
         function showToast(message, type = 'success') {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
@@ -175,39 +185,74 @@
             setTimeout(() => { toast.remove(); }, 5000);
         }
 
-        // --- BẮT ĐẦU THAY ĐỔI: Hàm tạo input dựa trên loại dữ liệu ---
-        function createCellInput(header, value) {
+        // --- START: SỬA ĐỔI - Thêm <select> cho Hạn trả nợ ---
+        function createCellInput(originalHeader, value) {
             const formattedValue = value ?? '';
             let inputHtml = '';
-            switch (header) {
-                case 'Ngày nợ':
-                case 'Ngày trả':
-                case 'Ngày thu hồi':
-                    // Định dạng ngày sang YYYY-MM-DD cho input type="date"
+            const displayedHeader = headerMapping[originalHeader] || originalHeader;
+
+            if (displayedHeader === 'NV Giao hàng cho nợ' || displayedHeader === 'NV Kinh doanh') {
+                const options = nhanSuList.map(name => 
+                    `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`
+                ).join('');
+                return `<td><select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select></td>`;
+            }
+
+            switch (originalHeader) {
+                case 'Ngày nợ': case 'Ngày trả': case 'Ngày thu hồi':
                     const dateValue = formatDateForInput(formattedValue);
-                    inputHtml = `<input type="date" data-field="${header}" value="${dateValue}">`;
+                    inputHtml = `<input type="date" data-field="${originalHeader}" value="${dateValue}">`;
                     break;
-                case 'Số tiền nợ':
-                case 'Đơn giá':
-                case 'Thành tiền':
-                    // Định dạng số có dấu phân cách
+                case 'Ngày phải trả':
+                    const dueDateValue = formatDateForInput(formattedValue);
+                    inputHtml = `<input type="date" data-field="${originalHeader}" value="${dueDateValue}" readonly>`;
+                    break;
+                case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền':
                     const numericValue = isNaN(Number(formattedValue)) ? '' : Number(formattedValue).toLocaleString('vi-VN');
-                    inputHtml = `<input type="text" inputmode="decimal" data-field="${header}" value="${numericValue}">`;
+                    inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}">`;
+                    break;
+                case 'Tên khách hàng':
+                    inputHtml = `<input type="text" list="customer-list-options" data-field="${originalHeader}" value="${formattedValue}">`;
                     break;
                 case 'Hạn trả nợ':
-                     inputHtml = `<input type="number" data-field="${header}" value="${formattedValue}">`;
-                     break;
+                    const val = formattedValue || '30'; // Mặc định là 30 nếu không có giá trị
+                    inputHtml = `<select data-field="Hạn trả nợ">
+                                    <option value="15" ${val == 15 ? 'selected' : ''}>15 ngày</option>
+                                    <option value="30" ${val == 30 ? 'selected' : ''}>30 ngày</option>
+                                 </select>`;
+                    break;
                 default:
-                    inputHtml = `<input type="text" data-field="${header}" value="${formattedValue}">`;
+                    inputHtml = `<input type="text" data-field="${originalHeader}" value="${formattedValue}">`;
                     break;
             }
             return `<td>${inputHtml}</td>`;
         }
+        // --- END: SỬA ĐỔI ---
+
 
         function renderTable(tableKey, data) {
             const config = TABLE_CONFIG[tableKey];
             const container = document.getElementById(config.containerId);
             document.getElementById(config.countId).textContent = `${data.data?.length || 0} bản ghi`;
+            
+            if (tableKey === 'khn' && data.data) {
+                const uniqueCustomers = {};
+                data.data.slice().reverse().forEach(row => {
+                    const name = row['Tên khách hàng'];
+                    if (name && !uniqueCustomers[name]) {
+                        uniqueCustomers[name] = {
+                            name: name,
+                            address: row['Địa chỉ'],
+                            phone: row['SĐT'],
+                            region: row['Khu vực']
+                        };
+                    }
+                });
+                customerList = Object.values(uniqueCustomers);
+                
+                const datalist = document.getElementById('customer-list-options');
+                datalist.innerHTML = customerList.map(c => `<option value="${c.name}"></option>`).join('');
+            }
 
             if (!data.data || !data.headers) {
                 container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>';
@@ -216,82 +261,155 @@
             
             const headers = data.headers;
             const displayedHeaders = headers.filter(h => !HIDDEN_COLUMNS.includes(h));
-            const headerHtml = `<thead><tr><th style="width: 50px;">Xóa</th>${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}</tr></thead>`;
+            const headerHtml = `<thead>
+                <tr><th style="width: 50px;">Xóa</th>${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}</tr>
+                <tr class="filter-row">
+                    <th></th>
+                    ${displayedHeaders.map((h) => `<th><input type="text" class="filter-input" data-header="${h}" placeholder="Lọc..."></th>`).join('')}
+                </tr>
+            </thead>`;
             
-            let inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${headers.map(h => {
+            // --- START: SỬA ĐỔI - Thêm <select> cho Hạn trả nợ ở dòng mới ---
+            const inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${headers.map(h => {
                 if (HIDDEN_COLUMNS.includes(h)) return `<td style="display: none;"><input type="hidden" data-field="${h}"></td>`;
                 const displayedHeader = headerMapping[h] || h;
                 let fieldHtml;
-                switch (h) {
-                    case 'Ngày nợ': case 'Ngày trả': case 'Ngày thu hồi': fieldHtml = `<input type="date" data-field="${h}">`; break;
-                    case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền': fieldHtml = `<input type="text" inputmode="decimal" placeholder="0" data-field="${h}">`; break;
-                    case 'Hạn trả nợ': fieldHtml = `<input type="number" placeholder="Số ngày" data-field="${h}">`; break;
-                    default: fieldHtml = `<input type="text" placeholder="${displayedHeader}..." data-field="${h}">`; break;
+                if (displayedHeader === 'NV Giao hàng cho nợ' || displayedHeader === 'NV Kinh doanh') {
+                    const options = nhanSuList.map(name => `<option value="${name}">${name}</option>`).join('');
+                    fieldHtml = `<select data-field="${h}"><option value="">-- Chọn --</option>${options}</select>`;
+                } else {
+                    switch (h) {
+                        case 'Tên khách hàng': fieldHtml = `<input type="text" list="customer-list-options" placeholder="Tên khách hàng..." data-field="${h}">`; break;
+                        case 'Ngày nợ': fieldHtml = `<input type="date" data-field="${h}">`; break;
+                        case 'Hạn trả nợ': fieldHtml = `<select data-field="Hạn trả nợ">
+                                                        <option value="15">15 ngày</option>
+                                                        <option value="30" selected>30 ngày</option>
+                                                      </select>`; break;
+                        case 'Ngày phải trả': fieldHtml = `<input type="date" data-field="${h}" readonly>`; break;
+                        case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền': fieldHtml = `<input type="text" inputmode="decimal" placeholder="0" data-field="${h}">`; break;
+                        default: fieldHtml = `<input type="text" placeholder="${displayedHeader}..." data-field="${h}">`; break;
+                    }
                 }
                 return `<td>${fieldHtml}</td>`;
             }).join('')}</tr>`;
+            // --- END: SỬA ĐỔI ---
             
             const bodyHtml = `<tbody>${inputRowHtml}${data.data.map(row => {
                 const rowId = row['id'];
-                // Tạo các ô input cho từng dòng dữ liệu
+                if (tableKey === 'khn') {
+                    row['Ngày phải trả'] = calculateDueDate(row['Ngày nợ'], row['Hạn trả nợ']);
+                }
                 const cellsHtml = headers.map(h => {
-                    if (HIDDEN_COLUMNS.includes(h)) {
-                        return `<td style="display: none;"></td>`; // Vẫn giữ cấu trúc td nhưng ẩn
-                    }
+                    if (HIDDEN_COLUMNS.includes(h)) return `<td style="display: none;"></td>`;
                     return createCellInput(h, row[h]);
                 }).join('');
                 return `<tr data-id="${rowId}"><td><span class="delete-btn" data-id="${rowId}">&#10006;</span></td>${cellsHtml}</tr>`;
             }).join('')}</tbody>`;
             
             container.innerHTML = `<table>${headerHtml}${bodyHtml}</table>`;
-
-            // --- Gắn sự kiện ---
+            setupEventListeners(tableKey, container);
+        }
+        
+        // --- START: SỬA ĐỔI - Cập nhật logic tính toán ---
+        function setupEventListeners(tableKey, container) {
             const table = container.querySelector('table');
+            if (!table) return;
+
+            table.querySelectorAll('.filter-input').forEach(input => {
+                input.addEventListener('input', () => filterTable(tableKey));
+            });
+
+            // Gộp listener cho input và change để tối ưu
+            const handleInputOrChange = (e) => {
+                const element = e.target;
+                const tr = element.closest('tr');
+                if (!tr) return;
+
+                // Cập nhật ngày phải trả tự động
+                if (tableKey === 'khn' && (element.dataset.field === 'Ngày nợ' || element.dataset.field === 'Hạn trả nợ')) {
+                    const ngayNoInput = tr.querySelector('input[data-field="Ngày nợ"]');
+                    const hanTraNoSelect = tr.querySelector('select[data-field="Hạn trả nợ"]');
+                    const ngayPhaiTraInput = tr.querySelector('input[data-field="Ngày phải trả"]');
+                    
+                    if (ngayNoInput && hanTraNoSelect && ngayPhaiTraInput) {
+                        const ngayPhaiTra = calculateDueDate(ngayNoInput.value, hanTraNoSelect.value);
+                        ngayPhaiTraInput.value = formatDateForInput(ngayPhaiTra);
+                    }
+                }
+                
+                // Các logic khác chỉ chạy trên sự kiện 'input'
+                if (e.type === 'input') {
+                    if (element.tagName === 'INPUT' && element.type === 'text' && !element.hasAttribute('inputmode')) {
+                        capitalizeFirstLetter(element);
+                    }
+                    
+                    if (tableKey === 'khn' && element.dataset.field === 'Tên khách hàng') {
+                        const customerName = element.value;
+                        const foundCustomer = customerList.find(c => c.name === customerName);
+                        if (foundCustomer) {
+                            const addressInput = tr.querySelector('input[data-field="Địa chỉ"]');
+                            const phoneInput = tr.querySelector('input[data-field="SĐT"]');
+                            const regionInput = tr.querySelector('input[data-field="Khu vực"]');
+                            if(addressInput) addressInput.value = foundCustomer.address || '';
+                            if(phoneInput) phoneInput.value = foundCustomer.phone || '';
+                            if(regionInput) regionInput.value = foundCustomer.region || '';
+                        }
+                    }
+                }
+            };
             
-            // Lắng nghe sự kiện 'change' trên toàn bộ table body cho hiệu suất
-            table.querySelector('tbody').addEventListener('change', (e) => {
-                 if (e.target.tagName === 'INPUT') {
+            const tbody = table.querySelector('tbody');
+            tbody.addEventListener('input', handleInputOrChange);
+            tbody.addEventListener('change', handleInputOrChange); // Bắt sự kiện change cho <select>
+            
+            tbody.addEventListener('change', (e) => {
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
                     handleCellEdit(e, tableKey);
                 }
             });
 
-             // Thêm sự kiện 'input' cho các ô số để định dạng khi gõ
-            table.querySelectorAll('tbody input[inputmode="decimal"]').forEach(input => {
-                setupCurrencyInput(input);
-            });
-
-            table.querySelectorAll('.delete-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => handleDeleteClick(e, tableKey));
-            });
+            tbody.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
+            table.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', (e) => handleDeleteClick(e, tableKey)));
+            
             const inputRow = document.getElementById(`input-row-${tableKey}`);
-            inputRow.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitNewRow(tableKey); } });
-            ['Số tiền nợ', 'Đơn giá', 'Thành tiền'].forEach(field => setupCurrencyInput(inputRow.querySelector(`input[data-field="${field}"]`)));
-        }
-
-        function handleCellEdit(e, tableKey) {
-            const input = e.target;
-            const tr = input.closest('tr');
-            const rowId = tr.dataset.id;
-            const field = input.dataset.field;
-            let newValue = input.value;
-
-            if (rowId) {
-                if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
-                if (!changeSet.update[tableKey][rowId]) {
-                    changeSet.update[tableKey][rowId] = { id: rowId };
-                }
-                
-                // Chuẩn hóa lại giá trị số trước khi lưu
-                if(input.getAttribute('inputmode') === 'decimal'){
-                    newValue = newValue.replace(/\./g, ''); // Xóa dấu chấm phân cách hàng nghìn
-                }
-
-                changeSet.update[tableKey][rowId][field] = newValue;
-                tr.classList.add('row-dirty');
-                setChangesMade(tableKey, true); // Kích hoạt nút lưu
+            if (inputRow) {
+                 inputRow.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); submitNewRow(tableKey); } });
             }
         }
-        // --- KẾT THÚC THAY ĐỔI ---
+        // --- END: SỬA ĐỔI ---
+
+        
+        function handleCellEdit(e, tableKey) {
+            const element = e.target;
+            const tr = element.closest('tr');
+            const rowId = tr.dataset.id;
+            const field = element.dataset.field;
+            let newValue = element.value;
+
+            if (!rowId) return;
+
+            if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
+            if (!changeSet.update[tableKey][rowId]) {
+                const originalRow = originalTableData[tableKey].data.find(r => r.id == rowId);
+                changeSet.update[tableKey][rowId] = { ...originalRow, id: rowId };
+            }
+            
+            if(element.getAttribute('inputmode') === 'decimal'){
+                newValue = newValue.replace(/\./g, '');
+            }
+
+            changeSet.update[tableKey][rowId][field] = newValue;
+            
+            if (tableKey === 'khn' && (field === 'Ngày nợ' || field === 'Hạn trả nợ')) {
+                const ngayNo = changeSet.update[tableKey][rowId]['Ngày nợ'];
+                const hanTraNo = changeSet.update[tableKey][rowId]['Hạn trả nợ'];
+                const ngayPhaiTra = calculateDueDate(ngayNo, hanTraNo);
+                changeSet.update[tableKey][rowId]['Ngày phải trả'] = formatDateForServer(ngayPhaiTra);
+            }
+            
+            tr.classList.add('row-dirty');
+            setChangesMade(tableKey, true);
+        }
         
         function handleDeleteClick(e, tableKey) {
             const rowId = e.target.dataset.id;
@@ -303,38 +421,58 @@
                 setChangesMade(tableKey, true);
             }
         }
-
+        
         function submitNewRow(tableKey) {
             const inputRow = document.getElementById(`input-row-${tableKey}`);
             const headers = originalTableData[tableKey].headers;
             const rowData = {};
+            
             headers.forEach(h => {
                 const input = inputRow.querySelector(`[data-field="${h}"]`);
                 if(input) rowData[h] = input.value;
             });
-
-            if (!Object.values(rowData).some(v => String(v).trim())) return showToast('Vui lòng nhập ít nhất một trường.', 'warning');
             
+            if (!Object.values(rowData).some(v => String(v).trim())) {
+                 showToast('Vui lòng nhập ít nhất một thông tin để thêm dòng mới.', 'warning');
+                 return; 
+            }
+
+            if (tableKey === 'khn') {
+                rowData['Ngày phải trả'] = formatDateForServer(calculateDueDate(rowData['Ngày nợ'], rowData['Hạn trả nợ']));
+            }
+
             const tempId = crypto.randomUUID();
             rowData['id'] = tempId;
             
             if(!changeSet.create[tableKey]) changeSet.create[tableKey] = {};
             changeSet.create[tableKey][tempId] = rowData;
 
+            const tempRenderData = {...rowData};
+            if(tableKey === 'khn') tempRenderData['Ngày phải trả'] = calculateDueDate(rowData['Ngày nợ'], rowData['Hạn trả nợ']);
+
             const newTr = document.createElement('tr');
             newTr.dataset.id = tempId;
             newTr.classList.add('row-new');
+            
             const cellsHtml = headers.map(h => {
                 if (HIDDEN_COLUMNS.includes(h)) return `<td style="display: none;"></td>`;
-                return createCellInput(h, rowData[h]);
+                return createCellInput(h, tempRenderData[h]);
             }).join('');
+
             newTr.innerHTML = `<td><span class="delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
             
-            // Gắn lại sự kiện định dạng tiền tệ cho dòng mới
             newTr.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
             
             inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
-            inputRow.querySelectorAll('input').forEach(input => input.value = '');
+            inputRow.querySelectorAll('input, select').forEach(input => {
+                if (!input.readOnly) {
+                    if (input.dataset.field === 'Hạn trả nợ') {
+                        input.value = '30'; // Reset dropdown về mặc định
+                    } else {
+                        input.value = '';
+                    }
+                }
+            });
             setChangesMade(tableKey, true);
         }
 
@@ -345,26 +483,28 @@
 
             const config = TABLE_CONFIG[tableKey];
             const payloads = [];
-
-            const createData = Object.values(changeSet.create[tableKey] || {});
-            if (createData.length > 0) {
-                 const cleanCreateData = createData.map(row => { 
-                    const newRow = {...row}; 
-                    // Dọn dẹp giá trị số trước khi gửi đi
+            
+            const cleanData = (data) => {
+                 return data.map(row => {
+                    const newRow = {...row};
                     Object.keys(newRow).forEach(key => {
-                        const numericHeaders = ['Số tiền nợ', 'Đơn giá', 'Thành tiền'];
+                        const numericHeaders = ['Số tiền nợ', 'Đơn giá', 'Thành tiền', 'Hạn trả nợ'];
                         if (numericHeaders.includes(key) && typeof newRow[key] === 'string') {
                             newRow[key] = newRow[key].replace(/\./g, '');
                         }
                     });
-                    return newRow; 
+                    return newRow;
                 });
-                payloads.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'create', data: cleanCreateData }) }));
+            };
+
+            const createData = Object.values(changeSet.create[tableKey] || {});
+            if (createData.length > 0) {
+                payloads.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'create', data: cleanData(createData) }) }));
             }
 
             const updateData = Object.values(changeSet.update[tableKey] || {});
             if (updateData.length > 0) {
-                payloads.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData }) }));
+                payloads.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'update', data: cleanData(updateData) }) }));
             }
             
             const deleteIds = changeSet.delete[tableKey] || [];
@@ -376,8 +516,8 @@
                 await Promise.all(payloads);
                 showToast('Lưu thay đổi thành công!', 'success');
                 changeSet = { create: {}, update: {}, delete: {} };
-                // TABLE_CONFIG[tableKey].loaded = false;
-                // loadData(tableKey);
+                TABLE_CONFIG[tableKey].loaded = false;
+                loadData(tableKey);
 
             } catch (error) {
                 showToast('Đã xảy ra lỗi khi lưu: ' + error.message, 'error');
@@ -393,7 +533,7 @@
             try {
                 const response = await fetch(`${API_BASE_URL}?tableName=${encodeURIComponent(config.name)}`);
                 const data = await response.json();
-                originalTableData[tableKey] = data;
+                originalTableData[tableKey] = JSON.parse(JSON.stringify(data)); 
                 renderTable(tableKey, data);
                 updateDashboard();
                 config.loaded = true;
@@ -402,6 +542,38 @@
                 document.getElementById(config.containerId).innerHTML = `<p class="status-indicator error">Lỗi tải dữ liệu: ${error.message}</p>`;
             } finally {
                  if (onComplete) onComplete();
+            }
+        }
+
+        async function fetchNhanSuAndLogin(username, password, errorEl, loginBtn) {
+            try {
+                const response = await fetch(`${API_BASE_URL}?tableName=Nhân sự`);
+                if (!response.ok) throw new Error('Không thể tải dữ liệu người dùng.');
+                
+                const personnelData = await response.json();
+                if (!personnelData || !personnelData.data) throw new Error('Dữ liệu người dùng không hợp lệ.');
+                
+                nhanSuList = personnelData.data.map(user => user['Họ và tên']).filter(Boolean).sort();
+                
+                if (username && password) {
+                    let foundUser = personnelData.data.find(user => user['Tên đăng nhập'] === username && user['Passwword'] == password);
+
+                    if (foundUser) {
+                        const userToStore = { name: foundUser['Họ và tên'] };
+                        sessionStorage.setItem('loggedInUser', JSON.stringify(userToStore));
+                        initApp();
+                    } else {
+                        errorEl.textContent = 'Tên đăng nhập hoặc mật khẩu không đúng.';
+                    }
+                }
+            } catch (error) {
+                errorEl.textContent = 'Lỗi kết nối hoặc không tìm thấy bảng Nhân sự.';
+                console.error("Login/Fetch Error:", error);
+            } finally {
+                if (loginBtn) {
+                    loginBtn.textContent = 'Đăng Nhập';
+                    loginBtn.disabled = false;
+                }
             }
         }
 
@@ -415,36 +587,8 @@
             errorEl.textContent = '';
             loginBtn.textContent = 'Đang xử lý...';
             loginBtn.disabled = true;
-
-            try {
-                const response = await fetch(`${API_BASE_URL}?tableName=Nhân sự`);
-                if (!response.ok) throw new Error('Không thể tải dữ liệu người dùng.');
-                
-                const personnelData = await response.json();
-                if (!personnelData || !personnelData.data) throw new Error('Dữ liệu người dùng không hợp lệ.');
-
-                let foundUser = null;
-                for (const user of personnelData.data) {
-                    if (user['Tên đăng nhập'] === username && user['Passwword'] == password) {
-                        foundUser = user;
-                        break;
-                    }
-                }
-
-                if (foundUser) {
-                    const userToStore = { name: foundUser['Họ và tên'] };
-                    sessionStorage.setItem('loggedInUser', JSON.stringify(userToStore));
-                    initApp();
-                } else {
-                    errorEl.textContent = 'Tên đăng nhập hoặc mật khẩu không đúng.';
-                }
-            } catch (error) {
-                errorEl.textContent = 'Lỗi kết nối hoặc không tìm thấy bảng Nhân sự.';
-                console.error("Login Error:", error);
-            } finally {
-                loginBtn.textContent = 'Đăng Nhập';
-                loginBtn.disabled = false;
-            }
+            
+            await fetchNhanSuAndLogin(username, password, errorEl, loginBtn);
         }
 
         function handleLogout() {
@@ -452,7 +596,7 @@
             location.reload();
         }
 
-        function initApp() {
+        async function initApp() {
             const user = JSON.parse(sessionStorage.getItem('loggedInUser'));
             if (user) {
                 document.getElementById('login-overlay').style.display = 'none';
@@ -462,7 +606,11 @@
                 userInfoEl.innerHTML = `Xin chào, <strong>${user.name}</strong>! <a href="#" id="logout-btn">Đăng xuất</a>`;
                 document.getElementById('logout-btn').addEventListener('click', handleLogout);
                 
-                loadData('khn');
+                if (nhanSuList.length === 0) {
+                    await fetchNhanSuAndLogin();
+                }
+                const activeTab = document.querySelector('.tab.active')?.id.replace('tab-btn-', '') || 'khn';
+                loadData(activeTab);
             } else {
                 document.getElementById('login-overlay').style.display = 'flex';
                 document.querySelector('.container').classList.remove('visible');
@@ -496,19 +644,82 @@
             document.getElementById('dashboard-total-conlai').textContent = (totalNo - totalTra - totalThuHoi).toLocaleString('vi-VN') + ' VNĐ';
         }
         
-        // --- BẮT ĐẦU THAY ĐỔI: Hàm tiện ích mới ---
-        function formatDateForInput(dateString) {
-            if (!dateString || typeof dateString !== 'string') return '';
+        function calculateDueDate(startDateStr, daysToAddStr) {
+            if (!startDateStr || daysToAddStr === null || daysToAddStr === '') return null;
             try {
-                const date = new Date(dateString);
-                // Lấy thông tin ngày tháng năm theo múi giờ UTC để tránh lệch ngày
-                const year = date.getUTCFullYear();
-                const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(date.getUTCDate()).padStart(2, '0');
-                return `${year}-${month}-${day}`;
-            } catch (e) {
-                return ''; // Trả về rỗng nếu ngày không hợp lệ
+                const startDate = new Date(startDateStr);
+                const daysToAdd = parseInt(daysToAddStr, 10);
+                if (isNaN(startDate.getTime()) || isNaN(daysToAdd)) return null;
+                startDate.setUTCDate(startDate.getUTCDate() + daysToAdd);
+                return startDate;
+            } catch (e) { return null; }
+        }
+
+        function filterTable(tableKey) {
+            const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+            const filters = Array.from(container.querySelectorAll('.filter-input'));
+            const tbody = container.querySelector('tbody');
+            const rows = tbody.querySelectorAll('tr:not(.input-row)');
+
+            const filterValues = filters.map(f => ({
+                header: f.dataset.header,
+                value: f.value.toLowerCase().trim()
+            }));
+
+            rows.forEach(row => {
+                const rowId = row.dataset.id;
+                const rowData = originalTableData[tableKey].data.find(d => d.id == rowId);
+                
+                if (!rowData) return;
+
+                let isVisible = true;
+                for (const filter of filterValues) {
+                    if (!filter.value) continue;
+                    let cellValue = rowData[filter.header] ?? '';
+                    
+                    if (cellValue && (filter.header.includes('Ngày') || filter.header.includes('ngày'))) {
+                        cellValue = formatDateForInput(cellValue) || cellValue;
+                    }
+
+                    cellValue = String(cellValue).toLowerCase().trim();
+                    if (!cellValue.includes(filter.value)) {
+                        isVisible = false;
+                        break;
+                    }
+                }
+                row.style.display = isVisible ? '' : 'none';
+            });
+        }
+        
+        function capitalizeFirstLetter(input) {
+            const value = input.value;
+            if (value.length > 0) {
+                input.value = value.charAt(0).toUpperCase() + value.slice(1);
             }
+        }
+
+        function formatDateForInput(date) {
+            if (!date) return '';
+            try {
+                const d = new Date(date);
+                if (isNaN(d.getTime())) return '';
+                const year = d.getUTCFullYear();
+                const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            } catch (e) { return ''; }
+        }
+
+        function formatDateForServer(date) {
+            if (!date) return '';
+             try {
+                const d = new Date(date);
+                if (isNaN(d.getTime())) return '';
+                const year = d.getUTCFullYear();
+                const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(d.getUTCDate()).padStart(2, '0');
+                return `${month}/${day}/${year}`;
+            } catch (e) { return ''; }
         }
 
         function setupCurrencyInput(input) { 
@@ -518,9 +729,8 @@
                 input.value = isNaN(rawValue) || rawValue.trim() === '' ? '' : Number(rawValue).toLocaleString('vi-VN');
             };
             input.addEventListener('input', format);
-            input.addEventListener('blur', format); // Định dạng lại khi người dùng rời khỏi ô
+            input.addEventListener('blur', format);
         }
-        // --- KẾT THÚC THAY ĐỔI ---
 
         function exportToExcel() {
              const activeKey = document.querySelector('.tab.active')?.id.replace('tab-btn-', ''); if (!activeKey) return;
@@ -540,19 +750,21 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            initApp();
             document.getElementById('login-form').addEventListener('submit', handleLogin);
             document.querySelectorAll('.tab').forEach(tab => {
-                tab.addEventListener('click', (e) => {
+                tab.addEventListener('click', async (e) => {
                     const targetKey = e.currentTarget.id.replace('tab-btn-', '');
                     const currentActiveKey = document.querySelector('.tab.active')?.id.replace('tab-btn-', '');
+                    if (currentActiveKey === targetKey) return;
                     if (currentActiveKey && hasPendingChanges(currentActiveKey) && !confirm('Bạn có thay đổi chưa lưu. Bạn có chắc muốn chuyển tab không?')) return;
                     
                     if (currentActiveKey) changeSet = { create: {}, update: {}, delete: {} };
                     document.querySelectorAll('.tab, .tab-content').forEach(el => el.classList.remove('active'));
                     e.currentTarget.classList.add('active');
                     document.getElementById(`tab-content-${targetKey}`).classList.add('active');
-                    if (targetKey !== 'tonghop') loadData(targetKey);
+                    if (targetKey !== 'tonghop') {
+                         await loadData(targetKey);
+                    }
                 });
             });
             document.querySelectorAll('.export-btn').forEach(button => button.addEventListener('click', exportToExcel));
@@ -562,6 +774,7 @@
                     handleSaveChanges(tableKey);
                 });
             });
+             initApp();
         });
     </script>
 </body>
