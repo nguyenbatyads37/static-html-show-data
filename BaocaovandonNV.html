@@ -1420,7 +1420,7 @@
                         if (start) start.setHours(0, 0, 0, 0);
                         if (end) end.setHours(23, 59, 59, 999);
                         filteredData = filteredData.filter(row => {
-                            const orderDate = parseDateString(row["Ngày lên đơn"] || row["Thời gian lên đơn"]);
+                            const orderDate = parseDateString(row["Ngày lên đơn"]);
                             return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
                         });
                     }
@@ -1466,7 +1466,6 @@
                     paymentStatusFilter.innerHTML = '<option value="">Tất cả Trạng thái thu tiền</option>';
                     paymentStatuses.forEach(opt => paymentStatusFilter.add(new Option(opt, opt)));
                     
-                    // Populate new multi-selects
                     const allStaff = [...new Set(globalData.map(r => r["NV Vận đơn"] || r["NV_Vận_đơn"]).filter(Boolean))].sort();
                     const allProducts = [...new Set(globalData.map(r => r["Mặt hàng"]).filter(Boolean))].sort();
                     const allMarkets = [...new Set(globalData.map(r => r["Khu vực"] || r["khu vực"]).filter(Boolean))].sort();
@@ -1497,7 +1496,6 @@
 
                     items.forEach(item => {
                         const label = document.createElement('label');
-                        // Encode special characters in value to be safe
                         const encodedItem = item.replace(/"/g, '&quot;');
                         label.innerHTML = `<input type="checkbox" value="${encodedItem}"> ${item}`;
                         label.querySelector('input').addEventListener('change', changeCallback);
@@ -1540,7 +1538,6 @@
                         document.getElementById('detailEndDateFilter').value = '';
                         document.getElementById('detailNameFilter').value = '';
 
-                        // Clear multi-selects
                         ['Staff', 'Product', 'Market'].forEach(type => {
                             const dropdown = document.getElementById(`detail${type}Dropdown`);
                             if(dropdown) dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -1600,7 +1597,7 @@
                         if (start) start.setHours(0, 0, 0, 0);
                         if (end) end.setHours(23, 59, 59, 999);
                         filteredData = filteredData.filter(row => {
-                            const orderDate = parseDateString(row["Thời gian lên đơn"] || row["Ngày lên đơn"]);
+                            const orderDate = parseDateString(row["Ngày lên đơn"]);
                             return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
                         });
                     }
@@ -1632,13 +1629,29 @@
                     
                     const teams = [...new Set(data.map(r => r["Team"]).filter(Boolean))].sort();
                     const headers = [
-                        "Mã đơn hàng", "Mã Tracking", "Thời gian lên đơn", "Thông tin khách hàng", "Phone*",
+                        "Mã đơn hàng", "Mã Tracking", "Ngày lên đơn", "Thông tin khách hàng", "Phone*",
                         "Mặt hàng", "Số lượng mặt hàng 1", "Tổng tiền VNĐ", "NV Vận đơn", "Đơn vị vận chuyển",
                         "Trạng thái giao hàng NB", "Kết quả Check", "Trạng thái thu tiền"
                     ];
 
-                    if (teams.length === 0) {
-                        const noDataContainer = document.createElement('div');
+                    if (teams.length === 0 && data.length > 0) { // Handle case where there's data but no team
+                        const noTeamContainer = document.createElement('div');
+                        noTeamContainer.className = 'region-container';
+                        noTeamContainer.innerHTML = '<h3 class="region-header">Đơn hàng (Chưa phân Team)</h3>';
+                         const tableWrapper = document.createElement('div');
+                        tableWrapper.className = 'table-wrapper';
+                        const table = document.createElement('table');
+                        table.id = `table-team-no-team`;
+                        table.innerHTML = '<thead></thead><tbody></tbody>';
+                        tableWrapper.appendChild(table);
+                        noTeamContainer.appendChild(tableWrapper);
+
+                        const summaryBar = document.querySelector('#DonChiTiet .summary-bar');
+                        summaryBar.parentNode.insertBefore(noTeamContainer, summaryBar.nextSibling);
+                        this.renderTableContent(table.id, headers, data);
+
+                    } else if (teams.length === 0) {
+                         const noDataContainer = document.createElement('div');
                         noDataContainer.className = 'region-container';
                         noDataContainer.innerHTML = '<h3 class="region-header">Không có dữ liệu khớp với bộ lọc</h3>';
                         const summaryBar = document.querySelector('#DonChiTiet .summary-bar');
@@ -1692,9 +1705,9 @@
                             const cell = tr.insertCell();
                             let value = row[header] || '';
 
-                            if (header === "Thời gian lên đơn") {
-                                const dateObject = parseDateString(value);
-                                cell.textContent = formatDateDisplay(dateObject); // Định dạng ngày tháng
+                            if (header === "Ngày lên đơn") {
+                                const dateObject = parseDateString(row["Ngày lên đơn"]); // Lấy trực tiếp từ "Ngày lên đơn"
+                                cell.textContent = formatDateDisplay(dateObject);
                             }
                             else if (header === "Tổng tiền VNĐ") {
                                 const numericValue = parseFloat(String(value).replace(/[^\d.-]/g, '')) || 0;
@@ -1792,7 +1805,6 @@
                         document.getElementById('paStartDateFilter').value = '';
                         document.getElementById('paEndDateFilter').value = '';
                         
-                        // Clear all multi-selects
                         this.clearMultiSelect('paProductDropdown', 'paProductFilterBtn', 'paProductSelectAll', 'Sản phẩm');
                         this.clearMultiSelect('paMarketDropdown', 'paMarketFilterBtn', 'paMarketSelectAll', 'Khu vực');
                         this.clearMultiSelect('paStaffDropdown', 'paStaffFilterBtn', 'paStaffSelectAll', 'NV Vận đơn');
@@ -1832,7 +1844,7 @@
                         if (start) start.setHours(0, 0, 0, 0);
                         if (end) end.setHours(23, 59, 59, 999);
                         filteredData = filteredData.filter(row => {
-                            const orderDate = parseDateString(row["Ngày lên đơn"] || row["Thời gian lên đơn"]);
+                            const orderDate = parseDateString(row["Ngày lên đơn"]);
                             return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
                         });
                     }
