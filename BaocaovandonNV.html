@@ -899,34 +899,53 @@
             evt.currentTarget.className += " active";
         }
 
+        // --- START: FIXED CODE ---
         // Hàm helper để parse ngày tháng từ nhiều định dạng
         function parseDateString(dateString) {
-            if (!dateString || typeof dateString !== 'string') return null;
-            const cleanedDateString = dateString.trim().replace(/[^\d\/\-\s]/g, '');
-            if (/^\d{4}-\d{2}-\d{2}/.test(cleanedDateString)) {
-                const d = new Date(cleanedDateString);
-                if (!isNaN(d.getTime())) return d;
+            if (!dateString) return null; // Trả về null nếu không có chuỗi đầu vào
+
+            const str = String(dateString).trim();
+
+            // Ưu tiên 1: Thử phân tích các chuỗi giống ISO 8601 một cách trực tiếp.
+            // new Date() xử lý rất tốt "2024-08-20T17:00:00.000Z" hoặc "2024-08-20".
+            // Việc kiểm tra sự tồn tại của '-' hoặc 'T' giúp tránh phân tích sai một số (ví dụ: '45500') thành một ngày tháng.
+            if (str.includes('-') || str.includes('T')) {
+                const d = new Date(str);
+                if (!isNaN(d.getTime())) {
+                    return d;
+                }
             }
-            const parts = cleanedDateString.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/);
+
+            // Ưu tiên 2: Kiểm tra định dạng DD/MM/YYYY hoặc DD-MM-YYYY
+            const parts = str.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/);
             if (parts) {
                 const day = parseInt(parts[1], 10);
                 const month = parseInt(parts[2], 10);
                 const year = parseInt(parts[3], 10);
                 if (year > 1000 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
                     const d = new Date(Date.UTC(year, month - 1, day));
+                    // Xác thực lần cuối để đảm bảo ngày tháng là hợp lệ (ví dụ: không phải ngày 30/02)
                     if (d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day) {
                         return d;
                     }
                 }
             }
-            const excelDateNumber = parseFloat(cleanedDateString);
-            if (!isNaN(excelDateNumber) && excelDateNumber > 0) {
-                const d = new Date(Date.UTC(0, 0, excelDateNumber - 1));
-                if (!isNaN(d.getTime())) return d;
+
+            // Ưu tiên 3: Thử phân tích dưới dạng số sê-ri của Excel nếu chuỗi chỉ chứa số
+            if (/^\d+(\.\d+)?$/.test(str)) {
+                const excelDateNumber = parseFloat(str);
+                if (excelDateNumber > 0) {
+                    // Công thức này chuyển đổi số ngày sê-ri của Excel (số ngày kể từ 1900-01-01) thành một đối tượng Date của JS.
+                    // Nó cũng tính đến lỗi năm nhuận 1900 của Excel.
+                    const d = new Date(Date.UTC(0, 0, excelDateNumber - 1));
+                    if (!isNaN(d.getTime())) return d;
+                }
             }
 
-            return null;
+            return null; // Trả về null nếu tất cả các phương pháp đều thất bại
         }
+        // --- END: FIXED CODE ---
+
 
         // Hàm helper để định dạng ngày thành DD/MM/YYYY
         function formatDateDisplay(dateObj) {
