@@ -429,9 +429,9 @@
     let rawData = []; // Mảng chứa toàn bộ dữ liệu sale đã được xử lý và làm sạch
     let isRestrictedView = false; // Cờ để xác định chế độ xem bị giới hạn
     
-    // --- THAY ĐỔI 1: Thêm biến allowedTeam để lọc theo team cho Leader ---
+    // --- THAY ĐỔI 1: Thêm biến allowedBranch để lọc theo Chi nhánh cho Leader ---
     let allowedNames = []; // Dùng cho NV: chỉ xem tên mình
-    let allowedTeam = null; // Dùng cho Leader: xem cả team
+    let allowedBranch = null; // Dùng cho Leader: xem cả chi nhánh
 
     const loader = document.getElementById('loading-overlay');
 
@@ -517,7 +517,7 @@
         .then(result => {
             const apiData = result.data;
 
-            // --- THAY ĐỔI 2: Cập nhật logic để xử lý vai trò Leader/NV ---
+            // --- THAY ĐỔI 2: Cập nhật logic để xử lý vai trò Leader theo Chi nhánh ---
             const idFromUrl = getUrlParameter('id');
             if (idFromUrl) {
                 // Lưu ý: Dữ liệu API của bạn dùng cột 'id_NS' để định danh
@@ -527,29 +527,29 @@
                 if (currentUserRecord) {
                     const cleanName = (currentUserRecord['Tên'] || '').trim();
                     const userRole = (currentUserRecord['Chức vụ'] || '').trim();
-                    const userTeam = (currentUserRecord['Team'] || '').trim();
+                    const userBranch = (currentUserRecord['Chi nhánh'] || '').trim() || 'Không xác định';
 
                     if (userRole === 'Leader') {
-                        // Nếu là Leader, cho phép xem cả team
-                        document.getElementById('report-title').textContent = `DỮ LIỆU TEAM - ${userTeam}`;
-                        allowedTeam = userTeam; // Lọc theo team
+                        // Nếu là Leader, cho phép xem cả chi nhánh
+                        document.getElementById('report-title').textContent = `DỮ LIỆU CHI NHÁNH - ${userBranch}`;
+                        allowedBranch = userBranch; // Lọc theo chi nhánh
                         allowedNames = []; // Không lọc theo tên
                     } else {
                         // Nếu là NV hoặc vai trò khác, chỉ xem dữ liệu cá nhân
                         document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
                         allowedNames = [cleanName]; // Lọc theo tên
-                        allowedTeam = null; // Không lọc theo team
+                        allowedBranch = null; // Không lọc theo chi nhánh
                     }
                 } else {
                     document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
                     allowedNames = [];
-                    allowedTeam = null;
+                    allowedBranch = null;
                     alert(`ID "${idFromUrl}" không hợp lệ hoặc không tồn tại.`);
                 }
             } else {
                 isRestrictedView = false;
                 allowedNames = [];
-                allowedTeam = null;
+                allowedBranch = null;
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
             
@@ -583,7 +583,7 @@
                 }));
             
             const dataForFilters = isRestrictedView
-                ? rawData.filter(r => (allowedTeam && r.team === allowedTeam) || (allowedNames.length > 0 && allowedNames.includes(r.ten)))
+                ? rawData.filter(r => (allowedBranch && r.chiNhanh === allowedBranch) || (allowedNames.length > 0 && allowedNames.includes(r.ten)))
                 : rawData;
 
             populateAllFilters(dataForFilters); 
@@ -696,10 +696,10 @@
         const selectedTeams = getSelectedOptions('team-all', 'filter-team');
 
         const filtered = rawData.filter(r => {
-            // --- THAY ĐỔI 3: Cập nhật điều kiện lọc chính để áp dụng quyền xem ---
+            // --- THAY ĐỔI 3: Cập nhật điều kiện lọc chính để áp dụng quyền xem theo Chi nhánh ---
             if (isRestrictedView) {
-                // Nếu là Leader, chỉ các record có team trùng khớp được giữ lại
-                if (allowedTeam && r.team !== allowedTeam) {
+                // Nếu là Leader, chỉ các record có chi nhánh trùng khớp được giữ lại
+                if (allowedBranch && r.chiNhanh !== allowedBranch) {
                     return false;
                 }
                 // Nếu là NV, chỉ record có tên trùng khớp được giữ lại
