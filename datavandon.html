@@ -281,7 +281,8 @@
     #tableBody tr:hover td,
     #japanTableBody tr:hover td,
     #allRegionsTableBody tr:hover td,
-    #leaderTableBody tr:hover td {
+    #leaderTableBody tr:hover td,
+    #mentionedTableBody tr:hover td {
       /* Thêm ID mới */
       background-color: var(--primary-color-light) !important;
       cursor: pointer;
@@ -512,9 +513,10 @@
 
   <div class="tab-controls">
     <button id="tabData" class="tab-btn active">Dữ liệu đơn hàng</button>
-    <button id="tabLeader" class="tab-btn" style="display: none;">Đơn của Leader</button> <!-- TAB MỚI -->
+    <button id="tabLeader" class="tab-btn" style="display: none;">Đơn của Leader</button>
     <button id="tabAllRegions" class="tab-btn" style="display: none;">Tổng đơn 2 miền</button>
     <button id="tabJapan" class="tab-btn">Đơn Nhật</button>
+    <button id="tabMentioned" class="tab-btn" style="display: none;">Người được nhắc hộ</button> <!-- TAB MỚI -->
   </div>
 
   <div id="contentData" class="content-tab active">
@@ -553,7 +555,7 @@
     </div>
   </div>
 
-  <!-- NỘI DUNG TAB LEADER MỚI -->
+  <!-- NỘI DUNG TAB LEADER -->
   <div id="contentLeader" class="content-tab">
     <div class="controls">
       <div class="left-controls">
@@ -644,6 +646,35 @@
     </div>
   </div>
 
+  <!-- NỘI DUNG TAB NGƯỜI ĐƯỢC NHẮC HỘ MỚI -->
+  <div id="contentMentioned" class="content-tab">
+    <div class="controls">
+      <div class="left-controls">
+        <span class="tab-info-text">Đơn hàng của người được nhắc hộ</span>
+        <button id="mentionedRefreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+        <button id="mentionedUpdateAll" class="update-btn">Cập nhật</button>
+        <div id="mentionedSummaryInfo" class="summary-info"></div>
+      </div>
+      <div class="right-controls">
+        <div class="date-filter">
+          <span>Từ:</span><input type="date" id="mentionedStartDateFilter" />
+          <span>Đến:</span><input type="date" id="mentionedEndDateFilter" />
+        </div>
+        <select id="mentionedProductFilter" class="filter-select">
+          <option value="">Sản phẩm</option>
+        </select>
+        <button id="mentionedClearFilters" class="clear-filter-btn">Xóa lọc</button>
+      </div>
+    </div>
+    <div class="main-table-wrapper" id="mentionedTableContainer">
+      <table>
+        <thead id="mentionedTableHead"></thead>
+        <tbody id="mentionedTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbz-RldT6BcffMyv_f0Z5zm_9jCfmsYdOHZxKsjYc6PKu25qbs3kdWbGU8P1UpEb_dXP/exec';
     const IMMEDIATE_UPDATE_URL = 'https://script.google.com/macros/s/AKfycbxZXv36EPfW5K9oT660V9jtm4xgVyaCQo2apk0EfBydggFrX6QLHC8sEnm6Kc0WsfE-/exec';
@@ -664,20 +695,37 @@
     const datalistFilterCols = ["Mã đơn hàng", "Name*", "Phone*", "Nhân viên Sale"];
     // === KẾT THÚC CẤU HÌNH ===
 
-    let allData = [], staffFilteredData = [], japanData = [], leaderData = [], // Thêm leaderData
-      changedRows = new Map(), japanChangedRows = new Map(), allRegionsChangedRows = new Map(), leaderChangedRows = new Map(), // Thêm leaderChangedRows
-      currentStaff = null, teamMembers = [], selectedCells = new Set(), isMouseDown = false, startCell = null,
-      dynamicFilterOptions = {}, japanDynamicFilterOptions = {}, allRegionsDynamicFilterOptions = {}, leaderDynamicFilterOptions = {}, // Thêm leaderDynamicFilterOptions
+    let allData = [],
+      staffFilteredData = [],
+      japanData = [],
+      leaderData = [],
+      mentionedData = [], // Thêm mentionedData
+      changedRows = new Map(),
+      japanChangedRows = new Map(),
+      allRegionsChangedRows = new Map(),
+      leaderChangedRows = new Map(),
+      mentionedChangedRows = new Map(), // Thêm mentionedChangedRows
+      currentStaff = null,
+      teamMembers = [],
+      selectedCells = new Set(),
+      isMouseDown = false,
+      startCell = null,
+      dynamicFilterOptions = {},
+      japanDynamicFilterOptions = {},
+      allRegionsDynamicFilterOptions = {},
+      leaderDynamicFilterOptions = {},
+      mentionedDynamicFilterOptions = {}, // Thêm mentionedDynamicFilterOptions
       datalistOptions = {},
       filterDebounceTimer;
 
     const mainTabConfig = { data: () => staffFilteredData, changedRows, controls: { refreshBtn: 'refreshData', updateBtn: 'updateAll', clearBtn: 'clearFilters', startDate: 'startDateFilter', endDate: 'endDateFilter', product: 'productFilter', market: 'marketFilter', summary: 'summaryInfo' }, table: { head: 'tableHead', body: 'tableBody' }, dynamicOptions: () => dynamicFilterOptions };
     const allRegionsTabConfig = { data: () => allData, changedRows: allRegionsChangedRows, controls: { refreshBtn: 'allRegionsRefreshData', updateBtn: 'allRegionsUpdateAll', clearBtn: 'allRegionsClearFilters', startDate: 'allRegionsStartDateFilter', endDate: 'allRegionsEndDateFilter', product: 'allRegionsProductFilter', market: 'allRegionsMarketFilter', staff: 'allRegionsStaffFilter', summary: 'allRegionsSummaryInfo' }, table: { head: 'allRegionsTableHead', body: 'allRegionsTableBody' }, dynamicOptions: () => allRegionsDynamicFilterOptions };
     const japanTabConfig = { data: () => japanData, changedRows: japanChangedRows, controls: { refreshBtn: 'japanRefreshData', updateBtn: 'japanUpdateAll', clearBtn: 'japanClearFilters', startDate: 'japanStartDateFilter', endDate: 'japanEndDateFilter', product: 'japanProductFilter', staff: 'japanStaffFilter', summary: 'japanSummaryInfo' }, table: { head: 'japanTableHead', body: 'japanTableBody' }, dynamicOptions: () => japanDynamicFilterOptions };
-    // Thêm config cho tab Leader
     const leaderTabConfig = { data: () => leaderData, changedRows: leaderChangedRows, controls: { refreshBtn: 'leaderRefreshData', updateBtn: 'leaderUpdateAll', clearBtn: 'leaderClearFilters', startDate: 'leaderStartDateFilter', endDate: 'leaderEndDateFilter', product: 'leaderProductFilter', summary: 'leaderSummaryInfo' }, table: { head: 'leaderTableHead', body: 'leaderTableBody' }, dynamicOptions: () => leaderDynamicFilterOptions };
+    // Thêm config cho tab Mentioned
+    const mentionedTabConfig = { data: () => mentionedData, changedRows: mentionedChangedRows, controls: { refreshBtn: 'mentionedRefreshData', updateBtn: 'mentionedUpdateAll', clearBtn: 'mentionedClearFilters', startDate: 'mentionedStartDateFilter', endDate: 'mentionedEndDateFilter', product: 'mentionedProductFilter', summary: 'mentionedSummaryInfo' }, table: { head: 'mentionedTableHead', body: 'mentionedTableBody' }, dynamicOptions: () => mentionedDynamicFilterOptions };
 
-    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig]; // Thêm leaderTabConfig vào mảng
+    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig, mentionedTabConfig]; // Thêm mentionedTabConfig vào mảng
 
     function getDateTimeVN(dateInput) {
       let date;
@@ -718,13 +766,57 @@
       const originalValue = typeof dateString === "string" ? dateString.trim() : ""; if (!originalValue) return { display: "", original: "" }; const dateObj = parseDateString(originalValue); if (dateObj) { const day = String(dateObj.getUTCDate()).padStart(2, "0"), month = String(dateObj.getUTCMonth() + 1).padStart(2, "0"), year = dateObj.getUTCFullYear(); return { display: `${day}/${month}/${year}`, original: originalValue } }
       return { display: originalValue, original: originalValue }
     }
-    async function fetchStaffInfo(idns, id1 = null) {
+    async function fetchStaffInfo(idns) {
       try {
-        const staffApiUrl = "https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec", response = await fetch(staffApiUrl, { cache: "no-store" }); if (!response.ok) throw new Error("Lỗi mạng khi tải data nhân viên"); const data = await response.json(); let staffMember = data.find(staff => String(staff.idnv) === idns), staffMember1 = id1 ? data.find(staff => String(staff.idnv) === id1) : null; if (!staffMember && !staffMember1) { let errorMsg = `Không tìm thấy nhân viên với ID: ${idns}`; if (id1) errorMsg += ` hoặc ID1: ${id1}`; throw new Error(errorMsg) }
-        const memberNames = new Set; if (staffMember) { if (staffMember.ho_va_ten) memberNames.add(staffMember.ho_va_ten); if (staffMember.vi_tri === "Leader" && staffMember.team) { const teamName = staffMember.team; data.forEach(member => { if (member.team === teamName && member.ho_va_ten) memberNames.add(member.ho_va_ten) }) } }
-        if (staffMember1 && staffMember1.ho_va_ten) memberNames.add(staffMember1.ho_va_ten); teamMembers = Array.from(memberNames); return staffMember || staffMember1
-      } catch (error) { showError(error.message); throw error }
+        const staffApiUrl = "https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec";
+        const response = await fetch(staffApiUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("Lỗi mạng khi tải data nhân viên");
+        const data = await response.json();
+        let staffMember = data.find(staff => String(staff.idnv) === idns);
+        if (!staffMember) {
+          throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`);
+        }
+        const memberNames = new Set();
+        if (staffMember) {
+          if (staffMember.ho_va_ten) memberNames.add(staffMember.ho_va_ten);
+          if (staffMember.vi_tri === "Leader" && staffMember.team) {
+            const teamName = staffMember.team;
+            data.forEach(member => {
+              if (member.team === teamName && member.ho_va_ten) memberNames.add(member.ho_va_ten);
+            });
+          }
+        }
+        teamMembers = Array.from(memberNames);
+        return staffMember;
+      } catch (error) {
+        showError(error.message);
+        throw error;
+      }
     }
+    async function fetchMultipleStaffInfo(idArray) {
+      if (!idArray || idArray.length === 0) return [];
+      try {
+        const staffApiUrl = "https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec";
+        const response = await fetch(staffApiUrl, { cache: "no-store" });
+        if (!response.ok) throw new Error("Lỗi mạng khi tải data nhân viên cho tab nhắc hộ");
+        const allStaffData = await response.json();
+        const staffNames = new Set();
+        idArray.forEach(id => {
+          const staffMember = allStaffData.find(staff => String(staff.idnv) === id.trim());
+          if (staffMember && staffMember.ho_va_ten) {
+            staffNames.add(staffMember.ho_va_ten);
+          }
+        });
+        if (staffNames.size === 0) {
+          console.warn("Không tìm thấy nhân viên nào hợp lệ cho các ID trong id1:", idArray);
+        }
+        return Array.from(staffNames);
+      } catch (error) {
+        showError(error.message, 'mentionedTableBody');
+        throw error;
+      }
+    }
+
     function showError(message, containerId = "tableBody") { const container = document.getElementById(containerId), colCount = displayColumns.length; container.innerHTML = `<tr><td colspan="${colCount}" class="no-data" style="text-align: center;">${message}</td></tr>` }
 
     function updateSummaryInfo(config) {
@@ -875,8 +967,8 @@
     async function handleData(response) {
       document.getElementById('loader-overlay').style.display = 'none';
       allTabConfigs.forEach(config => { document.getElementById(config.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load' });
-      allData = [], staffFilteredData = [], japanData = [], leaderData = []; // Khởi tạo leaderData
-      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(); // Clear leaderChangedRows
+      allData = [], staffFilteredData = [], japanData = [], leaderData = [], mentionedData = [];
+      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(), mentionedChangedRows.clear();
 
       if (response.error || !Array.isArray(response.rows)) {
         const errorMsg = 'Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng');
@@ -887,14 +979,15 @@
       allData = response.rows.sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
       generateDatalistOptions();
 
-      const staffId = getUrlParameter('id'), staffId1 = getUrlParameter('id1');
-      if (!staffId && !staffId1) {
+      const staffId = getUrlParameter('id');
+      const mentionedStaffIds = (getUrlParameter('id1') || '').split(',').filter(id => id.trim() !== '');
+
+      if (!staffId) {
         showError('Thiếu tham số ID nhân viên trong URL', mainTabConfig.table.body);
       } else {
         try {
-          currentStaff = await fetchStaffInfo(staffId, staffId1);
+          currentStaff = await fetchStaffInfo(staffId);
           let staffInfo = `Nhân viên: ${currentStaff.ho_va_ten}`;
-          if (staffId1 && staffId1 !== staffId) staffInfo += ` và ${teamMembers.find(name => name !== currentStaff.ho_va_ten) || ''}`;
           if (currentStaff.vi_tri === "Leader") staffInfo += ` (Leader - Team ${currentStaff.team})`;
           document.getElementById('userInfo').textContent = staffInfo;
 
@@ -904,12 +997,10 @@
 
           document.getElementById('tabAllRegions').style.display = currentStaff?.vi_tri === "Leader" ? '' : 'none';
 
-          // *** LOGIC MỚI: KIỂM TRA LEADER VÀ TẠO DỮ LIỆU/TAB ***
           if (currentStaff?.vi_tri === "Leader") {
-            document.getElementById('tabLeader').style.display = ''; // Hiện nút tab
-            // Lọc dữ liệu chỉ của leader
+            document.getElementById('tabLeader').style.display = '';
             leaderData = allData.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"]) === currentStaff.ho_va_ten);
-            initializeTab(leaderTabConfig, leaderData); // Khởi tạo tab mới
+            initializeTab(leaderTabConfig, leaderData);
           }
 
           staffFilteredData = allData.filter(row => {
@@ -921,6 +1012,23 @@
           showError(error.message, mainTabConfig.table.body);
         }
       }
+
+      // *** LOGIC MỚI: XỬ LÝ TAB NGƯỜI ĐƯỢC NHẮC HỘ (id1) ***
+      if (mentionedStaffIds.length > 0) {
+        document.getElementById('tabMentioned').style.display = ''; // Hiện tab
+        try {
+          const mentionedStaffNames = await fetchMultipleStaffInfo(mentionedStaffIds);
+          if (mentionedStaffNames.length > 0) {
+            mentionedData = allData.filter(row => mentionedStaffNames.includes(row["NV Vận đơn"] || row["NV_Vận_đơn"]));
+            initializeTab(mentionedTabConfig, mentionedData);
+          } else {
+            showError('Không tìm thấy nhân viên nào cho các ID được cung cấp trong tham số id1.', 'mentionedTableBody');
+          }
+        } catch (error) {
+          // Lỗi đã được hiển thị bên trong fetchMultipleStaffInfo
+        }
+      }
+
 
       japanData = allData.filter(row => (row['khu vực'] || row['Khu vực']) === 'Nhật Bản');
       initializeTab(allRegionsTabConfig, allData);
@@ -954,7 +1062,8 @@
       if (config === mainTabConfig) dynamicFilterOptions = options;
       else if (config === japanTabConfig) japanDynamicFilterOptions = options;
       else if (config === allRegionsTabConfig) allRegionsDynamicFilterOptions = options;
-      else if (config === leaderTabConfig) leaderDynamicFilterOptions = options; // Thêm case cho leader
+      else if (config === leaderTabConfig) leaderDynamicFilterOptions = options;
+      else if (config === mentionedTabConfig) mentionedDynamicFilterOptions = options; // Thêm case cho mentioned
     }
 
     function populateExternalFilters(config) {
