@@ -1190,6 +1190,53 @@
                     this.setupControls();
                     setupQuickDateSelect('quick-date-vandon', 'reportStartDateFilter', 'reportEndDateFilter', 'reportEndDateFilter');
                 },
+                // --- START: UPDATED FUNCTION ---
+                handleStaffClickAndSwitchTab: function(staffName) {
+                    if (!staffName || staffName.startsWith("TỔNG")) return; // Không làm gì đối với các dòng tổng
+
+                    // 1. Chuyển sang tab "Chi tiết Vận đơn"
+                    const detailTabButton = document.querySelector('.tab-btn[onclick*="DonChiTiet"]');
+                    if (detailTabButton) {
+                        detailTabButton.click();
+                    }
+
+                    // 2. Xóa tất cả các bộ lọc hiện có trong tab chi tiết
+                    const detailClearBtn = document.getElementById('detailClearFilters');
+                    if (detailClearBtn) {
+                        detailClearBtn.click(); 
+                    }
+
+                    // 3. Tìm và chọn hộp kiểm cho nhân viên (BỘ LỌC CHÍNH Ở TRÊN)
+                    const mainStaffCheckbox = document.querySelector(`#detailStaffDropdown input[value="${staffName.replace(/"/g, '\\"')}"]`);
+                    if (mainStaffCheckbox) {
+                        mainStaffCheckbox.checked = true;
+                    }
+                    // Cập nhật nút cho bộ lọc chính
+                    detailApp.updateFilterButtonText('detailStaffFilterBtn', 'detailStaffDropdown', 'detailStaffSelectAll', 'NV');
+                    
+                    // 4. Tìm và chọn hộp kiểm cho nhân viên (BỘ LỌC TRONG CỘT)
+                    // Selector này sẽ tìm bộ lọc cột NV Vận đơn ở bất kỳ bảng nào trong tab Chi tiết
+                    const columnFilterContainer = document.querySelector(`#DonChiTiet .filter-row .multi-select-container[data-column="NV Vận đơn"]`);
+                    if (columnFilterContainer) {
+                        // Tìm checkbox của nhân viên tương ứng bên trong bộ lọc cột
+                        const columnStaffCheckbox = columnFilterContainer.querySelector(`input[value="${staffName.replace(/"/g, '\\"')}"]`);
+                        if (columnStaffCheckbox) {
+                            columnStaffCheckbox.checked = true;
+                        }
+
+                        // Cập nhật text của nút lọc trong cột
+                        const columnFilterButton = columnFilterContainer.querySelector('button');
+                        const columnFilterDropdown = columnFilterContainer.querySelector('.checkbox-dropdown');
+                        if (columnFilterButton && columnFilterDropdown) {
+                            // Gọi hàm helper của detailApp để cập nhật nút
+                            detailApp.updateColumnMultiSelectButtonText(columnFilterButton, columnFilterDropdown);
+                        }
+                    }
+
+                    // 5. Áp dụng bộ lọc (hàm này sẽ đọc cả hai bộ lọc đã được tick)
+                    detailApp.applyFilters();
+                },
+                // --- END: UPDATED FUNCTION ---
                 showError: function (message, containerId = 'summaryTableBody') {
                     const container = document.getElementById(containerId);
                     if (container) container.innerHTML = `<tr><td colspan="17" class="no-data">${message}</td></tr>`;
@@ -1284,7 +1331,27 @@
                 },
                 renderSummaryRow: function (staffName, companyName, data) {
                     const tr = document.createElement('tr');
-                    tr.insertCell().textContent = staffName;
+                    
+                    // --- START: MODIFICATION ---
+                    const staffCell = tr.insertCell();
+                    // Chỉ làm cho tên nhân viên thực tế có thể nhấp được, không phải các dòng tổng
+                    if (staffName && !staffName.startsWith("TỔNG") && staffName !== "Chưa có NV") {
+                        const link = document.createElement('a');
+                        link.href = '#';
+                        link.textContent = staffName;
+                        link.style.cursor = 'pointer';
+                        link.style.textDecoration = 'underline';
+                        link.style.color = '#007bff';
+                        link.onclick = (e) => {
+                            e.preventDefault();
+                            this.handleStaffClickAndSwitchTab(staffName);
+                        };
+                        staffCell.appendChild(link);
+                    } else {
+                        staffCell.textContent = staffName;
+                    }
+                    // --- END: MODIFICATION ---
+
                     tr.insertCell().textContent = companyName;
                     tr.insertCell().textContent = data["Đã Thanh Toán (có bill)"].count;
                     tr.insertCell().textContent = new Intl.NumberFormat('vi-VN').format(data["Đã Thanh Toán (có bill)"].amount) + ' ₫';
@@ -1556,25 +1623,6 @@
                     const tbody = table.querySelector('tbody');
                     const colspan = table.querySelector('thead tr')?.children.length || 13;
                     if (tbody) tbody.innerHTML = `<tr><td colspan="${colspan}" class="no-data">${message}</td></tr>`;
-                },
-                handleStaffClickAndSwitchTab: function(staffName) {
-                    if (!staffName || staffName === "Chưa có NV") return; 
-
-                    const reportTabButton = document.querySelector('.tab-btn[onclick*="VanDonReport"]');
-                    if (reportTabButton) {
-                        reportTabButton.click();
-                    }
-
-                    const clearBtn = document.getElementById('reportClearFilters');
-                    if(clearBtn) clearBtn.click();
-
-                    const staffCheckbox = document.querySelector(`#reportStaffDropdown input[value="${staffName.replace(/"/g, '\\"')}"]`);
-                    if (staffCheckbox) {
-                        staffCheckbox.checked = true;
-                        
-                        vanDonReportApp.updateStaffFilterButtonText();
-                        vanDonReportApp.applyAllFilters();
-                    }
                 },
                 populateFilters: function () {
                     const checkResultFilter = document.getElementById('detailCheckResultFilter');
@@ -2010,24 +2058,9 @@
                         headers.forEach(header => {
                             const cell = tr.insertCell();
                             let value = row[header] || '';
-
-                            if (header === "NV Vận đơn") {
-                                if (value) {
-                                    const link = document.createElement('a');
-                                    link.href = '#';
-                                    link.textContent = value;
-                                    link.style.cursor = 'pointer';
-                                    link.style.textDecoration = 'underline';
-                                    link.style.color = '#007bff';
-                                    link.onclick = (e) => {
-                                        e.preventDefault();
-                                        this.handleStaffClickAndSwitchTab(value);
-                                    };
-                                    cell.appendChild(link);
-                                } else {
-                                    cell.textContent = "Chưa có NV";
-                                }
-                            } else if (header === "Ngày lên đơn") {
+                            
+                            // --- START: MODIFICATION (REMOVED LINK) ---
+                            if (header === "Ngày lên đơn") {
                                 const dateObject = parseDateString(row["Ngày lên đơn"]);
                                 cell.textContent = formatDateDisplay(dateObject);
                             }
@@ -2038,6 +2071,7 @@
                             else {
                                 cell.textContent = value;
                             }
+                            // --- END: MODIFICATION ---
                         });
                     });
                 }
@@ -2295,6 +2329,4 @@
         });
     </script>
 </body>
-
-
 </html>
