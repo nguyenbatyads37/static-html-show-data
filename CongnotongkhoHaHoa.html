@@ -278,6 +278,20 @@
         tbody tr:hover {
             background-color: #e8f5e9;
         }
+        
+        tfoot {
+            position: sticky;
+            bottom: -1px; /* Fix for border visibility */
+            z-index: 10;
+        }
+
+        tfoot td {
+            background-color: #e8f5e9;
+            font-weight: bold;
+            font-size: 15px;
+            color: var(--summary-color);
+            padding: 12px 15px !important;
+        }
 
         tbody tr.row-new {
             background-color: #e8f5e9 !important;
@@ -669,6 +683,8 @@
 
         const headerMapping = { 'Giao hàng cho nợ': 'NV Giao hàng cho nợ', 'Người chịu trách nhiệm': 'NV Kinh doanh', 'id nợ': 'ID Nợ Gốc', 'Số tiền trả nợ': 'Số tiền đã trả' };
         const HIDDEN_COLUMNS = ['id', 'id nợ'];
+        const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
+        const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ'];
 
         let originalTableData = {};
         let changeSet = { create: {}, update: {}, delete: {} };
@@ -688,7 +704,7 @@
             const formattedValue = value ?? '';
             let inputHtml = '';
             const displayedHeader = headerMapping[originalHeader] || originalHeader;
-            const textareaColumns = ['Tên Khách Hàng', 'Địa chỉ', 'Khu vực'];
+            const textareaColumns = ['Tên Khách Hàng', 'Địa chỉ', 'Khu vực', 'Ghi chú'];
 
             if (tableKey === 'khtn' && originalHeader === 'Tên Khách Hàng') {
                 const debtData = originalTableData['khn']?.data || [];
@@ -707,7 +723,14 @@
                 return `<td>${inputHtml}</td>`;
             }
 
-            if (displayedHeader === 'NV Giao hàng cho nợ' || displayedHeader === 'NV Kinh doanh') {
+            if (originalHeader === 'Giao hàng cho nợ') {
+                 const options = GIAO_HANG_NV_LIST.map(name =>
+                    `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`
+                ).join('');
+                return `<td><select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select></td>`;
+            }
+
+            if (displayedHeader === 'NV Kinh doanh') {
                 const options = nhanSuList.map(name =>
                     `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`
                 ).join('');
@@ -796,7 +819,7 @@
                 
                 const displayedHeader = headerMapping[h] || h;
                 let fieldHtml;
-                const textareaColumns = ['Tên Khách Hàng', 'Địa chỉ', 'Khu vực'];
+                const textareaColumns = ['Tên Khách Hàng', 'Địa chỉ', 'Khu vực', 'Ghi chú'];
 
                 if (tableKey === 'khtn' && h === 'Tên Khách Hàng') {
                     const debtData = originalTableData['khn']?.data || [];
@@ -810,7 +833,11 @@
                 else if (textareaColumns.includes(h)) {
                     const readonlyAttr = (tableKey === 'khtn') ? 'readonly' : '';
                     fieldHtml = `<textarea placeholder="${displayedHeader}..." data-field="${h}" ${readonlyAttr}></textarea>`;
-                } else if (displayedHeader === 'NV Giao hàng cho nợ' || displayedHeader === 'NV Kinh doanh') {
+                } else if (h === 'Giao hàng cho nợ') {
+                     const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}">${name}</option>`).join('');
+                    fieldHtml = `<select data-field="${h}"><option value="">-- Chọn --</option>${options}</select>`;
+                }
+                else if (displayedHeader === 'NV Kinh doanh') {
                     const options = nhanSuList.map(name => `<option value="${name}">${name}</option>`).join('');
                     fieldHtml = `<select data-field="${h}"><option value="">-- Chọn --</option>${options}</select>`;
                 } else {
@@ -844,8 +871,43 @@
                 return `<tr data-id="${rowId}" data-id-no="${row['id nợ'] || ''}"><td><span class="delete-btn" data-id="${rowId}">&#10006;</span></td>${cellsHtml}</tr>`;
             }).join('')}</tbody>`;
 
-            container.innerHTML = `<table>${headerHtml}${bodyHtml}</table>`;
+            container.innerHTML = `<table>${headerHtml}${bodyHtml}<tfoot></tfoot></table>`;
             setupEventListeners(tableKey, container);
+            updateTotals(tableKey);
+        }
+        
+        function updateTotals(tableKey) {
+            const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+            const table = container.querySelector('table');
+            if (!table) return;
+
+            const tfoot = table.querySelector('tfoot');
+            if (!tfoot) return;
+
+            const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).slice(1).map(th => {
+                 // Find original header key from displayed text
+                return Object.keys(headerMapping).find(key => headerMapping[key] === th.textContent) || th.textContent;
+            });
+            
+            const visibleRows = Array.from(table.querySelectorAll('tbody tr:not(.input-row)')).filter(row => row.style.display !== 'none');
+
+            console.log('visibleRows:', headers);
+
+            let totalRowHtml = '<td>Tổng cộng</td>';
+            headers.forEach(header => {
+                if (NUMERIC_COLUMNS_FOR_TOTAL.includes(header)) {
+                    const total = visibleRows.reduce((sum, row) => {
+                        const input = row.querySelector(`[data-field="${header}"]`);
+                        const value = input ? (input.value || '0').replace(/\./g, '') : '0';
+                        return sum + (parseFloat(value) || 0);
+                    }, 0);
+                    totalRowHtml += `<td>${total.toLocaleString('vi-VN')}</td>`;
+                } else {
+                    totalRowHtml += '<td></td>';
+                }
+            });
+            
+            tfoot.innerHTML = `<tr>${totalRowHtml}</tr>`;
         }
 
         function setupEventListeners(tableKey, container) {
@@ -1002,6 +1064,7 @@
 
             tr.classList.add('row-dirty');
             setChangesMade(tableKey, true);
+            updateTotals(tableKey);
         }
 
         function handleDeleteClick(e, tableKey) {
@@ -1012,6 +1075,8 @@
                 changeSet.delete[tableKey].push(rowId);
                 tr.classList.add('row-deleted');
                 setChangesMade(tableKey, true);
+                tr.style.display = 'none'; // Hide the row immediately
+                updateTotals(tableKey); // Recalculate totals
             }
         }
 
@@ -1343,6 +1408,8 @@
                 }
                 row.style.display = isVisible ? '' : 'none';
             });
+
+            updateTotals(tableKey);
         }
 
         function capitalizeFirstLetter(input) {
