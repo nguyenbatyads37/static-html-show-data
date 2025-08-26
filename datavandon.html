@@ -282,7 +282,9 @@
     #japanTableBody tr:hover td,
     #allRegionsTableBody tr:hover td,
     #leaderTableBody tr:hover td,
-    #mentionedTableBody tr:hover td {
+    #mentionedTableBody tr:hover td,
+    #hcmTableBody tr:hover td,
+    #hanoiTableBody tr:hover td {
       /* Thêm ID mới */
       background-color: var(--primary-color-light) !important;
       cursor: pointer;
@@ -516,7 +518,10 @@
     <button id="tabLeader" class="tab-btn" style="display: none;">Đơn của Leader</button>
     <button id="tabAllRegions" class="tab-btn" style="display: none;">Tổng đơn 2 miền</button>
     <button id="tabJapan" class="tab-btn">Đơn Nhật</button>
-    <button id="tabMentioned" class="tab-btn" style="display: none;">Người được nhắc hộ</button> <!-- TAB MỚI -->
+    <button id="tabMentioned" class="tab-btn" style="display: none;">Người được nhắc hộ</button>
+    <!-- NEW TABS -->
+    <button id="tabHCM" class="tab-btn" style="display: none;">Đơn HCM</button>
+    <button id="tabHanoi" class="tab-btn" style="display: none;">Đơn Hà Nội</button>
   </div>
 
   <div id="contentData" class="content-tab active">
@@ -674,6 +679,68 @@
     </div>
   </div>
 
+  <!-- NỘI DUNG TAB HCM -->
+  <div id="contentHCM" class="content-tab">
+    <div class="controls">
+      <div class="left-controls">
+        <span class="tab-info-text">Đơn hàng khu vực: Hồ Chí Minh</span>
+        <button id="hcmRefreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+        <button id="hcmUpdateAll" class="update-btn">Cập nhật</button>
+        <div id="hcmSummaryInfo" class="summary-info"></div>
+      </div>
+      <div class="right-controls">
+        <div class="date-filter">
+          <span>Từ:</span><input type="date" id="hcmStartDateFilter" />
+          <span>Đến:</span><input type="date" id="hcmEndDateFilter" />
+        </div>
+        <select id="hcmProductFilter" class="filter-select">
+          <option value="">Sản phẩm</option>
+        </select>
+        <select id="hcmStaffFilter" class="filter-select">
+          <option value="">NV Vận đơn</option>
+        </select>
+        <button id="hcmClearFilters" class="clear-filter-btn">Xóa lọc</button>
+      </div>
+    </div>
+    <div class="main-table-wrapper" id="hcmTableContainer">
+      <table>
+        <thead id="hcmTableHead"></thead>
+        <tbody id="hcmTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- NỘI DUNG TAB HÀ NỘI -->
+  <div id="contentHanoi" class="content-tab">
+    <div class="controls">
+      <div class="left-controls">
+        <span class="tab-info-text">Đơn hàng khu vực: Hà Nội</span>
+        <button id="hanoiRefreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+        <button id="hanoiUpdateAll" class="update-btn">Cập nhật</button>
+        <div id="hanoiSummaryInfo" class="summary-info"></div>
+      </div>
+      <div class="right-controls">
+        <div class="date-filter">
+          <span>Từ:</span><input type="date" id="hanoiStartDateFilter" />
+          <span>Đến:</span><input type="date" id="hanoiEndDateFilter" />
+        </div>
+        <select id="hanoiProductFilter" class="filter-select">
+          <option value="">Sản phẩm</option>
+        </select>
+        <select id="hanoiStaffFilter" class="filter-select">
+          <option value="">NV Vận đơn</option>
+        </select>
+        <button id="hanoiClearFilters" class="clear-filter-btn">Xóa lọc</button>
+      </div>
+    </div>
+    <div class="main-table-wrapper" id="hanoiTableContainer">
+      <table>
+        <thead id="hanoiTableHead"></thead>
+        <tbody id="hanoiTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
 
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbz-RldT6BcffMyv_f0Z5zm_9jCfmsYdOHZxKsjYc6PKu25qbs3kdWbGU8P1UpEb_dXP/exec';
@@ -700,11 +767,15 @@
       japanData = [],
       leaderData = [],
       mentionedData = [], // Thêm mentionedData
+      hcmData = [], // NEW
+      hanoiData = [], // NEW
       changedRows = new Map(),
       japanChangedRows = new Map(),
       allRegionsChangedRows = new Map(),
       leaderChangedRows = new Map(),
       mentionedChangedRows = new Map(), // Thêm mentionedChangedRows
+      hcmChangedRows = new Map(), // NEW
+      hanoiChangedRows = new Map(), // NEW
       currentStaff = null,
       teamMembers = [],
       selectedCells = new Set(),
@@ -715,6 +786,8 @@
       allRegionsDynamicFilterOptions = {},
       leaderDynamicFilterOptions = {},
       mentionedDynamicFilterOptions = {}, // Thêm mentionedDynamicFilterOptions
+      hcmDynamicFilterOptions = {}, // NEW
+      hanoiDynamicFilterOptions = {}, // NEW
       datalistOptions = {},
       filterDebounceTimer;
 
@@ -724,8 +797,12 @@
     const leaderTabConfig = { data: () => leaderData, changedRows: leaderChangedRows, controls: { refreshBtn: 'leaderRefreshData', updateBtn: 'leaderUpdateAll', clearBtn: 'leaderClearFilters', startDate: 'leaderStartDateFilter', endDate: 'leaderEndDateFilter', product: 'leaderProductFilter', summary: 'leaderSummaryInfo' }, table: { head: 'leaderTableHead', body: 'leaderTableBody' }, dynamicOptions: () => leaderDynamicFilterOptions };
     // Thêm config cho tab Mentioned
     const mentionedTabConfig = { data: () => mentionedData, changedRows: mentionedChangedRows, controls: { refreshBtn: 'mentionedRefreshData', updateBtn: 'mentionedUpdateAll', clearBtn: 'mentionedClearFilters', startDate: 'mentionedStartDateFilter', endDate: 'mentionedEndDateFilter', product: 'mentionedProductFilter', summary: 'mentionedSummaryInfo' }, table: { head: 'mentionedTableHead', body: 'mentionedTableBody' }, dynamicOptions: () => mentionedDynamicFilterOptions };
+    // NEW TAB CONFIGS
+    const hcmTabConfig = { data: () => hcmData, changedRows: hcmChangedRows, controls: { refreshBtn: 'hcmRefreshData', updateBtn: 'hcmUpdateAll', clearBtn: 'hcmClearFilters', startDate: 'hcmStartDateFilter', endDate: 'hcmEndDateFilter', product: 'hcmProductFilter', staff: 'hcmStaffFilter', summary: 'hcmSummaryInfo' }, table: { head: 'hcmTableHead', body: 'hcmTableBody' }, dynamicOptions: () => hcmDynamicFilterOptions };
+    const hanoiTabConfig = { data: () => hanoiData, changedRows: hanoiChangedRows, controls: { refreshBtn: 'hanoiRefreshData', updateBtn: 'hanoiUpdateAll', clearBtn: 'hanoiClearFilters', startDate: 'hanoiStartDateFilter', endDate: 'hanoiEndDateFilter', product: 'hanoiProductFilter', staff: 'hanoiStaffFilter', summary: 'hanoiSummaryInfo' }, table: { head: 'hanoiTableHead', body: 'hanoiTableBody' }, dynamicOptions: () => hanoiDynamicFilterOptions };
 
-    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig, mentionedTabConfig]; // Thêm mentionedTabConfig vào mảng
+
+    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig, mentionedTabConfig, hcmTabConfig, hanoiTabConfig]; // Thêm mentionedTabConfig và các tab mới vào mảng
 
     function getDateTimeVN(dateInput) {
       let date;
@@ -967,8 +1044,8 @@
     async function handleData(response) {
       document.getElementById('loader-overlay').style.display = 'none';
       allTabConfigs.forEach(config => { document.getElementById(config.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load' });
-      allData = [], staffFilteredData = [], japanData = [], leaderData = [], mentionedData = [];
-      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(), mentionedChangedRows.clear();
+      allData = [], staffFilteredData = [], japanData = [], leaderData = [], mentionedData = [], hcmData = [], hanoiData = []; // Reset new data arrays
+      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(), mentionedChangedRows.clear(), hcmChangedRows.clear(), hanoiChangedRows.clear(); // Reset new changedRows maps
 
       if (response.error || !Array.isArray(response.rows)) {
         const errorMsg = 'Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng');
@@ -976,7 +1053,7 @@
         return;
       }
 
-      allData = response.rows.sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
+      allData = response.rows.filter(a => a["Đơn vị vận chuyển"] == "").sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
       generateDatalistOptions();
 
       const staffId = getUrlParameter('id');
@@ -1001,6 +1078,17 @@
             document.getElementById('tabLeader').style.display = '';
             leaderData = allData.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"]) === currentStaff.ho_va_ten);
             initializeTab(leaderTabConfig, leaderData);
+            // Conditional display and data filtering for HCM and Hanoi tabs
+            const leaderTeam = currentStaff.chi_nhanh; // Assuming 'team' property for leader
+            if (leaderTeam === "HCM") {
+              document.getElementById('tabHCM').style.display = '';
+              hcmData = allData.filter(row => (row.Team || '') === 'HCM'); // Filter by 'Team' column in data
+              initializeTab(hcmTabConfig, hcmData);
+            } else if (leaderTeam === "Hà Nội") {
+              document.getElementById('tabHanoi').style.display = '';
+              hanoiData = allData.filter(row => (row.Team || '') === 'Hà Nội'); // Filter by 'Team' column in data
+              initializeTab(hanoiTabConfig, hanoiData);
+            }
           }
 
           staffFilteredData = allData.filter(row => {
@@ -1064,6 +1152,8 @@
       else if (config === allRegionsTabConfig) allRegionsDynamicFilterOptions = options;
       else if (config === leaderTabConfig) leaderDynamicFilterOptions = options;
       else if (config === mentionedTabConfig) mentionedDynamicFilterOptions = options; // Thêm case cho mentioned
+      else if (config === hcmTabConfig) hcmDynamicFilterOptions = options; // NEW
+      else if (config === hanoiTabConfig) hanoiDynamicFilterOptions = options; // NEW
     }
 
     function populateExternalFilters(config) {
@@ -1389,7 +1479,8 @@
           setTimeout(() => {
             handleFixedColumnCountChange();
             const summaryEl = document.getElementById('selectionSummary');
-            if (summaryEl) summaryEl.innerHTML = contentId === 'contentData' ? '' : ''
+            // This part already effectively clears selection summary for non-main tabs
+            if (summaryEl) summaryEl.innerHTML = contentId === 'contentData' ? '' : '';
           }, 10)
         })
       })
