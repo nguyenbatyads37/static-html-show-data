@@ -296,7 +296,7 @@
   </style>
 </head>
 <body>
-  <h2>Quản lý đơn hàng SPEEGO/h2>
+  <h2>Quản lý đơn hàng SPEEGO</h2>
 
   <div id="mainFilters" class="main-filters">
     <div class="filter-group">
@@ -335,6 +335,8 @@
     </div>
     <div>
       <button id="toggleTrackingView" class="tab-btn tracking-tab">Xem đơn có mã Tracking</button>
+      <!-- NÚT CHUYỂN KHO MỚI -->
+      <button id="transferWarehouseBtn" class="tab-btn" disabled style="display: none; background-color: #f39c12; color: white;">Chuyển kho</button>
     </div>
   </div>
   
@@ -361,7 +363,9 @@
   <script>
     const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx_rU4gsMXugPUK9ZoTczyWpKdsPVO3QcXzdpswFKVQmnsMU6B6J9lirCO_7NvET78/exec';
     const POST_URL = SCRIPT_URL;
-    
+    // URL API mới để chuyển kho
+    const TRANSFER_API_URL = 'https://script.google.com/macros/s/AKfycbxsyTWC6ovehqoL8sxTd5opIUe286g1jnAka68Xrfku_WeTUkLfe0szSwuNVwe6ASAi/exec'; // API của bạn
+
     // *** THAY ĐỔI 1: Định nghĩa tên cột để tạo Tab. Bạn có thể thay đổi "Team" thành tên cột khác nếu cần. ***
     const TEAM_COLUMN_NAME = "Team"; 
 
@@ -717,6 +721,8 @@
         document.getElementById('filterDateTo').addEventListener('change', render);
         document.getElementById('downloadExcel').addEventListener('click', downloadAsExcel);
         document.getElementById('fixedColumns').addEventListener('change', updateFixedColumns);
+        // Thêm trình nghe sự kiện cho nút "Chuyển kho"
+        document.getElementById('transferWarehouseBtn').addEventListener('click', transferSelectedOrders);
     }
     
     function refreshData() { const btn = document.getElementById('refreshData'); btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Đang tải...'; state.activeTeam = 'all'; state.filterValues = {}; document.getElementById('tabContainer').innerHTML = ''; document.getElementById('filterRow').innerHTML = ''; document.getElementById('mainFilters').querySelectorAll('input, select').forEach(el => { if(el.id !== 'fixedColumns') el.value = ''; }); updateOrderCounter(0); loadData(); }
@@ -762,7 +768,7 @@
     
     function getCellValue(cell) { if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); return input ? input.value : cell.textContent; }
     
-    // ===== BẮT ĐẦU PHẦN SỬA LỖI =====
+    // ===== BẮT ĐẦU PHẦN SỬA LỖI (và di chuyển clearAllSelections ra ngoài) =====
     function setCellValue(cell, value) {
         if (!cell) return;
         const select = cell.querySelector('select');
@@ -785,13 +791,139 @@
             cell.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
+
+    // --- GLOBAL UTILITY FUNCTIONS ---
+    // Di chuyển clearAllSelections ra khỏi setupInteractionHandlers để có thể gọi từ transferSelectedOrders
+    function clearAllSelections() {
+        document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected'));
+        if(pasteAnchorCell) {
+            pasteAnchorCell.classList.remove('paste-anchor');
+            pasteAnchorCell = null;
+        }
+        updateSelectionSummary(); // Hàm này sẽ xử lý trạng thái hiển thị/kích hoạt của nút "Chuyển kho"
+    }
     // ===== KẾT THÚC PHẦN SỬA LỖI =====
 
-    function updateSelectionSummary() { const summaryEl = document.getElementById('selectionSummary'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; if (selectedCells.length <= 1) { return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d.-]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); }
+    function updateSelectionSummary() {
+        const summaryEl = document.getElementById('selectionSummary');
+        const transferBtn = document.getElementById('transferWarehouseBtn'); // Lấy nút "Chuyển kho"
+        const selectedCells = document.querySelectorAll('td.cell-selected');
+        summaryEl.innerHTML = '';
+
+        const selectedOrderIds = new Set();
+        const orderIdColIndex = displayColumns.indexOf("Mã đơn hàng"); // Lấy chỉ số cột "Mã đơn hàng"
+
+        if (selectedCells.length === 0) {
+            transferBtn.style.display = 'none'; // Ẩn nút nếu không có ô nào được chọn
+            transferBtn.disabled = true;
+            return;
+        }
+
+        const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"];
+        const columns = new Map();
+        selectedCells.forEach(cell => {
+            const colIndex = cell.cellIndex;
+            // Nếu ô được chọn là cột "Mã đơn hàng", thêm vào danh sách ID
+            if (colIndex === orderIdColIndex) {
+                const orderId = getCellValue(cell).trim();
+                if (orderId) {
+                    selectedOrderIds.add(orderId);
+                }
+            }
+
+            if (!columns.has(colIndex)) {
+                columns.set(colIndex, []);
+            }
+            columns.get(colIndex).push(cell);
+        });
+
+        const summaryParts = [];
+        columns.forEach((cells, colIndex) => {
+            const headerText = displayColumns[colIndex].toLowerCase();
+            const isNumeric = numericKeywords.some(kw => headerText.includes(kw));
+            if (isNumeric) {
+                let sum = 0;
+                let count = 0;
+                cells.forEach(cell => {
+                    const value = getCellValue(cell);
+                    const num = parseFloat(String(value).replace(/[^\d.-]/g, ''));
+                    if (!isNaN(num)) { sum += num; count++; }
+                });
+                if (count > 0) {
+                    summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`);
+                }
+            } else {
+                let count = 0;
+                cells.forEach(cell => {
+                    if (getCellValue(cell).trim() !== '') { count++; }
+                });
+                if (count > 0) {
+                    summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`);
+                }
+            }
+        });
+        summaryEl.innerHTML = summaryParts.join('');
+
+        // Logic để hiển thị/ẩn và kích hoạt nút "Chuyển kho"
+        if (selectedOrderIds.size > 0) {
+            transferBtn.style.display = 'block'; // Hiển thị nút
+            transferBtn.disabled = false;       // Kích hoạt nút
+        } else {
+            transferBtn.style.display = 'none'; // Ẩn nút
+            transferBtn.disabled = true;
+        }
+    }
+
+    // --- HÀM MỚI: XỬ LÝ CHUYỂN KHO ---
+    async function transferSelectedOrders() {
+        const transferBtn = document.getElementById('transferWarehouseBtn');
+        const originalText = transferBtn.textContent;
+        transferBtn.disabled = true;
+        transferBtn.textContent = 'Đang chuyển...';
+
+        const selectedOrderIds = new Set();
+        const orderIdColIndex = displayColumns.indexOf("Mã đơn hàng");
+        document.querySelectorAll('td.cell-selected').forEach(cell => {
+            if (cell.cellIndex === orderIdColIndex) {
+                const orderId = getCellValue(cell).trim();
+                if (orderId) {
+                    selectedOrderIds.add(orderId);
+                }
+            }
+        });
+
+        if (selectedOrderIds.size === 0) {
+            showCustomAlert('Vui lòng chọn ít nhất một "Mã đơn hàng" để chuyển kho.', 'info');
+            transferBtn.disabled = false;
+            transferBtn.textContent = originalText;
+            return;
+        }
+
+        const maDonList = Array.from(selectedOrderIds);
+
+        const response = await fetch(TRANSFER_API_URL, {
+                method: 'POST',
+                mode: 'no-cors', // Đảm bảo chế độ CORS
+                headers: {
+                    'Content-Type': 'application/json' // API Apps Script mong đợi JSON
+                },
+                body: JSON.stringify({ data: maDonList }) // Payload giống như Apps Script đã cung cấp
+            });
+
+            setTimeout(() => {
+                showCustomAlert(`Đã gửi thành công.`, 'success');
+                    clearAllSelections(); // Xóa các ô đã chọn sau khi chuyển kho thành công
+                    // Nếu API chuyển kho cũng cập nhật sheet hiện tại, bạn có thể gọi refreshData() ở đây
+                    // Tuy nhiên, nếu nó chỉ là một bản ghi bên ngoài, thì không cần tải lại toàn bộ dữ liệu.
+                    transferBtn.disabled = false;
+            transferBtn.textContent = originalText;
+            }, 1000);
+    }
+
     function setupInteractionHandlers() {
         const tableBody = document.getElementById('tableBody'); if (!tableBody) return;
         let isSelecting = false, startCell = null;
-        const clearAllSelections = () => { document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected')); if(pasteAnchorCell) { pasteAnchorCell.classList.remove('paste-anchor'); pasteAnchorCell = null; } updateSelectionSummary(); };
+        // const clearAllSelections = () => { document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected')); if(pasteAnchorCell) { pasteAnchorCell.classList.remove('paste-anchor'); pasteAnchorCell = null; } updateSelectionSummary(); }; // Đã di chuyển ra ngoài thành hàm global
         const selectCells = (start, end) => { clearAllSelections(); const tableRows = tableBody.rows; const minRow = Math.min(start.parentElement.rowIndex, end.parentElement.rowIndex); const maxRow = Math.max(start.parentElement.rowIndex, end.parentElement.rowIndex); const minCol = Math.min(start.cellIndex, end.cellIndex); const maxCol = Math.max(start.cellIndex, end.cellIndex); for (let i = 0; i < tableRows.length; i++) { const row = tableRows[i]; if (row.rowIndex >= minRow && row.rowIndex <= maxRow) { for (let j = minCol; j <= maxCol; j++) { if (row.cells[j]) row.cells[j].classList.add('cell-selected'); } } } if (start) { pasteAnchorCell = start; start.classList.add('paste-anchor'); } };
         tableBody.addEventListener('mousedown', e => { if (e.button !== 0) return; const cell = e.target.closest('td'); if (!cell) return; e.preventDefault(); if (e.shiftKey && pasteAnchorCell) { selectCells(pasteAnchorCell, cell); updateSelectionSummary(); } else { isSelecting = true; clearAllSelections(); startCell = cell; pasteAnchorCell = cell; cell.classList.add('cell-selected'); cell.classList.add('paste-anchor'); updateSelectionSummary(); } });
         tableBody.addEventListener('mousemove', e => { if (!isSelecting || !startCell) return; const currentCell = e.target.closest('td'); if (currentCell && currentCell !== startCell) { selectCells(startCell, currentCell); } });
