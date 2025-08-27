@@ -284,7 +284,8 @@
     #leaderTableBody tr:hover td,
     #mentionedTableBody tr:hover td,
     #hcmTableBody tr:hover td,
-    #hanoiTableBody tr:hover td {
+    #hanoiTableBody tr:hover td,
+    #mgtTableBody tr:hover td {
       /* Thêm ID mới */
       background-color: var(--primary-color-light) !important;
       cursor: pointer;
@@ -522,6 +523,7 @@
     <!-- NEW TABS -->
     <button id="tabHCM" class="tab-btn" style="display: none;">Đơn HCM</button>
     <button id="tabHanoi" class="tab-btn" style="display: none;">Đơn Hà Nội</button>
+    <button id="tabMGT" class="tab-btn" style="display: none;">MGT Nội bộ</button> <!-- NEW MGT TAB BUTTON -->
   </div>
 
   <div id="contentData" class="content-tab active">
@@ -741,10 +743,45 @@
     </div>
   </div>
 
+  <!-- NỘI DUNG TAB MGT NỘI BỘ -->
+  <div id="contentMGT" class="content-tab">
+    <div class="controls">
+      <div class="left-controls">
+        <span class="tab-info-text">Đơn hàng MGT nội bộ</span>
+        <button id="mgtRefreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
+        <button id="mgtUpdateAll" class="update-btn">Cập nhật</button>
+        <div id="mgtSummaryInfo" class="summary-info"></div>
+      </div>
+      <div class="right-controls">
+        <div class="date-filter">
+          <span>Từ:</span><input type="date" id="mgtStartDateFilter" />
+          <span>Đến:</span><input type="date" id="mgtEndDateFilter" />
+        </div>
+        <select id="mgtProductFilter" class="filter-select">
+          <option value="">Sản phẩm</option>
+        </select>
+        <select id="mgtMarketFilter" class="filter-select">
+          <option value="">Khu vực</option>
+        </select>
+        <select id="mgtStaffFilter" class="filter-select">
+          <option value="">NV Vận đơn</option>
+        </select>
+        <button id="mgtClearFilters" class="clear-filter-btn">Xóa lọc</button>
+      </div>
+    </div>
+    <div class="main-table-wrapper" id="mgtTableContainer">
+      <table>
+        <thead id="mgtTableHead"></thead>
+        <tbody id="mgtTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+
 
   <script>
     const POST_URL = 'https://script.google.com/macros/s/AKfycbz-RldT6BcffMyv_f0Z5zm_9jCfmsYdOHZxKsjYc6PKu25qbs3kdWbGU8P1UpEb_dXP/exec';
     const IMMEDIATE_UPDATE_URL = 'https://script.google.com/macros/s/AKfycbxZXv36EPfW5K9oT660V9jtm4xgVyaCQo2apk0EfBydggFrX6QLHC8sEnm6Kc0WsfE-/exec';
+    const MGT_API_URL = 'https://script.google.com/macros/s/AKfycbxsyTWC6ovehqoL8sxTd5opIUe286g1jnAka68Xrfku_WeTUkLfe0szSwuNVwe6ASAi/exec?tableName=MGT%20n%E1%BB%99i%20b%E1%BB%99'; // NEW MGT API URL
 
     // === CẤU HÌNH CỘT ===
     const columnDisplayMapping = {};
@@ -769,6 +806,7 @@
       mentionedData = [], // Thêm mentionedData
       hcmData = [], // NEW
       hanoiData = [], // NEW
+      mgtData = [], // NEW MGT Data
       changedRows = new Map(),
       japanChangedRows = new Map(),
       allRegionsChangedRows = new Map(),
@@ -776,6 +814,7 @@
       mentionedChangedRows = new Map(), // Thêm mentionedChangedRows
       hcmChangedRows = new Map(), // NEW
       hanoiChangedRows = new Map(), // NEW
+      mgtChangedRows = new Map(), // NEW MGT Changed Rows
       currentStaff = null,
       teamMembers = [],
       selectedCells = new Set(),
@@ -788,6 +827,7 @@
       mentionedDynamicFilterOptions = {}, // Thêm mentionedDynamicFilterOptions
       hcmDynamicFilterOptions = {}, // NEW
       hanoiDynamicFilterOptions = {}, // NEW
+      mgtDynamicFilterOptions = {}, // NEW MGT Dynamic Filter Options
       datalistOptions = {},
       filterDebounceTimer;
 
@@ -800,9 +840,11 @@
     // NEW TAB CONFIGS
     const hcmTabConfig = { data: () => hcmData, changedRows: hcmChangedRows, controls: { refreshBtn: 'hcmRefreshData', updateBtn: 'hcmUpdateAll', clearBtn: 'hcmClearFilters', startDate: 'hcmStartDateFilter', endDate: 'hcmEndDateFilter', product: 'hcmProductFilter', staff: 'hcmStaffFilter', summary: 'hcmSummaryInfo' }, table: { head: 'hcmTableHead', body: 'hcmTableBody' }, dynamicOptions: () => hcmDynamicFilterOptions };
     const hanoiTabConfig = { data: () => hanoiData, changedRows: hanoiChangedRows, controls: { refreshBtn: 'hanoiRefreshData', updateBtn: 'hanoiUpdateAll', clearBtn: 'hanoiClearFilters', startDate: 'hanoiStartDateFilter', endDate: 'hanoiEndDateFilter', product: 'hanoiProductFilter', staff: 'hanoiStaffFilter', summary: 'hanoiSummaryInfo' }, table: { head: 'hanoiTableHead', body: 'hanoiTableBody' }, dynamicOptions: () => hanoiDynamicFilterOptions };
+    // NEW MGT TAB CONFIG
+    const mgtTabConfig = { data: () => mgtData, changedRows: mgtChangedRows, controls: { refreshBtn: 'mgtRefreshData', updateBtn: 'mgtUpdateAll', clearBtn: 'mgtClearFilters', startDate: 'mgtStartDateFilter', endDate: 'mgtEndDateFilter', product: 'mgtProductFilter', market: 'mgtMarketFilter', staff: 'mgtStaffFilter', summary: 'mgtSummaryInfo' }, table: { head: 'mgtTableHead', body: 'mgtTableBody' }, dynamicOptions: () => mgtDynamicFilterOptions };
 
 
-    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig, mentionedTabConfig, hcmTabConfig, hanoiTabConfig]; // Thêm mentionedTabConfig và các tab mới vào mảng
+    const allTabConfigs = [mainTabConfig, allRegionsTabConfig, japanTabConfig, leaderTabConfig, mentionedTabConfig, hcmTabConfig, hanoiTabConfig, mgtTabConfig]; // Thêm mentionedTabConfig và các tab mới vào mảng
 
     function getDateTimeVN(dateInput) {
       let date;
@@ -907,6 +949,9 @@
         if (tr.style.display !== 'none') {
           visibleCount++;
           const rowIndex = parseInt(tr.dataset.rowIndex, 10);
+          // For MGT data, rowIndex might not directly map to originalData if it's filtered/reordered
+          // So we need to look up the row data based on a unique identifier if possible
+          // For now, assume originalData[rowIndex] works for all tabs where rowIndex corresponds to the current tab's data array
           if (!isNaN(rowIndex) && originalData[rowIndex]) {
             const row = originalData[rowIndex];
             let amountValue = row["Tổng tiền VNĐ"] || row.Tổng_tiền_VNĐ || 0;
@@ -945,7 +990,7 @@
         minRow = Math.min(startRowIndex, endRowIndex),
         maxRow = Math.max(startRowIndex, endRowIndex),
         minCol = Math.min(startColIndex, endColIndex),
-        maxCol = Math.max(endColIndex, endColIndex),
+        maxCol = Math.max(endColIndex, endColIndex), // Should be maxCol = Math.max(startColIndex, endColIndex)
         newSelection = new Set;
       for (let i = minRow; i <= maxRow; i++)
         for (let j = minCol; j <= maxCol; j++) {
@@ -1044,8 +1089,8 @@
     async function handleData(response) {
       document.getElementById('loader-overlay').style.display = 'none';
       allTabConfigs.forEach(config => { document.getElementById(config.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load' });
-      allData = [], staffFilteredData = [], japanData = [], leaderData = [], mentionedData = [], hcmData = [], hanoiData = []; // Reset new data arrays
-      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(), mentionedChangedRows.clear(), hcmChangedRows.clear(), hanoiChangedRows.clear(); // Reset new changedRows maps
+      allData = [], staffFilteredData = [], japanData = [], leaderData = [], mentionedData = [], hcmData = [], hanoiData = [], mgtData = []; // Reset new data arrays
+      changedRows.clear(), japanChangedRows.clear(), allRegionsChangedRows.clear(), leaderChangedRows.clear(), mentionedChangedRows.clear(), hcmChangedRows.clear(), hanoiChangedRows.clear(), mgtChangedRows.clear(); // Reset new changedRows maps
 
       if (response.error || !Array.isArray(response.rows)) {
         const errorMsg = 'Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng');
@@ -1053,7 +1098,6 @@
         return;
       }
       
-      // THAY ĐỔI 1: Loại bỏ bộ lọc `a["Đơn vị vận chuyển"] == ""` để lấy toàn bộ dữ liệu.
       allData = response.rows.sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
       
       generateDatalistOptions();
@@ -1125,10 +1169,44 @@
         }
       }
 
-
       japanData = allData.filter(row => (row['khu vực'] || row['Khu vực']) === 'Nhật Bản');
       initializeTab(allRegionsTabConfig, allData);
       initializeTab(japanTabConfig, japanData);
+
+      // *** LOGIC MỚI CHO TAB MGT NỘI BỘ ***
+      document.getElementById('tabMGT').style.display = ''; // Luôn hiển thị tab MGT nội bộ
+
+      try {
+          const mgtResponse = await fetch(MGT_API_URL, { cache: "no-store" });
+          if (!mgtResponse.ok) throw new Error("Lỗi mạng khi tải dữ liệu MGT nội bộ");
+          const mgtJson = await mgtResponse.json();
+
+          if (!Array.isArray(mgtJson.rows)) {
+              throw new Error("Dữ liệu MGT nội bộ không đúng định dạng.");
+          }
+
+          const mgtOrderCodes = mgtJson.rows.map(row => row["Mã đơn hàng"]).filter(Boolean);
+          const allDataMap = new Map();
+          staffFilteredData.forEach(row => {
+              const orderCode = row["Mã đơn hàng"] || row["Mã_đơn_hàng"];
+              if (orderCode) {
+                  allDataMap.set(orderCode, row);
+              }
+          });
+
+          // Sắp xếp và lọc dữ liệu MGT theo thứ tự từ API MGT
+          mgtData = [];
+          mgtOrderCodes.forEach(code => {
+              const row = allDataMap.get(code);
+              if (row) {
+                  mgtData.push(row);
+              }
+          });
+
+          initializeTab(mgtTabConfig, mgtData);
+      } catch (error) {
+          showError(error.message, mgtTabConfig.table.body);
+      }
     }
 
     function initializeTab(config, data) {
@@ -1162,6 +1240,7 @@
       else if (config === mentionedTabConfig) mentionedDynamicFilterOptions = options; // Thêm case cho mentioned
       else if (config === hcmTabConfig) hcmDynamicFilterOptions = options; // NEW
       else if (config === hanoiTabConfig) hanoiDynamicFilterOptions = options; // NEW
+      else if (config === mgtTabConfig) mgtDynamicFilterOptions = options; // NEW MGT
     }
 
     function populateExternalFilters(config) {
@@ -1226,7 +1305,7 @@
         if (isVisible) {
           for (const colName in filterValues) {
             const dataKey = columnDisplayMapping[colName] || colName;
-            let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? rowData['Khu vực'] || '' : ''));
+            let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (rowData['Khu vực'] || '') : ''));
             const cellValueLower = String(cellValue).toLowerCase();
             const colFilters = filterValues[colName];
 
