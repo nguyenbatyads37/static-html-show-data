@@ -1,3 +1,5 @@
+--- START OF FILE CongnotongkhoHaHoa.html ---
+
 <!DOCTYPE html>
 <html lang="vi">
 
@@ -185,19 +187,25 @@
             font-size: 14px;
         }
 
-        th,
-        td {
+        /* New alignment classes */
+        .align-left { text-align: left !important; }
+        .align-right { text-align: right !important; }
+        .align-center { text-align: center !important; }
+
+        /* General table cell and input styles */
+        th, td {
             padding: 12px 15px;
-            text-align: center;
             border: 1px solid var(--border-color);
             white-space: nowrap;
             vertical-align: middle;
         }
 
-        td {
-            padding: 0;
+        /* Default header alignment to center */
+        th {
+            text-align: center;
         }
 
+        /* Input, select, textarea within table cells */
         tbody td input,
         tbody td select,
         tbody td textarea {
@@ -207,47 +215,21 @@
             background-color: transparent;
             padding: 12px 15px;
             font-size: 14px;
-            text-align: center;
+            text-align: inherit; /* Inherit alignment from parent td */
             appearance: none;
             resize: vertical;
             min-height: 45px;
         }
 
-        tbody td select {
-            text-align: center;
-            padding: 0 15px;
-        }
+        /* Specific overrides for alignment in inputs if needed, though inherit should work if td has class */
+        .align-left input, .align-left select, .align-left textarea { text-align: left !important; }
+        .align-right input, .align-right select, .align-right textarea { text-align: right !important; }
+        .align-center input, .align-center select, .align-center textarea { text-align: center !important; }
 
-        tbody td select[data-field="Giao hàng cho nợ"],
-        tbody td select[data-field="Người chịu trách nhiệm"] {
+        /* Filter inputs should be left-aligned by default */
+        thead .filter-row input,
+        thead .filter-row select {
             text-align: left;
-        }
-        
-        tbody td select[data-field="Tên Khách Hàng"] {
-            text-align: left;
-        }
-
-        tbody td input:focus,
-        tbody td select:focus,
-        tbody td textarea:focus {
-            outline: 2px solid var(--secondary-color);
-            background-color: #fffbe6;
-        }
-
-        tbody td input[readonly],
-        tbody td textarea[readonly] {
-            background-color: #f0f0f0;
-            cursor: not-allowed;
-            color: #555;
-        }
-
-        th {
-            background-color: var(--primary-color);
-            color: white;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-            padding: 12px 15px;
         }
 
         thead .filter-row th {
@@ -278,10 +260,11 @@
         tbody tr:hover {
             background-color: #e8f5e9;
         }
-        
+
         tfoot {
             position: sticky;
-            bottom: -1px; /* Fix for border visibility */
+            bottom: -1px;
+            /* Fix for border visibility */
             z-index: 10;
         }
 
@@ -327,10 +310,7 @@
             font-weight: bold;
             resize: vertical;
             min-height: 38px;
-        }
-        
-        .input-row select[data-field="Tên Khách Hàng"] {
-            text-align: left;
+            text-align: inherit; /* Ensure input row inputs also inherit alignment */
         }
 
         .input-row input[readonly],
@@ -684,7 +664,34 @@
         const headerMapping = { 'Giao hàng cho nợ': 'NV Giao hàng cho nợ', 'Người chịu trách nhiệm': 'NV Kinh doanh', 'id nợ': 'ID Nợ Gốc', 'Số tiền trả nợ': 'Số tiền đã trả' };
         const HIDDEN_COLUMNS = ['id', 'id nợ'];
         const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
-        const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ'];
+        const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ', 'Đơn giá', 'Số lượng', 'Hạn trả nợ', 'Số ngày'];
+
+        const COLUMN_ALIGNMENT = {
+            'Tên Khách Hàng': 'left',
+            'Địa chỉ': 'left',
+            'Khu vực': 'left',
+            'Ghi chú': 'left',
+            'Giao hàng cho nợ': 'left',
+            'Người chịu trách nhiệm': 'left',
+            'SĐT': 'left',
+            'Sản phẩm/Mặt hàng': 'left',
+            'Mã ĐH': 'left',
+            'Người thu hồi': 'left',
+            'Tên sản phẩm': 'left',
+
+            'Số tiền nợ': 'right',
+            'Đơn giá': 'right',
+            'Thành tiền': 'right',
+            'Số tiền trả nợ': 'right',
+            'Hạn trả nợ': 'right',
+            'Số ngày': 'right',
+            'Số lượng': 'right',
+
+            'Ngày nợ': 'center',
+            'Ngày trả': 'center',
+            'Ngày thu hồi': 'center',
+            'Ngày phải trả': 'center',
+        };
 
         let originalTableData = {};
         let changeSet = { create: {}, update: {}, delete: {} };
@@ -705,6 +712,7 @@
             let inputHtml = '';
             const displayedHeader = headerMapping[originalHeader] || originalHeader;
             const textareaColumns = ['Tên Khách Hàng', 'Địa chỉ', 'Khu vực', 'Ghi chú'];
+            const alignmentClass = `align-${COLUMN_ALIGNMENT[originalHeader] || 'left'}`; // Default to left if not defined
 
             if (tableKey === 'khtn' && originalHeader === 'Tên Khách Hàng') {
                 const debtData = originalTableData['khn']?.data || [];
@@ -714,27 +722,33 @@
                     const isSelected = (value == debt['id']) ? 'selected' : '';
                     return `<option value="${debt['id']}" ${isSelected}>${debt['Tên Khách Hàng']} | Nợ ngày: ${debtDate} | Số tiền: ${debtAmount} VNĐ</option>`;
                 }).join('');
-                return `<td><select data-field="Tên Khách Hàng"><option value="">-- Chọn khoản nợ cần trả --</option>${options}</select></td>`;
+                return `<td class="${alignmentClass}"><select data-field="Tên Khách Hàng"><option value="">-- Chọn khoản nợ cần trả --</option>${options}</select></td>`;
             }
 
             if (textareaColumns.includes(originalHeader)) {
                 const readonlyAttr = (tableKey === 'khtn') ? 'readonly' : '';
                 inputHtml = `<textarea data-field="${originalHeader}" ${readonlyAttr}>${formattedValue}</textarea>`;
-                return `<td>${inputHtml}</td>`;
+                return `<td class="${alignmentClass}">${inputHtml}</td>`;
             }
 
             if (originalHeader === 'Giao hàng cho nợ') {
-                 const options = GIAO_HANG_NV_LIST.map(name =>
+                const options = GIAO_HANG_NV_LIST.map(name =>
                     `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`
                 ).join('');
-                return `<td><select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select></td>`;
+                return `<td class="${alignmentClass}"><select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select></td>`;
             }
 
-            if (displayedHeader === 'NV Kinh doanh') {
-                const options = nhanSuList.map(name =>
+            if (originalHeader === 'Người chịu trách nhiệm') { // Displayed as 'NV Kinh doanh'
+                // Get unique 'Người chịu trách nhiệm' from the current table data
+                const salesPeople = originalTableData[tableKey]?.data
+                                        .map(item => item['Người chịu trách nhiệm'])
+                                        .filter(Boolean); // Filter out null/undefined/empty
+                const uniqueSalesPeople = [...new Set(salesPeople)].sort((a,b) => String(a).localeCompare(String(b), 'vi')); // Sort alphabetically
+
+                const options = uniqueSalesPeople.map(name =>
                     `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`
                 ).join('');
-                return `<td><select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select></td>`;
+                return `<td class="${alignmentClass}"><select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select></td>`;
             }
 
             const khtnReadonlyFields = ['SĐT', 'Số tiền nợ', 'Ngày nợ', 'Số ngày'];
@@ -749,7 +763,7 @@
                     const dueDateValue = formatDateForInput(formattedValue);
                     inputHtml = `<input type="date" data-field="${originalHeader}" value="${dueDateValue}" readonly>`;
                     break;
-                case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền': case 'Số tiền trả nợ':
+                case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền': case 'Số tiền trả nợ': case 'Số lượng':
                     const cleanValue = String(formattedValue).replace(/\./g, '');
                     const numericValue = isNaN(Number(cleanValue)) ? '' : Number(cleanValue).toLocaleString('vi-VN');
                     inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}" ${readonlyAttr}>`;
@@ -765,9 +779,9 @@
                     inputHtml = `<input type="text" data-field="${originalHeader}" value="${formattedValue}" ${readonlyAttr}>`;
                     break;
             }
-            return `<td>${inputHtml}</td>`;
+            return `<td class="${alignmentClass}">${inputHtml}</td>`;
         }
-        
+
         function renderTable(tableKey, data) {
             const config = TABLE_CONFIG[tableKey];
             const container = document.getElementById(config.containerId);
@@ -794,7 +808,7 @@
 
             const headers = data.headers;
             const displayedHeaders = headers.filter(h => !HIDDEN_COLUMNS.includes(h));
-            
+
             const uniqueColumnValues = {};
             displayedHeaders.forEach(header => {
                 const values = new Set(data.data.map(row => row[header]).filter(val => val != null && val !== ''));
@@ -804,20 +818,31 @@
             const filterRowHtml = `<tr class="filter-row">
                 <th></th>
                 ${displayedHeaders.map(h => {
-                    const options = uniqueColumnValues[h].map(val => `<option value="${val}">${val}</option>`).join('');
-                    return `<th><select class="filter-input" data-header="${h}"><option value="">Tất cả</option>${options}</select></th>`;
-                }).join('')}
+                const datalistId = `filter-datalist-${tableKey}-${h.replace(/\s/g, '-')}`; // Unique ID for datalist
+                const options = uniqueColumnValues[h].map(val => `<option value="${val}"></option>`).join('');
+                const alignmentClass = `align-${COLUMN_ALIGNMENT[h] || 'left'}`; // Align filter input's text
+                return `<th class="${alignmentClass}">
+                            <input type="text" list="${datalistId}" class="filter-input" data-header="${h}" placeholder="Lọc..." />
+                            <datalist id="${datalistId}">${options}</datalist>
+                        </th>`;
+            }).join('')}
             </tr>`;
 
             const headerHtml = `<thead>
-                <tr><th style="width: 50px;">Xóa</th>${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}</tr>
+                <tr>
+                    <th style="width: 50px;" class="align-center">Xóa</th>
+                    ${displayedHeaders.map(h => `<th class="align-center">${headerMapping[h] || h}</th>`).join('')}
+                </tr>
                 ${filterRowHtml}
             </thead>`;
-            
-            const inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${headers.map(h => {
+
+            const inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row">
+                <td class="align-center"></td>
+                ${headers.map(h => {
                 if (HIDDEN_COLUMNS.includes(h)) return `<td style="display: none;"><input type="hidden" data-field="${h}"></td>`;
-                
+
                 const displayedHeader = headerMapping[h] || h;
+                const alignmentClass = `align-${COLUMN_ALIGNMENT[h] || 'left'}`;
                 let fieldHtml;
                 const textareaColumns = ['Tên Khách Hàng', 'Địa chỉ', 'Khu vực', 'Ghi chú'];
 
@@ -834,11 +859,15 @@
                     const readonlyAttr = (tableKey === 'khtn') ? 'readonly' : '';
                     fieldHtml = `<textarea placeholder="${displayedHeader}..." data-field="${h}" ${readonlyAttr}></textarea>`;
                 } else if (h === 'Giao hàng cho nợ') {
-                     const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}">${name}</option>`).join('');
+                    const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}">${name}</option>`).join('');
                     fieldHtml = `<select data-field="${h}"><option value="">-- Chọn --</option>${options}</select>`;
                 }
-                else if (displayedHeader === 'NV Kinh doanh') {
-                    const options = nhanSuList.map(name => `<option value="${name}">${name}</option>`).join('');
+                else if (h === 'Người chịu trách nhiệm') { // Displayed as 'NV Kinh doanh'
+                    const salesPeople = originalTableData[tableKey]?.data
+                                        .map(item => item['Người chịu trách nhiệm'])
+                                        .filter(Boolean);
+                    const uniqueSalesPeople = [...new Set(salesPeople)].sort((a,b) => String(a).localeCompare(String(b), 'vi'));
+                    const options = uniqueSalesPeople.map(name => `<option value="${name}">${name}</option>`).join('');
                     fieldHtml = `<select data-field="${h}"><option value="">-- Chọn --</option>${options}</select>`;
                 } else {
                     const khtnReadonlyFields = ['SĐT', 'Số tiền nợ', 'Ngày nợ', 'Số ngày'];
@@ -850,12 +879,12 @@
                         case 'Ngày trả': fieldHtml = `<input type="date" data-field="${h}" value="${today}">`; break;
                         case 'Hạn trả nợ': fieldHtml = `<select data-field="Hạn trả nợ"><option value="15">15 ngày</option><option value="30" selected>30 ngày</option></select>`; break;
                         case 'Ngày phải trả': fieldHtml = `<input type="date" data-field="${h}" readonly>`; break;
-                        case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền': case 'Số tiền trả nợ': fieldHtml = `<input type="text" inputmode="decimal" placeholder="0" data-field="${h}" ${readonlyAttr}>`; break;
+                        case 'Số tiền nợ': case 'Đơn giá': case 'Thành tiền': case 'Số tiền trả nợ': case 'Số lượng': fieldHtml = `<input type="text" inputmode="decimal" placeholder="0" data-field="${h}" ${readonlyAttr}>`; break;
                         case 'Số ngày': fieldHtml = `<input type="text" placeholder="0" data-field="${h}" readonly>`; break;
                         default: fieldHtml = `<input type="text" placeholder="${displayedHeader}..." data-field="${h}" ${readonlyAttr}>`; break;
                     }
                 }
-                return `<td>${fieldHtml}</td>`;
+                return `<td class="${alignmentClass}">${fieldHtml}</td>`;
             }).join('')}</tr>`;
 
             const bodyHtml = `<tbody>${inputRowHtml}${data.data.map(row => {
@@ -868,14 +897,14 @@
                     const cellValue = (h === 'Tên Khách Hàng' && tableKey === 'khtn') ? row['id nợ'] : row[h];
                     return createCellInput(h, cellValue, tableKey);
                 }).join('');
-                return `<tr data-id="${rowId}" data-id-no="${row['id nợ'] || ''}"><td><span class="delete-btn" data-id="${rowId}">&#10006;</span></td>${cellsHtml}</tr>`;
+                return `<tr data-id="${rowId}" data-id-no="${row['id nợ'] || ''}"><td class="align-center"><span class="delete-btn" data-id="${rowId}">&#10006;</span></td>${cellsHtml}</tr>`;
             }).join('')}</tbody>`;
 
             container.innerHTML = `<table>${headerHtml}${bodyHtml}<tfoot></tfoot></table>`;
             setupEventListeners(tableKey, container);
             updateTotals(tableKey);
         }
-        
+
         function updateTotals(tableKey) {
             const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
             const table = container.querySelector('table');
@@ -885,15 +914,13 @@
             if (!tfoot) return;
 
             const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).slice(1).map(th => {
-                 // Find original header key from displayed text
+                // Find original header key from displayed text
                 return Object.keys(headerMapping).find(key => headerMapping[key] === th.textContent) || th.textContent;
             });
-            
+
             const visibleRows = Array.from(table.querySelectorAll('tbody tr:not(.input-row)')).filter(row => row.style.display !== 'none');
 
-            console.log('visibleRows:', headers);
-
-            let totalRowHtml = '<td>Tổng cộng</td>';
+            let totalRowHtml = '<td class="align-left">Tổng cộng</td>';
             headers.forEach(header => {
                 if (NUMERIC_COLUMNS_FOR_TOTAL.includes(header)) {
                     const total = visibleRows.reduce((sum, row) => {
@@ -901,12 +928,13 @@
                         const value = input ? (input.value || '0').replace(/\./g, '') : '0';
                         return sum + (parseFloat(value) || 0);
                     }, 0);
-                    totalRowHtml += `<td>${total.toLocaleString('vi-VN')}</td>`;
+                    const alignmentClass = `align-${COLUMN_ALIGNMENT[header] || 'left'}`;
+                    totalRowHtml += `<td class="${alignmentClass}">${total.toLocaleString('vi-VN')}</td>`;
                 } else {
                     totalRowHtml += '<td></td>';
                 }
             });
-            
+
             tfoot.innerHTML = `<tr>${totalRowHtml}</tr>`;
         }
 
@@ -915,7 +943,8 @@
             if (!table) return;
 
             table.querySelectorAll('.filter-input').forEach(input => {
-                input.addEventListener('change', () => filterTable(tableKey));
+                // Use 'input' event for live filtering as user types
+                input.addEventListener('input', () => filterTable(tableKey));
             });
 
             const handleInputOrChange = (e) => {
@@ -942,8 +971,8 @@
                                 if (targetField.includes('Ngày') || targetField.includes('ngày')) {
                                     value = formatDateForInput(value);
                                 }
-                                
-                                input.value = value; 
+
+                                input.value = value;
                                 input.dispatchEvent(new Event('input', { bubbles: true }));
                                 input.dispatchEvent(new Event('change', { bubbles: true }));
                             }
@@ -1017,25 +1046,25 @@
             if (!changeSet.update[tableKey][rowId]) {
                 const rowDataFromDOM = {};
                 const headers = originalTableData[tableKey].headers;
-                
+
                 headers.forEach(h => {
                     const cell = tr.querySelector(`[data-field="${h}"]`);
                     // Đối với các cột ẩn không có input, ta vẫn phải lấy từ dữ liệu gốc
                     if (!cell) {
                         const originalRow = originalTableData[tableKey]?.data.find(r => r.id == rowId);
                         if (originalRow) {
-                           rowDataFromDOM[h] = originalRow[h];
+                            rowDataFromDOM[h] = originalRow[h];
                         }
                     } else {
                         // Đọc giá trị trực tiếp từ các ô input trên giao diện
                         let value = cell.value;
-                         if (cell.getAttribute('inputmode') === 'decimal') {
+                        if (cell.getAttribute('inputmode') === 'decimal') {
                             value = value.replace(/\./g, '');
                         }
                         rowDataFromDOM[h] = value;
                     }
                 });
-                
+
                 changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
             }
 
@@ -1044,7 +1073,7 @@
                 newValue = newValue.replace(/\./g, '');
             }
             changeSet.update[tableKey][rowId][field] = newValue;
-            
+
             // Xử lý logic riêng cho các trường đặc biệt
             if (tableKey === 'khtn' && field === 'Tên Khách Hàng') {
                 const selectedDebtId = newValue;
@@ -1106,12 +1135,12 @@
             }
 
             if (tableKey === 'khtn') {
-                const selectedDebtId = rowData['Tên Khách Hàng']; 
+                const selectedDebtId = rowData['Tên Khách Hàng'];
                 const debtData = originalTableData['khn']?.data || [];
                 const selectedDebt = debtData.find(d => d.id == selectedDebtId);
 
                 rowData['id nợ'] = selectedDebt.id;
-                rowData['Tên Khách Hàng'] = selectedDebt['Tên Khách Hàng']; 
+                rowData['Tên Khách Hàng'] = selectedDebt['Tên Khách Hàng'];
                 rowData['Khu vực'] = selectedDebt['Khu vực'];
                 rowData['Địa chỉ'] = selectedDebt['Địa chỉ'];
                 rowData['SĐT'] = selectedDebt['SĐT'];
@@ -1150,10 +1179,10 @@
                 return createCellInput(h, cellValue, tableKey);
             }).join('');
 
-            newTr.innerHTML = `<td><span class="delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
+            newTr.innerHTML = `<td class="align-center"><span class="delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
             newTr.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
             inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
-            
+
             inputRow.querySelectorAll('input, select, textarea').forEach(input => {
                 if (input.dataset.field === 'Ngày trả') {
                     input.value = new Date().toISOString().slice(0, 10);
@@ -1165,6 +1194,7 @@
             });
 
             setChangesMade(tableKey, true);
+            updateTotals(tableKey); // Update totals after adding a new row
         }
 
         async function handleSaveChanges(tableKey) {
@@ -1180,7 +1210,7 @@
                 return clonedData.map(row => {
                     const newRow = { ...row };
                     Object.keys(newRow).forEach(key => {
-                        const numericHeaders = ['Số tiền nợ', 'Đơn giá', 'Thành tiền', 'Hạn trả nợ', 'Số tiền trả nợ'];
+                        const numericHeaders = NUMERIC_COLUMNS_FOR_TOTAL; // Use the defined numeric columns
                         if (numericHeaders.includes(key) && typeof newRow[key] === 'string') {
                             newRow[key] = String(newRow[key]).replace(/\./g, '');
                         }
@@ -1189,11 +1219,11 @@
                 });
             };
 
-            const createData = Object.values(changeSet.create[tableKey] || {});
+            const createData = cleanData(Object.values(changeSet.create[tableKey] || {}));
             if (createData.length > 0) {
                 fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'create', data: createData }) }));
             }
-            const updateData = Object.values(changeSet.update[tableKey] || {});
+            const updateData = cleanData(Object.values(changeSet.update[tableKey] || {}));
             if (updateData.length > 0) {
                 fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData }) }));
             }
@@ -1241,7 +1271,7 @@
                 await Promise.all(fetchPromises);
                 showToast('Lưu thay đổi thành công!', 'success');
                 changeSet = { create: {}, update: {}, delete: {} };
-                
+
                 TABLE_CONFIG['khn'].loaded = false;
                 TABLE_CONFIG['khtn'].loaded = false;
                 await loadData('khn');
@@ -1253,10 +1283,11 @@
                 updateBtn.innerHTML = '<i class="fas fa-save"></i> Lưu Thay Đổi';
             }
         }
-        
+
         async function loadData(tableKey, onComplete) {
             const config = TABLE_CONFIG[tableKey];
-            if (!config || (config.loaded && hasPendingChanges(tableKey))) { if (onComplete) onComplete(); return; }
+            // Only skip if loaded AND no pending changes
+            if (!config || (config.loaded && !hasPendingChanges(tableKey))) { if (onComplete) onComplete(); return; }
             document.getElementById(config.containerId).innerHTML = `<p class="status-indicator">Đang tải dữ liệu...</p>`;
             try {
                 const response = await fetch(`${API_BASE_URL}?tableName=${encodeURIComponent(config.name)}`);
@@ -1329,7 +1360,7 @@
                 document.getElementById('logout-btn').addEventListener('click', handleLogout);
 
                 if (nhanSuList.length === 0) await fetchNhanSuAndLogin();
-                
+
                 const activeTabKey = document.querySelector('.tab.active')?.id.replace('tab-btn-', '') || 'khn';
                 await loadData('khn');
                 if (activeTabKey !== 'khn') {
@@ -1391,17 +1422,33 @@
 
             rows.forEach(row => {
                 const rowId = row.dataset.id;
-                let rowData = originalTableData[tableKey]?.data.find(d => d.id == rowId) || changeSet.create[tableKey]?.[rowId];
-                if (!rowData) return;
+                // Get row data, considering new, updated, and original data
+                let rowData = null;
+                if (changeSet.create[tableKey]?.[rowId]) {
+                    rowData = changeSet.create[tableKey][rowId];
+                } else if (originalTableData[tableKey]?.data) {
+                    rowData = originalTableData[tableKey].data.find(d => d.id == rowId);
+                    if (rowData && changeSet.update[tableKey]?.[rowId]) {
+                        rowData = { ...rowData, ...changeSet.update[tableKey][rowId] };
+                    }
+                }
+
+                // If row is deleted or no data, hide it
+                if (!rowData || changeSet.delete[tableKey]?.includes(rowId)) {
+                    row.style.display = 'none';
+                    return;
+                }
 
                 let isVisible = true;
                 for (const filter of filterValues) {
-                    if (!filter.value) continue;
+                    if (!filter.value) continue; // Skip empty filters
                     let cellValue = rowData[filter.header] ?? '';
                     if (cellValue && (filter.header.includes('Ngày') || filter.header.includes('ngày'))) {
-                        cellValue = formatDateForInput(cellValue) || cellValue;
+                        cellValue = formatDateForInput(cellValue) || cellValue; // Format date for comparison
                     }
-                    if (String(cellValue).trim() !== filter.value) {
+
+                    // Perform case-insensitive partial match
+                    if (!String(cellValue).toLowerCase().includes(filter.value.toLowerCase())) {
                         isVisible = false;
                         break;
                     }
@@ -1424,6 +1471,7 @@
             try {
                 const d = new Date(date);
                 if (isNaN(d.getTime())) return '';
+                // Use UTC methods to avoid timezone issues for consistent date representation
                 return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
             } catch (e) { return ''; }
         }
@@ -1433,6 +1481,7 @@
             try {
                 const d = new Date(date);
                 if (isNaN(d.getTime())) return '';
+                // Format to MM/DD/YYYY for server (assuming server expects this format)
                 return `${String(d.getUTCMonth() + 1).padStart(2, '0')}/${String(d.getUTCDate()).padStart(2, '0')}/${d.getUTCFullYear()}`;
             } catch (e) { return ''; }
         }
@@ -1466,7 +1515,7 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('login-form').addEventListener('submit', handleLogin);
-            
+
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.addEventListener('click', async (e) => {
                     const targetKey = e.currentTarget.id.replace('tab-btn-', '');
@@ -1484,12 +1533,15 @@
                     }
                     if (targetKey !== 'tonghop') {
                         await loadData(targetKey);
+                    } else {
+                        // For tonghop, if it's not loaded, display the default message
+                        document.getElementById('container-tonghop').innerHTML = '<p class="status-indicator">Vui lòng chọn tab để xem</p>';
                     }
                 });
             });
 
             document.querySelectorAll('.export-btn').forEach(button => button.addEventListener('click', exportToExcel));
-            
+
             document.querySelectorAll('.update-btn').forEach(button => {
                 button.addEventListener('click', (e) => {
                     const tableKey = e.target.closest('.tab-content').id.replace('tab-content-', '');
