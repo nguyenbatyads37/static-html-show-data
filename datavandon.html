@@ -1052,8 +1052,10 @@
         allTabConfigs.forEach(config => showError(errorMsg, config.table.body));
         return;
       }
-
-      allData = response.rows.filter(a => a["Đơn vị vận chuyển"] == "").sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
+      
+      // THAY ĐỔI 1: Loại bỏ bộ lọc `a["Đơn vị vận chuyển"] == ""` để lấy toàn bộ dữ liệu.
+      allData = response.rows.sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
+      
       generateDatalistOptions();
 
       const staffId = getUrlParameter('id');
@@ -1073,23 +1075,29 @@
           }
 
           document.getElementById('tabAllRegions').style.display = currentStaff?.vi_tri === "Leader" ? '' : 'none';
-
+          
           if (currentStaff?.vi_tri === "Leader") {
             document.getElementById('tabLeader').style.display = '';
             leaderData = allData.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"]) === currentStaff.ho_va_ten);
             initializeTab(leaderTabConfig, leaderData);
-            // Conditional display and data filtering for HCM and Hanoi tabs
-            const leaderTeam = currentStaff.chi_nhanh; // Assuming 'team' property for leader
-            if (leaderTeam === "HCM") {
-              document.getElementById('tabHCM').style.display = '';
-              hcmData = allData.filter(row => (row.Team || '') === 'HCM'); // Filter by 'Team' column in data
-              initializeTab(hcmTabConfig, hcmData);
-            } else if (leaderTeam === "Hà Nội") {
-              document.getElementById('tabHanoi').style.display = '';
-              hanoiData = allData.filter(row => (row.Team || '') === 'Hà Nội'); // Filter by 'Team' column in data
-              initializeTab(hanoiTabConfig, hanoiData);
-            }
           }
+
+          // THAY ĐỔI 2: Logic hiển thị tab HCM/Hà Nội chỉ dựa vào `vi_tri_van_don`
+          if (currentStaff.vi_tri_van_don === "Lên đơn FFM") {
+              const staffBranch = currentStaff.chi_nhanh;
+              if (staffBranch === "HCM") {
+                  document.getElementById('tabHCM').style.display = '';
+                  // Giả định dữ liệu đơn hàng có cột 'Team' để lọc
+                  hcmData = allData.filter(row => (row.Team || '') === 'HCM'); 
+                  initializeTab(hcmTabConfig, hcmData);
+              } else if (staffBranch === "Hà Nội") {
+                  document.getElementById('tabHanoi').style.display = '';
+                  // Giả định dữ liệu đơn hàng có cột 'Team' để lọc
+                  hanoiData = allData.filter(row => (row.Team || '') === 'Hà Nội');
+                  initializeTab(hanoiTabConfig, hanoiData);
+              }
+          }
+
 
           staffFilteredData = allData.filter(row => {
             const isTeamMemberOrder = teamMembers.includes(row["NV Vận đơn"] || row["NV_Vận_đơn"] || '');
