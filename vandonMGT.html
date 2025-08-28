@@ -365,6 +365,8 @@
     const POST_URL = SCRIPT_URL;
     // URL API mới để chuyển kho
     const TRANSFER_API_URL = 'https://script.google.com/macros/s/AKfycbxsyTWC6ovehqoL8sxTd5opIUe286g1jnAka68Xrfku_WeTUkLfe0szSwuNVwe6ASAi/exec'; // API của bạn
+    // NEW API for MGT Nội Bộ tab ORDERING
+    const MGT_NOI_BO_ORDER_API_URL = 'https://script.google.com/macros/s/AKfycbxsyTWC6ovehqoL8sxTd5opIUe286g1jnAka68Xrfku_WeTUkLfe0szSwuNVwe6ASAi/exec?tableName=MGT%20n%E1%BB%99i%20b%E1%BB%99';
 
     // *** THAY ĐỔI 1: Định nghĩa tên cột để tạo Tab. Bạn có thể thay đổi "Team" thành tên cột khác nếu cần. ***
     const TEAM_COLUMN_NAME = "Team"; 
@@ -383,6 +385,8 @@
         activeTeam: 'all', // *** THAY ĐỔI 2: Đổi tên biến để rõ nghĩa hơn ***
         showTrackingOrders: false,
         filterValues: {},
+        mgtNoiBoOrder: [], // NEW: To store the ordered list from MGT Nội Bộ API
+        isMgtNoiBoOrderLoading: false, // NEW: To track loading state for MGT Nội Bộ
     };
     let pasteAnchorCell = null;
 
@@ -420,7 +424,12 @@
       populateMainFilters(initialDataForFilters);
       createTabs(initialDataForFilters); // *** THAY ĐỔI 3: Gọi lại hàm createTabs với dữ liệu để nó tự tạo tab ***
       setupColumnFilters();
-      render();
+      // If the "MGT nội bộ" tab is currently active, we need to load its specific order.
+      if (state.activeTeam === 'mgt_noi_bo' && state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) {
+          fetchMGTNoiBoOrder().then(render); // Fetch order then render
+      } else {
+          render();
+      }
     }
     
     function filterByCarrier(data) {
@@ -428,6 +437,39 @@
             const carrier = row["Đơn vị vận chuyển"] || row["Đơn_vị_vận_chuyển"];
             return carrier?.toString().toUpperCase() === "MGT";
         });
+    }
+
+    // NEW: Function to fetch the MGT Nội Bộ ordering data
+    async function fetchMGTNoiBoOrder() {
+        if (state.isMgtNoiBoOrderLoading) return;
+        state.isMgtNoiBoOrderLoading = true;
+        showCustomAlert('Đang tải danh sách đơn hàng nội bộ...', 'info', 0); // Show persistent loading alert
+        try {
+            const response = await fetch(MGT_NOI_BO_ORDER_API_URL, { mode: 'cors' });
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const json = await response.json();
+            if (json.rows && Array.isArray(json.rows)) {
+                state.mgtNoiBoOrder = json.rows.map(row => row["Mã đơn hàng"]).filter(Boolean);
+                showCustomAlert('Đã tải danh sách đơn hàng nội bộ.', 'success', 2000);
+            } else {
+                state.mgtNoiBoOrder = [];
+                showCustomAlert('Không thể tải danh sách đơn hàng nội bộ hoặc dữ liệu không hợp lệ.', 'error');
+            }
+        } catch (e) {
+            console.error('Lỗi khi tải dữ liệu MGT Nội Bộ:', e);
+            showCustomAlert(`Lỗi kết nối khi tải danh sách đơn hàng nội bộ: ${e.message}`, 'error');
+            state.mgtNoiBoOrder = [];
+        } finally {
+            state.isMgtNoiBoOrderLoading = false;
+            // Ensure the persistent loading alert is hidden if it was specifically for this fetch
+            const currentAlertMessage = document.getElementById('customAlertMessage').textContent;
+            if (document.getElementById('customAlert').classList.contains('show') && 
+                currentAlertMessage === 'Đang tải danh sách đơn hàng nội bộ...') {
+                 document.getElementById('customAlert').classList.remove('show');
+            }
+        }
     }
 
     function populateMainFilters(data) {
@@ -471,7 +513,27 @@
         if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
         
         // *** THAY ĐỔI 4: Logic lọc theo tab dựa trên cột "Team" (hoặc tên cột bạn định nghĩa ở TEAM_COLUMN_NAME) ***
-        if (state.activeTeam !== 'all') { 
+        // Handle "MGT nội bộ" tab for specific ordering
+        if (state.activeTeam === 'mgt_noi_bo') {
+            if (state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) {
+                // If the order list is empty and not currently loading, display no data.
+                // A loading message should already be shown by fetchMGTNoiBoOrder().
+                return [];
+            }
+
+            const orderedIds = new Set(state.mgtNoiBoOrder);
+            // Filter dataToRender to only include orders present in mgtNoiBoOrder
+            dataToRender = dataToRender.filter(row => orderedIds.has(row["Mã đơn hàng"]));
+            // Create a map for quick lookup of order IDs to their index in the ordered list
+            const orderIndexMap = new Map(state.mgtNoiBoOrder.map((id, index) => [id, index]));
+            // Sort dataToRender based on the mgtNoiBoOrder
+            dataToRender.sort((a, b) => {
+                const indexA = orderIndexMap.get(a["Mã đơn hàng"]);
+                const indexB = orderIndexMap.get(b["Mã đơn hàng"]);
+                // As we filtered earlier, indexA and indexB should always be defined here.
+                return indexA - indexB;
+            });
+        } else if (state.activeTeam !== 'all') { 
             dataToRender = dataToRender.filter(row => row[TEAM_COLUMN_NAME] === state.activeTeam); 
         }
         
@@ -509,35 +571,38 @@
         }
         
         // ===== START: MODIFIED SORTING LOGIC (Đã kiểm tra và thấy logic này hoạt động đúng) =====
-        const primarySortKey = 'Ngày Kế toán đối soát với FFM lần 2';
-        const secondarySortKey = 'Mã đơn hàng';
-        
-        dataToRender.sort((a, b) => {
-            const parseDate = (val) => { if (!val) return null; const date = new Date(val); return isNaN(date.getTime()) ? null : date; };
-            const dateA = parseDate(a[primarySortKey]);
-            const dateB = parseDate(b[primarySortKey]);
-
-            // So sánh theo khóa chính (ngày đối soát)
-            if (dateA === null && dateB === null) {
-                // Cả hai đều null, chuyển sang sắp xếp theo khóa phụ
-            } else if (dateA === null) {
-                return 1; // Đẩy giá trị null của A xuống cuối
-            } else if (dateB === null) {
-                return -1; // Đẩy giá trị null của B xuống cuối
-            } else {
-                const dateComparison = dateA.getTime() - dateB.getTime();
-                if (dateComparison !== 0) {
-                    return dateComparison; // Trả về kết quả nếu ngày khác nhau (bao gồm giờ, phút, giây)
-                }
-                // Nếu ngày giờ giống hệt nhau, sẽ chuyển sang sắp xếp theo khóa phụ
-            }
+        // ONLY apply this sorting if NOT on the MGT Nội Bộ tab
+        if (state.activeTeam !== 'mgt_noi_bo') {
+            const primarySortKey = 'Ngày Kế toán đối soát với FFM lần 2';
+            const secondarySortKey = 'Mã đơn hàng';
             
-            // So sánh theo khóa phụ (Mã đơn hàng) khi khóa chính bằng nhau
-            const orderIdA = a[secondarySortKey] || '';
-            const orderIdB = b[secondarySortKey] || '';
-            // Sử dụng localeCompare để sắp xếp chuỗi một cách chính xác
-            return orderIdA.localeCompare(orderIdB);
-        });
+            dataToRender.sort((a, b) => {
+                const parseDate = (val) => { if (!val) return null; const date = new Date(val); return isNaN(date.getTime()) ? null : date; };
+                const dateA = parseDate(a[primarySortKey]);
+                const dateB = parseDate(b[primarySortKey]);
+
+                // So sánh theo khóa chính (ngày đối soát)
+                if (dateA === null && dateB === null) {
+                    // Cả hai đều null, chuyển sang sắp xếp theo khóa phụ
+                } else if (dateA === null) {
+                    return 1; // Đẩy giá trị null của A xuống cuối
+                } else if (dateB === null) {
+                    return -1; // Đẩy giá trị null của B xuống cuối
+                } else {
+                    const dateComparison = dateA.getTime() - dateB.getTime();
+                    if (dateComparison !== 0) {
+                        return dateComparison; // Trả về kết quả nếu ngày khác nhau (bao gồm giờ, phút, giây)
+                    }
+                    // Nếu ngày giờ giống hệt nhau, sẽ chuyển sang sắp xếp theo khóa phụ
+                }
+                
+                // So sánh theo khóa phụ (Mã đơn hàng) khi khóa chính bằng nhau
+                const orderIdA = a[secondarySortKey] || '';
+                const orderIdB = b[secondarySortKey] || '';
+                // Sử dụng localeCompare để sắp xếp chuỗi một cách chính xác
+                return orderIdA.localeCompare(orderIdB);
+            });
+        }
         // ===== END: MODIFIED SORTING LOGIC =====
         
         return dataToRender;
@@ -580,7 +645,11 @@
         const container = document.getElementById('tableBody');
         container.innerHTML = '';
         if (filteredData.length === 0) { 
-            container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">Không có dữ liệu phù hợp</td></tr>`;
+            let message = 'Không có dữ liệu phù hợp';
+            if (state.activeTeam === 'mgt_noi_bo' && state.isMgtNoiBoOrderLoading) {
+                 message = 'Đang tải danh sách đơn hàng nội bộ...'; // Show specific message if loading order
+            }
+            container.innerHTML = `<tr><td colspan="${displayColumns.length}" class="no-data">${message}</td></tr>`;
             updateOrderCounter(0);
             return;
         }
@@ -663,7 +732,7 @@
         updateFixedColumns();
     }
     
-    // *** THAY ĐỔI 5: Viết lại hàm createTabs để tự động tạo tab từ cột "Team" ***
+    // *** THAY ĐỔI 5: Viết lại hàm createTabs để tự động tạo tab từ cột "Team" VÀ thêm tab "MGT nội bộ" ***
     function createTabs(data) {
         const tabContainer = document.getElementById('tabContainer');
         tabContainer.innerHTML = '';
@@ -677,16 +746,21 @@
             if (value === state.activeTeam) {
                 button.classList.add('active');
             }
-            button.addEventListener('click', () => {
+            button.addEventListener('click', async () => { // Make async to await fetchMGTNoiBoOrder
                 state.activeTeam = value;
                 document.querySelectorAll('#tabContainer .tab-btn').forEach(btn => btn.classList.remove('active'));
                 button.classList.add('active');
+                if (value === 'mgt_noi_bo' && state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) {
+                    await fetchMGTNoiBoOrder();
+                }
                 render();
             });
             return button;
         };
         
         tabContainer.appendChild(createTab('Tất cả', 'all'));
+        // Add the "MGT nội bộ" tab explicitly
+        tabContainer.appendChild(createTab('MGT nội bộ', 'mgt_noi_bo'));
         teams.forEach(team => tabContainer.appendChild(createTab(team, team)));
     }
     
@@ -725,7 +799,19 @@
         document.getElementById('transferWarehouseBtn').addEventListener('click', transferSelectedOrders);
     }
     
-    function refreshData() { const btn = document.getElementById('refreshData'); btn.disabled = true; btn.innerHTML = '<span class="loading"></span> Đang tải...'; state.activeTeam = 'all'; state.filterValues = {}; document.getElementById('tabContainer').innerHTML = ''; document.getElementById('filterRow').innerHTML = ''; document.getElementById('mainFilters').querySelectorAll('input, select').forEach(el => { if(el.id !== 'fixedColumns') el.value = ''; }); updateOrderCounter(0); loadData(); }
+    function refreshData() { 
+      const btn = document.getElementById('refreshData'); 
+      btn.disabled = true; 
+      btn.innerHTML = '<span class="refresh-icon">↻</span> Đang tải...'; 
+      state.activeTeam = 'all'; // Reset active tab to 'all'
+      state.filterValues = {}; 
+      state.mgtNoiBoOrder = []; // Clear MGT Nội Bộ order list on refresh
+      document.getElementById('tabContainer').innerHTML = ''; 
+      document.getElementById('filterRow').innerHTML = ''; 
+      document.getElementById('mainFilters').querySelectorAll('input, select').forEach(el => { if(el.id !== 'fixedColumns') el.value = ''; }); 
+      updateOrderCounter(0); 
+      loadData(); 
+    }
     function toggleTrackingView() { const btn = document.getElementById('toggleTrackingView'); state.showTrackingOrders = !state.showTrackingOrders; if (state.showTrackingOrders) { btn.textContent = 'Xem đơn chưa có mã Tracking'; btn.classList.add('active'); } else { btn.textContent = 'Xem đơn có mã Tracking'; btn.classList.remove('active'); } render(); }
     function loadData() { document.getElementById('tableBody').innerHTML = `<tr><td colspan="${displayColumns.length}" style="text-align: center;">Đang tải...</td></tr>`; const script = document.createElement('script'); script.src = SCRIPT_URL + '?callback=handleData&rand=' + Math.random(); const oldScript = document.querySelector('script[src^="' + SCRIPT_URL + '"]'); if (oldScript) document.body.removeChild(oldScript); document.body.appendChild(script); }
 
@@ -901,21 +987,21 @@
 
         const maDonList = Array.from(selectedOrderIds);
 
-        const response = await fetch(TRANSFER_API_URL, {
-                method: 'POST',
+            const response = await fetch(TRANSFER_API_URL, {
+                    method: 'POST',
                 mode: 'no-cors', // Đảm bảo chế độ CORS
-                headers: {
-                    'Content-Type': 'application/json' // API Apps Script mong đợi JSON
-                },
-                body: JSON.stringify({ data: maDonList }) // Payload giống như Apps Script đã cung cấp
-            });
+                    headers: {
+                        'Content-Type': 'application/json' // API Apps Script mong đợi JSON
+                    },
+                    body: JSON.stringify({ data: maDonList }) // Payload giống như Apps Script đã cung cấp
+                });
 
             setTimeout(() => {
                 showCustomAlert(`Đã gửi thành công.`, 'success');
                     clearAllSelections(); // Xóa các ô đã chọn sau khi chuyển kho thành công
                     // Nếu API chuyển kho cũng cập nhật sheet hiện tại, bạn có thể gọi refreshData() ở đây
                     // Tuy nhiên, nếu nó chỉ là một bản ghi bên ngoài, thì không cần tải lại toàn bộ dữ liệu.
-                    transferBtn.disabled = false;
+            transferBtn.disabled = false;
             transferBtn.textContent = originalText;
             }, 1000);
     }
