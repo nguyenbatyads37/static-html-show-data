@@ -1,0 +1,957 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Báo cáo chi phí chi tiết</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    /* --- CÀI ĐẶT CHUNG --- */
+    body {
+      font-family: 'Roboto', Arial, sans-serif;
+      padding: 20px;
+      background-color: #f4f4f4;
+      color: #333;
+      font-size: 16px;
+    }
+    
+    /* --- STYLES CHUNG CHO BẢNG & CĂN LỀ --- */
+    .table-responsive-container {
+      overflow-x: auto;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: auto;
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    th,
+    td {
+      border: 1px solid #e0e0e0;
+      padding: 12px 14px;
+      white-space: nowrap;
+      vertical-align: middle;
+      transition: background-color 0.2s;
+      font-size: 15px;
+    }
+
+    th {
+      text-align: center !important;
+      font-size: 16px;
+    }
+
+    td {
+      text-align: right !important;
+    }
+
+    .text-left {
+      text-align: left !important;
+    }
+
+    .text-center {
+      text-align: center !important;
+    }
+
+    /* CẢI THIỆN KHẢ NĂNG ĐỌC BẢNG */
+    tbody tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+
+    tbody tr:not(.team-header-row):not(.total-row):not(.highlight):hover {
+      background-color: #eff5fb;
+    }
+
+    th.green-header {
+      background: #4CAF50;
+      color: white;
+      font-weight: 700;
+    }
+
+    th.blue-header {
+      background: #4CAF50;
+      color: white;
+      font-weight: 700;
+    }
+
+    th.yellow-header {
+      background: #FFC107;
+      color: #424242;
+      font-weight: 700;
+    }
+
+    tr.total-row,
+    tr.total-row:hover {
+      background: #2d7c2d;
+      color: white;
+      font-weight: 700;
+      font-size: 1.2em;
+      border-bottom: 3px solid #FFC107;
+    }
+
+    .total-row .total-label {
+      text-transform: uppercase;
+      text-align: left !important;
+    }
+
+    .total-row .total-value {
+      text-align: right !important;
+    }
+
+    .bg-green {
+      background-color: #4CAF50 !important;
+      color: white;
+    }
+
+    .bg-yellow {
+      background-color: #FFEB3B !important;
+      color: #424242;
+    }
+
+    .bg-lightred {
+      background-color: #F44336 !important;
+      color: white;
+    }
+
+    .bg-lightblue {
+      background-color: #2196F3 !important;
+      color: white;
+    }
+
+    /* --- STYLES CHO LAYOUT CHUNG --- */
+    .report-container {
+      display: flex;
+      gap: 20px;
+    }
+
+    .sidebar {
+      width: 260px;
+      flex-shrink: 0;
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .sidebar h3 {
+      background: #2d7c2d;
+      color: #fff;
+      padding: 10px;
+      margin-top: 10px;
+      font-size: 18px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .sidebar label {
+      display: block;
+      margin: 8px 0;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .sidebar .indent {
+      margin-left: 16px;
+    }
+
+    .sidebar input[type="date"],
+    .sidebar select {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 8px;
+      margin: 4px 0 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 15px;
+    }
+
+    .main-content-area {
+      flex-grow: 1;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .header img {
+      height: 60px;
+      margin-right: 15px;
+      border-radius: 50%;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    }
+
+    .header h2 {
+      margin: 0;
+      color: #2d7c2d;
+      font-weight: 700;
+      font-size: 28px;
+    }
+    
+    /* --- CHỈ BÁO ĐANG TẢI --- */
+    #loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.7);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+      font-size: 1.5em;
+      font-weight: bold;
+      color: #2d7c2d;
+      transition: opacity 0.3s, visibility 0.3s;
+      visibility: hidden;
+      opacity: 0;
+    }
+
+    #loading-overlay.visible {
+      visibility: visible;
+      opacity: 1;
+    }
+
+    /* --- CSS SẮP XẾP BẢNG --- */
+    .sortable-table th {
+      cursor: pointer;
+      position: relative;
+    }
+
+    .sortable-table th .sort-icon {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.8em;
+      opacity: 0.4;
+      transition: opacity 0.2s;
+    }
+
+    .sortable-table th:hover .sort-icon {
+      opacity: 0.8;
+    }
+
+    .sortable-table th.sorted .sort-icon {
+      opacity: 1;
+    }
+
+    .sortable-table th .sort-icon.asc::after {
+      content: " ▲";
+    }
+
+    .sortable-table th .sort-icon.desc::after {
+      content: " ▼";
+    }
+
+    .daily-breakdown h3 {
+      margin-top: 30px;
+      background: #f0f0f0;
+      padding: 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 18px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="loading-overlay">Đang tải dữ liệu...</div>
+
+  <!-- NỘI DUNG TAB 1: BÁO CÁO CHI TIẾT -->
+  <div id="DetailedReport" style="display: block;">
+    <div class="report-container">
+      <div class="sidebar">
+        <h3>Bộ lọc</h3>
+        <label for="quick-date-select">Chọn nhanh:</label>
+        <select id="quick-date-select">
+          <option value="">-- Chọn nhanh --</option>
+          <optgroup label="Ngày">
+            <option value="today">Hôm nay</option>
+            <option value="yesterday">Hôm qua</option>
+          </optgroup>
+          <optgroup label="Tuần">
+            <option value="lastWeek">Tuần trước</option>
+            <option value="thisWeek">Tuần này</option>
+            <option value="nextWeek">Tuần sau</option>
+          </optgroup>
+          <optgroup label="Tháng">
+            <option value="thisMonth">Tháng này</option>
+            <option value="month_1">Tháng 1</option>
+            <option value="month_2">Tháng 2</option>
+            <option value="month_3">Tháng 3</option>
+            <option value="month_4">Tháng 4</option>
+            <option value="month_5">Tháng 5</option>
+            <option value="month_6">Tháng 6</option>
+            <option value="month_7">Tháng 7</option>
+            <option value="month_8">Tháng 8</option>
+            <option value="month_9">Tháng 9</option>
+            <option value="month_10">Tháng 10</option>
+            <option value="month_11">Tháng 11</option>
+            <option value="month_12">Tháng 12</option>
+          </optgroup>
+          <optgroup label="Quý">
+            <option value="quarter_1">Quý 1</option>
+            <option value="quarter_2">Quý 2</option>
+            <option value="quarter_3">Quý 3</option>
+            <option value="quarter_4">Quý 4</option>
+          </optgroup>
+        </select>
+        <label for="start-date">Từ ngày:</label><input type="date" id="start-date">
+        <label for="end-date">Đến ngày:</label><input type="date" id="end-date">
+        <h3>Sản phẩm</h3>
+        <label><input type="checkbox" id="product-all" checked> Tất cả</label>
+        <div id="product-options" class="indent"></div>
+        <h3>Ca</h3>
+        <label><input type="checkbox" id="ca-all" checked> Tất cả</label>
+        <div id="ca-options" class="indent"></div>
+        <h3>Team</h3>
+        <label><input type="checkbox" id="team-all" checked> Tất cả</label>
+        <div id="team-options" class="indent"></div>
+        <h3>Thị trường</h3>
+        <label><input type="checkbox" id="market-all" checked> Tất cả</label>
+        <div id="market-options"></div>
+      </div>
+      <div class="main-content-area">
+        <div class="header">
+          <img
+            src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg"
+            alt="Logo">
+          <h2 id="report-title">DỮ LIỆU CHI PHÍ ADS</h2>
+        </div>
+        <div class="table-responsive-container">
+          <table id="summary-table" class="sortable-table">
+            <thead>
+              <tr>
+                <th class="green-header">STT<span class="sort-icon"></span></th>
+                <th class="green-header">Team<span class="sort-icon"></span></th>
+                <th class="green-header">Marketing<span class="sort-icon"></span></th>
+                <th class="green-header">Số Mess<span class="sort-icon"></span></th>
+                <th class="green-header">CPQC<span class="sort-icon"></span></th>
+                <th class="green-header">Số Đơn<span class="sort-icon"></span></th>
+                <th class="blue-header">Số Đơn (TT)<span class="sort-icon"></span></th>
+                <th class="green-header">DS Chốt<span class="sort-icon"></span></th>
+                <th class="blue-header">DS Chốt (TT)<span class="sort-icon"></span></th>
+                <th class="yellow-header">Tỉ lệ chốt<span class="sort-icon"></span></th>
+                <th class="yellow-header">Tỉ lệ chốt (TT)<span class="sort-icon"></span></th>
+                <th class="yellow-header">Giá Mess<span class="sort-icon"></span></th>
+                <th class="yellow-header">CPS<span class="sort-icon"></span></th>
+                <th class="yellow-header">%CP/DS<span class="sort-icon"></span></th>
+                <th class="yellow-header">Giá TB Đơn<span class="sort-icon"></span></th>
+              </tr>
+            </thead>
+            <tbody id="summary-body"></tbody>
+            <tfoot id="summary-foot"></tfoot>
+          </table>
+        </div>
+        <div id="daily-breakdown"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // =================================================================================
+    // --- I. KHAI BÁO BIẾN TOÀN CỤC & CẤU HÌNH ---
+    // =================================================================================
+
+    const API_URL = 'https://script.google.com/macros/s/AKfycbxJXU9NJ0zjXRLWRPVDlwv-b0ilYcb16yUGgaPOCQ0som3KPW8j5kPVmzLA0_6v13n2/exec?tableName=Báo cáo MKT';
+    const MARKET_GROUPS = {
+      'Châu Á': ['Hàn Quốc', 'Nhật Bản', 'VN'],
+      'Ngoài Châu Á': ['Úc', 'US', 'Canada']
+    };
+
+    let masterData = [];
+    let baseDataForReport = [];
+    const sortStates = {
+      summary: { column: null, direction: 'asc' },
+      daily: {}
+    };
+
+    const summaryColumnSortKeys = {
+      1: { prop: 'team', type: 'string' },
+      2: { prop: 'name', type: 'string' },
+      3: { prop: 'mess', type: 'number' },
+      4: { prop: 'cpqc', type: 'number' },
+      5: { prop: 'don', type: 'number' },
+      6: { prop: 'donThucTe', type: 'number' },
+      7: { prop: 'chot', type: 'number' },
+      8: { prop: 'chotThucTe', type: 'number' },
+      9: { prop: (s) => s.mess ? s.don / s.mess : 0, type: 'number' }, // Tỉ lệ chốt
+      10: { prop: (s) => s.mess ? s.donThucTe / s.mess : 0, type: 'number' }, // Tỉ lệ chốt (TT)
+      11: { prop: (s) => s.mess ? s.cpqc / s.mess : 0, type: 'number' }, // Giá Mess
+      12: { prop: (s) => s.don ? s.cpqc / s.don : 0, type: 'number' },   // CPS
+      13: { prop: (s) => s.chotThucTe ? s.cpqc / s.chotThucTe : 0, type: 'number' }, // %CP/DS
+      14: { prop: (s) => s.don ? s.chotThucTe / s.don : 0, type: 'number' }  // Giá TB Đơn
+    };
+
+    // =================================================================================
+    // --- II. KHỞI TẠO ỨNG DỤNG ---
+    // =================================================================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      setupEventListeners();
+      setDefaultDates();
+      fetchAndProcessData();
+    });
+
+    function setDefaultDates() {
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      const formatDateForInput = (date) => date.toISOString().split('T')[0];
+
+      document.getElementById('start-date').value = formatDateForInput(firstDay);
+      document.getElementById('end-date').value = formatDateForInput(lastDay);
+    }
+
+    function setupEventListeners() {
+      // Lắng nghe tất cả các thay đổi trên bộ lọc
+      document.querySelector('.sidebar').addEventListener('change', handleFilterChange);
+
+      // Lắng nghe sự kiện click để sắp xếp bảng
+      document.getElementById('summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e, 'summary'));
+      document.getElementById('daily-breakdown').addEventListener('click', (e) => {
+        if (e.target.closest('th')) {
+          sortTable(e, 'daily');
+        }
+      });
+    }
+
+    // =================================================================================
+    // --- III. TẢI VÀ XỬ LÝ DỮ LIỆU ---
+    // =================================================================================
+
+    async function fetchAndProcessData() {
+      showLoader();
+      try {
+        const response = await fetch(API_URL);
+        const result = await response.json();
+
+        masterData = result.data
+          .filter(r => r["Tên"] && String(r["Tên"]).trim() !== '')
+          .map(r => ({
+              idnv: (r["id_NS"] || '').trim(),
+              ten: (r["Tên"] || 'N/A').trim(),
+              ngay: new Date(r["Ngày"]),
+              ca: (r["ca"] || 'N/A').trim(),
+              sanPham: (r["Sản_phẩm"] || 'N/A').trim(),
+              thiTruong: (r["Thị_trường"] || 'N/A').trim(),
+              team: (r["Team"] || 'Khác').trim(),
+              chucVu: (r["Chức vụ"] || '').trim().toLowerCase(),
+              cpqc: Number(r["CPQC"]) || 0,
+              soMessCmt: Number(r["Số_Mess_Cmt"]) || 0,
+              soDon: Number(r["Số đơn"]) || 0,
+              dsChot: Number(r["DS chốt"]) || 0,
+              // --- UPDATED CALCULATION FOR 'Số Đơn (TT)' AS PER NEW REQUEST ---
+              soDonThucTe: (Number(r["Số đơn thực tế"]) || 0) - (Number(r["Số đơn hoàn hủy thực tế"]) || 0),
+              dsChotThucTe: Number(r["Doanh số sau hoàn hủy thực tế"]) || 0,
+          }));
+
+        setupInitialReportView();
+        populateAllFilters();
+        applyFilters(); // Áp dụng bộ lọc lần đầu
+      } catch (err) {
+        console.error("Lỗi tải dữ liệu:", err);
+        alert('Không thể tải dữ liệu từ API. Vui lòng kiểm tra lại.');
+        document.getElementById('report-title').textContent = `LỖI TẢI DỮ LIỆU`;
+      } finally {
+        hideLoader();
+      }
+    }
+
+    function setupInitialReportView() {
+      const idFromUrl = new URLSearchParams(window.location.search).get('id');
+      if (!idFromUrl) {
+        document.getElementById('report-title').textContent = 'DỮ LIỆU CHI PHÍ ADS';
+        baseDataForReport = masterData;
+        return;
+      }
+      const currentUser = masterData.find(emp => emp.idnv === idFromUrl);
+      if (currentUser) {
+        if (currentUser.chucVu === 'leader') {
+          document.getElementById('report-title').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
+          baseDataForReport = masterData.filter(r => (r.team || '').trim() === currentUser.team);
+        } else {
+          document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ten}`;
+          baseDataForReport = masterData.filter(r => (r.ten || '').trim() === currentUser.ten);
+        }
+      } else {
+        alert(`ID "${idFromUrl}" không hợp lệ.`);
+        document.getElementById('report-title').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
+        baseDataForReport = [];
+      }
+    }
+    
+    // =================================================================================
+    // --- IV. XỬ LÝ SỰ KIỆN VÀ BỘ LỌC ---
+    // =================================================================================
+    
+    function handleFilterChange(e) {
+      const target = e.target;
+
+      // Xử lý chọn nhanh ngày tháng
+      if (target.matches('#quick-date-select')) {
+        handleQuickDateChange(e);
+        return; // Dừng lại sau khi xử lý để tránh áp dụng bộ lọc hai lần
+      }
+      
+      // Xử lý các checkbox "Tất cả"
+      handleCheckbox('product-all', 'filter-product', target);
+      handleCheckbox('ca-all', 'filter-ca', target);
+      handleCheckbox('team-all', 'filter-team', target);
+      handleCheckbox('market-all', 'filter-market', target);
+
+      // Áp dụng bộ lọc sau khi có thay đổi
+      showLoader();
+      setTimeout(() => {
+        applyFilters();
+        hideLoader();
+      }, 50);
+    }
+    
+    function handleCheckbox(allId, childClass, target) {
+      const allCheckbox = document.getElementById(allId);
+      if (!allCheckbox) return;
+
+      if (target.id === allId) {
+        document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked);
+      } else if (target.classList.contains(childClass)) {
+        const allChildren = document.querySelectorAll(`.${childClass}`);
+        allCheckbox.checked = [...allChildren].every(cb => cb.checked);
+      }
+    }
+
+    function handleQuickDateChange(event) {
+      const selection = event.target.value;
+      if (!selection) return;
+
+      const { startDate, endDate } = getDateRange(selection);
+      document.getElementById('start-date').value = startDate.toLocaleDateString('en-CA');
+      document.getElementById('end-date').value = endDate.toLocaleDateString('en-CA');
+      
+      // Kích hoạt sự kiện change để áp dụng bộ lọc
+      document.getElementById('start-date').dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function getFilteredData() {
+        const startDateVal = document.getElementById('start-date').value;
+        const endDateVal = document.getElementById('end-date').value;
+        const startDate = startDateVal ? new Date(startDateVal) : null;
+        const endDate = endDateVal ? new Date(endDateVal) : null;
+
+        if ((startDate && isNaN(startDate)) || (endDate && isNaN(endDate))) return [];
+
+        const getSelected = (type) => {
+            if (document.getElementById(`${type}-all`).checked) return [];
+            return Array.from(document.querySelectorAll(`.filter-${type}:checked`)).map(cb => cb.value);
+        };
+        const selectedProducts = getSelected('product');
+        const selectedMarkets = getSelected('market');
+        const selectedCas = getSelected('ca');
+        const selectedTeams = getSelected('team');
+        
+        return baseDataForReport.filter(r => {
+            const date = new Date(r.ngay);
+            if (!r.ngay || isNaN(date)) return false;
+            
+            const isDateOk = (!startDate || date >= startDate) && (!endDate || date <= endDate);
+            if (!isDateOk) return false;
+            
+            const isProductOk = selectedProducts.length === 0 || selectedProducts.includes(r.sanPham);
+            if (!isProductOk) return false;
+            
+            const marketGroup = getMarketGroup(normalize(r.thiTruong));
+            const isMarketOk = selectedMarkets.length === 0 || selectedMarkets.includes(r.thiTruong) || selectedMarkets.includes(marketGroup);
+            if (!isMarketOk) return false;
+            
+            const isCaOk = selectedCas.length === 0 || selectedCas.includes(r.ca);
+            if (!isCaOk) return false;
+            
+            const isTeamOk = selectedTeams.length === 0 || selectedTeams.includes(r.team);
+            if (!isTeamOk) return false;
+
+            return true;
+        });
+    }
+
+    function populateAllFilters() {
+      if (!masterData.length) return;
+
+      const products = [...new Set(masterData.map(r => r.sanPham).filter(Boolean))].sort();
+      const cas = [...new Set(masterData.map(r => r.ca).filter(Boolean))].sort();
+      const teams = [...new Set(masterData.map(r => r.team).filter(Boolean))].sort();
+      const markets = [...new Set(masterData.map(r => r.thiTruong).filter(Boolean))].sort();
+
+      const createCheckboxes = (items, className) => items.map(item => `<label class='indent'><input type='checkbox' class='${className}' value='${item}' checked> ${item}</label>`).join('');
+      const createMarketCheckboxes = (className) => {
+        let html = '';
+        Object.keys(MARKET_GROUPS).forEach(group => {
+          html += `<label><input type='checkbox' class='${className} filter-market-group' value='${group}' checked> <b>${group}</b></label>`;
+          html += MARKET_GROUPS[group].map(child => `<label class='indent'><input type='checkbox' class='${className}' value='${child}' checked> ${child}</label>`).join('');
+        });
+        const ungroupedMarkets = markets.filter(m => !Object.values(MARKET_GROUPS).flat().map(normalize).includes(normalize(m)));
+        html += createCheckboxes(ungroupedMarkets, className);
+        return html;
+      };
+
+      document.getElementById('product-options').innerHTML = createCheckboxes(products, 'filter-product');
+      document.getElementById('ca-options').innerHTML = createCheckboxes(cas, 'filter-ca');
+      document.getElementById('team-options').innerHTML = createCheckboxes(teams, 'filter-team');
+      document.getElementById('market-options').innerHTML = createMarketCheckboxes('filter-market');
+    }
+
+    // =================================================================================
+    // --- V. HÀM ÁP DỤNG BỘ LỌC CHÍNH ---
+    // =================================================================================
+    
+    function applyFilters() {
+      const filteredData = getFilteredData();
+      const summaryList = generateSummaryTableData(filteredData);
+      
+      sortList(summaryList, sortStates.summary, summaryColumnSortKeys, { prop: 'team', type: 'string' });
+      renderSummary(summaryList);
+      updateSortIcons(document.getElementById('summary-table'), sortStates.summary);
+      
+      renderDailyBreakdown(filteredData);
+    }
+    
+    // =================================================================================
+    // --- VI. CÁC HÀM TÍNH TOÁN VÀ TỔNG HỢP DỮ LIỆU ---
+    // =================================================================================
+
+    function generateSummaryTableData(data) {
+      const summary = {};
+      data.forEach(r => {
+        const key = r.ten || 'N/A';
+        if (!summary[key]) {
+          summary[key] = {
+            team: r.team, name: r.ten, mess: 0, don: 0, chot: 0, cpqc: 0,
+            donThucTe: 0, chotThucTe: 0
+          };
+        }
+        const S = summary[key];
+        S.mess += r.soMessCmt;
+        S.don += r.soDon;
+        S.chot += r.dsChot;
+        S.cpqc += r.cpqc;
+        S.donThucTe += r.soDonThucTe;
+        S.chotThucTe += r.dsChotThucTe;
+      });
+      return Object.values(summary);
+    }
+
+    // =================================================================================
+    // --- VII. CÁC HÀM HIỂN THỊ DỮ LIỆU (RENDERING) ---
+    // =================================================================================
+
+    function renderSummary(dataList) {
+      const selM = [...document.querySelectorAll('.filter-market:checked')].map(cb => cb.value);
+      const { bodyHtml } = generateSummaryTableHTML(dataList, selM);
+      document.getElementById('summary-body').innerHTML = bodyHtml;
+      document.getElementById('summary-foot').innerHTML = ''; // Đảm bảo footer trống
+    }
+
+    function renderDailyBreakdown(filteredData) {
+      const container = document.getElementById('daily-breakdown');
+      container.innerHTML = '';
+      if (filteredData.length === 0) { 
+          container.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không có dữ liệu chi tiết.</p>'; 
+          return; 
+      }
+
+      const groupedByDate = {};
+      filteredData.forEach(r => {
+        const d = formatDate(r.ngay);
+        if (!groupedByDate[d]) groupedByDate[d] = [];
+        groupedByDate[d].push(r);
+      });
+
+      const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
+      const selectedMarkets = [...document.querySelectorAll('.filter-market:checked')].map(cb => cb.value);
+      
+      let finalHtml = sortedDates.map(date => {
+        let dailyList = generateSummaryTableData(groupedByDate[date]);
+        sortList(dailyList, { column: null, direction: 'asc' }, summaryColumnSortKeys, { prop: 'team', type: 'string' });
+        const { bodyHtml } = generateSummaryTableHTML(dailyList, selectedMarkets);
+        return `<h3>${date}</h3><div class="table-responsive-container"><table class="sortable-table daily-summary-table" data-date="${date}">
+        <thead><tr>
+        <th class="green-header">STT<span class="sort-icon"></span></th>
+        <th class="green-header">Team<span class="sort-icon"></span></th>
+        <th class="green-header">Marketing<span class="sort-icon"></span></th>
+        <th class="green-header">Số Mess<span class="sort-icon"></span></th>
+        <th class="green-header">CPQC<span class="sort-icon"></span></th>
+        <th class="green-header">Số Đơn<span class="sort-icon"></span></th>
+        <th class="blue-header">Số Đơn (TT)<span class="sort-icon"></span></th>
+        <th class="green-header">DS Chốt<span class="sort-icon"></span></th>
+        <th class="blue-header">DS Chốt (TT)<span class="sort-icon"></span></th>
+        <th class="yellow-header">Tỉ lệ chốt<span class="sort-icon"></span></th>
+        <th class="yellow-header">Tỉ lệ chốt (TT)<span class="sort-icon"></span></th>
+        <th class="yellow-header">Giá Mess<span class="sort-icon"></span></th>
+        <th class="yellow-header">CPS<span class="sort-icon"></span></th>
+        <th class="yellow-header">%CP/DS<span class="sort-icon"></span></th>
+        <th class="yellow-header">Giá TB Đơn<span class="sort-icon"></span></th>
+        </tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+      }).join('');
+      
+      container.innerHTML = finalHtml;
+      sortStates.daily = {};
+    }
+
+    function generateSummaryTableHTML(dataList, selectedMarkets) {
+      let total = { mess: 0, don: 0, chot: 0, cpqc: 0, donThucTe: 0, chotThucTe: 0 };
+      const bodyRowsHtml = dataList.map((s, index) => {
+        Object.keys(total).forEach(key => total[key] += s[key] || 0);
+        const rate = s.mess ? s.don / s.mess : 0;
+        const rateThucTe = s.mess ? s.donThucTe / s.mess : 0;
+        const pm = s.mess ? s.cpqc / s.mess : 0;
+        const pd = s.don ? s.cpqc / s.don : 0;
+        const pc = s.chotThucTe ? s.cpqc / s.chotThucTe : 0;
+        const pdt = s.don ? s.chotThucTe / s.don : 0;
+        const rateClass = rate > 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
+        const rateThucTeClass = rateThucTe > 0.1 ? 'bg-green' : (rateThucTe > 0.05 ? 'bg-yellow' : '');
+        const cpsClass = getCpsCellStyle(pd, selectedMarkets);
+        const cpdsClass = pc > 0.33 ? 'bg-yellow' : '';
+        return `<tr>
+                <td class="text-center">${index + 1}</td>
+                <td class="text-left">${s.team}</td>
+                <td class="text-left">${s.name}</td>
+                <td>${formatNumber(s.mess)}</td>
+                <td>${formatCurrency(s.cpqc)}</td>
+                <td>${formatNumber(s.don)}</td>
+                <td>${formatNumber(s.donThucTe)}</td>
+                <td>${formatCurrency(s.chot)}</td>
+                <td>${formatCurrency(s.chotThucTe)}</td>
+                <td class="${rateClass}">${formatPercent(rate)}</td>
+                <td class="${rateThucTeClass}">${formatPercent(rateThucTe)}</td>
+                <td>${formatCurrency(pm)}</td>
+                <td class="${cpsClass}">${formatCurrency(pd)}</td>
+                <td class="${cpdsClass}">${formatPercent(pc)}</td>
+                <td>${formatCurrency(pdt)}</td>
+            </tr>`;
+      }).join('');
+      const tRate = total.mess ? total.don / total.mess : 0;
+      const tRateThucTe = total.mess ? total.donThucTe / total.mess : 0;
+      const tPm = total.mess ? total.cpqc / total.mess : 0;
+      const tPd = total.don ? total.cpqc / total.don : 0;
+      const tPc = total.chotThucTe ? total.cpqc / total.chotThucTe : 0;
+      const tPdt = total.don ? total.chotThucTe / total.don : 0;
+      const totalRowHtml = `<tr class="total-row">
+            <td class="total-label" colspan="3">TỔNG CỘNG</td>
+            <td class="total-value">${formatNumber(total.mess)}</td>
+            <td class="total-value">${formatCurrency(total.cpqc)}</td>
+            <td class="total-value">${formatNumber(total.don)}</td>
+            <td class="total-value">${formatNumber(total.donThucTe)}</td>
+            <td class="total-value">${formatCurrency(total.chot)}</td>
+            <td class="total-value">${formatCurrency(total.chotThucTe)}</td>
+            <td class="total-value">${formatPercent(tRate)}</td>
+            <td class="total-value">${formatPercent(tRateThucTe)}</td>
+            <td class="total-value">${formatCurrency(tPm)}</td>
+            <td class="total-value">${formatCurrency(tPd)}</td>
+            <td class="total-value">${formatPercent(tPc)}</td>
+            <td class="total-value">${formatCurrency(tPdt)}</td>
+        </tr>`;
+      return { bodyHtml: totalRowHtml + bodyRowsHtml };
+    }
+
+
+    // =================================================================================
+    // --- VIII. LOGIC SẮP XẾP BẢNG ---
+    // =================================================================================
+
+    function sortTable(event, tableType) {
+      const th = event.target.closest('th');
+      if (!th) return;
+      let columnIndex = th.cellIndex;
+      if (columnIndex === 0) return; // Không sắp xếp cột STT
+
+      let sortState;
+      let tableElement = th.closest('table');
+
+      if (tableType === 'daily') {
+        const date = tableElement.dataset.date;
+        if (!sortStates.daily[date]) sortStates.daily[date] = { column: null, direction: 'asc' };
+        sortState = sortStates.daily[date];
+      } else {
+        sortState = sortStates[tableType];
+      }
+
+      if (sortState.column === columnIndex) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortState.column = columnIndex;
+        sortState.direction = 'asc';
+      }
+
+      if (tableType === 'daily') {
+        sortAndRenderDailyTable(tableElement, sortState);
+      } else if (tableType === 'summary') {
+        applyFilters();
+      }
+    }
+
+    function sortAndRenderDailyTable(table, sortState) {
+      const date = table.dataset.date;
+      const filteredData = getFilteredData();
+      const dailyData = filteredData.filter(r => formatDate(r.ngay) === date);
+      let dailyList = generateSummaryTableData(dailyData);
+      sortList(dailyList, sortState, summaryColumnSortKeys, { prop: 'team', type: 'string' });
+      const selectedMarkets = [...document.querySelectorAll('.filter-market:checked')].map(cb => cb.value);
+      const { bodyHtml } = generateSummaryTableHTML(dailyList, selectedMarkets);
+      table.querySelector('tbody').innerHTML = bodyHtml;
+      updateSortIcons(table, sortState);
+    }
+
+    function sortList(list, sortState, columnKeys, defaultSortKey) {
+      const { column, direction } = sortState;
+      const sortInfo = columnKeys[column];
+      if (!sortInfo && !defaultSortKey) return;
+      
+      list.sort((a, b) => {
+        const key = sortInfo || defaultSortKey;
+        if (key.prop === 'chot' && !sortInfo) return b.chot - a.chot;
+        
+        let valA = typeof key.prop === 'function' ? key.prop(a) : a[key.prop];
+        let valB = typeof key.prop === 'function' ? key.prop(b) : b[key.prop];
+        
+        if (valA == null) valA = key.type === 'string' ? '' : -Infinity;
+        if (valB == null) valB = key.type === 'string' ? '' : -Infinity;
+        
+        let comparison = 0;
+        if (key.type === 'string') {
+          comparison = String(valA).localeCompare(String(valB));
+        } else {
+          comparison = valA - valB;
+        }
+        
+        if (!sortInfo) return comparison; // Default sort is always ascending
+        return direction === 'asc' ? comparison : -comparison;
+      });
+    }
+
+    function updateSortIcons(tableElement, sortState) {
+      if (!tableElement) return;
+      tableElement.querySelectorAll('thead th').forEach((th, index) => {
+        const icon = th.querySelector('.sort-icon');
+        if (!icon) return;
+        
+        icon.className = 'sort-icon';
+        th.classList.remove('sorted');
+        
+        if (index === sortState.column) {
+          th.classList.add('sorted');
+          icon.classList.add(sortState.direction);
+        }
+      });
+    }
+    
+    // =================================================================================
+    // --- IX. CÁC HÀM TIỆN ÍCH (UTILITIES) ---
+    // =================================================================================
+    const loader = document.getElementById('loading-overlay');
+    const showLoader = () => loader.classList.add('visible');
+    const hideLoader = () => loader.classList.remove('visible');
+
+    function normalize(s) { return (s || '').trim().toLowerCase(); }
+    function getMarketGroup(normalizedMarket) {
+      for (const group in MARKET_GROUPS) {
+        if (MARKET_GROUPS[group].map(normalize).includes(normalizedMarket)) return group;
+      }
+      return null;
+    }
+    function formatDate(dateObj) {
+      if (!(dateObj instanceof Date) || isNaN(dateObj)) return '';
+      return `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
+    }
+    function formatCurrency(v) { return Number(v || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }); }
+    function formatNumber(v) { return Number(v || 0).toLocaleString('vi-VN'); }
+    function formatPercent(v) {
+      if (!isFinite(v)) return '0.00%';
+      return `${(Number(v || 0) * 100).toFixed(2)}%`;
+    }
+    function getCpsCellStyle(cps, selectedMarkets) {
+      const hasAsia = selectedMarkets.some(m => m === 'Châu Á' || MARKET_GROUPS['Châu Á'].includes(m));
+      const hasNonAsia = selectedMarkets.some(m => m === 'Ngoài Châu Á' || MARKET_GROUPS['Ngoài Châu Á'].includes(m));
+      
+      // Mặc định (khi không chọn thị trường hoặc chọn cả hai)
+      if (cps > 1.5e6) return 'bg-lightred';
+      if (cps > 1e6) return 'bg-yellow';
+      
+      // Chỉ chọn thị trường Châu Á
+      if (hasAsia && !hasNonAsia && selectedMarkets.length > 0) {
+        if (cps > 1e6) return 'bg-lightred';
+        if (cps > 7e5) return 'bg-yellow';
+      }
+      return '';
+    }
+    function getDateRange(selection) {
+      const now = new Date();
+      let startDate, endDate = new Date(now);
+      const currentYear = now.getFullYear(), currentMonth = now.getMonth(), currentDay = now.getDay();
+      const dayOfWeek = currentDay === 0 ? 6 : currentDay - 1; // 0 for Monday, 6 for Sunday
+      
+      switch (selection) {
+        case 'today': 
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            endDate = new Date(now.setHours(23, 59, 59, 999));
+            break;
+        case 'yesterday':
+            startDate = new Date(new Date().setDate(new Date().getDate() - 1));
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(startDate);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+        case 'thisWeek':
+            startDate = new Date(now.setDate(now.getDate() - dayOfWeek));
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+        case 'lastWeek':
+            startDate = new Date();
+            startDate.setDate(new Date().getDate() - dayOfWeek - 7);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+        case 'nextWeek':
+             startDate = new Date();
+            startDate.setDate(new Date().getDate() - dayOfWeek + 7);
+            startDate.setHours(0, 0, 0, 0);
+            endDate = new Date(startDate);
+            endDate.setDate(startDate.getDate() + 6);
+            endDate.setHours(23, 59, 59, 999);
+            break;
+        case 'thisMonth':
+            startDate = new Date(currentYear, currentMonth, 1);
+            endDate = new Date(currentYear, currentMonth + 1, 0);
+            break;
+        default:
+          if (selection.startsWith('month_')) {
+            const month = parseInt(selection.split('_')[1], 10) - 1;
+            startDate = new Date(currentYear, month, 1);
+            endDate = new Date(currentYear, month + 1, 0);
+          } else if (selection.startsWith('quarter_')) {
+            const quarter = parseInt(selection.split('_')[1], 10);
+            const startMonth = (quarter - 1) * 3;
+            startDate = new Date(currentYear, startMonth, 1);
+            endDate = new Date(currentYear, startMonth + 3, 0);
+          }
+          break;
+      }
+      return { startDate, endDate };
+    }
+  </script>
+</body>
+</html>
