@@ -779,9 +779,13 @@
 
 
   <script>
-    const POST_URL = 'https://script.google.com/macros/s/AKfycbz-RldT6BcffMyv_f0Z5zm_9jCfmsYdOHZxKsjYc6PKu25qbs3kdWbGU8P1UpEb_dXP/exec';
-    const IMMEDIATE_UPDATE_URL = 'https://script.google.com/macros/s/AKfycbxZXv36EPfW5K9oT660V9jtm4xgVyaCQo2apk0EfBydggFrX6QLHC8sEnm6Kc0WsfE-/exec';
-    const MGT_API_URL = 'https://script.google.com/macros/s/AKfycbxsyTWC6ovehqoL8sxTd5opIUe286g1jnAka68Xrfku_WeTUkLfe0szSwuNVwe6ASAi/exec?tableName=MGT%20n%E1%BB%99i%20b%E1%BB%99'; // NEW MGT API URL
+    const prod = 'https://n-api-rouge.vercel.app'
+    const localhost = 'http://localhost:8081'
+    const host = 'prod'
+    const mainHost = host === 'prod' ? prod : localhost
+    const POST_URL = `${mainHost}/sheet/updateSheets`;
+    const IMMEDIATE_UPDATE_URL = `${mainHost}/sheet/quickUpdateF3`;
+    const MGT_API_URL = `${mainHost}/sheet/getSheets?rangeSheet=A:A&sheetName=MGT nội bộ`;
 
     // === CẤU HÌNH CỘT ===
     const columnDisplayMapping = {};
@@ -887,10 +891,23 @@
     }
     async function fetchStaffInfo(idns) {
       try {
-        const staffApiUrl = "https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec";
+        const staffApiUrl = `${mainHost}/sheet/getSheets?rangeSheet=A:K&sheetName=Nhân%20sự&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54`;
         const response = await fetch(staffApiUrl, { cache: "no-store" });
         if (!response.ok) throw new Error("Lỗi mạng khi tải data nhân viên");
-        const data = await response.json();
+        const results = await response.json();
+        const data = results?.rows?.map(item => ({
+          idnv: item['id'],
+          ho_va_ten: item['Họ Và Tên'],
+          bo_phan: item['Bộ phận'],
+          vi_tri: item['Vị trí'],
+          email: item['email'],
+          sdt: item['SĐT'],
+          team: item['Team'],
+          chi_nhanh: item['chi nhánh'],
+          ca: item['Ca'],
+          vi_tri_van_don: item['Vị trí vận đơn'],
+          link_van_don: item['link vận đơn']
+        }));
         let staffMember = data.find(staff => String(staff.idnv) === idns);
         if (!staffMember) {
           throw new Error(`Không tìm thấy nhân viên với ID: ${idns}`);
@@ -915,10 +932,23 @@
     async function fetchMultipleStaffInfo(idArray) {
       if (!idArray || idArray.length === 0) return [];
       try {
-        const staffApiUrl = "https://script.google.com/macros/s/AKfycbzwOv7UFwrqzf88QJL1QrxLKcnnnSIQ_PSmF0SO8LboqWI5li3vF3W8_-8s-A8lNGaR/exec";
+        const staffApiUrl = `${mainHost}/sheet/getSheets?rangeSheet=A:K&sheetName=Nhân%20sự&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54`;
         const response = await fetch(staffApiUrl, { cache: "no-store" });
         if (!response.ok) throw new Error("Lỗi mạng khi tải data nhân viên cho tab nhắc hộ");
-        const allStaffData = await response.json();
+        const results = await response.json();
+        const allStaffData = results?.rows?.map(item => ({
+          idnv: item['id'],
+          ho_va_ten: item['Họ Và Tên'],
+          bo_phan: item['Bộ phận'],
+          vi_tri: item['Vị trí'],
+          email: item['email'],
+          sdt: item['SĐT'],
+          team: item['Team'],
+          chi_nhanh: item['chi nhánh'],
+          ca: item['Ca'],
+          vi_tri_van_don: item['Vị trí vận đơn'],
+          link_van_don: item['link vận đơn']
+        })) || [];
         const staffNames = new Set();
         idArray.forEach(id => {
           const staffMember = allStaffData.find(staff => String(staff.idnv) === id.trim());
@@ -1097,9 +1127,9 @@
         allTabConfigs.forEach(config => showError(errorMsg, config.table.body));
         return;
       }
-      
+
       allData = response.rows.sort((a, b) => (parseDateString(b["Ngày lên đơn"] || b["Thời gian lên đơn"]) || 0) - (parseDateString(a["Ngày lên đơn"] || a["Thời gian lên đơn"]) || 0));
-      
+
       generateDatalistOptions();
 
       const staffId = getUrlParameter('id');
@@ -1119,7 +1149,7 @@
           }
 
           document.getElementById('tabAllRegions').style.display = currentStaff?.vi_tri === "Leader" ? '' : 'none';
-          
+
           if (currentStaff?.vi_tri === "Leader") {
             document.getElementById('tabLeader').style.display = '';
             leaderData = allData.filter(row => (row["NV Vận đơn"] || row["NV_Vận_đơn"]) === currentStaff.ho_va_ten);
@@ -1128,18 +1158,18 @@
 
           // THAY ĐỔI 2: Logic hiển thị tab HCM/Hà Nội chỉ dựa vào `vi_tri_van_don`
           if (currentStaff.vi_tri_van_don === "Lên đơn FFM") {
-              const staffBranch = currentStaff.chi_nhanh;
-              if (staffBranch === "HCM") {
-                  document.getElementById('tabHCM').style.display = '';
-                  // Giả định dữ liệu đơn hàng có cột 'Team' để lọc
-                  hcmData = allData.filter(row => (row.Team || '') === 'HCM'); 
-                  initializeTab(hcmTabConfig, hcmData);
-              } else if (staffBranch === "Hà Nội") {
-                  document.getElementById('tabHanoi').style.display = '';
-                  // Giả định dữ liệu đơn hàng có cột 'Team' để lọc
-                  hanoiData = allData.filter(row => (row.Team || '') === 'Hà Nội');
-                  initializeTab(hanoiTabConfig, hanoiData);
-              }
+            const staffBranch = currentStaff.chi_nhanh;
+            if (staffBranch === "HCM") {
+              document.getElementById('tabHCM').style.display = '';
+              // Giả định dữ liệu đơn hàng có cột 'Team' để lọc
+              hcmData = allData.filter(row => (row.Team || '') === 'HCM');
+              initializeTab(hcmTabConfig, hcmData);
+            } else if (staffBranch === "Hà Nội") {
+              document.getElementById('tabHanoi').style.display = '';
+              // Giả định dữ liệu đơn hàng có cột 'Team' để lọc
+              hanoiData = allData.filter(row => (row.Team || '') === 'Hà Nội');
+              initializeTab(hanoiTabConfig, hanoiData);
+            }
           }
 
 
@@ -1177,35 +1207,35 @@
       document.getElementById('tabMGT').style.display = ''; // Luôn hiển thị tab MGT nội bộ
 
       try {
-          const mgtResponse = await fetch(MGT_API_URL, { cache: "no-store" });
-          if (!mgtResponse.ok) throw new Error("Lỗi mạng khi tải dữ liệu MGT nội bộ");
-          const mgtJson = await mgtResponse.json();
+        const mgtResponse = await fetch(MGT_API_URL, { cache: "no-store" });
+        if (!mgtResponse.ok) throw new Error("Lỗi mạng khi tải dữ liệu MGT nội bộ");
+        const mgtJson = await mgtResponse.json();
 
-          if (!Array.isArray(mgtJson.rows)) {
-              throw new Error("Dữ liệu MGT nội bộ không đúng định dạng.");
+        if (!Array.isArray(mgtJson.rows)) {
+          throw new Error("Dữ liệu MGT nội bộ không đúng định dạng.");
+        }
+
+        const mgtOrderCodes = mgtJson.rows.map(row => row["Mã đơn hàng"]).filter(Boolean);
+        const allDataMap = new Map();
+        allData.forEach(row => {
+          const orderCode = row["Mã đơn hàng"] || row["Mã_đơn_hàng"];
+          if (orderCode) {
+            allDataMap.set(orderCode, row);
           }
+        });
 
-          const mgtOrderCodes = mgtJson.rows.map(row => row["Mã đơn hàng"]).filter(Boolean);
-          const allDataMap = new Map();
-          allData.forEach(row => {
-              const orderCode = row["Mã đơn hàng"] || row["Mã_đơn_hàng"];
-              if (orderCode) {
-                  allDataMap.set(orderCode, row);
-              }
-          });
+        // Sắp xếp và lọc dữ liệu MGT theo thứ tự từ API MGT
+        mgtData = [];
+        mgtOrderCodes.forEach(code => {
+          const row = allDataMap.get(code);
+          if (row) {
+            mgtData.push(row);
+          }
+        });
 
-          // Sắp xếp và lọc dữ liệu MGT theo thứ tự từ API MGT
-          mgtData = [];
-          mgtOrderCodes.forEach(code => {
-              const row = allDataMap.get(code);
-              if (row) {
-                  mgtData.push(row);
-              }
-          });
-
-          initializeTab(mgtTabConfig, mgtData);
+        initializeTab(mgtTabConfig, mgtData);
       } catch (error) {
-          showError(error.message, mgtTabConfig.table.body);
+        showError(error.message, mgtTabConfig.table.body);
       }
     }
 
@@ -1586,7 +1616,7 @@
     function loadData() {
       document.getElementById('loader-overlay').style.display = 'flex';
       allTabConfigs.forEach(config => showError('Đang tải dữ liệu...', config.table.body));
-      const script = document.createElement('script'); script.src = `${POST_URL}?callback=handleData&rand=${Math.random()}`;
+      const script = document.createElement('script'); script.src = `${mainHost}/sheet/getAll?callback=handleData&rand=${Math.random()}`;
       document.querySelector('script[src^="https://script.google.com"]')?.remove();
       document.body.appendChild(script)
     }
