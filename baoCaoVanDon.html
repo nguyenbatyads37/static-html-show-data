@@ -846,12 +846,12 @@
 
             function handleData(response) {
                 hideLoader();
-                if (response.error || !Array.isArray(response.data)) {
+                if (response.error || !Array.isArray(response.rows)) {
                     vanDonReportApp.showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'));
                     detailApp.showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'));
                     return;
                 }
-                globalData = response.data;
+                globalData = response.rows;
                 vanDonReportApp.populateReportFilters();
                 vanDonReportApp.applyAllFilters();
                 detailApp.populateFilters();
@@ -865,7 +865,7 @@
                 detailApp.showError('hcmTable', 'Đang tải dữ liệu...');
                 detailApp.showError('hnTable', 'Đang tải dữ liệu...');
 
-                const apiUrl = 'https://script.google.com/macros/s/AKfycbwxYvbxWphp7FHtG4CvHX8ZeIF-pz58w2j8XvgGsxASmC8nWaWjwDAjrh3Ndpnb5Qg/exec?tableName=F3';
+                const apiUrl = 'https://n-api-rouge.vercel.app/sheet/getAll';
 
                 fetch(apiUrl)
                     .then(response => response.json())
@@ -1204,9 +1204,9 @@
                     }
                     if (nameQuery) {
                         filteredData = filteredData.filter(r =>
-                            (r["Tên khách hàng"] || '').toLowerCase().includes(nameQuery) ||
-                            (r["SĐT"] || '').toString().toLowerCase().includes(nameQuery) ||
-                            (r["Mã đơn"] || '').toLowerCase().includes(nameQuery)
+                            (r["Name*"] || '').toLowerCase().includes(nameQuery) ||
+                            (r["Phone*"] || '').toString().toLowerCase().includes(nameQuery) ||
+                            (r["Mã đơn hàng"] || '').toLowerCase().includes(nameQuery)
                         );
                     }
                     this.updateSummaryBar(filteredData);
@@ -1223,8 +1223,11 @@
                     document.getElementById('totalOrdersAmount').textContent = new Intl.NumberFormat('vi-VN').format(totalAmount) + ' ₫';
                 },
                 renderTables: function (data) {
-                    const hcmData = data.filter(r => (r["khu vực"] || "").toLowerCase().includes('hcm'));
-                    const hnData = data.filter(r => (r["khu vực"] || "").toLowerCase().includes('hà nội'));
+                    const hcmData = data.filter(r => (r["Team"] || "").toLowerCase().includes('hcm'));
+                    console.log('data', data);
+                    console.log('hcm', hcmData);
+
+                    const hnData = data.filter(r => (r["Team"] || "").toLowerCase().includes('hà nội'));
                     const headers = ["Mã đơn", "Ngày lên đơn", "Tên khách hàng", "SĐT", "Mặt hàng", "Tổng tiền VNĐ", "NV Vận đơn", "Đơn vị vận chuyển", "Trạng thái giao hàng NB", "Trạng thái thu tiền", "Kết quả check"];
 
                     this.renderTableContent('hcmTable', headers, hcmData);
@@ -1256,17 +1259,34 @@
                         const tr = tbody.insertRow();
                         headers.forEach(header => {
                             const cell = tr.insertCell();
-                            const value = row[header] || '';
+                            let value = row[header] || '';
+                            if (header == "Mã đơn") {
+                                value = row["Mã đơn hàng"] || '';
+                            }
+                            if (header == "SĐT") {
+                                value = row["Phone*"] || '';
+                            }
+                            if (header == "Tên khách hàng") {
+                                value = row["Name*"] || '';
+                            }
                             // Format currency
                             if (header === "Tổng tiền VNĐ" && !isNaN(parseFloat(value))) {
-                                cell.textContent = new Intl.NumberFormat('vi-VN').format(value) + ' ₫';
+                                cell.textContent = formatVND(value) + ' ₫';
                             } else {
-                                cell.textContent = value;
+                                cell.textContent = value
                             }
                         });
                     });
                 }
             };
+
+            function formatVND(value) {
+                if (value == null) return '';
+                const cleaned = String(value).replace(/[^\d.-]/g, '');  // bỏ dấu phẩy, ký tự lạ
+                const n = Number(cleaned);
+                if (Number.isNaN(n)) return '';
+                return n.toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+            }
 
             // --- GLOBAL TABLE SORTING HANDLER ---
             function parseSortableValue(text) {
