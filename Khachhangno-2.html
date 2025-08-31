@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khách Hàng Nợ | Tổng kho Hà Hòa</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #ff9800;
+            --hover-color: #45a049;
+            --text-color: #333;
+            --border-color: #e0e0e0;
+            --error-color: #d32f2f;
+            --input-bg: #fffbe6;
+            --summary-color: #1D6F42;
+            --disabled-color: #ccc;
+            --overdue-color: #ffcdd2; /* Màu cho dòng quá hạn */
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Roboto', sans-serif; }
+        body { background-color: #f4f7f6; line-height: 1.6; }
+        .container { max-width: 1800px; margin: 20px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08); display: none; }
+        .container.visible { display: block; }
+        header { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 20px; padding-bottom: 20px; border-bottom: 2px solid var(--primary-color); position: relative; }
+        header img { height: 120px; width: 120px; object-fit: cover; margin-bottom: 15px; border-radius: 50%; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15); border: 3px solid var(--primary-color); }
+        header h1 { color: var(--primary-color); font-size: 28px; }
+        #user-info { position: absolute; top: 10px; right: 10px; font-size: 14px; color: #555; background-color: #f0f0f0; padding: 8px 12px; border-radius: 20px; }
+        #user-info #logout-btn { color: var(--error-color); text-decoration: none; font-weight: 500; margin-left: 8px; }
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px; padding: 20px; background-color: #f9f9f9; border-radius: 8px; border: 1px solid var(--border-color); }
+        .dashboard-card { background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07); border-left: 5px solid var(--primary-color); transition: transform 0.2s, box-shadow 0.2s; }
+        .dashboard-card.summary { border-left-color: var(--summary-color); }
+        .dashboard-card.summary p { color: var(--summary-color); }
+        .dashboard-card:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); }
+        .dashboard-card h3 { font-size: 16px; color: #555; margin-bottom: 10px; font-weight: 500; }
+        .dashboard-card p { font-size: 24px; font-weight: 700; color: var(--primary-color); }
+        
+        #max-debt-control-card { grid-column: 1 / -1; border-left-color: var(--secondary-color); }
+        #max-debt-control-card h3 { color: var(--secondary-color); }
+        .debt-control-wrapper { display: flex; align-items: flex-end; gap: 20px; margin-top: 10px; flex-wrap: wrap; }
+        .debt-control-group { flex: 1; min-width: 200px; }
+        .debt-control-group label { font-weight: 500; font-size: 14px; display: block; margin-bottom: 5px; }
+        .debt-control-group input { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        #current-customer-debt-display { display: none; flex: 1; min-width: 220px; background-color: #f0f0f0; padding: 8px; border-radius: 4px; }
+        #current-customer-debt-display p { line-height: 1.2; }
+        #current-customer-debt-display .debt-label { margin: 0; font-size: 14px; color: #333; }
+        #current-customer-debt-display #current-customer-debt-value { margin: 0; font-size: 20px; font-weight: 700; color: var(--error-color); }
+
+        .table-container { overflow-x: auto; max-height: 60vh; }
+        table { border-collapse: collapse; font-size: 13px; width: 100%; }
+        .col-sales-staff { min-width: 180px; }
+        .align-left { text-align: left !important; } .align-right { text-align: right !important; } .align-center { text-align: center !important; }
+        th, td { padding: 8px 10px; border: 1px solid var(--border-color); vertical-align: middle; word-break: break-word; }
+        th { text-align: center; }
+        thead tr:first-child th { text-align: center !important; }
+        tbody td input, tbody td select, tbody td textarea { width: 100%; height: 100%; border: none; background-color: transparent; padding: 8px 10px; font-size: 13px; text-align: inherit; appearance: none; resize: vertical; min-height: 38px; }
+        .align-left input, .align-left select, .align-left textarea { text-align: left !important; } .align-right input, .align-right select, .align-right textarea { text-align: right !important; } .align-center input, .align-center select, .align-center textarea { text-align: center !important; }
+        thead .filter-row input, thead .filter-row select { text-align: left; }
+        thead th { background-color: var(--primary-color); color: white; position: sticky; top: 0; z-index: 20; }
+        thead tr:first-child th:not(:first-child) { resize: horizontal; overflow: auto; position: relative; }
+        thead .filter-row th { padding: 5px; background-color: #e8f5e9; top: 45px; z-index: 10; position: sticky; vertical-align: top; }
+        thead .filter-row input, thead .filter-row select { width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; }
+        tbody tr:nth-child(even) { background-color: #f9f9f9; }
+        tbody tr:hover { background-color: #e8f5e9; }
+        tfoot { position: sticky; bottom: -1px; z-index: 10; }
+        tfoot td { background-color: #e8f5e9; font-weight: bold; font-size: 13px; color: var(--summary-color); padding: 8px 10px !important; }
+        tbody tr.row-new { background-color: #e8f5e9 !important; font-weight: bold; }
+        tbody tr.row-dirty { background-color: #fff9c4 !important; }
+        tbody tr.row-deleted { display: none; }
+        tbody tr.row-overdue:not(.debt-paid-off) { background-color: var(--overdue-color) !important; }
+        tr.debt-paid-off { display: none !important; }
+        .input-row { background-color: var(--input-bg) !important; font-weight: bold; }
+        .input-row td { padding: 8px; vertical-align: middle; }
+        .input-row input, .input-row select, .input-row textarea { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; font-weight: bold; resize: vertical; min-height: 38px; text-align: inherit; }
+        .input-row input[readonly], .input-row textarea[readonly] { background-color: #e9e9e9; cursor: not-allowed; }
+        .input-row input::placeholder, .input-row textarea::placeholder { font-weight: normal; color: #999; }
+        .status-indicator { text-align: center; padding: 20px; font-size: 16px; color: #777; font-style: italic; }
+        .status-indicator.error { color: var(--error-color); font-weight: 500; }
+        .table-title { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 15px; margin-top: 25px; }
+        .table-title h2 { color: #333; }
+        .table-title .controls-wrapper { display: flex; align-items: center; gap: 10px; }
+        .table-title .record-count { font-size: 14px; color: #555; background-color: #e0e0e0; padding: 4px 10px; border-radius: 12px; font-weight: 500; }
+        footer { text-align: center; margin-top: 30px; color: #888; font-size: 13px; }
+        .delete-btn { cursor: pointer; color: var(--error-color); font-weight: bold; font-size: 1.4em; line-height: 1; display: block; padding: 8px 10px; }
+        .delete-btn:hover { color: #a02020; }
+        .action-btn { border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 500; display: inline-flex; align-items: center; gap: 8px; transition: background-color 0.3s; }
+        .action-btn i { font-size: 16px; }
+        .export-btn { background-color: #1D6F42; color: white; }
+        .export-btn:hover { background-color: #165934; }
+        .update-btn { background-color: #ff9800; color: white; }
+        .update-btn:hover { background-color: #e68900; }
+        .update-btn:disabled { background-color: var(--disabled-color); cursor: not-allowed; }
+        #login-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.6); z-index: 1000; display: flex; justify-content: center; align-items: center; }
+        #login-box { background: #fff; padding: 40px; border-radius: 8px; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); text-align: center; width: 100%; max-width: 350px; }
+        #login-box h2 { margin-bottom: 25px; color: var(--primary-color); }
+        .input-group { margin-bottom: 20px; text-align: left; }
+        .input-group label { display: block; margin-bottom: 5px; font-weight: 500; color: #555; }
+        .input-group input { width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; }
+        #login-btn { width: 100%; padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background-color 0.3s; }
+        #login-btn:hover { background-color: var(--hover-color); }
+        #login-error { margin-top: 15px; color: var(--error-color); font-size: 14px; height: 20px; }
+        #toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 9999; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
+        .toast { padding: 12px 20px; border-radius: 6px; color: #fff; font-size: 15px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); opacity: 0; transform: translateX(100%); animation: slideIn 0.5s forwards, fadeOut 0.5s 4.5s forwards; }
+        .toast.success { background-color: #4CAF50; } .toast.error { background-color: var(--error-color); } .toast.warning { background-color: #ff9800; }
+        @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
+    </style>
+</head>
+
+<body>
+    <div id="login-overlay">
+        <div id="login-box">
+            <h2>Đăng Nhập Hệ Thống</h2>
+            <form id="login-form">
+                <div class="input-group"> <label for="username">Tên đăng nhập</label> <input type="text" id="username" required> </div>
+                <div class="input-group"> <label for="password">Mật khẩu</label> <input type="password" id="password" required> </div>
+                <button type="submit" id="login-btn">Đăng Nhập</button>
+                <p id="login-error"></p>
+            </form>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div id="user-info"></div>
+            <img alt="Logo" src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff6c823b5.%E1%BA%A2nh.094646.jpg" />
+            <h1>Công Nợ Khách Hàng Nhà Phân Phối Hà Hoà</h1>
+        </header>
+        <div class="dashboard">
+            <div class="dashboard-card"> <h3>Tổng Tiền Nợ</h3> <p id="dashboard-total-no">0</p> </div>
+            <div class="dashboard-card"> <h3>Tổng Tiền Đã Trả</h3> <p id="dashboard-total-tra">0</p> </div>
+            <div class="dashboard-card"> <h3>Giá Trị Hàng Thu Hồi</h3> <p id="dashboard-total-thuhoi">0</p> </div>
+            <div class="dashboard-card summary"> <h3>Tổng Công Nợ Cuối Cùng</h3> <p id="dashboard-total-conlai">0</p> </div>
+            
+            <div class="dashboard-card" id="max-debt-control-card">
+                <h3>Kiểm Soát Hạn Mức Nợ</h3>
+                <div class="debt-control-wrapper">
+                    <div class="debt-control-group">
+                        <label for="max-debt-input">Hạn Mức Nợ Tối Đa (VNĐ)</label>
+                        <input type="text" id="max-debt-input" inputmode="decimal" placeholder="Nhập hạn mức...">
+                    </div>
+                    <div class="debt-control-group">
+                        <label for="custom-debt-term-input">Thêm Hạn Nợ Tùy Chỉnh (Ngày)</label>
+                        <input type="number" id="custom-debt-term-input" placeholder="Nhập số ngày...">
+                    </div>
+                    <div id="current-customer-debt-display" class="debt-control-group">
+                        <p class="debt-label">Nợ hiện tại của KH:</p>
+                        <p id="current-customer-debt-value">0 VNĐ</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="main-content-khn">
+            <div class="table-title">
+                <h2>Bảng Khách Hàng Nợ</h2>
+                <div class="controls-wrapper">
+                    <span id="count-khn" class="record-count">...</span>
+                    <button id="update-btn-khn" class="update-btn action-btn" disabled><i class="fas fa-save"></i> Lưu Thay Đổi</button>
+                    <button class="export-btn action-btn" data-table-key="khn"><i class="fas fa-file-excel"></i> Tải Excel</button>
+                </div>
+            </div>
+            <div class="table-container" id="container-khn">
+                <p class="status-indicator">Đang tải dữ liệu...</p>
+            </div>
+        </div>
+
+        <footer>
+            <p>&copy; 2023 - Hệ thống quản lý Tổng kho Hà Hòa</p>
+        </footer>
+    </div>
+
+    <div id="toast-container"></div>
+    <datalist id="customer-list-options"></datalist>
+    <datalist id="sales-person-list-options"></datalist>
+
+   <script>
+    const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwZ73GdTFsSitoVqJKiZKIbU3wHM_qpjxQEbhlKTwi1V9GijNC8SPoRH9vVDD65xb9x/exec';
+    const TABLE_CONFIG = {
+        'khn': { name: 'Khách Hàng Nợ', containerId: 'container-khn', countId: 'count-khn', loaded: false, totalField: 'Số tiền nợ' },
+        'khtn': { name: 'Khách hàng trả nợ', loaded: false, totalField: 'Số tiền trả nợ' },
+        'hth': { name: 'Hàng thu hồi', loaded: false, totalField: 'Thành tiền' },
+    };
+    const headerMapping = { 'Giao hàng cho nợ': 'NV Giao hàng', 'Người chịu trách nhiệm': 'NV Kinh doanh', 'Số tiền nợ': 'Tiền Nợ', 'Hạn trả nợ': 'Hạn Nợ', 'Ngày phải trả': 'Ngày Trả Nợ' };
+    const HIDDEN_COLUMNS = ['id', 'id nợ'];
+    const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
+    const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ', 'Đơn giá', 'Số lượng', 'Hạn trả nợ', 'Số ngày'];
+    const COLUMN_CONFIG = {
+        'Người chịu trách nhiệm': { align: 'left', className: 'col-sales-staff' }, 'Địa chỉ': { align: 'left' }, 'Ghi chú': { align: 'left' }, 'Tên Khách Hàng': { align: 'left' }, 'Sản phẩm/Mặt hàng': { align: 'left' }, 'Tên sản phẩm': { align: 'left' }, 'SĐT': { align: 'left' }, 'Số tiền nợ': { align: 'right' }, 'Đơn giá': { align: 'right' }, 'Thành tiền': { align: 'right' }, 'Số tiền trả nợ': { align: 'right' }, 'Hạn trả nợ': { align: 'right' }, 'Số ngày': { align: 'right' }, 'Số lượng': { align: 'right' }, 'Ngày nợ': { align: 'center' }, 'Ngày trả': { align: 'center' }, 'Ngày thu hồi': { align: 'center' }, 'Ngày phải trả': { align: 'center' },
+    };
+    let originalTableData = {};
+    let changeSet = { create: {}, update: {}, delete: {} };
+    let nhanSuList = [];
+    let customerList = [];
+
+    function calculateCustomerTotalDebt(customerName) {
+        if (!customerName) return 0;
+        let totalDebt = 0, totalPaid = 0, totalReturned = 0;
+
+        const getConsolidatedData = (tableKey) => {
+            const originalData = originalTableData[tableKey]?.data || [];
+            const createdData = Object.values(changeSet.create[tableKey] || {});
+            const updatedData = changeSet.update[tableKey] || {};
+            const deletedIds = new Set(changeSet.delete[tableKey] || []);
+            let consolidated = [];
+            originalData.forEach(row => {
+                if (!deletedIds.has(row.id)) {
+                    consolidated.push({ ...row, ...(updatedData[row.id] || {}) });
+                }
+            });
+            consolidated.push(...createdData);
+            return consolidated;
+        };
+
+        const allDebts = getConsolidatedData('khn');
+        const customerDebtIds = new Set();
+        
+        allDebts.forEach(row => {
+            if (row['Tên Khách Hàng'] === customerName) {
+                totalDebt += parseFloat(String(row['Số tiền nợ'] || '0').replace(/\./g, '')) || 0;
+                customerDebtIds.add(row.id);
+            }
+        });
+
+        getConsolidatedData('khtn').forEach(row => {
+            if (customerDebtIds.has(row['id nợ'])) {
+                totalPaid += parseFloat(String(row['Số tiền trả nợ'] || '0').replace(/\./g, '')) || 0;
+            }
+        });
+
+        getConsolidatedData('hth').forEach(row => {
+            if (row['Tên Khách Hàng'] === customerName) {
+                totalReturned += parseFloat(String(row['Thành tiền'] || '0').replace(/\./g, '')) || 0;
+            }
+        });
+        
+        return totalDebt - totalPaid - totalReturned;
+    }
+
+    function updateVisibleRowCount(tableKey) {
+        const config = TABLE_CONFIG[tableKey];
+        const container = document.getElementById(config.containerId);
+        if (!container || !config.countId) return;
+        const table = container.querySelector('table');
+        if (!table) { document.getElementById(config.countId).textContent = '0 bản ghi'; return; }
+        const unpaidRows = table.querySelectorAll('tbody tr:not(.input-row):not(.debt-paid-off)');
+        document.getElementById(config.countId).textContent = `${unpaidRows.length} bản ghi`;
+    }
+    
+    function processAndMarkPaidDebts() {
+        const khnData = originalTableData['khn']?.data;
+        const khtnData = originalTableData['khtn']?.data;
+        if (!khnData) return;
+        const paidAmounts = {};
+        (khtnData || []).forEach(p => { paidAmounts[p['id nợ']] = (paidAmounts[p['id nợ']] || 0) + (parseFloat(String(p['Số tiền trả nợ'] || '0').replace(/\./g, '')) || 0); });
+        
+        const khnTable = document.querySelector('#container-khn table');
+        if (!khnTable) return;
+        khnData.forEach(debt => {
+            const totalDebt = parseFloat(String(debt['Số tiền nợ'] || '0').replace(/\./g, '')) || 0;
+            const totalPaid = paidAmounts[debt.id] || 0;
+            const row = khnTable.querySelector(`tr[data-id="${debt.id}"]`);
+            if (row) {
+                if (totalPaid >= totalDebt && totalDebt > 0) {
+                    row.classList.add('debt-paid-off');
+                } else {
+                    row.classList.remove('debt-paid-off');
+                }
+            }
+        });
+    }
+
+    function highlightOverdueRows() {
+        const table = document.querySelector('#container-khn table');
+        if (!table) return;
+        const rows = table.querySelectorAll('tbody tr[data-id]');
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); 
+
+        rows.forEach(row => {
+            if (row.classList.contains('debt-paid-off')) {
+                row.classList.remove('row-overdue');
+                return;
+            }
+            const dueDateInput = row.querySelector('[data-field="Ngày phải trả"]');
+            if (dueDateInput && dueDateInput.value) {
+                const dueDate = new Date(dueDateInput.value);
+                if (dueDate < today) {
+                    row.classList.add('row-overdue');
+                } else {
+                    row.classList.remove('row-overdue');
+                }
+            }
+        });
+    }
+
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = `toast ${type}`;
+        toast.textContent = message;
+        container.appendChild(toast);
+        setTimeout(() => { toast.remove(); }, 5000);
+    }
+    
+    function createCellInput(originalHeader, value) {
+        const formattedValue = value ?? '';
+        let inputHtml = '';
+        const textareaColumns = ['Địa chỉ', 'Khu vực', 'Ghi chú', 'Sản phẩm/Mặt hàng'];
+        const config = COLUMN_CONFIG[originalHeader] || { align: 'left', className: '' };
+        const cellClasses = `align-${config.align} ${config.className || ''}`.trim();
+        if (originalHeader === 'Tên Khách Hàng') {
+            inputHtml = `<input type="text" list="customer-list-options" data-field="${originalHeader}" value="${formattedValue}">`;
+        } else if (textareaColumns.includes(originalHeader)) {
+            inputHtml = `<textarea data-field="${originalHeader}">${formattedValue}</textarea>`;
+        } else if (originalHeader === 'Giao hàng cho nợ') {
+            const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`).join('');
+            inputHtml = `<select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select>`;
+        } else if (originalHeader === 'Người chịu trách nhiệm') {
+            inputHtml = `<input type="text" list="sales-person-list-options" data-field="${originalHeader}" value="${formattedValue}">`;
+        } else {
+            switch (originalHeader) {
+                case 'Ngày nợ':
+                    inputHtml = `<input type="date" data-field="${originalHeader}" value="${formatDateForInput(formattedValue)}">`; break;
+                case 'Ngày phải trả':
+                    inputHtml = `<input type="date" data-field="${originalHeader}" value="${formatDateForInput(formattedValue)}" readonly>`; break;
+                case 'Số tiền nợ': case 'Đơn giá': case 'Số lượng':
+                    const cleanValue = String(formattedValue).replace(/\./g, '');
+                    const numericValue = isNaN(Number(cleanValue)) ? '' : Number(cleanValue).toLocaleString('vi-VN');
+                    inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}">`; break;
+                case 'Hạn trả nợ': // Dành cho các dòng đã tồn tại
+                    const defaultOptions = [15, 30, 45, 60];
+                    const currentValue = formattedValue || '30';
+                    const options = [...new Set([...defaultOptions, parseInt(currentValue)])].filter(Boolean).sort((a,b)=>a-b);
+                    const optionsHtml = options.map(d => `<option value="${d}" ${d == currentValue ? 'selected' : ''}>${d} ngày</option>`).join('');
+                    inputHtml = `<select data-field="Hạn trả nợ">${optionsHtml}</select>`;
+                    break;
+                default:
+                    inputHtml = `<input type="text" data-field="${originalHeader}" value="${formattedValue}">`; break;
+            }
+        }
+        return `<td class="${cellClasses}">${inputHtml}</td>`;
+    }
+
+    function renderTable(tableKey, data) {
+        const config = TABLE_CONFIG[tableKey];
+        const container = document.getElementById(config.containerId);
+        if (!container) return;
+        if (tableKey === 'khn' && data.data) {
+            const uniqueCustomers = {};
+            data.data.slice().reverse().forEach(row => {
+                if (row['Tên Khách Hàng'] && !uniqueCustomers[row['Tên Khách Hàng']]) uniqueCustomers[row['Tên Khách Hàng']] = {};
+            });
+            customerList = Object.keys(uniqueCustomers);
+            document.getElementById('customer-list-options').innerHTML = customerList.map(c => `<option value="${c}"></option>`).join('');
+        }
+        if (!data.data || !data.headers) { container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>'; return; }
+        const headers = data.headers;
+        const displayedHeaders = headers.filter(h => !HIDDEN_COLUMNS.includes(h));
+        const filterRowHtml = `<tr class="filter-row"><th></th>${displayedHeaders.map(h => `<th><input type="text" class="filter-input" data-header="${h}" placeholder="Lọc..."></th>`).join('')}</tr>`;
+        const headerHtml = `<thead><tr><th style="width: 50px;">Xóa</th>${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}</tr>${filterRowHtml}</thead>`;
+        const inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${headers.map(h => { 
+            if (HIDDEN_COLUMNS.includes(h)) return `<td style="display: none;"><input type="hidden" data-field="${h}"></td>`;
+            const dH = headerMapping[h] || h; let fH;
+            if (['Địa chỉ', 'Sản phẩm/Mặt hàng', 'Ghi chú'].includes(h)) { fH = `<textarea placeholder="${dH}..." data-field="${h}"></textarea>`;
+            } else if (h === 'Tên Khách Hàng') { fH = `<input type="text" list="customer-list-options" placeholder="${dH}..." data-field="${h}">`;
+            } else if (h === 'Giao hàng cho nợ') { const o = GIAO_HANG_NV_LIST.map(n => `<option value="${n}">${n}</option>`).join(''); fH = `<select data-field="${h}"><option value="">-- Chọn --</option>${o}</select>`;
+            } else if (h === 'Người chịu trách nhiệm') { fH = `<input type="text" list="sales-person-list-options" placeholder="${dH}..." data-field="${h}">`;
+            } else { switch (h) {
+                case 'Ngày nợ': fH = `<input type="date" data-field="${h}" value="${new Date().toISOString().slice(0,10)}">`; break;
+                case 'Hạn trả nợ': // Thay đổi cho dòng thêm mới
+                    fH = `<input type="number" data-field="Hạn trả nợ" placeholder="Ngày" value="30">`; 
+                    break;
+                case 'Ngày phải trả': fH = `<input type="date" data-field="${h}" readonly>`; break;
+                case 'Số tiền nợ': case 'Số lượng': case 'Đơn giá': fH = `<input type="text" inputmode="decimal" placeholder="0" data-field="${h}">`; break;
+                default: fH = `<input type="text" placeholder="${dH}..." data-field="${h}">`; break;
+            }} return `<td>${fH}</td>`;
+        }).join('')}</tr>`;
+        const bodyHtml = `<tbody>${inputRowHtml}${data.data.map(row => { const rId = row['id']; row['Ngày phải trả'] = calculateDueDate(row['Ngày nợ'], row['Hạn trả nợ']); const cH = headers.map(h => HIDDEN_COLUMNS.includes(h) ? `<td style="display: none;">${row[h] || ''}</td>` : createCellInput(h, row[h])).join(''); return `<tr data-id="${rId}"><td class="align-center"><span class="delete-btn" data-id="${rId}">&#10006;</span></td>${cH}</tr>`; }).join('')}</tbody>`;
+        container.innerHTML = `<table>${headerHtml}${bodyHtml}<tfoot></tfoot></table>`;
+        setupEventListeners(tableKey, container);
+        updateTotals(tableKey);
+        highlightOverdueRows();
+    }
+
+    function updateTotals(tableKey) {
+        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId); if (!container) return;
+        const table = container.querySelector('table'); if (!table) return;
+        const tfoot = table.querySelector('tfoot'); if (!tfoot) return;
+        const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).slice(1).map(th => Object.keys(headerMapping).find(key => headerMapping[key] === th.textContent) || th.textContent);
+        const visibleRows = Array.from(table.querySelectorAll('tbody tr:not(.input-row)')).filter(row => row.style.display !== 'none' && !row.classList.contains('debt-paid-off'));
+        let totalRowHtml = '<td>Tổng cộng</td>';
+        headers.forEach(header => {
+            if (NUMERIC_COLUMNS_FOR_TOTAL.includes(header) && header !== 'Hạn trả nợ') {
+                const total = visibleRows.reduce((sum, row) => { const input = row.querySelector(`[data-field="${header}"]`); return sum + (parseFloat((input ? input.value || '0' : '0').replace(/\./g, '')) || 0); }, 0);
+                totalRowHtml += `<td class="align-right">${total.toLocaleString('vi-VN')}</td>`;
+            } else { totalRowHtml += '<td></td>'; }
+        });
+        tfoot.innerHTML = `<tr>${totalRowHtml}</tr>`;
+    }
+
+    function setupEventListeners(tableKey, container) {
+        if (!container) return;
+        const table = container.querySelector('table'); if (!table) return;
+        const tbody = table.querySelector('tbody');
+        table.querySelectorAll('.filter-input').forEach(input => input.addEventListener('input', () => filterTable(tableKey)));
+        tbody.addEventListener('change', (e) => { const el = e.target; const tr = el.closest('tr'); if (tr && !tr.classList.contains('input-row')) handleCellEdit(e, tableKey); });
+        
+        const eventTrigger = (e) => {
+            const el = e.target;
+            const tr = el.closest('tr');
+            if (!tr) return;
+
+            if (el.tagName === 'INPUT' || el.tagName === 'SELECT') {
+                const row = el.closest('tr');
+                if (row) {
+                    const ngayNoInput = row.querySelector('[data-field="Ngày nợ"]');
+                    const hanTraNoInput = row.querySelector('[data-field="Hạn trả nợ"]');
+                    const ngayPhaiTraInput = row.querySelector('[data-field="Ngày phải trả"]');
+                    
+                    if (ngayNoInput && hanTraNoInput && ngayPhaiTraInput) {
+                        ngayPhaiTraInput.value = formatDateForInput(calculateDueDate(ngayNoInput.value, hanTraNoInput.value));
+                    }
+                }
+            }
+            if ((el.tagName === 'INPUT' && el.type === 'text' && !el.hasAttribute('inputmode')) || el.tagName === 'TEXTAREA') {
+                capitalizeFirstLetter(el);
+            }
+        };
+        tbody.addEventListener('input', eventTrigger);
+
+        tbody.addEventListener('click', (e) => { if (e.target.classList.contains('temp-delete-btn')) { const tr = e.target.closest('tr'); const rowId = tr.dataset.id; if (changeSet.create[tableKey]?.[rowId]) delete changeSet.create[tableKey][rowId]; tr.remove(); updateTotals(tableKey); updateDashboard(); updateVisibleRowCount(tableKey); setChangesMade(tableKey, hasPendingChanges(tableKey)); } });
+        tbody.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
+        table.querySelectorAll('.delete-btn:not(.temp-delete-btn)').forEach(btn => btn.addEventListener('click', (e) => handleDeleteClick(e, tableKey)));
+        
+        const inputRow = document.getElementById(`input-row-${tableKey}`);
+        if (inputRow) {
+            inputRow.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); submitNewRow(tableKey); } });
+            inputRow.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
+            const customerNameInput = inputRow.querySelector('input[data-field="Tên Khách Hàng"]');
+            if(customerNameInput) {
+                customerNameInput.addEventListener('input', (e) => {
+                    const customerName = e.target.value.trim();
+                    const displayContainer = document.getElementById('current-customer-debt-display');
+                    const displayValue = document.getElementById('current-customer-debt-value');
+                    if(customerName) {
+                        const currentDebt = calculateCustomerTotalDebt(customerName);
+                        displayValue.textContent = `${currentDebt.toLocaleString('vi-VN')} VNĐ`;
+                        displayContainer.style.display = 'block';
+                    } else {
+                        displayContainer.style.display = 'none';
+                    }
+                });
+            }
+            // Trigger calculation for the input row initially
+            const firstHanTraNo = inputRow.querySelector('[data-field="Hạn trả nợ"]');
+            if(firstHanTraNo) firstHanTraNo.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+    }
+
+    function handleCellEdit(e, tableKey) {
+        const element = e.target; const tr = element.closest('tr'); const rowId = tr.dataset.id; const field = element.dataset.field;
+        let newValue = (element.getAttribute('inputmode') === 'decimal') ? element.value.replace(/\./g, '') : element.value;
+        if (!rowId) return;
+        if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
+        if (!changeSet.update[tableKey][rowId]) {
+            const rowDataFromDOM = {};
+            originalTableData[tableKey].headers.forEach(h => {
+                const cell = tr.querySelector(`[data-field="${h}"]`);
+                if (cell) rowDataFromDOM[h] = cell.value.replace(/\./g, '');
+                else { const originalRow = originalTableData[tableKey]?.data.find(r => r.id == rowId); if (originalRow) rowDataFromDOM[h] = originalRow[h]; }
+            });
+            changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
+        }
+        changeSet.update[tableKey][rowId][field] = newValue;
+        tr.classList.add('row-dirty');
+        setChangesMade(tableKey, true);
+        updateTotals(tableKey);
+        updateDashboard();
+        highlightOverdueRows();
+    }
+
+    function handleDeleteClick(e, tableKey) {
+        const rowId = e.target.dataset.id; const tr = e.target.closest('tr');
+        if (rowId && tr) { if (!changeSet.delete[tableKey]) changeSet.delete[tableKey] = []; changeSet.delete[tableKey].push(rowId); tr.classList.add('row-deleted'); setChangesMade(tableKey, true); tr.style.display = 'none'; updateTotals(tableKey); updateDashboard(); updateVisibleRowCount(tableKey); }
+    }
+
+    function submitNewRow(tableKey) {
+        const inputRow = document.getElementById(`input-row-${tableKey}`);
+        const headers = originalTableData[tableKey].headers;
+        const rowData = {};
+        headers.forEach(h => { const i = inputRow.querySelector(`[data-field="${h}"]`); if (i) rowData[h] = i.value.replace(/\./g, ''); });
+        
+        const maxDebtInput = document.getElementById('max-debt-input');
+        const maxDebtValue = maxDebtInput ? (parseFloat(maxDebtInput.value.replace(/\./g, '')) || 0) : 0;
+        if (maxDebtValue > 0) {
+            const customerName = rowData['Tên Khách Hàng'];
+            if (customerName) {
+                const currentDebt = calculateCustomerTotalDebt(customerName);
+                const newDebt = parseFloat(rowData['Số tiền nợ'] || '0');
+                if ((currentDebt + newDebt) > maxDebtValue) {
+                    showToast(`Nợ của KH (${(currentDebt + newDebt).toLocaleString('vi-VN')}) vượt hạn mức (${maxDebtValue.toLocaleString('vi-VN')}). Không thể thêm!`, 'error');
+                    return;
+                }
+            }
+        }
+        
+        if (!rowData['Tên Khách Hàng']) { showToast('Vui lòng nhập Tên Khách Hàng.', 'warning'); return; }
+        rowData['Ngày phải trả'] = formatDateForServer(calculateDueDate(rowData['Ngày nợ'], rowData['Hạn trả nợ']));
+        const tempId = crypto.randomUUID();
+        rowData['id'] = tempId;
+        if (!changeSet.create[tableKey]) changeSet.create[tableKey] = {};
+        changeSet.create[tableKey][tempId] = rowData;
+        const newTr = document.createElement('tr');
+        newTr.dataset.id = tempId; newTr.classList.add('row-new');
+        const cellsHtml = headers.map(h => HIDDEN_COLUMNS.includes(h) ? `<td style="display: none;"></td>` : createCellInput(h, rowData[h])).join('');
+        newTr.innerHTML = `<td class="align-center"><span class="delete-btn temp-delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
+        newTr.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
+        inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
+        inputRow.querySelectorAll('input, select, textarea').forEach(i => { 
+            const field = i.dataset.field;
+            if (field === 'Ngày nợ') { i.value = new Date().toISOString().slice(0, 10); } 
+            else if (field === 'Hạn trả nợ') { i.value = '30'; }
+            else if (i.tagName === 'SELECT') { i.selectedIndex = 0; } 
+            else if (!i.readOnly) { i.value = ''; } 
+        });
+        document.getElementById('current-customer-debt-display').style.display = 'none';
+        setChangesMade(tableKey, true);
+        updateTotals(tableKey);
+        updateDashboard();
+        updateVisibleRowCount(tableKey);
+        highlightOverdueRows();
+        inputRow.querySelector('[data-field="Hạn trả nợ"]').dispatchEvent(new Event('input', {bubbles: true}));
+    }
+
+    async function handleSaveChanges(tableKey) {
+        const updateBtn = document.getElementById('update-btn-khn');
+        updateBtn.disabled = true; updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
+        const config = TABLE_CONFIG[tableKey];
+        const fetchPromises = [];
+        const cleanData = (data) => JSON.parse(JSON.stringify(data)).map(row => { Object.keys(row).forEach(key => { if (key === 'SĐT' && row[key]) row[key] = "'" + String(row[key]); }); return row; });
+        const createData = cleanData(Object.values(changeSet.create[tableKey] || {}));
+        if (createData.length > 0) fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'create', data: createData }) }));
+        const updateData = cleanData(Object.values(changeSet.update[tableKey] || {}));
+        if (updateData.length > 0) fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData }) }));
+        const deleteIds = changeSet.delete[tableKey] || [];
+        if (deleteIds.length > 0) fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'delete', data: { ids: deleteIds } }) }));
+        try {
+            await Promise.all(fetchPromises);
+            showToast('Lưu thay đổi thành công!', 'success');
+            changeSet = { create: {}, update: {}, delete: {} };
+            Object.keys(TABLE_CONFIG).forEach(k => TABLE_CONFIG[k].loaded = false);
+            await initApp(true);
+        } catch (error) { showToast('Đã xảy ra lỗi khi lưu: ' + error.message, 'error');
+        } finally { updateBtn.innerHTML = '<i class="fas fa-save"></i> Lưu Thay Đổi'; }
+    }
+
+    async function loadData(tableKey, onComplete) {
+        const config = TABLE_CONFIG[tableKey];
+        if (!config || (config.loaded && !hasPendingChanges(tableKey))) { if (onComplete) onComplete(); return; }
+        if (config.containerId) document.getElementById(config.containerId).innerHTML = `<p class="status-indicator">Đang tải...</p>`;
+        try {
+            const response = await fetch(`${API_BASE_URL}?tableName=${encodeURIComponent(config.name)}`);
+            if (!response.ok) throw new Error(`Lỗi mạng: ${response.statusText}`);
+            originalTableData[tableKey] = await response.json();
+            if (config.containerId) renderTable(tableKey, originalTableData[tableKey]);
+            config.loaded = true;
+            if (config.containerId) setChangesMade(tableKey, false);
+        } catch (error) { if (config.containerId) document.getElementById(config.containerId).innerHTML = `<p class="status-indicator error">Lỗi tải dữ liệu: ${error.message}</p>`;
+        } finally { if (onComplete) onComplete(); }
+    }
+
+    async function fetchNhanSuAndLogin(username, password, errorEl, loginBtn) {
+        try {
+            const response = await fetch(`${API_BASE_URL}?tableName=Nhân sự`);
+            if (!response.ok) throw new Error('Không thể tải dữ liệu người dùng.');
+            const personnelData = await response.json();
+            if (!personnelData || !personnelData.data) throw new Error('Dữ liệu người dùng không hợp lệ.');
+            nhanSuList = [...new Set(personnelData.data.map(user => user['Họ và tên']))].filter(Boolean).sort();
+            if (username && password) {
+                const foundUser = personnelData.data.find(user => user['Tên đăng nhập'] === username && user['Passwword'] == password);
+                if (foundUser) { sessionStorage.setItem('loggedInUser', JSON.stringify({ name: foundUser['Họ và tên'] })); await initApp();
+                } else { errorEl.textContent = 'Tên đăng nhập hoặc mật khẩu không đúng.'; }
+            }
+        } catch (error) { if(errorEl) errorEl.textContent = 'Lỗi kết nối hoặc không tìm thấy bảng Nhân sự.';
+        } finally { if (loginBtn) { loginBtn.textContent = 'Đăng Nhập'; loginBtn.disabled = false; } }
+    }
+
+    async function handleLogin(e) { e.preventDefault(); const username = document.getElementById('username').value; const password = document.getElementById('password').value; const errorEl = document.getElementById('login-error'); const loginBtn = document.getElementById('login-btn'); errorEl.textContent = ''; loginBtn.textContent = 'Đang xử lý...'; loginBtn.disabled = true; await fetchNhanSuAndLogin(username, password, errorEl, loginBtn); }
+    function handleLogout() { sessionStorage.removeItem('loggedInUser'); location.reload(); }
+
+    async function initApp(isReload = false) {
+        const user = JSON.parse(sessionStorage.getItem('loggedInUser'));
+        if (user) {
+            if (!isReload) {
+                document.getElementById('login-overlay').style.display = 'none';
+                document.querySelector('.container').classList.add('visible');
+                const userInfoEl = document.getElementById('user-info');
+                userInfoEl.innerHTML = `Xin chào, <strong>${user.name}</strong>! <a href="#" id="logout-btn">Đăng xuất</a>`;
+                document.getElementById('logout-btn').addEventListener('click', handleLogout);
+            }
+            await fetchNhanSuAndLogin(); 
+            const salesDatalist = document.getElementById('sales-person-list-options');
+            if (salesDatalist && nhanSuList.length > 0) salesDatalist.innerHTML = nhanSuList.map(name => `<option value="${name}"></option>`).join('');
+            await Promise.all([loadData('khn'), loadData('khtn'), loadData('hth')]);
+            processAndMarkPaidDebts();
+            updateDashboard();
+            updateVisibleRowCount('khn');
+            highlightOverdueRows();
+        } else {
+            document.getElementById('login-overlay').style.display = 'flex';
+        }
+    }
+
+    function setChangesMade(tableKey, madeChanges) { const btn = document.getElementById(`update-btn-${tableKey}`); if (btn) btn.disabled = !madeChanges; }
+    function hasPendingChanges(tableKey) { return (Object.keys(changeSet.create[tableKey] || {}).length + Object.keys(changeSet.update[tableKey] || {}).length + (changeSet.delete[tableKey] || []).length) > 0; }
+    
+    function calculateGrandTotal(tableKey, filteredData = null) {
+        const config = TABLE_CONFIG[tableKey];
+        if (!config || !config.totalField) return 0;
+        
+        let sourceData;
+        if(filteredData) {
+            sourceData = filteredData;
+        } else {
+            const originalData = originalTableData[tableKey]?.data || [];
+            const createdData = Object.values(changeSet.create[tableKey] || {});
+            const updatedData = changeSet.update[tableKey] || {};
+            const deletedIds = new Set(changeSet.delete[tableKey] || []);
+            
+            sourceData = [];
+            originalData.forEach(row => {
+                if (!deletedIds.has(row.id)) {
+                    sourceData.push({ ...row, ...(updatedData[row.id] || {}) });
+                }
+            });
+            sourceData.push(...createdData);
+        }
+        
+        return sourceData.reduce((sum, row) => sum + (parseFloat(String(row[config.totalField] || '0').replace(/\./g, '')) || 0), 0);
+    }
+    
+    function updateDashboard(filteredData = null) {
+        const tN = calculateGrandTotal('khn', filteredData ? filteredData.khn : null);
+        const tT = calculateGrandTotal('khtn', filteredData ? filteredData.khtn : null);
+        const tTH = calculateGrandTotal('hth', filteredData ? filteredData.hth : null);
+        document.getElementById('dashboard-total-no').textContent = tN.toLocaleString('vi-VN') + ' VNĐ';
+        document.getElementById('dashboard-total-tra').textContent = tT.toLocaleString('vi-VN') + ' VNĐ';
+        document.getElementById('dashboard-total-thuhoi').textContent = tTH.toLocaleString('vi-VN') + ' VNĐ';
+        document.getElementById('dashboard-total-conlai').textContent = (tN - tT - tTH).toLocaleString('vi-VN') + ' VNĐ';
+    }
+
+    function calculateDueDate(s, d) { if (!s || d == null) return null; try { const sD = new Date(s); const dA = parseInt(d, 10); if (isNaN(sD.getTime()) || isNaN(dA)) return null; sD.setUTCDate(sD.getUTCDate() + dA); return sD; } catch (e) { return null; } }
+    
+    function filterTable(tableKey) {
+        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+        const filters = Array.from(container.querySelectorAll('.filter-input'));
+        const tbody = container.querySelector('tbody');
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr:not(.input-row)');
+        const filterValues = filters.map(f => ({ header: f.dataset.header, value: f.value.trim().toLowerCase() }));
+        
+        const hasActiveFilters = filterValues.some(f => f.value !== '');
+        if (hasActiveFilters) {
+            const allKhnData = [...(originalTableData.khn?.data || [])];
+            const filteredKhn = allKhnData.filter(row => {
+                for (const filter of filterValues) {
+                    if (!filter.value) continue;
+                    const cellValue = String(row[filter.header] || '').toLowerCase();
+                    if (!cellValue.includes(filter.value)) return false;
+                }
+                return true;
+            });
+            const filteredDebtIds = new Set(filteredKhn.map(r => r.id));
+            const filteredCustomerNames = new Set(filteredKhn.map(r => r['Tên Khách Hàng']));
+            const filteredKhtn = (originalTableData.khtn?.data || []).filter(row => filteredDebtIds.has(row['id nợ']));
+            const filteredHth = (originalTableData.hth?.data || []).filter(row => filteredCustomerNames.has(row['Tên Khách Hàng']));
+            updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
+        } else {
+            updateDashboard();
+        }
+
+        rows.forEach(row => {
+            let matchesFilters = true;
+            for (const filter of filterValues) {
+                if (!filter.value) continue;
+                const cell = row.querySelector(`[data-field="${filter.header}"]`);
+                const cellValue = cell ? (cell.value || cell.textContent).toLowerCase() : '';
+                if (!cellValue.includes(filter.value)) { matchesFilters = false; break; }
+            }
+            row.style.display = (matchesFilters) ? '' : 'none';
+        });
+        updateTotals(tableKey);
+        highlightOverdueRows();
+    }
+
+    function capitalizeFirstLetter(input) { if (input.value.length > 0) input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1); }
+    function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
+    function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
+    function setupCurrencyInput(input) { if (!input) return; const f = () => { const r = input.value.replace(/\./g, ''); input.value = isNaN(r) || r.trim() === '' ? '' : Number(r).toLocaleString('vi-VN'); }; input.addEventListener('input', f); input.addEventListener('blur', f); f(); }
+    
+    function exportToExcel(e) {
+        const tableKey = e.currentTarget.dataset.tableKey;
+        if (!tableKey || !originalTableData[tableKey]?.data) return showToast('Không có dữ liệu để xuất.', 'warning');
+        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+        const visibleIds = new Set(Array.from(container.querySelectorAll('tbody tr:not(.input-row)'))
+            .filter(tr => tr.style.display !== 'none' && !tr.classList.contains('debt-paid-off'))
+            .map(tr => tr.dataset.id));
+        const dataToExport = originalTableData[tableKey].data.filter(row => visibleIds.has(row.id));
+        if(dataToExport.length === 0) return showToast('Không có dữ liệu nào được lọc để xuất.', 'warning');
+        const headers = originalTableData[tableKey].headers.filter(h => !HIDDEN_COLUMNS.includes(h));
+        const headerRow = headers.map(h => headerMapping[h] || h);
+        const dataRows = dataToExport.map(row => headers.map(h => row[h] ?? ''));
+        const csvContent = [headerRow, ...dataRows].map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `BaoCao_CongNo_${new Date().toISOString().slice(0, 10)}.csv`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('login-form').addEventListener('submit', handleLogin);
+        document.querySelector('.export-btn').addEventListener('click', exportToExcel);
+        document.getElementById('update-btn-khn').addEventListener('click', () => handleSaveChanges('khn'));
+        
+        setupCurrencyInput(document.getElementById('max-debt-input'));
+        
+        const customDebtTermInput = document.getElementById('custom-debt-term-input');
+        if (customDebtTermInput) {
+            customDebtTermInput.addEventListener('input', (e) => {
+                const days = e.target.value;
+                const inputRow = document.getElementById('input-row-khn');
+                if (!inputRow) return;
+
+                const debtTermInput = inputRow.querySelector('input[data-field="Hạn trả nợ"]');
+                if (debtTermInput) {
+                    debtTermInput.value = days;
+                    debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+        }
+        
+        initApp();
+    });
+</script>
+</body>
+</html>
