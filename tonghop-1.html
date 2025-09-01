@@ -1582,81 +1582,85 @@ updateNvDataLists();
         // START: FIXED FILTERING LOGIC
         // =========================================================================
         function applySummaryFilters() {
-            const startDate = document.getElementById('filter-start-date').value;
-            const endDate = document.getElementById('filter-end-date').value;
-            const selectedNvGiaoHang = getNvGiaoSelected();
-const selectedNvKinhDoanh = getNvKdSelected();
-const selectedCustomers = getCustomerSelected();
+  const startDate = document.getElementById('filter-start-date').value;
+  const endDate = document.getElementById('filter-end-date').value;
 
-            const region = document.getElementById('filter-region').value.trim().toLowerCase();
-            
-            const allKhnData = originalTableData['khn']?.data || [];
-            const allKhtnData = originalTableData['khtn']?.data || [];
-            const allHthData = originalTableData['hth']?.data || [];
+  // DÙNG LẠI 3 HÀM TOKEN CỦA BẠN
+  const selectedNvGiaoHang = getNvGiaoSelected();
+  const selectedNvKinhDoanh = getNvKdSelected();
+  const selectedCustomers = getCustomerSelected();
 
-            const filteredKhn = allKhnData.filter(row => {
+  const region = document.getElementById('filter-region').value.trim().toLowerCase();
+  
+  const allKhnData = originalTableData['khn']?.data || [];
+  const allKhtnData = originalTableData['khtn']?.data || [];
+  const allHthData = originalTableData['hth']?.data || [];
+
+  const filteredKhn = allKhnData.filter(row => {
+    // --- LỌC THEO NGÀY: Y HỆT CODE THAM CHIẾU ---
     let checkDate = true;
-    
+
     if (startDate && endDate) {
-        // Có cả hai: Ngày nợ phải >= Từ ngày VÀ Ngày phải trả phải <= Tới ngày
-        const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
-        const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
-        const startDateFilter = new Date(startDate);
-        const endDateFilter = new Date(endDate);
-        checkDate = ngayNo && ngayPhaiTra && 
-                   ngayNo >= startDateFilter && 
-                   ngayPhaiTra <= endDateFilter;
+      // Ngày nợ >= Từ ngày VÀ Ngày phải trả <= Tới ngày
+      const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
+      const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
+      const startDateFilter = new Date(startDate);
+      const endDateFilter = new Date(endDate);
+      checkDate = ngayNo && ngayPhaiTra &&
+                  (ngayNo >= startDateFilter) &&
+                  (ngayPhaiTra <= endDateFilter);
     } else if (startDate && !endDate) {
-        // Chỉ có "Từ ngày": lọc Ngày nợ >= từ ngày
-        const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
-        const startDateFilter = new Date(startDate);
-        checkDate = ngayNo && ngayNo >= startDateFilter;
+      // Chỉ Từ ngày: lọc theo Ngày nợ >= Từ ngày
+      const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
+      const startDateFilter = new Date(startDate);
+      checkDate = ngayNo && (ngayNo >= startDateFilter);
     } else if (!startDate && endDate) {
-        // Chỉ có "Tới ngày": lọc Ngày phải trả <= tới ngày
-        const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
-        const endDateFilter = new Date(endDate);
-        checkDate = ngayPhaiTra && ngayPhaiTra <= endDateFilter;
+      // Chỉ Tới ngày: lọc theo Ngày phải trả <= Tới ngày
+      const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
+      const endDateFilter = new Date(endDate);
+      checkDate = ngayPhaiTra && (ngayPhaiTra <= endDateFilter);
     }
-                // --- ROBUST CHECKS FOR STAFF NAMES ---
-const rowNvGiao = String(row['NV cho nợ'] || '').trim().replace(/\s+/g, ' ');
-                const checkNvGiao = selectedNvGiaoHang.length === 0 || selectedNvGiaoHang.some(name => {
-                    const normalizedFilterName = name.trim().replace(/\s+/g, ' ').toLowerCase();
-                    return rowNvGiao.includes(normalizedFilterName);
-                });
 
-                const rowNvKd = String(row['Người chịu trách nhiệm'] || '').trim().replace(/\s+/g, ' ').toLowerCase();
-                const checkNvKd = selectedNvKinhDoanh.length === 0 || selectedNvKinhDoanh.some(name => {
-                    const normalizedFilterName = name.trim().replace(/\s+/g, ' ').toLowerCase();
-                    return rowNvKd.includes(normalizedFilterName);
-                });
-                // --- END OF ROBUST CHECKS ---
+    // --- GIỐNG CODE THAM CHIẾU: so sánh tên theo lowercase ---
+    const rowNvGiao = String(row['NV cho nợ'] || '')
+      .trim().replace(/\s+/g, ' ').toLowerCase();
+    const checkNvGiao = selectedNvGiaoHang.length === 0 || selectedNvGiaoHang.some(name => {
+      const normalized = name.trim().replace(/\s+/g, ' ').toLowerCase();
+      return rowNvGiao.includes(normalized);
+    });
 
-                const checkCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(row['Tên Khách Hàng']);
-                const checkRegion = !region || (row['Khu vực'] && String(row['Khu vực']).toLowerCase().includes(region));
+    const rowNvKd = String(row['Người chịu trách nhiệm'] || '')
+      .trim().replace(/\s+/g, ' ').toLowerCase();
+    const checkNvKd = selectedNvKinhDoanh.length === 0 || selectedNvKinhDoanh.some(name => {
+      const normalized = name.trim().replace(/\s+/g, ' ').toLowerCase();
+      return rowNvKd.includes(normalized);
+    });
 
-                return checkDate && checkNvGiao && checkNvKd && checkCustomer && checkRegion;
-            });
+    const checkCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(row['Tên Khách Hàng']);
+    const checkRegion = !region || (row['Khu vực'] && String(row['Khu vực']).toLowerCase().includes(region));
 
-            const filteredKhnIds = new Set(filteredKhn.map(r => r.id));
-            const filteredCustomerNames = new Set(filteredKhn.map(r => r['Tên Khách Hàng']));
+    return checkDate && checkNvGiao && checkNvKd && checkCustomer && checkRegion;
+  });
 
-            const filteredKhtn = allKhtnData.filter(row => {
-    // Chỉ lấy các khoản trả nợ thuộc các khoản nợ đã được lọc
-    return filteredKhnIds.has(row['id nợ']);
-});
-            
-            const filteredHth = allHthData.filter(row => {
-                if (!filteredCustomerNames.has(row['Tên Khách Hàng'])) {
-                    return false;
-                }
-                 const rowDate = row['Ngày thu hồi'] ? new Date(formatDateForInput(row['Ngày thu hồi'])) : null;
-                return (!startDate || (rowDate && rowDate >= new Date(startDate))) && (!endDate || (rowDate && rowDate <= new Date(endDate)));
-            });
+  const filteredKhnIds = new Set(filteredKhn.map(r => r.id));
+  const filteredCustomerNames = new Set(filteredKhn.map(r => r['Tên Khách Hàng']));
 
-            renderSummaryTable('tonghop-khn', originalTableData['khn'], filteredKhn);
-            renderSummaryTable('tonghop-khtn', originalTableData['khtn'], filteredKhtn);
-            updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
-        }
+  // Chỉ lấy trả nợ thuộc các khoản nợ đã lọc
+  const filteredKhtn = allKhtnData.filter(row => filteredKhnIds.has(row['id nợ']));
+
+  // Hàng thu hồi: KH nằm trong filteredKhn và (Ngày thu hồi trong khoảng nếu có chọn)
+  const filteredHth = allHthData.filter(row => {
+    if (!filteredCustomerNames.has(row['Tên Khách Hàng'])) return false;
+    const rowDate = row['Ngày thu hồi'] ? new Date(formatDateForInput(row['Ngày thu hồi'])) : null;
+    return (!startDate || (rowDate && rowDate >= new Date(startDate))) &&
+           (!endDate || (rowDate && rowDate <= new Date(endDate)));
+  });
+
+  renderSummaryTable('tonghop-khn', originalTableData['khn'], filteredKhn);
+  renderSummaryTable('tonghop-khtn', originalTableData['khtn'], filteredKhtn);
+  updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
+}
+
         // =========================================================================
         // END: FIXED FILTERING LOGIC
         // =========================================================================
