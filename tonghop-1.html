@@ -1364,7 +1364,54 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
 
         async function handleLogin(e) { e.preventDefault(); const username = document.getElementById('username').value; const password = document.getElementById('password').value; const errorEl = document.getElementById('login-error'); const loginBtn = document.getElementById('login-btn'); errorEl.textContent = ''; loginBtn.textContent = 'Đang xử lý...'; loginBtn.disabled = true; await fetchNhanSuAndLogin(username, password, errorEl, loginBtn); }
         function handleLogout() { sessionStorage.removeItem('loggedInUser'); location.reload(); }
-
+        
+        function updateNvDataLists() {
+            // Cập nhật NV Kinh doanh từ tất cả các bảng
+            const allNvKinhDoanh = [];
+            ['khn', 'khtn', 'hth'].forEach(tableKey => {
+                if (originalTableData[tableKey]?.data) {
+                    originalTableData[tableKey].data.forEach(row => {
+                        if (row['Người chịu trách nhiệm']) {
+                            allNvKinhDoanh.push(row['Người chịu trách nhiệm']);
+                        }
+                    });
+                }
+            });
+            
+            // SỬA: Lấy từ cột 'NV cho nợ' thay vì 'Giao hàng cho nợ'
+            const allNvGiaoHang = [];
+            ['khn', 'khtn', 'hth'].forEach(tableKey => {
+                if (originalTableData[tableKey]?.data) {
+                    originalTableData[tableKey].data.forEach(row => {
+                        if (row['NV cho nợ']) {  // ← SỬA TẠI ĐÂY
+                            allNvGiaoHang.push(row['NV cho nợ']);
+                        }
+                    });
+                }
+            });
+            
+            // Kết hợp với danh sách từ nhanSuList và GIAO_HANG_NV_LIST
+            const combinedNvKinhDoanh = [...nhanSuList, ...allNvKinhDoanh];
+            const combinedNvGiaoHang = [...GIAO_HANG_NV_LIST, ...allNvGiaoHang];
+            
+            // Chuẩn hóa và loại bỏ trùng lặp
+            const uniqueNvKinhDoanh = [...new Set(combinedNvKinhDoanh)]
+                .map(name => name ? String(name).trim().replace(/\s+/g, ' ') : '')
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'vi'));
+                
+            const uniqueNvGiaoHang = [...new Set(combinedNvGiaoHang)]
+                .map(name => name ? String(name).trim().replace(/\s+/g, ' ') : '')
+                .filter(Boolean)
+                .sort((a, b) => a.localeCompare(b, 'vi'));
+            
+            // Cập nhật datalist
+            document.getElementById('sales-person-list-options').innerHTML = 
+                uniqueNvKinhDoanh.map(name => `<option value="${name}"></option>`).join('');
+            
+            document.getElementById('giao-hang-list-options').innerHTML = 
+                uniqueNvGiaoHang.map(name => `<option value="${name}"></option>`).join('');
+        }
         async function initApp(isReload = false) {
             const user = JSON.parse(sessionStorage.getItem('loggedInUser'));
             if (user) {
@@ -1397,7 +1444,8 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
                 // Populate the datalist for input suggestions
                 document.getElementById('customer-list-options').innerHTML = customerList.map(c => `<option value="${c}"></option>`).join('');
                 // === FIX ENDS HERE ===
-                
+                // Cập nhật datalist cho NV
+updateNvDataLists();
                 renderSummaryTable('tonghop-khn', originalTableData['khn']);
                 renderSummaryTable('tonghop-khtn', originalTableData['khtn']);
                 
@@ -1570,7 +1618,7 @@ const selectedCustomers = getCustomerSelected();
         checkDate = ngayPhaiTra && ngayPhaiTra <= endDateFilter;
     }
                 // --- ROBUST CHECKS FOR STAFF NAMES ---
-const rowNvGiao = String(row['Giao hàng cho nợ'] || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const rowNvGiao = String(row['NV cho nợ'] || '').trim().replace(/\s+/g, ' ');
                 const checkNvGiao = selectedNvGiaoHang.length === 0 || selectedNvGiaoHang.some(name => {
                     const normalizedFilterName = name.trim().replace(/\s+/g, ' ').toLowerCase();
                     return rowNvGiao.includes(normalizedFilterName);
