@@ -319,6 +319,42 @@ header img {
         #container-tonghop-khn th, #container-tonghop-khtn th { background-color: var(--secondary-color); }
         .summary-table-section { margin-bottom: 40px; }
 
+        .tokenbox {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 40px;
+  padding: 6px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+}
+.tokenbox input {
+  border: none;
+  outline: none;
+  min-width: 160px;
+  font-size: 14px;
+}
+.token {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #e8f5e9;
+  border: 1px solid #c8e6c9;
+  border-radius: 16px;
+  font-size: 13px;
+  color: #1b5e20;
+}
+.token .remove {
+  cursor: pointer;
+  font-weight: bold;
+  color: #2e7d32;
+}
+.token .remove:hover {
+  color: #1b5e20;
+}
+
     </style>
 </head>
 
@@ -410,17 +446,44 @@ header img {
                             </div>
                         </div>
                         <div class="filter-group">
-                            <label for="filter-customer">Khách hàng</label>
-                            <select id="filter-customer" multiple size="4"></select>
-                        </div>
+  <label for="filter-customer-input">Khách hàng</label>
+  <div id="filter-customer-tokenbox" class="tokenbox">
+    <input
+      id="filter-customer-input"
+      list="customer-list-options"
+      placeholder="Gõ tên và Enter để thêm…"
+      autocomplete="off"
+    />
+  </div>
+  <small style="color:#666;font-size:12px;">• Enter để thêm • Backspace để xoá thẻ cuối</small>
+</div>
+
                         <div class="filter-group">
-                            <label for="filter-nv-kinh-doanh">NV Kinh doanh</label>
-                            <select id="filter-nv-kinh-doanh" multiple size="4"></select>
-                        </div>
+  <label for="filter-nv-kinh-doanh-input">NV Kinh doanh</label>
+  <div id="filter-nv-kinh-doanh-tokenbox" class="tokenbox">
+    <input
+      id="filter-nv-kinh-doanh-input"
+      list="sales-person-list-options"
+      placeholder="Gõ tên và Enter để thêm…"
+      autocomplete="off"
+    />
+  </div>
+  <small style="color:#666;font-size:12px;">• Enter để thêm • Backspace để xoá thẻ cuối</small>
+</div>
+
                         <div class="filter-group">
-                            <label for="filter-nv-giao-hang">NV Giao hàng cho nợ</label>
-                            <select id="filter-nv-giao-hang" multiple size="4"></select>
-                        </div>
+  <label for="filter-nv-giao-hang-input">NV Giao hàng cho nợ</label>
+  <div id="filter-nv-giao-hang-tokenbox" class="tokenbox">
+    <input
+      id="filter-nv-giao-hang-input"
+      list="giao-hang-list-options"
+      placeholder="Gõ tên và Enter để thêm…"
+      autocomplete="off"
+    />
+  </div>
+  <small style="color:#666;font-size:12px;">• Enter để thêm • Backspace để xoá thẻ cuối</small>
+</div>
+
                          <div class="filter-group">
     <label for="filter-region">Khu vực</label>
     <input type="text" id="filter-region" list="region-list-options" placeholder="Lọc theo khu vực...">
@@ -472,6 +535,7 @@ header img {
     <datalist id="sales-person-list-options"></datalist>
     <datalist id="debt-list-options"></datalist>
     <datalist id="region-list-options"></datalist>
+    <datalist id="giao-hang-list-options"></datalist>
 
     <script>
         // ===================================================================================
@@ -508,8 +572,156 @@ header img {
         let nhanSuList = [];
         let customerList = [];
         let tempSelectedDebtIds = [];
+ 
+       // --- TOKEN HELPERS cho 3 bộ lọc: NV Kinh doanh, Khách hàng, NV Giao hàng ---
 
-        // --- TAB MANAGEMENT ---
+// ================== NV Kinh doanh ==================
+let filterNvKdSelected = [];
+
+function renderNvKdTokens() {
+  const box = document.getElementById('filter-nv-kinh-doanh-tokenbox');
+  const input = document.getElementById('filter-nv-kinh-doanh-input');
+  if (!box || !input) return;
+
+  // Xoá token cũ (giữ lại input)
+  Array.from(box.querySelectorAll('.token')).forEach(el => el.remove());
+
+  // Vẽ token
+  filterNvKdSelected.forEach(name => {
+    const t = document.createElement('span');
+    t.className = 'token';
+    t.innerHTML = `<span>${name}</span><span class="remove" title="Xoá">×</span>`;
+    t.querySelector('.remove').addEventListener('click', () => {
+      filterNvKdSelected = filterNvKdSelected.filter(n => n !== name);
+      renderNvKdTokens();
+    });
+    box.insertBefore(t, input);
+  });
+}
+
+function tryAddNvKdToken(rawValue) {
+  const v = String(rawValue || '').trim();
+  if (!v) return;
+
+  const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+  // Ưu tiên match theo nhanSuList; không có thì vẫn cho thêm tự do
+  const matched =
+    nhanSuList.find(n => norm(n) === norm(v)) ||
+    nhanSuList.find(n => norm(n).includes(norm(v)));
+  const finalName = matched || v;
+
+  // Không thêm trùng
+  if (filterNvKdSelected.map(norm).includes(norm(finalName))) return;
+
+  filterNvKdSelected.push(finalName);
+  renderNvKdTokens();
+}
+
+function getNvKdSelected() {
+  return [...filterNvKdSelected];
+}
+
+function clearNvKdTokens() {
+  filterNvKdSelected = [];
+  renderNvKdTokens();
+}
+
+// ================== Khách hàng ==================
+let filterCustomerSelected = [];
+
+function renderCustomerTokens() {
+  const box = document.getElementById('filter-customer-tokenbox');
+  const input = document.getElementById('filter-customer-input');
+  if (!box || !input) return;
+
+  Array.from(box.querySelectorAll('.token')).forEach(el => el.remove());
+
+  filterCustomerSelected.forEach(name => {
+    const t = document.createElement('span');
+    t.className = 'token';
+    t.innerHTML = `<span>${name}</span><span class="remove" title="Xoá">×</span>`;
+    t.querySelector('.remove').addEventListener('click', () => {
+      filterCustomerSelected = filterCustomerSelected.filter(n => n !== name);
+      renderCustomerTokens();
+    });
+    box.insertBefore(t, input);
+  });
+}
+
+function tryAddCustomerToken(rawValue) {
+  const v = String(rawValue || '').trim();
+  if (!v) return;
+
+  const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
+  const matched =
+    customerList.find(c => norm(c) === norm(v)) ||
+    customerList.find(c => norm(c).includes(norm(v)));
+  const finalName = matched || v;
+
+  if (filterCustomerSelected.map(norm).includes(norm(finalName))) return;
+
+  filterCustomerSelected.push(finalName);
+  renderCustomerTokens();
+}
+
+function getCustomerSelected() {
+  return [...filterCustomerSelected];
+}
+
+function clearCustomerTokens() {
+  filterCustomerSelected = [];
+  renderCustomerTokens();
+}
+
+// ================== NV Giao hàng ==================
+let filterNvGiaoSelected = [];
+
+function renderNvGiaoTokens() {
+  const box = document.getElementById('filter-nv-giao-hang-tokenbox');
+  const input = document.getElementById('filter-nv-giao-hang-input');
+  if (!box || !input) return;
+
+  Array.from(box.querySelectorAll('.token')).forEach(el => el.remove());
+
+  filterNvGiaoSelected.forEach(name => {
+    const t = document.createElement('span');
+    t.className = 'token';
+    t.innerHTML = `<span>${name}</span><span class="remove" title="Xoá">×</span>`;
+    t.querySelector('.remove').addEventListener('click', () => {
+      filterNvGiaoSelected = filterNvGiaoSelected.filter(n => n !== name);
+      renderNvGiaoTokens();
+    });
+    box.insertBefore(t, input);
+  });
+}
+
+function tryAddNvGiaoToken(rawValue, suggestions = []) {
+  const v = String(rawValue || '').trim();
+  if (!v) return;
+
+  const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
+
+  const matched =
+    suggestions.find(n => norm(n) === norm(v)) ||
+    suggestions.find(n => norm(n).includes(norm(v)));
+  const finalName = matched || v;
+
+  if (filterNvGiaoSelected.map(norm).includes(norm(finalName))) return;
+
+  filterNvGiaoSelected.push(finalName);
+  renderNvGiaoTokens();
+}
+
+function getNvGiaoSelected() {
+  return [...filterNvGiaoSelected];
+}
+
+function clearNvGiaoTokens() {
+  filterNvGiaoSelected = [];
+  renderNvGiaoTokens();
+}
+
         function openTab(evt, tabName) {
             let i, tabcontent, tablinks;
             tabcontent = document.getElementsByClassName("tab-content");
@@ -1270,7 +1482,7 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
         return name.split(' ').map(word => 
             word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
         ).join(' ');
-    });
+    }).sort((a,b) => a.localeCompare(b, 'vi'));
     
     // Tạo danh sách khu vực từ dữ liệu
     const allRegions = [];
@@ -1304,9 +1516,17 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
     const uniqueRegions = Array.from(regionMap.values())
         .sort((a, b) => a.localeCompare(b, 'vi'));
     
-    document.getElementById('filter-nv-giao-hang').innerHTML = capitalizedGiaoHangList.map(name => `<option value="${name}">${name}</option>`).join('');
-    document.getElementById('filter-nv-kinh-doanh').innerHTML = nhanSuList.map(name => `<option value="${name}">${name}</option>`).join('');
-    document.getElementById('filter-customer').innerHTML = customerList.map(c => `<option value="${c}">${c}</option>`).join('');
+    // =======================================================
+    // SỬA LỖI TẠI ĐÂY
+    // Target đúng <datalist> với ID là 'giao-hang-list-options'
+    // và tạo thẻ <option> đúng định dạng cho datalist.
+    // =======================================================
+    document.getElementById('giao-hang-list-options').innerHTML = capitalizedGiaoHangList.map(name => `<option value="${name}"></option>`).join('');
+    
+    // Dọn dẹp: Các dòng dưới đây không cần thiết vì datalist cho khách hàng và NV kinh doanh
+    // đã được điền ở hàm initApp().
+    // document.getElementById('filter-customer').innerHTML = customerList.map(c => `<option value="${c}">${c}</option>`).join('');
+    
     document.getElementById('region-list-options').innerHTML = uniqueRegions.map(r => `<option value="${r}"></option>`).join('');
 }
 
@@ -1316,9 +1536,10 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
         function applySummaryFilters() {
             const startDate = document.getElementById('filter-start-date').value;
             const endDate = document.getElementById('filter-end-date').value;
-            const selectedNvGiaoHang = Array.from(document.getElementById('filter-nv-giao-hang').selectedOptions).map(opt => opt.value);
-            const selectedNvKinhDoanh = Array.from(document.getElementById('filter-nv-kinh-doanh').selectedOptions).map(opt => opt.value);
-            const selectedCustomers = Array.from(document.getElementById('filter-customer').selectedOptions).map(opt => opt.value);
+            const selectedNvGiaoHang = getNvGiaoSelected();
+const selectedNvKinhDoanh = getNvKdSelected();
+const selectedCustomers = getCustomerSelected();
+
             const region = document.getElementById('filter-region').value.trim().toLowerCase();
             
             const allKhnData = originalTableData['khn']?.data || [];
@@ -1349,7 +1570,7 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
         checkDate = ngayPhaiTra && ngayPhaiTra <= endDateFilter;
     }
                 // --- ROBUST CHECKS FOR STAFF NAMES ---
-const rowNvGiao = String(row['NV cho nợ'] || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const rowNvGiao = String(row['Giao hàng cho nợ'] || '').trim().replace(/\s+/g, ' ').toLowerCase();
                 const checkNvGiao = selectedNvGiaoHang.length === 0 || selectedNvGiaoHang.some(name => {
                     const normalizedFilterName = name.trim().replace(/\s+/g, ' ').toLowerCase();
                     return rowNvGiao.includes(normalizedFilterName);
@@ -1395,9 +1616,12 @@ const rowNvGiao = String(row['NV cho nợ'] || '').trim().replace(/\s+/g, ' ').t
         function resetSummaryFilters() {
             document.getElementById('filter-start-date').value = '';
             document.getElementById('filter-end-date').value = '';
-            ['filter-nv-giao-hang', 'filter-nv-kinh-doanh', 'filter-customer'].forEach(id => {
-                Array.from(document.getElementById(id).options).forEach(option => option.selected = false);
-            });
+            // Giữ nguyên reset cho NV giao hàng & Khách hàng
+clearNvKdTokens();
+clearCustomerTokens();
+clearNvGiaoTokens();
+
+
             document.getElementById('filter-region').value = '';
             renderSummaryTable('tonghop-khn', originalTableData['khn']);
             renderSummaryTable('tonghop-khtn', originalTableData['khtn']);
@@ -1437,43 +1661,128 @@ const rowNvGiao = String(row['NV cho nợ'] || '').trim().replace(/\s+/g, ' ').t
             document.body.appendChild(link); link.click(); document.body.removeChild(link);
         }
 
-        // --- DOMContentLoaded EVENT LISTENER ---
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('login-form').addEventListener('submit', handleLogin);
-            
-            document.querySelectorAll('.export-btn').forEach(button => button.addEventListener('click', exportToExcel));
+       // --- DOMContentLoaded EVENT LISTENER ---
+// --- DOMContentLoaded EVENT LISTENER ---
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('login-form').addEventListener('submit', handleLogin);
+  
+  document.querySelectorAll('.export-btn').forEach(button => button.addEventListener('click', exportToExcel));
 
-            document.getElementById('apply-filters-btn').addEventListener('click', applySummaryFilters);
-            document.getElementById('reset-filters-btn').addEventListener('click', resetSummaryFilters);
-            document.querySelectorAll('.date-presets button').forEach(button => {
-                button.addEventListener('click', (e) => {
-                    const days = parseInt(e.target.dataset.days, 10);
-                    const endDate = new Date();
-                    const startDate = new Date();
-                    if (days > 0) startDate.setDate(endDate.getDate() - days + (days === 1 ? 0 : 1));
-                    if (days === 1) endDate.setDate(endDate.getDate() - 1);
-                    document.getElementById('filter-end-date').value = formatDateForInput(endDate);
-                    document.getElementById('filter-start-date').value = formatDateForInput(startDate);
-                });
-            });
+  document.getElementById('apply-filters-btn').addEventListener('click', applySummaryFilters);
+  document.getElementById('reset-filters-btn').addEventListener('click', resetSummaryFilters);
 
-            setupCurrencyInput(document.getElementById('max-debt-input'));
-            const customDebtTermInput = document.getElementById('custom-debt-term-input');
-            if (customDebtTermInput) {
-                customDebtTermInput.addEventListener('input', (e) => {
-                    const days = e.target.value;
-                    const inputRow = document.getElementById('input-row-khn');
-                    if (!inputRow) return;
-                    const debtTermInput = inputRow.querySelector('input[data-field="Hạn trả nợ"]');
-                    if (debtTermInput) {
-                        debtTermInput.value = days;
-                        debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                });
-            }
-            
-            initApp();
-        });
+  document.querySelectorAll('.date-presets button').forEach(button => {
+    button.addEventListener('click', (e) => {
+      const days = parseInt(e.target.dataset.days, 10);
+      const endDate = new Date();
+      const startDate = new Date();
+      if (days > 0) startDate.setDate(endDate.getDate() - days + (days === 1 ? 0 : 1));
+      if (days === 1) endDate.setDate(endDate.getDate() - 1);
+      document.getElementById('filter-end-date').value = formatDateForInput(endDate);
+      document.getElementById('filter-start-date').value = formatDateForInput(startDate);
+    });
+  });
+
+  setupCurrencyInput(document.getElementById('max-debt-input'));
+  const customDebtTermInput = document.getElementById('custom-debt-term-input');
+  if (customDebtTermInput) {
+    customDebtTermInput.addEventListener('input', (e) => {
+      const days = e.target.value;
+      const inputRow = document.getElementById('input-row-khn');
+      if (!inputRow) return;
+      const debtTermInput = inputRow.querySelector('input[data-field="Hạn trả nợ"]');
+      if (debtTermInput) {
+        debtTermInput.value = days;
+        debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
+      }
+    });
+  }
+
+  // === NV Kinh doanh token input ===
+  const nvkdInput = document.getElementById('filter-nv-kinh-doanh-input');
+  if (nvkdInput) {
+    // Enter hoặc dấu phẩy để thêm token
+    nvkdInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        tryAddNvKdToken(nvkdInput.value);
+        nvkdInput.value = '';
+      } else if (e.key === 'Backspace' && nvkdInput.value === '') {
+        filterNvKdSelected.pop();
+        renderNvKdTokens();
+      }
+    });
+
+    // Khi chọn từ datalist
+    nvkdInput.addEventListener('change', () => {
+      if (!nvkdInput.value) return;
+      tryAddNvKdToken(nvkdInput.value);
+      nvkdInput.value = '';
+    });
+  }
+
+  // Vẽ token lần đầu (NV Kinh doanh)
+  renderNvKdTokens();
+
+  // === Khách hàng token input ===
+  const customerInput = document.getElementById('filter-customer-input');
+  if (customerInput) {
+    customerInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        tryAddCustomerToken(customerInput.value);
+        customerInput.value = '';
+      } else if (e.key === 'Backspace' && customerInput.value === '') {
+        filterCustomerSelected.pop();
+        renderCustomerTokens();
+      }
+    });
+
+    customerInput.addEventListener('change', () => {
+      if (!customerInput.value) return;
+      tryAddCustomerToken(customerInput.value);
+      customerInput.value = '';
+    });
+  }
+
+  // Vẽ token lần đầu (Khách hàng)
+  renderCustomerTokens();
+
+  // === NV Giao hàng token input ===
+  const giaoInput = document.getElementById('filter-nv-giao-hang-input');
+  if (giaoInput) {
+    // Lấy danh sách gợi ý từ datalist (nếu có)
+    const getGiaoSuggestions = () => {
+      const dl = document.getElementById('giao-hang-list-options');
+      return dl ? Array.from(dl.querySelectorAll('option')).map(o => o.value).filter(Boolean) : [];
+    };
+
+    giaoInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        e.preventDefault();
+        tryAddNvGiaoToken(giaoInput.value, getGiaoSuggestions());
+        giaoInput.value = '';
+      } else if (e.key === 'Backspace' && giaoInput.value === '') {
+        filterNvGiaoSelected.pop();
+        renderNvGiaoTokens();
+      }
+    });
+
+    giaoInput.addEventListener('change', () => {
+      if (!giaoInput.value) return;
+      tryAddNvGiaoToken(giaoInput.value, getGiaoSuggestions());
+      giaoInput.value = '';
+    });
+  }
+
+  // Vẽ token lần đầu (NV Giao hàng)
+  renderNvGiaoTokens();
+
+  // Khởi tạo app
+  initApp();
+});
+
+
     </script>
 </body>
 </html>
