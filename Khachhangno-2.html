@@ -67,9 +67,9 @@ header img {
 }
 .header-title h1 { 
     color: var(--primary-color); 
-    font-size: 16px; 
+    font-size: 28px; 
     margin: 0 0 5px 0; 
-    font-weight: 500;
+    font-weight: 700;
 }
 .header-title h2 { 
     color: var(--primary-color); 
@@ -168,6 +168,18 @@ thead tr:first-child th:not(:first-child) {
         .toast.success { background-color: #4CAF50; } .toast.error { background-color: var(--error-color); } .toast.warning { background-color: #ff9800; }
         @keyframes slideIn { to { opacity: 1; transform: translateX(0); } }
         @keyframes fadeOut { to { opacity: 0; transform: translateX(100%); } }
+        /* Override cỡ chữ cho Địa chỉ & Hotline */
+.contact-info { font-size: 16px; line-height: 1.5; }
+.contact-info .address,
+.contact-info .hotline { font-size: 18px; font-weight: 700; }
+
+/* Tùy chọn: cỡ nhỏ hơn một chút trên mobile */
+@media (max-width: 768px) {
+  .contact-info { font-size: 15px; }
+  .contact-info .address,
+  .contact-info .hotline { font-size: 17px; }
+}
+
     </style>
 </head>
 
@@ -207,11 +219,11 @@ thead tr:first-child th:not(:first-child) {
                 <h3>Kiểm Soát Hạn Mức Nợ</h3>
                 <div class="debt-control-wrapper">
                     <div class="debt-control-group">
-                        <label for="max-debt-input">Hạn Mức Nợ Tối Đa (VNĐ)</label>
+                        <label for="max-debt-input">Hạn Mức Nợ Tối Đa Của Từng Khách Hàng(VNĐ)</label>
                         <input type="text" id="max-debt-input" inputmode="decimal" placeholder="Nhập hạn mức...">
                     </div>
                     <div class="debt-control-group">
-                        <label for="custom-debt-term-input">Thêm Hạn Nợ Tùy Chỉnh (Ngày)</label>
+                        <label for="custom-debt-term-input">Số Ngày Nợ Tối Đa Của Từng Khách Hàng</label>
                         <input type="number" id="custom-debt-term-input" placeholder="Nhập số ngày...">
                     </div>
                     <div id="current-customer-debt-display" class="debt-control-group">
@@ -244,6 +256,7 @@ thead tr:first-child th:not(:first-child) {
     <div id="toast-container"></div>
     <datalist id="customer-list-options"></datalist>
     <datalist id="sales-person-list-options"></datalist>
+    <datalist id="delivery-staff-list-options"></datalist>
 
    <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwZ73GdTFsSitoVqJKiZKIbU3wHM_qpjxQEbhlKTwi1V9GijNC8SPoRH9vVDD65xb9x/exec';
@@ -252,9 +265,11 @@ thead tr:first-child th:not(:first-child) {
         'khtn': { name: 'Khách hàng trả nợ', loaded: false, totalField: 'Số tiền trả nợ' },
         'hth': { name: 'Hàng thu hồi', loaded: false, totalField: 'Thành tiền' },
     };
-    const headerMapping = { 'Giao hàng cho nợ': 'NV Giao hàng', 'Người chịu trách nhiệm': 'NV Kinh doanh', 'Số tiền nợ': 'Tiền Nợ', 'Hạn trả nợ': 'Hạn Nợ', 'Ngày phải trả': 'Ngày Trả Nợ' };
+    const headerMapping = { 'Giao hàng cho nợ': 'NV Giao hàng',  'NV cho nợ': 'NV Giao hàng', 'Người chịu trách nhiệm': 'NV Kinh doanh (Chịu Trách Nhiệm)', 'Số tiền nợ': 'Tiền Nợ', 'Hạn trả nợ': 'Hạn Nợ', 'Ngày phải trả': 'Ngày đến hạn' };
     const HIDDEN_COLUMNS = ['id', 'id nợ'];
     const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
+    const NV_GIAO_HANG_HEADERS = ['Giao hàng cho nợ']; // bỏ 'NV cho nợ'
+
     const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ', 'Đơn giá', 'Số lượng', 'Hạn trả nợ', 'Số ngày'];
     const COLUMN_CONFIG = {
         'Người chịu trách nhiệm': { align: 'left', className: 'col-sales-staff' }, 'Địa chỉ': { align: 'left' }, 'Ghi chú': { align: 'left' }, 'Tên Khách Hàng': { align: 'left' }, 'Sản phẩm/Mặt hàng': { align: 'left' }, 'Tên sản phẩm': { align: 'left' }, 'SĐT': { align: 'left' }, 'Số tiền nợ': { align: 'right' }, 'Đơn giá': { align: 'right' }, 'Thành tiền': { align: 'right' }, 'Số tiền trả nợ': { align: 'right' }, 'Hạn trả nợ': { align: 'right' }, 'Số ngày': { align: 'right' }, 'Số lượng': { align: 'right' }, 'Ngày nợ': { align: 'center' }, 'Ngày trả': { align: 'center' }, 'Ngày thu hồi': { align: 'center' }, 'Ngày phải trả': { align: 'center' },
@@ -385,9 +400,14 @@ thead tr:first-child th:not(:first-child) {
         } else if (textareaColumns.includes(originalHeader)) {
             inputHtml = `<textarea data-field="${originalHeader}">${formattedValue}</textarea>`;
         } else if (originalHeader === 'Giao hàng cho nợ') {
-            const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`).join('');
-            inputHtml = `<select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select>`;
-        } else if (originalHeader === 'Người chịu trách nhiệm') {
+  const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`).join('');
+  inputHtml = `<select data-field="${originalHeader}"><option value="">-- Chọn --</option>${options}</select>`;
+} else if (originalHeader === 'NV cho nợ') {
+  inputHtml = `<input type="text" list="delivery-staff-list-options" data-field="${originalHeader}" value="${formattedValue}" placeholder="Nhập tên NV giao hàng...">`;
+}
+ else if (originalHeader === 'Người chịu trách nhiệm') {
+
+
             inputHtml = `<input type="text" list="sales-person-list-options" data-field="${originalHeader}" value="${formattedValue}">`;
         } else {
             switch (originalHeader) {
@@ -431,15 +451,22 @@ thead tr:first-child th:not(:first-child) {
         if (!data.data || !data.headers) { container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>'; return; }
         const headers = data.headers;
         const displayedHeaders = headers.filter(h => !HIDDEN_COLUMNS.includes(h));
-        const filterRowHtml = `<tr class="filter-row"><th></th>${displayedHeaders.map(h => `<th><input type="text" class="filter-input" data-header="${h}" placeholder="Lọc..."></th>`).join('')}</tr>`;
+        const filterRowHtml = `<tr class="filter-row"><th></th>${displayedHeaders.map(h => `<th><input type="text" class="filter-input" data-header="${h}" placeholder="Tìm kiếm..."></th>`).join('')}</tr>`;
         const headerHtml = `<thead><tr><th style="width: 50px;">Xóa</th>${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}</tr>${filterRowHtml}</thead>`;
         const inputRowHtml = `<tr id="input-row-${tableKey}" class="input-row"><td></td>${headers.map(h => { 
             if (HIDDEN_COLUMNS.includes(h)) return `<td style="display: none;"><input type="hidden" data-field="${h}"></td>`;
             const dH = headerMapping[h] || h; let fH;
             if (['Địa chỉ', 'Sản phẩm/Mặt hàng', 'Ghi chú'].includes(h)) { fH = `<textarea placeholder="${dH}..." data-field="${h}"></textarea>`;
-            } else if (h === 'Tên Khách Hàng') { fH = `<input type="text" list="customer-list-options" placeholder="${dH}..." data-field="${h}">`;
-            } else if (h === 'Giao hàng cho nợ') { const o = GIAO_HANG_NV_LIST.map(n => `<option value="${n}">${n}</option>`).join(''); fH = `<select data-field="${h}"><option value="">-- Chọn --</option>${o}</select>`;
-            } else if (h === 'Người chịu trách nhiệm') { fH = `<input type="text" list="sales-person-list-options" placeholder="${dH}..." data-field="${h}">`;
+            } else if (h === 'Tên Khách Hàng') {
+  fH = `<input type="text" list="customer-list-options" placeholder="Nhập tên Khách Hàng..." data-field="${h}">`;
+} else if (NV_GIAO_HANG_HEADERS.includes(h)) {
+  const o = GIAO_HANG_NV_LIST.map(n => `<option value="${n}">${n}</option>`).join('');
+  fH = `<select data-field="${h}"><option value="">-- Chọn --</option>${o}</select>`;
+}
+else if (h === 'NV cho nợ') {
+  fH = `<input type="text" list="delivery-staff-list-options" placeholder="Nhập tên NV giao hàng..." data-field="${h}">`;
+} else if (h === 'Người chịu trách nhiệm') {
+ fH = `<input type="text" list="sales-person-list-options" placeholder="${dH}..." data-field="${h}">`;
             } else { switch (h) {
                 case 'Ngày nợ': fH = `<input type="date" data-field="${h}" value="${new Date().toISOString().slice(0,10)}">`; break;
                 case 'Hạn trả nợ': // Thay đổi cho dòng thêm mới
@@ -844,6 +871,12 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
                 }
             });
         }
+        const deliveryDatalist = document.getElementById('delivery-staff-list-options');
+  if (deliveryDatalist) {
+    deliveryDatalist.innerHTML = GIAO_HANG_NV_LIST
+      .map(n => `<option value="${n}"></option>`)
+      .join('');
+  }
         
         initApp();
     });
