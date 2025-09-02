@@ -507,6 +507,109 @@
                 if (!date) return '';
                 return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
             }
+            function normalizeDateToYMD(input) {
+  if (!input) return '';
+  const str = String(input).trim();
+
+  // ISO / có 'T' / có '-'
+  const d1 = new Date(str);
+  if (!isNaN(d1.getTime())) {
+    const y = d1.getFullYear();
+    const m = String(d1.getMonth() + 1).padStart(2, '0');
+    const d = String(d1.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // dd/mm/yyyy hoặc dd-mm-yyyy
+  const m1 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m1) {
+    const y = +m1[3];
+    const m = String(+m1[2]).padStart(2, '0');
+    const d = String(+m1[1]).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  // serial ngày (Excel)
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+    const d = new Date(excelEpoch.getTime() + (parseFloat(str) * 86400000));
+    if (!isNaN(d.getTime())) {
+      const y = d.getUTCFullYear();
+      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+      const day = String(d.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+  }
+
+  return '';
+}
+// Chuyển chuỗi tiền tệ (ví dụ "120.000 ₫", "500k", "1.2m") thành số (VND)
+function parseMoneyToNumber(str) {
+  if (str == null) return NaN;
+  let s = String(str).toLowerCase().trim();
+
+  // bỏ ký tự tiền tệ / dấu ngăn cách
+  s = s.replace(/[₫\s,]/g, '');
+
+  // hậu tố k, m, b
+  const match = s.match(/^([<>]=?|=)?\s*([0-9]*\.?[0-9]+)\s*([kmb])?$/i);
+  if (match) {
+    const num = parseFloat(match[2]);
+    const suffix = (match[3] || '').toLowerCase();
+    let mul = 1;
+    if (suffix === 'k') mul = 1_000;
+    if (suffix === 'm') mul = 1_000_000;
+    if (suffix === 'b') mul = 1_000_000_000;
+    return num * mul;
+  }
+
+  // nếu không có hậu tố, cố gắng lấy chỉ-digit
+  const digits = s.replace(/[^\d.]/g, '');
+  if (digits.includes('.')) {
+    // trường hợp "100.000" thực ra là phân cách nghìn => bỏ mọi dấu chấm rồi parseInt
+    const noDots = digits.replace(/\./g, '');
+    return parseInt(noDots || '0', 10);
+  }
+  return parseInt(digits || '0', 10);
+}
+
+// Kiểm tra một amount (number) khớp với biểu thức người dùng
+// Hỗ trợ: ">500k", ">=1m", "< 200000", "100k-300k", "=150000", "150000"
+function matchAmount(amount, exprRaw) {
+  if (isNaN(amount)) return false;
+  const expr = String(exprRaw).toLowerCase().trim().replace(/\s+/g, '');
+
+  // khoảng a-b
+  const range = expr.match(/^([0-9]*\.?[0-9]+[kmb]?)-([0-9]*\.?[0-9]+[kmb]?)$/i);
+  if (range) {
+    const a = parseMoneyToNumber(range[1]);
+    const b = parseMoneyToNumber(range[2]);
+    if (isNaN(a) || isNaN(b)) return false;
+    const min = Math.min(a, b);
+    const max = Math.max(a, b);
+    return amount >= min && amount <= max;
+  }
+
+  // so sánh >, <, >=, <=, =
+  const cmp = expr.match(/^(>=|<=|>|<|=)?([0-9]*\.?[0-9]+[kmb]?)$/i);
+  if (cmp) {
+    const op = cmp[1] || '=';
+    const val = parseMoneyToNumber(cmp[2]);
+    if (isNaN(val)) return false;
+    if (op === '>')  return amount >  val;
+    if (op === '>=') return amount >= val;
+    if (op === '<')  return amount <  val;
+    if (op === '<=') return amount <= val;
+    return amount === val; // '=' hoặc không ghi toán tử
+  }
+
+  // fallback: chứa chuỗi số (ít dùng)
+  const digits = expr.replace(/[^\d]/g, '');
+  const amtDigits = String(Math.round(amount)).replace(/[^\d]/g, '');
+  return amtDigits.includes(digits);
+}
+
+
             
             // --- XỬ LÝ DỮ LIỆU CHÍNH ---
             function handleData(response) {
@@ -544,7 +647,9 @@
             // =========== MODULE CHO CHI TIẾT VẬN ĐƠN (TAB 2) ================
             // ===================================================================
             const detailApp = {
-                init: function () {
+    tableCache: new Map(), // <— thêm dòng này
+    init: function () {
+
                     this.setupControls();
                 },
                 showError: function (tableId, message) {
@@ -703,16 +808,16 @@
                     if (selectedDeliveryStatuses.length > 0) filteredData = filteredData.filter(r => selectedDeliveryStatuses.includes(r["Trạng thái giao hàng NB"] || ''));
                     if (selectedPaymentStatuses.length > 0) filteredData = filteredData.filter(r => selectedPaymentStatuses.includes(r["Trạng thái thu tiền"] || ''));
 
-                    if (startDate || endDate) {
-                        const start = startDate ? new Date(startDate) : null;
-                        const end = endDate ? new Date(endDate) : null;
-                        if (start) start.setHours(0, 0, 0, 0);
-                        if (end) end.setHours(23, 59, 59, 999);
-                        filteredData = filteredData.filter(row => {
-                            const orderDate = parseDateString(row["Ngày lên đơn"]);
-                            return orderDate && (!start || orderDate >= start) && (!end || orderDate <= end);
-                        });
-                    }
+                   if (startDate || endDate) {
+  filteredData = filteredData.filter(row => {
+    const ymd = normalizeDateToYMD(row["Ngày lên đơn"]); // chuẩn hoá => 'YYYY-MM-DD'
+    if (!ymd) return false;
+    if (startDate && ymd < startDate) return false;
+    if (endDate && ymd > endDate) return false;
+    return true;
+  });
+}
+
                     if (nameQuery) {
                         filteredData = filteredData.filter(r =>
                             (r["Thông tin khách hàng"] || '').toLowerCase().includes(nameQuery) ||
@@ -738,13 +843,26 @@
                         filteredData = filteredData.filter(row => {
                             return Object.entries(columnFilters).every(([column, filter]) => {
                                 const colMap = { "Nhân sự Marketing": "Nhân viên Marketing", "Nhân sự Sale": "Nhân viên Sale" };
-                                let cellValue = row[colMap[column] || column] || '';
-                                if (filter.type === 'multiselect') return filter.value.has(String(cellValue));
-                                if (filter.type === 'date') {
-                                    const dateObject = parseDateString(cellValue);
-                                    return dateObject ? formatDateForInputLocal(dateObject) === filter.value : false;
-                                }
-                                return String(cellValue).toLowerCase().includes(filter.value);
+let cellValue = row[colMap[column] || column] || '';
+
+if (filter.type === 'multiselect') {
+  return filter.value.has(String(cellValue));
+}
+
+if (filter.type === 'date') {
+  const ymd = normalizeDateToYMD(cellValue);
+  return ymd === filter.value;
+}
+
+// TEXT: riêng cột tiền thì so sánh số, còn lại dùng includes
+if (column === 'Tổng tiền VNĐ') {
+  const amount = parseMoneyToNumber(cellValue);
+  return matchAmount(amount, filter.value);
+}
+
+// Mặc định: lọc chứa chuỗi
+return String(cellValue).toLowerCase().includes(filter.value);
+
                             });
                         });
                     }
@@ -759,42 +877,54 @@
                     document.getElementById('totalOrdersAmount').textContent = new Intl.NumberFormat('vi-VN').format(totalAmount) + ' ₫';
                 },
                 renderTables: function (data) {
-                    const container = document.getElementById('DonChiTiet');
-                    container.querySelectorAll('.region-container').forEach(c => c.remove()); // Luôn xóa bảng cũ
-                    
-                    if (data.length === 0) {
-                        this.showError('DonChiTiet', 'Không có dữ liệu khớp với bộ lọc.');
-                        return;
-                    }
+  const container = document.getElementById('DonChiTiet');
 
-                    const teams = [...new Set(data.map(r => r["Team"]).filter(Boolean))].sort();
-                    if (data.some(r => !r["Team"])) teams.push("Chưa phân Team"); // Thêm nhóm mặc định nếu có dữ liệu không team
+  // 3 bảng cố định: HCM, Hà Nội, Chưa phân Team
+  const headers = ["Mã đơn hàng","Mã Tracking","Ngày lên đơn","Thông tin khách hàng","Phone*","Mặt hàng","Số lượng mặt hàng 1","Tổng tiền VNĐ","Nhân sự Marketing","Nhân sự Sale","NV Vận đơn","Đơn vị vận chuyển","Trạng thái giao hàng NB","Kết quả Check","Trạng thái thu tiền"];
 
-                    const headers = ["Mã đơn hàng", "Mã Tracking", "Ngày lên đơn", "Thông tin khách hàng", "Phone*", "Mặt hàng", "Số lượng mặt hàng 1", "Tổng tiền VNĐ", "Nhân sự Marketing", "Nhân sự Sale", "NV Vận đơn", "Đơn vị vận chuyển", "Trạng thái giao hàng NB", "Kết quả Check", "Trạng thái thu tiền"];
-                    
-                    teams.forEach(teamName => {
-                        const teamData = data.filter(r => (teamName === "Chưa phân Team") ? !r["Team"] : r["Team"] === teamName);
-                        if (teamData.length === 0) return;
+  const groups = {
+    "HCM": data.filter(r => (r["Team"] || '').toLowerCase() === "hcm"),
+    "Hà Nội": data.filter(r => {
+      const t = (r["Team"] || '').toLowerCase();
+      return t === "hà nội" || t === "ha noi";
+    }),
+    "Chưa phân Team": data.filter(r => !r["Team"])
+  };
 
-                        const teamContainer = document.createElement('div');
-                        teamContainer.className = 'region-container';
-                        const tableId = `table-team-${teamName.replace(/\s+/g, '-').toLowerCase()}`;
-                        teamContainer.innerHTML = `
-                            <h3 class="region-header">Team: ${teamName} (${teamData.length} đơn)</h3>
-                            <div class="table-wrapper">
-                                <table id="${tableId}">
-                                    <thead></thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>`;
-                        
-                        const summaryBar = container.querySelector('.summary-bar');
-                        summaryBar.parentNode.insertBefore(teamContainer, summaryBar.nextSibling);
+  const summaryBar = container.querySelector('.summary-bar');
 
-                        this.renderTableHeader(tableId, headers);
-                        this.renderTableRows(tableId, headers, teamData);
-                    });
-                },
+  Object.entries(groups).forEach(([teamName, teamData]) => {
+    const safeId = `table-team-${teamName.replace(/\s+/g, '-').toLowerCase()}`;
+
+    // Tạo khung bảng + header 1 lần, sau đó chỉ cập nhật tbody
+    if (!this.tableCache.has(teamName)) {
+      const teamContainer = document.createElement('div');
+      teamContainer.className = 'region-container';
+      teamContainer.innerHTML = `
+        <h3 class="region-header">Team: ${teamName} (<span class="team-count">0</span> đơn)</h3>
+        <div class="table-wrapper">
+          <table id="${safeId}">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      `;
+      summaryBar.parentNode.insertBefore(teamContainer, summaryBar.nextSibling);
+
+      this.renderTableHeader(safeId, headers);
+      this.tableCache.set(teamName, { container: teamContainer, tableId: safeId, headers });
+    }
+
+    // Cập nhật tbody + số đơn
+    const { container: teamContainer, tableId } = this.tableCache.get(teamName);
+    this.renderTableBody(tableId, headers, teamData);
+    teamContainer.querySelector('.team-count').textContent = teamData.length.toLocaleString('vi-VN');
+
+    // luôn hiển thị cả 3 bảng; nếu muốn ẩn bảng trống thì đổi thành: teamContainer.style.display = teamData.length ? '' : 'none';
+    teamContainer.style.display = '';
+  });
+},
+
                 renderTableHeader: function(tableId, headers) {
                     const table = document.getElementById(tableId);
                     if (!table || table.querySelector('thead').innerHTML !== '') return; // Chỉ render 1 lần
@@ -845,6 +975,46 @@
                         filterRow.appendChild(th);
                     });
                 },
+                renderTableBody: function (tableId, headers, data) {
+  const tbody = document.getElementById(tableId)?.querySelector('tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const colMap = { "Nhân sự Marketing": "Nhân viên Marketing", "Nhân sự Sale": "Nhân viên Sale" };
+  const frag = document.createDocumentFragment();
+
+  data.forEach(row => {
+    const tr = document.createElement('tr');
+
+    headers.forEach(header => {
+      const td = document.createElement('td');
+      let value = row[colMap[header] || header] || '';
+
+      if (header === "Ngày lên đơn") {
+        // hiển thị dd/mm/yyyy từ Y-M-D
+        const ymd = normalizeDateToYMD(row["Ngày lên đơn"]);
+        if (ymd) {
+          const [y,m,d] = ymd.split('-');
+          td.textContent = `${d}/${m}/${y}`;
+        } else {
+          td.textContent = '';
+        }
+      } else if (header === "Tổng tiền VNĐ") {
+        const num = parseFloat(String(value).replace(/[^\d.-]/g, '')) || 0;
+        td.textContent = new Intl.NumberFormat('vi-VN').format(num) + ' ₫';
+      } else {
+        td.textContent = value;
+      }
+
+      tr.appendChild(td);
+    });
+
+    frag.appendChild(tr);
+  });
+
+  tbody.appendChild(frag);
+},
+
                 createColumnMultiSelect: function(header, items) {
                     const container = document.createElement('div');
                     container.className = 'multi-select-container column-filter';
