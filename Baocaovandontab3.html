@@ -282,6 +282,7 @@
             text-align: center;
             color: #2c3e50;
             margin-bottom: 20px;
+            font-size: 26px !important;
         }
 
         ::-webkit-scrollbar {
@@ -415,6 +416,41 @@
             font-weight: 500;
             color: var(--primary-color);
         }
+        /* Ẩn tạm dòng */
+.hidden-temp { display: none !important; }
+
+/* Ô tỷ lệ có bố cục đưa nút X sang phải */
+.rate-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+/* Nút X ẩn dòng */
+.hide-row-btn {
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 6px;
+    color: #e74c3c;
+}
+.hide-row-btn:hover {
+    background: #fdecea;
+}
+
+/* Nút khôi phục */
+.restore-btn {
+    background-color: #34495e !important;
+}
+.restore-btn:hover {
+    background-color: #2c3e50 !important;
+}
+
     </style>
 </head>
 
@@ -488,6 +524,8 @@
                     </div>
                 </div>
                 <button id="paClearFilters" class="clear-filter-btn">Xóa lọc</button>
+                <button id="paRestoreHidden" class="restore-btn">Khôi Phục Bảng Tổng </button>
+
             </div>
         </div>
 
@@ -714,6 +752,10 @@
             // ===================================================================
             // =========== MODULE CHO BÁO CÁO SẢN PHẨM & KHU VỰC (TAB 3) ======
             // ===================================================================
+            // Lưu các dòng bị ẩn tạm theo khóa "product||area"
+const hiddenRowKeys = new Set();
+const makeRowKey = (product, area) => `${product}||${area}`;
+
             const productAreaApp = {
                 chartInstances: {},
                 init: function () {
@@ -789,24 +831,43 @@
                     else btn.textContent = `${selectedCount} ${defaultTextPrefix} đã chọn`;
                 },
                 setupControls: function () {
-                    const apply = this.applyFilters.bind(this);
-                    document.getElementById('paStartDateFilter')?.addEventListener('change', apply);
-                    document.getElementById('paEndDateFilter')?.addEventListener('change', apply);
-                    this.setupMultiSelectDropdown('paProductFilterBtn', 'paProductDropdown');
-                    this.setupMultiSelectDropdown('paMarketFilterBtn', 'paMarketDropdown');
-                    this.setupMultiSelectDropdown('paStaffFilterBtn', 'paStaffDropdown');
+    const apply = this.applyFilters.bind(this);
 
-                    document.getElementById('paClearFilters')?.addEventListener('click', () => {
-                        document.getElementById('paStartDateFilter').value = '';
-                        document.getElementById('paEndDateFilter').value = '';
+    document.getElementById('paStartDateFilter')?.addEventListener('change', apply);
+    document.getElementById('paEndDateFilter')?.addEventListener('change', apply);
 
-                        this.clearMultiSelect('paProductDropdown', 'paProductFilterBtn', 'paProductSelectAll', 'Sản phẩm');
-                        this.clearMultiSelect('paMarketDropdown', 'paMarketFilterBtn', 'paMarketSelectAll', 'Khu vực');
-                        this.clearMultiSelect('paStaffDropdown', 'paStaffFilterBtn', 'paStaffSelectAll', 'NV Vận đơn');
+    this.setupMultiSelectDropdown('paProductFilterBtn', 'paProductDropdown');
+    this.setupMultiSelectDropdown('paMarketFilterBtn', 'paMarketDropdown');
+    this.setupMultiSelectDropdown('paStaffFilterBtn', 'paStaffDropdown');
 
-                        apply();
-                    });
-                },
+    // NÚT Xóa lọc (ĐÂY LÀ MỐC THAM CHIẾU)
+    document.getElementById('paClearFilters')?.addEventListener('click', () => {
+        document.getElementById('paStartDateFilter').value = '';
+        document.getElementById('paEndDateFilter').value = '';
+
+        this.clearMultiSelect('paProductDropdown', 'paProductFilterBtn', 'paProductSelectAll', 'Sản phẩm');
+        this.clearMultiSelect('paMarketDropdown', 'paMarketFilterBtn', 'paMarketSelectAll', 'Khu vực');
+        this.clearMultiSelect('paStaffDropdown', 'paStaffFilterBtn', 'paStaffSelectAll', 'NV Vận đơn');
+
+        apply();
+    });
+
+    // ➜ THÊM NGAY SAU ĐOẠN TRÊN
+    document.getElementById('paRestoreHidden')?.addEventListener('click', () => {
+    // 1) Xóa danh sách khóa ẩn tạm
+    hiddenRowKeys.clear();
+
+    // 2) Gỡ class ẩn trên các dòng đang có sẵn trong bảng (nếu chưa render lại)
+    document
+      .querySelectorAll('#productAreaSummaryTableBody tr.hidden-temp')
+      .forEach(tr => tr.classList.remove('hidden-temp'));
+
+    // 3) Render lại để chắc chắn đồng bộ (nếu đang có filter áp dụng)
+    this.applyFilters();
+});
+
+},
+
                 clearMultiSelect: function (dropdownId, btnId, selectAllId, prefix) {
                     const dropdown = document.getElementById(dropdownId);
                     if (dropdown) dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
@@ -862,9 +923,8 @@
                     this.updateSummaryTable(filteredData);
                 },
                 updateCharts: function (filteredData) {
-                    Object.keys(this.chartInstances).forEach(key => {
-                        if (this.chartInstances[key]) this.chartInstances[key].destroy();
-                    });
+                    
+
                     if (filteredData.length === 0) return;
 
                     const productStats = {};
@@ -877,61 +937,54 @@
                         productStats[product].totalOrders++;
                         productStats[product].totalAmount += (parseFloat(String(row["Tổng tiền VNĐ"]).replace(/[^\d.-]/g, '')) || 0);
                     });
-                    const productCtx = document.getElementById('productBreakdownChart')?.getContext('2d');
-                    if (productCtx) this.chartInstances.product = new Chart(productCtx, {
-                        type: 'bar',
-                        data: {
-                            labels: Object.keys(productStats),
-                            datasets: [{
-                                label: 'Tổng đơn',
-                                data: Object.values(productStats).map(p => p.totalOrders),
-                                backgroundColor: '#3498db'
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            maintainAspectRatio: false, // Giữ false để lấp đầy vùng chứa có chiều cao cố định
-                            plugins: {
-                                title: {
-                                    display: true, // Bật hiển thị tiêu đề
-                                    text: 'Phân tích theo sản phẩm', // Văn bản tiêu đề
-                                    font: {
-                                        size: 20, // Kích thước chữ
-                                        weight: 'bold', // Độ đậm của chữ
-                                        family: 'Roboto, Arial, sans-serif' // Font chữ, nên khớp với font của body
-                                    },
-                                    color: '#2c3e50', // Màu sắc của tiêu đề
-                                    padding: {
-                                        top: 10,
-                                        bottom: 10 // Khoảng cách trên và dưới của tiêu đề
-                                    }
-                                },
-                                datalabels: {
-                                    anchor: 'end',
-                                    align: 'top',
-                                    formatter: (value) => value.toLocaleString('vi-VN'),
-                                    color: '#333',
-                                    font: {
-                                        weight: 'bold'
-                                    }
-                                },
-                                tooltip: { // Cấu hình tooltip cho biểu đồ cột
-                                    callbacks: {
-                                        label: function (context) {
-                                            let label = context.dataset.label || '';
-                                            if (label) {
-                                                label += ': ';
-                                            }
-                                            if (context.parsed.y !== null) {
-                                                label += context.parsed.y.toLocaleString('vi-VN') + ' đơn';
-                                            }
-                                            return label;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    });
+                    // Sắp xếp theo tổng số đơn giảm dần
+const productEntries = Object.entries(productStats)
+  .sort((a, b) => b[1].totalOrders - a[1].totalOrders);
+
+const productLabels = productEntries.map(([name]) => name);
+const productOrders = productEntries.map(([_, v]) => v.totalOrders);
+
+const productCtx = document.getElementById('productBreakdownChart')?.getContext('2d');
+if (productCtx) this.chartInstances.product = new Chart(productCtx, {
+  type: 'bar',
+  data: {
+    labels: productLabels,
+    datasets: [{
+      label: 'Tổng đơn',
+      data: productOrders,
+      backgroundColor: '#3498db'
+    }]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      title: {
+        display: true,
+        text: 'Phân tích theo sản phẩm',
+        font: { size: 20, weight: 'bold', family: 'Roboto, Arial, sans-serif' },
+        color: '#2c3e50',
+        padding: { top: 10, bottom: 10 }
+      },
+      datalabels: {
+        anchor: 'end',
+        align: 'top',
+        formatter: (value) => value.toLocaleString('vi-VN'),
+        color: '#333',
+        font: { weight: 'bold' }
+      },
+      tooltip: {
+        callbacks: {
+          label: (ctx) => {
+            const v = ctx.parsed.y ?? 0;
+            return `Tổng đơn: ${v.toLocaleString('vi-VN')} đơn`;
+          }
+        }
+      }
+    }
+  }
+});
+
 
                     const areaOrderCounts = {};
                     filteredData.forEach(row => {
@@ -1036,31 +1089,70 @@
                     Object.keys(productAreaStats).sort().forEach(productName => {
                         const productData = productAreaStats[productName];
                         Object.keys(productData).filter(k => k !== '_total').sort().forEach(areaName => {
-                            summaryTableBody.appendChild(this.renderProductAreaRow(productName, areaName, productData[areaName], ''));
-                        });
-                        summaryTableBody.appendChild(this.renderProductAreaRow(productName, 'TỔNG CỘNG', productData._total, 'group-total'));
+    const row = this.renderProductAreaRow(productName, areaName, productData[areaName], '');
+    summaryTableBody.appendChild(row);
+    if (hiddenRowKeys.has(makeRowKey(productName, areaName))) {
+        row.classList.add('hidden-temp');
+    }
+});
+
+                        const groupRow = this.renderProductAreaRow(productName, 'TỔNG CỘNG', productData._total, 'group-total');
+summaryTableBody.appendChild(groupRow);
+if (hiddenRowKeys.has(makeRowKey(productName, 'TỔNG CỘNG'))) {
+    groupRow.classList.add('hidden-temp');
+}
+
                     });
 
-                    summaryTableBody.appendChild(this.renderProductAreaRow('TỔNG TOÀN BỘ', 'Tất cả', grandTotal, 'grand-total'));
+                    const grandRow = this.renderProductAreaRow('TỔNG TOÀN BỘ', 'Tất cả', grandTotal, 'grand-total');
+summaryTableBody.appendChild(grandRow);
+if (hiddenRowKeys.has(makeRowKey('TỔNG TOÀN BỘ', 'Tất cả'))) {
+    grandRow.classList.add('hidden-temp');
+}
+
                 },
                 renderProductAreaRow: function(product, area, stats, rowClass) {
-                    const tr = document.createElement('tr');
-                    if (rowClass) tr.className = rowClass;
-                    tr.insertCell().textContent = product;
-                    tr.insertCell().textContent = area;
-                    tr.insertCell().textContent = stats.totalOrders.toLocaleString('vi-VN');
-                    tr.insertCell().textContent = new Intl.NumberFormat('vi-VN').format(stats.totalAmount) + ' ₫';
-                    tr.insertCell().textContent = stats.successful.toLocaleString('vi-VN');
-                    tr.insertCell().textContent = stats.returned.toLocaleString('vi-VN');
-                    tr.insertCell().textContent = stats.delivering.toLocaleString('vi-VN');
-                    tr.insertCell().textContent = stats.waitingForCheck.toLocaleString('vi-VN');
-                    tr.insertCell().textContent = stats.other.toLocaleString('vi-VN');
-                    const successRate = stats.totalOrders > 0 ? (stats.successful / stats.totalOrders * 100) : 0;
-                    const rateCell = tr.insertCell();
-                    rateCell.textContent = successRate.toFixed(1) + '%';
-                    rateCell.className = successRate > 70 ? 'positive' : 'negative';
-                    return tr;
-                }
+    const tr = document.createElement('tr');
+    if (rowClass) tr.className = rowClass;
+
+    tr.insertCell().textContent = product;
+    tr.insertCell().textContent = area;
+    tr.insertCell().textContent = stats.totalOrders.toLocaleString('vi-VN');
+    tr.insertCell().textContent = new Intl.NumberFormat('vi-VN').format(stats.totalAmount) + ' ₫';
+    tr.insertCell().textContent = stats.successful.toLocaleString('vi-VN');
+    tr.insertCell().textContent = stats.returned.toLocaleString('vi-VN');
+    tr.insertCell().textContent = stats.delivering.toLocaleString('vi-VN');
+    tr.insertCell().textContent = stats.waitingForCheck.toLocaleString('vi-VN');
+    tr.insertCell().textContent = stats.other.toLocaleString('vi-VN');
+
+    const successRate = stats.totalOrders > 0 ? (stats.successful / stats.totalOrders * 100) : 0;
+    const rateCell = tr.insertCell();
+    rateCell.className = 'rate-cell'; // bố cục flex để đẩy nút X sang phải
+
+    // Tỷ lệ (màu xanh/đỏ như cũ)
+    const rateSpan = document.createElement('span');
+    rateSpan.textContent = successRate.toFixed(1) + '%';
+    rateSpan.className = successRate > 70 ? 'positive' : 'negative';
+
+    // Nút X ẩn dòng
+    const hideBtn = document.createElement('button');
+    hideBtn.className = 'hide-row-btn';
+    hideBtn.setAttribute('title', 'Ẩn dòng này');
+    hideBtn.textContent = '×';
+
+    hideBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const key = makeRowKey(product, area);
+        hiddenRowKeys.add(key);
+        tr.classList.add('hidden-temp');
+    });
+
+    rateCell.appendChild(rateSpan);
+    rateCell.appendChild(hideBtn);
+
+    return tr;
+}
+
             };
 
             // --- INITIALIZE APP ---
