@@ -100,6 +100,18 @@
       }
     }
 
+    @keyframes pulse-glow {
+      0% {
+        box-shadow: 0 0 5px rgba(243, 112, 33, 0.5);
+      }
+      50% {
+        box-shadow: 0 0 15px rgba(243, 112, 33, 0.8), 0 0 25px rgba(243, 112, 33, 0.3);
+      }
+      100% {
+        box-shadow: 0 0 5px rgba(243, 112, 33, 0.5);
+      }
+    }
+
     .controls {
       display: flex;
       justify-content: space-between;
@@ -494,6 +506,112 @@
     td.highlight {
       background-color: #ffeb3b !important;
     }
+
+    /* === NEW POPOVER STYLES === */
+    .popover-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    }
+
+    .popover-content {
+      background: white;
+      padding: 20px;
+      border-radius: var(--border-radius);
+      width: 90%;
+      max-width: 600px;
+      box-shadow: var(--shadow-lg);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .popover-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+      margin-bottom: 15px;
+    }
+
+    .popover-header h3 {
+      margin: 0;
+      color: var(--primary-color);
+    }
+
+    .close-popover {
+      background: transparent;
+      border: none;
+      font-size: 1.5rem;
+      cursor: pointer;
+      color: var(--text-color-muted);
+    }
+
+    .popover-body {
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 20px;
+    }
+
+    .popover-footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 15px;
+    }
+
+    .pending-change-item {
+      padding: 8px;
+      border-bottom: 1px solid #eee;
+      font-size: 0.9rem;
+    }
+
+    .pending-change-item:last-child {
+      border-bottom: none;
+    }
+
+    .pending-change-item strong {
+      color: var(--primary-color-dark);
+    }
+    
+    .pending-change-item ul {
+        margin-top: 5px;
+        padding-left: 20px;
+    }
+
+    /* Badge for status button */
+    #pending-count-badge {
+      background-color: white;
+      color: var(--accent-color);
+      border-radius: 50%;
+      padding: 2px 6px;
+      font-size: 0.75em;
+      font-weight: bold;
+      vertical-align: top;
+      margin-left: 5px;
+      min-width: 18px;
+      text-align: center;
+      border: 2px solid var(--accent-color);
+    }
+
+    #update-info {
+      font-size: 0.85em;
+      font-weight: 500;
+      margin-left: 5px;
+    }
+
+    #pending-count-text {
+      font-weight: bold;
+      color: inherit;
+    }
   </style>
 </head>
 
@@ -528,6 +646,14 @@
         <span id="userInfo"></span>
         <button id="refreshData" class="refresh-btn"><span class="refresh-icon">↻</span> Load</button>
         <button id="updateAll" class="update-btn">Cập nhật</button>
+        <!-- NEW STATUS BUTTON -->
+        <button id="statusButton" class="status-btn" style="background-color: #6c757d;">
+          Trạng thái cập nhật 
+          <span id="update-info">
+            (<span id="pending-count-text">0</span> bản cập nhật)
+          </span>
+          <span id="pending-count-badge">0</span>
+        </button>
         <div class="fixed-col-control">
           <span>Cột cố định:</span>
           <input type="number" id="fixedColumnCountInput" value="1" min="0" style="width: 70px;">
@@ -706,6 +832,23 @@
     </div>
   </div>
 
+  <!-- NEW STATUS POPOVER HTML -->
+  <div id="status-popover" class="popover-overlay" style="display: none;">
+    <div class="popover-content">
+      <div class="popover-header">
+        <h3>Các thay đổi đang chờ</h3>
+        <button class="close-popover">&times;</button>
+      </div>
+      <div id="pending-changes-list" class="popover-body">
+        <!-- Changes will be listed here -->
+      </div>
+      <div class="popover-footer">
+        <button id="cancel-all-changes" class="btn clear-filter-btn">Hủy tất cả</button>
+        <button id="update-all-pending" class="btn update-btn">Cập nhật tất cả</button>
+      </div>
+    </div>
+  </div>
+
 
   <script>
     const prod = 'https://n-api-gamma.vercel.app';
@@ -757,6 +900,124 @@
       filterDebounceTimer;
 
 
+    // --- Local Storage & Status Popover Logic ---
+    function updateStatusButtonUI() {
+        const changes = getPendingChanges();
+        const count = Object.keys(changes).length;
+        const badge = document.getElementById('pending-count-badge');
+        const countText = document.getElementById('pending-count-text');
+        const updateInfo = document.getElementById('update-info');
+        const statusButton = document.getElementById('statusButton');
+        
+        if (badge) {
+            badge.textContent = count;
+            badge.style.display = count > 0 ? '' : 'none';
+        }
+        
+        if (countText) {
+            countText.textContent = count;
+        }
+        
+        if (updateInfo) {
+            updateInfo.style.display = count > 0 ? '' : 'none';
+        }
+        
+        if (statusButton) {
+            statusButton.style.backgroundColor = count > 0 ? 'var(--accent-color)' : '#6c757d';
+            // Add animation effect when there are updates
+            if (count > 0) {
+                statusButton.style.animation = 'pulse-glow 2s infinite';
+            } else {
+                statusButton.style.animation = 'none';
+            }
+        }
+    }
+
+    function showStatusPopover() {
+        const popover = document.getElementById('status-popover');
+        const listContainer = document.getElementById('pending-changes-list');
+        const changes = getPendingChanges();
+        const changeKeys = Object.keys(changes);
+
+        listContainer.innerHTML = ''; // Clear previous list
+
+        if (changeKeys.length === 0) {
+            listContainer.innerHTML = '<p style="text-align: center; color: var(--text-color-muted);">Không có thay đổi nào đang chờ cập nhật.</p>';
+        } else {
+            changeKeys.forEach(primaryKey => {
+                const changeData = changes[primaryKey];
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'pending-change-item';
+                
+                let changesHtml = `<strong>Đơn hàng: ${primaryKey}</strong><ul>`;
+                for (const field in changeData) {
+                    if (field !== "Mã đơn hàng") {
+                        changesHtml += `<li>${field}: "<strong>${changeData[field]}</strong>"</li>`;
+                    }
+                }
+                changesHtml += '</ul>';
+                itemDiv.innerHTML = changesHtml;
+                listContainer.appendChild(itemDiv);
+            });
+        }
+        popover.style.display = 'flex';
+    }
+
+    function hideStatusPopover() {
+        document.getElementById('status-popover').style.display = 'none';
+    }
+
+    async function handleUpdateAllPending() {
+        const payload = Object.values(getPendingChanges());
+
+        if (payload.length === 0) {
+            showTempMessage('Không có dữ liệu để cập nhật.', true);
+            return;
+        }
+        
+        const updateBtn = document.getElementById('update-all-pending');
+        const originalText = updateBtn.textContent;
+        updateBtn.disabled = true;
+        updateBtn.textContent = 'Đang xử lý...';
+
+        try {
+            const response = await fetch(UPDATE_BULK_URL, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+
+            if (!response.ok || !result.success) {
+                throw new Error(result.message || 'Lỗi không xác định từ server');
+            }
+            
+            showTempMessage(`Cập nhật thành công ${result.summary.updated} đơn hàng từ bộ nhớ. Tải lại dữ liệu...`);
+            clearPendingChanges(); 
+            hideStatusPopover();
+            setTimeout(loadData, 1000); // Reload data to show updated state
+
+        } catch (error) {
+            console.error("Lỗi khi cập nhật từ popover:", error);
+            showTempMessage(`Lỗi cập nhật. Các thay đổi vẫn được lưu.`, true);
+        } finally {
+            updateBtn.disabled = false;
+            updateBtn.textContent = originalText;
+        }
+    }
+
+    function handleCancelAllChanges() {
+        if (Object.keys(getPendingChanges()).length === 0) {
+            showTempMessage('Không có thay đổi nào để hủy.', true);
+            return;
+        }
+        if (confirm('Bạn có chắc muốn hủy tất cả các thay đổi chưa được lưu? Hành động này không thể hoàn tác.')) {
+            clearPendingChanges(); 
+            showTempMessage('Đã hủy tất cả các thay đổi đang chờ.');
+            hideStatusPopover();
+        }
+    }
+    
     // --- Local Storage Change Management ---
     function getPendingChanges() {
         return JSON.parse(localStorage.getItem(LOCAL_STORAGE_KEY) || '{}');
@@ -770,17 +1031,20 @@
         changes[primaryKey][field] = value;
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(changes));
         console.log('Change saved to local storage:', { primaryKey, field, value });
+        updateStatusButtonUI();
     }
     
     function removePendingChange(primaryKey) {
         const changes = getPendingChanges();
         delete changes[primaryKey];
         localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(changes));
+        updateStatusButtonUI();
     }
     
     function clearPendingChanges() {
         localStorage.removeItem(LOCAL_STORAGE_KEY);
         console.log('Local storage cleared.');
+        updateStatusButtonUI();
     }
 
 
@@ -1097,7 +1361,7 @@ function selectCellsBetween(start, end) {
       document.getElementById('loader-overlay').style.display = 'none';
       allTabConfigs.forEach(config => { document.getElementById(config.controls.refreshBtn).innerHTML = '<span class="refresh-icon">↻</span> Load' });
       allData = [], staffFilteredData = [], japanData = [], leaderData = [], mentionedData = [], hcmData = [], hanoiData = [];
-      clearPendingChanges(); // Clear old pending changes on new data load
+      // clearPendingChanges(); // MODIFIED: Do not clear changes on load to persist them
 
       if (response.error || !Array.isArray(response.rows)) {
         const errorMsg = 'Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng');
@@ -1159,6 +1423,8 @@ function selectCellsBetween(start, end) {
       }
       japanData = allData.filter(row => (row['khu vực'] || row['Khu vực']) === 'Nhật Bản');
       initializeTab(japanTabConfig, japanData);
+      
+      updateStatusButtonUI(); // MODIFIED: Update button state after data is handled
     }
     function initializeTab(config, data) { generateDynamicOptions(config, data); populateExternalFilters(config); renderHeader(config); renderTableBody(config, data); applyAllFilters(config); setupCellSelection(config.table.body); }
     function generateDynamicOptions(config, data) { const options = {}; columnsToMakeDynamic.forEach(colName => { if (dropdownCols[colName]) { options[colName] = dropdownCols[colName].filter(opt => opt !== "").sort((a, b) => String(a).localeCompare(String(b), 'vi')); } else { const dataKey = columnDisplayMapping[colName] || colName; const valueMapper = row => { const val = row[dataKey] || row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? row['Khu vực'] || '' : ''); return typeof val === 'string' ? val.trim() : val; }; const uniqueValues = new Set(data.map(valueMapper).filter(Boolean)); options[colName] = Array.from(uniqueValues).sort((a, b) => String(a).localeCompare(String(b), 'vi')); } }); if (config === mainTabConfig) dynamicFilterOptions = options; else if (config === japanTabConfig) japanDynamicFilterOptions = options; else if (config === leaderTabConfig) leaderDynamicFilterOptions = options; else if (config === mentionedTabConfig) mentionedDynamicFilterOptions = options; else if (config === hcmTabConfig) hcmDynamicFilterOptions = options; else if (config === hanoiTabConfig) hanoiDynamicFilterOptions = options; }
@@ -1167,7 +1433,35 @@ function selectCellsBetween(start, end) {
     function applyAllFilters(config) { const tableHead = document.getElementById(config.table.head); const tableBody = document.getElementById(config.table.body); if (!tableHead.querySelector('tr') || !tableBody) return; const startDateVal = document.getElementById(config.controls.startDate).value; const endDateVal = document.getElementById(config.controls.endDate).value; const start = startDateVal ? new Date(startDateVal) : null; const end = endDateVal ? new Date(endDateVal) : null; if (start) start.setHours(0, 0, 0, 0); if (end) end.setHours(23, 59, 59, 999); const productValue = document.getElementById(config.controls.product).value; const marketValue = config.controls.market ? document.getElementById(config.controls.market).value : ''; const staffValue = config.controls.staff ? document.getElementById(config.controls.staff).value : ''; const filterValues = {}; tableHead.querySelectorAll('[data-column]').forEach(filter => { const colName = filter.dataset.column; if (!filterValues[colName]) filterValues[colName] = {}; if (filter.dataset.filterType) { filterValues[colName][filter.dataset.filterType] = filter.value.toLowerCase(); } else if (filter.classList.contains('multi-select-container')) { const selected = Array.from(filter.querySelectorAll('input:checked:not(.select-all-cb)')).map(cb => cb.value); if (selected.length > 0) filterValues[colName].multi = new Set(selected); } else if (filter.tagName === 'SELECT') { if (filter.value) filterValues[colName].single = filter.value; } else if (filter.classList.contains('filter-input')) { filterValues[colName].text = filter.value.toLowerCase(); } }); const originalData = config.data(); const rows = tableBody.querySelectorAll('tr'); rows.forEach(tr => { const rowIndex = parseInt(tr.dataset.rowIndex, 10); if (isNaN(rowIndex)) return; const rowData = originalData[rowIndex]; if (!rowData) return; let isVisible = true; if (start || end) { const orderDate = parseDateString(rowData["Ngày lên đơn"] || rowData["Thời gian lên đơn"]); if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) { isVisible = false; } } if (isVisible && productValue && (rowData["Mặt hàng"] || '') !== productValue) isVisible = false; if (isVisible && marketValue && (rowData["Khu vực"] || rowData["khu vực"] || '') !== marketValue) isVisible = false; if (isVisible && staffValue && (rowData["NV Vận đơn"] || rowData["NV_Vận_đơn"] || '') !== staffValue) isVisible = false; if (isVisible) { for (const colName in filterValues) { const dataKey = columnDisplayMapping[colName] || colName; let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (rowData['Khu vực'] || '') : '')); const cellValueLower = String(cellValue).toLowerCase(); const colFilters = filterValues[colName]; if (colFilters.text && !cellValueLower.includes(colFilters.text)) { isVisible = false; break; } if (colFilters.single && String(cellValue) !== colFilters.single) { isVisible = false; break; } if (colFilters.multi) { const valueAsString = String(cellValue).trim(); const isBlank = !valueAsString; const isMatch = (colFilters.multi.has('') && isBlank) || colFilters.multi.has(valueAsString); if (!isMatch) { isVisible = false; break; } } if (colFilters.contains && !cellValueLower.includes(colFilters.contains)) { isVisible = false; break; } if (colFilters.notcontains && colFilters.notcontains !== '' && cellValueLower.includes(colFilters.notcontains)) { isVisible = false; break; } } } tr.style.display = isVisible ? '' : 'none'; }); updateSummaryInfo(config); }
     function renderHeader(config) { const header = document.getElementById(config.table.head); const options = config.dynamicOptions(); header.innerHTML = ''; const tr = document.createElement('tr'); const fixedCount = getFixedColumnCount(); const debouncedFilter = () => { clearTimeout(filterDebounceTimer); filterDebounceTimer = setTimeout(() => applyAllFilters(config), 300) }; const immediateFilter = () => applyAllFilters(config); displayColumns.forEach((colName, index) => { const th = document.createElement('th'); th.textContent = colName; if (index < fixedCount) th.classList.add('fixed-column'); th.appendChild(document.createElement('br')); if (colName === "Mã Tracking") { const container = document.createElement('div'); container.className = 'tracking-filter-container'; const inputContains = document.createElement('input'); inputContains.type = 'text'; inputContains.placeholder = 'Chứa ký tự...'; inputContains.className = 'filter-input'; inputContains.dataset.column = colName; inputContains.dataset.filterType = 'contains'; inputContains.addEventListener('input', debouncedFilter); const inputNotContains = document.createElement('input'); inputNotContains.type = 'text'; inputNotContains.placeholder = 'Không chứa...'; inputNotContains.className = 'filter-input'; inputNotContains.dataset.column = colName; inputNotContains.dataset.filterType = 'notcontains'; inputNotContains.addEventListener('input', debouncedFilter); container.append(inputContains, inputNotContains); th.appendChild(container) } else if (singleSelectFilterCols.includes(colName) && options[colName]) { const filterElement = document.createElement('select'); filterElement.className = 'filter-select'; filterElement.dataset.column = colName; filterElement.add(new Option(`Tất cả ${colName}`, '')); options[colName].forEach(opt => filterElement.add(new Option(opt, opt))); filterElement.addEventListener('change', immediateFilter); th.appendChild(filterElement) } else if (options[colName]) { const container = document.createElement('div'); container.className = 'multi-select-container'; container.dataset.column = colName; const button = document.createElement('button'); button.className = 'multi-select-button'; button.textContent = `Tất cả ${colName}`; const dropdown = document.createElement('div'); dropdown.className = 'checkbox-dropdown'; const selectAllLabel = document.createElement('label'); const selectAllCheckbox = document.createElement('input'); selectAllCheckbox.type = 'checkbox'; selectAllCheckbox.className = 'select-all-cb'; selectAllLabel.style.fontWeight = 'bold'; selectAllLabel.style.borderBottom = '1px solid #ccc'; selectAllLabel.style.marginBottom = '4px'; selectAllLabel.append(selectAllCheckbox, ' (Tất cả)'); dropdown.appendChild(selectAllLabel); const createCheckbox = (value, text) => { const label = document.createElement('label'); const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = value; checkbox.addEventListener('change', () => { const allOptionCheckboxes = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:not(.select-all-cb)')); selectAllCheckbox.checked = allOptionCheckboxes.every(cb => cb.checked); const selectedCount = dropdown.querySelectorAll('input:checked:not(.select-all-cb)').length; button.textContent = selectedCount === 0 ? `Tất cả ${colName}` : `${selectedCount} lựa chọn`; immediateFilter(); }); label.append(checkbox, ` ${text}`); return label; }; dropdown.appendChild(createCheckbox('', '(Trống)')); options[colName].forEach(opt => dropdown.appendChild(createCheckbox(opt, opt))); selectAllCheckbox.addEventListener('change', (e) => { dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked); const selectedCount = e.target.checked ? dropdown.querySelectorAll('input:checked:not(.select-all-cb)').length : 0; button.textContent = selectedCount === 0 ? `Tất cả ${colName}` : `${selectedCount} lựa chọn`; immediateFilter(); }); button.addEventListener('click', e => { e.stopPropagation(); document.querySelectorAll('.checkbox-dropdown.show').forEach(d => { if (d !== dropdown) d.classList.remove('show') }); dropdown.classList.toggle('show') }); container.append(button, dropdown); th.appendChild(container) } else if (datalistFilterCols.includes(colName)) { const input = document.createElement('input'); input.type = 'text'; input.className = 'filter-input'; input.placeholder = `Lọc ${colName}...`; input.dataset.column = colName; const datalistId = `datalist-${colName.replace(/[^a-zA-Z0-9]/g, '-')}`; input.setAttribute('list', datalistId); const datalist = document.createElement('datalist'); datalist.id = datalistId; if (datalistOptions[colName]) { datalistOptions[colName].forEach(opt => { const option = document.createElement('option'); option.value = opt; datalist.appendChild(option) }) } input.addEventListener('input', debouncedFilter); th.append(input, datalist) } else { const filterElement = document.createElement('input'); filterElement.type = 'text'; filterElement.className = 'filter-input'; filterElement.placeholder = `Lọc ${colName}...`; filterElement.dataset.column = colName; filterElement.addEventListener('input', debouncedFilter); th.appendChild(filterElement) } tr.appendChild(th) }); header.appendChild(tr); window.addEventListener('click', e => { if (!e.target.closest('.multi-select-container')) { document.querySelectorAll('.checkbox-dropdown.show').forEach(d => d.classList.remove('show')) } }) }
     function renderTableBody(config, data) { const container = document.getElementById(config.table.body); container.innerHTML = ''; if (data.length === 0) { showError(`Không có đơn hàng nào.`, config.table.body); return; } const fixedCount = getFixedColumnCount(); data.forEach((row, originalRowIndex) => { const tr = document.createElement('tr'); tr.dataset.rowIndex = originalRowIndex; displayColumns.forEach((col, index) => { const td = document.createElement('td'); if (index < fixedCount) td.classList.add('fixed-column'); const dataKey = columnDisplayMapping[col] || col; let value; if (allDateColumns.includes(dataKey)) { let dateSource = row[dataKey] || ''; if (dataKey === "Ngày lên đơn") dateSource = row["Ngày lên đơn"] || row["Thời gian lên đơn"]; const formattedDate = formatDate(dateSource); value = formattedDate.display; td.dataset.originalValue = formattedDate.original; } else if (dataKey === "Ngày Kế toán đối soát với FFM lần 2") { const dateVal = row[dataKey]; if (dateVal) { const dateObj = new Date(dateVal); if (!isNaN(dateObj.getTime())) { value = getDateTimeVN(dateObj); } else { value = ''; } } else { value = ''; } } else { value = row[dataKey] ?? (row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : '')); } if (editableCols.includes(col)) { td.classList.add('editable'); if (dropdownCols[col]) { td.classList.add('has-dropdown'); const select = document.createElement('select'); const validOptions = dropdownCols[col]; validOptions.forEach(opt => select.add(new Option(opt, opt))); if (validOptions.includes(value)) { select.value = value; } else { select.value = ""; } select.addEventListener('change', (e) => { td.classList.add('highlight'); const newValue = select.value; const primaryKey = data[originalRowIndex]["Mã đơn hàng"]; if (primaryKey) { const updates = { [col]: newValue }; if (col === 'Đơn vị vận chuyển') { const timestamp = getDateTimeVN(); updates["Ngày Kế toán đối soát với FFM lần 2"] = timestamp; const tr = td.closest('tr'); const dateColIndex = displayColumns.indexOf("Ngày Kế toán đối soát với FFM lần 2"); if (dateColIndex > -1 && tr.cells[dateColIndex]) { tr.cells[dateColIndex].textContent = timestamp; tr.cells[dateColIndex].classList.add('highlight'); } } processCellUpdate(primaryKey, updates); } }); td.appendChild(select); } else { td.textContent = value; } } else { td.textContent = value; } if (col === "Kết quả Check") { if (value === 'OK') td.classList.add('cell-ok'); else if (value === 'Vận đơn XL') td.classList.add('cell-xl'); else if (value === 'Huỷ') td.classList.add('cell-cancel'); } tr.appendChild(td); }); container.appendChild(tr); }); updateStickyColumns(config); }
-    function setupControls() { setupTabs(); allTabConfigs.forEach(setupTabControls); document.getElementById('fixedColumnCountInput').addEventListener('input', handleFixedColumnCountChange); document.addEventListener('keydown', e => { const activeEl = document.activeElement; if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) && !activeEl.closest('td')) return; if (document.querySelector('td.editing')) return; if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedCells.size > 0) { e.preventDefault(); copySelectedCells() } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && selectedCells.size > 0) { e.preventDefault(); navigator.clipboard.readText().then(text => pasteToSelectedCells(text)).catch(err => console.error('Lỗi đọc clipboard:', err)) } else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCells.size > 0) { e.preventDefault(); clearSelectedCells() } }); window.addEventListener('resize', () => { const activeTab = document.querySelector('.content-tab.active'); if (!activeTab) return; const activeConfig = allTabConfigs.find(c => c.table.body === activeTab.querySelector('tbody')?.id); if (activeConfig) updateStickyColumns(activeConfig) }); }
+    function setupControls() { 
+        setupTabs(); 
+        allTabConfigs.forEach(setupTabControls); 
+        document.getElementById('fixedColumnCountInput').addEventListener('input', handleFixedColumnCountChange); 
+        
+        // MODIFIED: Add listeners for popover
+        document.getElementById('statusButton').addEventListener('click', showStatusPopover);
+        document.querySelector('.close-popover').addEventListener('click', hideStatusPopover);
+        document.getElementById('status-popover').addEventListener('click', (e) => {
+            if (e.target.id === 'status-popover') hideStatusPopover();
+        });
+        document.getElementById('update-all-pending').addEventListener('click', handleUpdateAllPending);
+        document.getElementById('cancel-all-changes').addEventListener('click', handleCancelAllChanges);
+
+        document.addEventListener('keydown', e => { 
+            const activeEl = document.activeElement; 
+            if (activeEl && ['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) && !activeEl.closest('td')) return; 
+            if (document.querySelector('td.editing')) return; 
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && selectedCells.size > 0) { e.preventDefault(); copySelectedCells() } 
+            else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'v' && selectedCells.size > 0) { e.preventDefault(); navigator.clipboard.readText().then(text => pasteToSelectedCells(text)).catch(err => console.error('Lỗi đọc clipboard:', err)) } 
+            else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedCells.size > 0) { e.preventDefault(); clearSelectedCells() } 
+        }); 
+        
+        window.addEventListener('resize', () => { 
+            const activeTab = document.querySelector('.content-tab.active'); if (!activeTab) return; 
+            const activeConfig = allTabConfigs.find(c => c.table.body === activeTab.querySelector('tbody')?.id); 
+            if (activeConfig) updateStickyColumns(activeConfig) 
+        }); 
+    }
     function setupTabControls(config) { document.getElementById(config.controls.refreshBtn).addEventListener('click', refreshData); document.getElementById(config.controls.updateBtn).addEventListener('click', () => processBulkUpdate(config)); const filterFunction = () => applyAllFilters(config); document.getElementById(config.controls.startDate).addEventListener('change', filterFunction); document.getElementById(config.controls.endDate).addEventListener('change', filterFunction); document.getElementById(config.controls.product).addEventListener('change', filterFunction); if (config.controls.market) document.getElementById(config.controls.market).addEventListener('change', filterFunction); if (config.controls.staff) document.getElementById(config.controls.staff).addEventListener('change', filterFunction); document.getElementById(config.controls.clearBtn).addEventListener('click', () => { document.getElementById(config.controls.startDate).value = ''; document.getElementById(config.controls.endDate).value = ''; document.getElementById(config.controls.product).selectedIndex = 0; if (config.controls.market) document.getElementById(config.controls.market).selectedIndex = 0; if (config.controls.staff) document.getElementById(config.controls.staff).selectedIndex = 0; const header = document.getElementById(config.table.head); header.querySelectorAll('.filter-input').forEach(f => f.value = ''); header.querySelectorAll('.filter-select').forEach(f => f.selectedIndex = 0); header.querySelectorAll('.multi-select-container').forEach(container => { container.querySelectorAll('input:checked').forEach(cb => cb.checked = !1); container.querySelector('.multi-select-button').textContent = `Tất cả ${container.dataset.column}` }); applyAllFilters(config) }) }
     function setupTabs() { const tabs = document.querySelectorAll('.tab-btn'), contents = document.querySelectorAll('.content-tab'); tabs.forEach(tab => { tab.addEventListener('click', () => { selectedCells.forEach(cell => cell.classList.remove('cell-selected')); selectedCells.clear(); isMouseDown = !1; startCell = null; tabs.forEach(item => item.classList.remove('active')); contents.forEach(content => content.classList.remove('active')); tab.classList.add('active'); const contentId = 'content' + tab.id.substring(3); document.getElementById(contentId).classList.add('active'); setTimeout(() => { handleFixedColumnCountChange(); const summaryEl = document.getElementById('selectionSummary'); if (summaryEl) summaryEl.innerHTML = contentId === 'contentData' ? '' : ''; }, 10) }) }) }
     
@@ -1209,13 +1503,13 @@ function selectCellsBetween(start, end) {
     }
 
     async function loadData() {
-      const { email, tuNgay, denNgay } = Object.fromEntries(new URLSearchParams(window.location.search));
+      const { email, tuNgay, denNgay, tableName, id1 } = Object.fromEntries(new URLSearchParams(window.location.search));
       document.getElementById('loader-overlay').style.display = 'flex';
       allTabConfigs.forEach(config => showError('Đang tải dữ liệu...', config.table.body));
       try {
         // Pre-fetch all staff data
         await fetchAllStaffData();
-        const url = `https://n-api-rouge.vercel.app/sheet/getAll?email=${email}&${ tuNgay ? `tuNgay=${tuNgay}&` : '' }${ denNgay ? `denNgay=${denNgay}&` : '' }`;
+        const url = `https://n-api-rouge.vercel.app/sheet/getAll?email=${email}&${ tuNgay ? `tuNgay=${tuNgay}&` : '' }${ denNgay ? `denNgay=${denNgay}&` : '' }${tableName ? `tableName=${tableName}` : ''}`;
         const response = await fetch(url);
         const data = await response.json();
         handleData(data);
