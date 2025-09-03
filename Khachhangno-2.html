@@ -226,6 +226,17 @@ thead tr:first-child th:not(:first-child) {
                         <label for="custom-debt-term-input">Số Ngày Nợ Tối Đa Của Từng Khách Hàng</label>
                         <input type="number" id="custom-debt-term-input" placeholder="Nhập số ngày...">
                     </div>
+                    <!-- DÁN THÊM ngay dưới nhóm Số Ngày Nợ Tối Đa -->
+<div class="debt-control-group">
+  <label for="max-sales-debt-input">Hạn Mức Nợ Tối Đa Của Từng NV Kinh Doanh (VNĐ)</label>
+  <input type="text" id="max-sales-debt-input" inputmode="decimal" placeholder="Nhập hạn mức...">
+</div>
+
+<div id="current-sales-debt-display" class="debt-control-group" style="display: none;">
+  <p class="debt-label">Nợ hiện tại của NVKD:</p>
+  <p id="current-sales-debt-value">0 VNĐ</p>
+</div>
+
                     <div id="current-customer-debt-display" class="debt-control-group">
                         <p class="debt-label">Nợ hiện tại của KH:</p>
                         <p id="current-customer-debt-value">0 VNĐ</p>
@@ -322,6 +333,48 @@ thead tr:first-child th:not(:first-child) {
         
         return totalDebt - totalPaid - totalReturned;
     }
+function calculateSalespersonTotalDebt(salesName) {
+    if (!salesName) return 0;
+
+    const getConsolidatedData = (tableKey) => {
+        const originalData = originalTableData[tableKey]?.data || [];
+        const createdData = Object.values(changeSet.create[tableKey] || {});
+        const updatedData = changeSet.update[tableKey] || {};
+        const deletedIds = new Set(changeSet.delete[tableKey] || []);
+        const consolidated = [];
+        originalData.forEach(row => {
+            if (!deletedIds.has(row.id)) {
+                consolidated.push({ ...row, ...(updatedData[row.id] || {}) });
+            }
+        });
+        consolidated.push(...createdData);
+        return consolidated;
+    };
+
+    const khn = getConsolidatedData('khn');   // bảng nợ
+    const khtn = getConsolidatedData('khtn'); // bảng trả nợ
+
+    // cộng trả nợ theo id nợ
+    const paidByDebtId = {};
+    khtn.forEach(p => {
+        const idNo = p['id nợ'];
+        const val = parseFloat(String(p['Số tiền trả nợ'] || '0').replace(/\./g, '')) || 0;
+        paidByDebtId[idNo] = (paidByDebtId[idNo] || 0) + val;
+    });
+
+    // tổng nợ còn lại theo 'Người chịu trách nhiệm'
+    let total = 0;
+    khn.forEach(row => {
+        if (row['Người chịu trách nhiệm'] === salesName) {
+            const debtId = row.id;
+            const totalDebt = parseFloat(String(row['Số tiền nợ'] || '0').replace(/\./g, '')) || 0;
+            const paid = paidByDebtId[debtId] || 0;
+            const remain = Math.max(0, totalDebt - paid);
+            total += remain;
+        }
+    });
+    return total;
+}
 
     function updateVisibleRowCount(tableKey) {
         const config = TABLE_CONFIG[tableKey];
@@ -562,6 +615,24 @@ if(customerNameInput) {
         }
     });
 }
+// Hiển thị nợ hiện tại của NV Kinh doanh
+const salesInput = inputRow.querySelector('input[data-field="Người chịu trách nhiệm"]');
+if (salesInput) {
+    salesInput.addEventListener('input', (e) => {
+        const name = e.target.value.trim();
+        const display = document.getElementById('current-sales-debt-display');
+        const valEl = document.getElementById('current-sales-debt-value');
+
+        if (name) {
+            const current = calculateSalespersonTotalDebt(name);
+            valEl.textContent = `${current.toLocaleString('vi-VN')} VNĐ`;
+            display.style.display = 'block';
+        } else {
+            display.style.display = 'none';
+        }
+    });
+}
+
             // Trigger calculation for the input row initially
             const firstHanTraNo = inputRow.querySelector('[data-field="Hạn trả nợ"]');
             if(firstHanTraNo) firstHanTraNo.dispatchEvent(new Event('input', {bubbles: true}));
@@ -614,6 +685,22 @@ if(customerNameInput) {
                 }
             }
         }
+        // --- Giới hạn theo NV Kinh doanh ---
+const maxSalesInput = document.getElementById('max-sales-debt-input');
+const maxSalesVal = maxSalesInput ? (parseFloat(maxSalesInput.value.replace(/\./g, '')) || 0) : 0;
+
+if (maxSalesVal > 0) {
+    const salesName = rowData['Người chịu trách nhiệm'];
+    if (salesName) {
+        const currentSalesDebt = calculateSalespersonTotalDebt(salesName);
+        const newDebt = parseFloat(rowData['Số tiền nợ'] || '0') || 0;
+        if ((currentSalesDebt + newDebt) > maxSalesVal) {
+            showToast(`Nợ của NVKD (${(currentSalesDebt + newDebt).toLocaleString('vi-VN')}) vượt hạn mức (${maxSalesVal.toLocaleString('vi-VN')}). Không thể thêm!`, 'error');
+            return;
+        }
+    }
+}
+
         
         if (!rowData['Tên Khách Hàng']) { showToast('Vui lòng nhập Tên Khách Hàng.', 'warning'); return; }
         rowData['Ngày phải trả'] = formatDateForServer(calculateDueDate(rowData['Ngày nợ'], rowData['Hạn trả nợ']));
@@ -635,6 +722,9 @@ if(customerNameInput) {
             else if (!i.readOnly) { i.value = ''; } 
         });
         document.getElementById('current-customer-debt-display').style.display = 'none';
+        const csd = document.getElementById('current-sales-debt-display');
+if (csd) csd.style.display = 'none';
+
         setChangesMade(tableKey, true);
         updateTotals(tableKey);
         updateDashboard();
@@ -856,6 +946,8 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
         document.getElementById('update-btn-khn').addEventListener('click', () => handleSaveChanges('khn'));
         
         setupCurrencyInput(document.getElementById('max-debt-input'));
+        setupCurrencyInput(document.getElementById('max-sales-debt-input'));
+
         
         const customDebtTermInput = document.getElementById('custom-debt-term-input');
         if (customDebtTermInput) {
