@@ -743,7 +743,6 @@
                 fetch(apiUrl)
                     .then(response => response.json())
                     .then(data => {
-                        // console.log("Dữ liệu tải về:", data);
                         handleData(data);
                     })
                     .catch(error => {
@@ -849,21 +848,13 @@
                         this.clearMultiSelect('paProductDropdown', 'paProductFilterBtn', 'paProductSelectAll', 'Sản phẩm');
                         this.clearMultiSelect('paMarketDropdown', 'paMarketFilterBtn', 'paMarketSelectAll', 'Khu vực');
                         this.clearMultiSelect('paStaffDropdown', 'paStaffFilterBtn', 'paStaffSelectAll', 'NV Vận đơn');
-
+                        
+                        hiddenRowKeys.clear(); // Xóa cả các dòng đã ẩn
                         apply();
                     });
 
-                    // ➜ THÊM NGAY SAU ĐOẠN TRÊN
                     document.getElementById('paRestoreHidden')?.addEventListener('click', () => {
-                        // 1) Xóa danh sách khóa ẩn tạm
                         hiddenRowKeys.clear();
-
-                        // 2) Gỡ class ẩn trên các dòng đang có sẵn trong bảng (nếu chưa render lại)
-                        document
-                            .querySelectorAll('#productAreaSummaryTableBody tr.hidden-temp')
-                            .forEach(tr => tr.classList.remove('hidden-temp'));
-
-                        // 3) Render lại để chắc chắn đồng bộ (nếu đang có filter áp dụng)
                         this.applyFilters();
                     });
 
@@ -938,7 +929,6 @@
                         productStats[product].totalOrders++;
                         productStats[product].totalAmount += (parseFloat(String(row["Tổng tiền VNĐ"]).replace(/[^\d.-]/g, '')) || 0);
                     });
-                    // Sắp xếp theo tổng số đơn giảm dần
                     const productEntries = Object.entries(productStats)
                         .sort((a, b) => b[1].totalOrders - a[1].totalOrders);
 
@@ -1007,38 +997,27 @@
                         },
                         options: {
                             responsive: true,
-                            maintainAspectRatio: false, // Giữ false để lấp đầy vùng chứa có chiều cao cố định
+                            maintainAspectRatio: false,
                             plugins: {
                                 title: {
-                                    display: true, // Bật hiển thị tiêu đề
-                                    text: 'Phân tích theo khu vực', // Văn bản tiêu đề
-                                    font: {
-                                        size: 20, // Kích thước chữ
-                                        weight: 'bold', // Độ đậm của chữ
-                                        family: 'Roboto, Arial, sans-serif' // Font chữ, nên khớp với font của body
-                                    },
-                                    color: '#2c3e50', // Màu sắc của tiêu đề
-                                    padding: {
-                                        top: 10,
-                                        bottom: 10 // Khoảng cách trên và dưới của tiêu đề
-                                    }
+                                    display: true,
+                                    text: 'Phân tích theo khu vực',
+                                    font: { size: 20, weight: 'bold', family: 'Roboto, Arial, sans-serif' },
+                                    color: '#2c3e50',
+                                    padding: { top: 10, bottom: 10 }
                                 },
                                 datalabels: {
                                     formatter: (value, context) => {
-                                        // Sử dụng totalAreaOrders đã tính bên ngoài để tránh tính lại
                                         const percentage = totalAreaOrders > 0 ? (value * 100 / totalAreaOrders).toFixed(1) : 0;
                                         return `${value.toLocaleString('vi-VN')} (${percentage}%)`;
                                     },
-                                    color: '#fff', // White color for better contrast
-                                    font: {
-                                        weight: 'bold'
-                                    },
-                                    // Điều chỉnh vị trí nhãn để tránh chồng chéo trên biểu đồ tròn
-                                    anchor: 'end', // Nhãn đặt ở cuối phần tử
-                                    align: 'start', // Căn chỉnh nhãn về phía tâm hoặc ra ngoài
-                                    offset: 8 // Khoảng cách từ nhãn đến cạnh của phần tử
+                                    color: '#fff',
+                                    font: { weight: 'bold' },
+                                    anchor: 'end',
+                                    align: 'start',
+                                    offset: 8
                                 },
-                                tooltip: { // Cấu hình tooltip cho biểu đồ tròn
+                                tooltip: {
                                     callbacks: {
                                         label: function (context) {
                                             const label = context.label || '';
@@ -1057,13 +1036,21 @@
                     const summaryTableBody = document.getElementById('productAreaSummaryTableBody');
                     if (!summaryTableBody) return;
                     summaryTableBody.innerHTML = '';
-                    if (filteredData.length === 0) {
+
+                    const dataToProcess = filteredData.filter(row => {
+                         const product = row["Mặt hàng"] || "Sản phẩm khác";
+                         const area = row["Khu vực"] || row["khu vực"] || "Khu vực khác";
+                         return !hiddenRowKeys.has(makeRowKey(product, area));
+                    });
+
+                    if (dataToProcess.length === 0) {
                         this.showError('productAreaSummaryTableBody', 'Không có dữ liệu báo cáo khớp với bộ lọc.');
                         return;
                     }
+
                     const productAreaStats = {};
                     const grandTotal = this.createEmptyStats();
-                    filteredData.forEach(row => {
+                    dataToProcess.forEach(row => {
                         const product = row["Mặt hàng"] || "Sản phẩm khác";
                         const area = row["Khu vực"] || row["khu vực"] || "Khu vực khác";
                         const deliveryStatus = row["Trạng thái giao hàng NB"] || "";
@@ -1091,6 +1078,7 @@
                         Object.keys(productData).filter(k => k !== '_total').sort().forEach(areaName => {
                             const row = this.renderProductAreaRow(productName, areaName, productData[areaName], '');
                             summaryTableBody.appendChild(row);
+                            // Dòng này vẫn cần thiết để giữ trạng thái ẩn khi re-render
                             if (hiddenRowKeys.has(makeRowKey(productName, areaName))) {
                                 row.classList.add('hidden-temp');
                             }
@@ -1098,18 +1086,10 @@
 
                         const groupRow = this.renderProductAreaRow(productName, 'TỔNG CỘNG', productData._total, 'group-total');
                         summaryTableBody.appendChild(groupRow);
-                        if (hiddenRowKeys.has(makeRowKey(productName, 'TỔNG CỘNG'))) {
-                            groupRow.classList.add('hidden-temp');
-                        }
-
                     });
 
                     const grandRow = this.renderProductAreaRow('TỔNG TOÀN BỘ', 'Tất cả', grandTotal, 'grand-total');
                     summaryTableBody.appendChild(grandRow);
-                    if (hiddenRowKeys.has(makeRowKey('TỔNG TOÀN BỘ', 'Tất cả'))) {
-                        grandRow.classList.add('hidden-temp');
-                    }
-
                 },
                 renderProductAreaRow: function (product, area, stats, rowClass) {
                     const tr = document.createElement('tr');
@@ -1125,29 +1105,29 @@
                     tr.insertCell().textContent = stats.other.toLocaleString('vi-VN');
                     const successRate = stats.totalOrders > 0 ? (stats.successful / stats.totalOrders * 100) : 0;
                     const rateCell = tr.insertCell();
-                    rateCell.className = 'rate-cell'; // bố cục flex để đẩy nút X sang phải
+                    rateCell.className = 'rate-cell';
 
-                    // Tỷ lệ (màu xanh/đỏ như cũ)
                     const rateSpan = document.createElement('span');
                     rateSpan.textContent = successRate.toFixed(1) + '%';
                     rateSpan.className = successRate > 70 ? 'positive' : 'negative';
-
-                    // Nút X ẩn dòng
-                    const hideBtn = document.createElement('button');
-                    hideBtn.className = 'hide-row-btn';
-                    hideBtn.setAttribute('title', 'Ẩn dòng này');
-                    hideBtn.textContent = '×';
-
-                    hideBtn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        const key = makeRowKey(product, area);
-                        hiddenRowKeys.add(key);
-                        tr.classList.add('hidden-temp');
-                    });
-
                     rateCell.appendChild(rateSpan);
-                    rateCell.appendChild(hideBtn);
 
+                    // *** THAY ĐỔI: Chỉ thêm nút X nếu không phải dòng tổng ***
+                    if (!rowClass) {
+                        const hideBtn = document.createElement('button');
+                        hideBtn.className = 'hide-row-btn';
+                        hideBtn.setAttribute('title', 'Ẩn dòng này');
+                        hideBtn.textContent = '×';
+
+                        hideBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            const key = makeRowKey(product, area);
+                            hiddenRowKeys.add(key);
+                            // *** THAY ĐỔI: Gọi applyFilters để tính toán lại và render lại toàn bộ ***
+                            this.applyFilters();
+                        });
+                        rateCell.appendChild(hideBtn);
+                    }
                     return tr;
                 }
             };
