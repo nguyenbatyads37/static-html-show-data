@@ -961,8 +961,12 @@
                                 td.classList.add('highlight');
                                 savePendingChangesToLocalStorage();
                                 
-                                if (!isPasting) {
+                                // THAY ĐỔI: Kiểm tra nếu là cột "Mã Tracking" thì không tự động cập nhật
+                                const isTrackingColumn = col === "Mã Tracking" || dataKey === "Mã Tracking";
+                                if (!isPasting && !isTrackingColumn) {
                                     handleSingleCellUpdate(orderId, dataKey, finalValueForState, td);
+                                } else if (isTrackingColumn) {
+                                    showCustomAlert('Thay đổi Mã Tracking đã được lưu. Vui lòng bấm "Cập nhật tất cả" để gửi dữ liệu.', 'info', 4000);
                                 }
                             } else {
                                 // Nếu giá trị quay về gốc, xóa khỏi pending changes
@@ -1184,14 +1188,394 @@
             } catch (error) { console.error('Lỗi khi cập nhật hàng loạt:', error); removeToast(loadingToast); showCustomAlert(`Lỗi kết nối: ${error.message}`, 'error'); } finally { updateBtn.disabled = false; updateBtn.textContent = 'Cập nhật tất cả thay đổi'; }
         }
 
-        async function batchUpdatePastedData(rowsToSend) { /* ... Giữ nguyên ... */ if (rowsToSend.length === 0) { return; } const updateBtn = document.getElementById('updateAll'); updateBtn.disabled = true; const loadingToast = showCustomAlert(`Đang cập nhật ${rowsToSend.length} thay đổi đã dán...`, 'info', 0); try { const response = await fetch(BATCH_UPDATE_API_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rowsToSend) }); if (!response.ok) { const errorResponse = await response.json(); throw new Error(errorResponse.message || `Lỗi HTTP! status: ${response.status}`); } const json = await response.json(); if (json.success) { removeToast(loadingToast); showCustomAlert(`Cập nhật thành công ${json?.updated + ' đơn hàng từ dữ liệu đã dán!'} `, 'success'); json.details.forEach(detail => { if (detail.status === 'updated') { const updatedRowData = rowsToSend.find(r => r[PRIMARY_KEY_COLUMN] === detail.primaryKey); if (updatedRowData) { const index = state.allData.findIndex(r => r[PRIMARY_KEY_COLUMN] === updatedRowData[PRIMARY_KEY_COLUMN]); if (index !== -1) { state.allData[index] = { ...state.allData[index], ...updatedRowData }; } const orderChanges = state.pendingChanges.get(updatedRowData[PRIMARY_KEY_COLUMN]); if (orderChanges) { Object.keys(updatedRowData).forEach(colName => { if (colName !== PRIMARY_KEY_COLUMN) { orderChanges.delete(colName); } }); if (orderChanges.size === 0) { state.pendingChanges.delete(updatedRowData[PRIMARY_KEY_COLUMN]); } } } } }); savePendingChangesToLocalStorage(); render(); } else { removeToast(loadingToast); showCustomAlert(`Lỗi cập nhật hàng loạt: ${json.message || 'Lỗi không xác định.'}`, 'error'); } } catch (error) { console.error('Lỗi khi cập nhật hàng loạt từ paste:', error); removeToast(loadingToast); showCustomAlert(`Lỗi kết nối: ${error.message}`, 'error'); } finally { updateBtn.disabled = false; } }
+        // THÊM MỚI: Function kiểm tra có thay đổi Mã Tracking không
+        function hasTrackingChanges(rowsToSend) {
+            return rowsToSend.some(row => {
+                return Object.keys(row).some(key => 
+                    key === "Mã Tracking" || key === "Mã_Tracking"
+                );
+            });
+        }
+
+        async function batchUpdatePastedData(rowsToSend) {
+            if (rowsToSend.length === 0) { return; }
+            
+            // THÊM MỚI: Kiểm tra nếu có thay đổi Mã Tracking
+            const hasTracking = hasTrackingChanges(rowsToSend);
+            
+            if (hasTracking) {
+                // Nếu có thay đổi Mã Tracking, chỉ lưu vào pending changes, không gửi API
+                rowsToSend.forEach(rowData => {
+                    const orderId = rowData[PRIMARY_KEY_COLUMN];
+                    if (!orderId) return;
+                    
+                    if (!state.pendingChanges.has(orderId)) {
+                        state.pendingChanges.set(orderId, new Map());
+                    }
+                    
+                    Object.keys(rowData).forEach(colName => {
+                        if (colName !== PRIMARY_KEY_COLUMN) {
+                            const originalRowData = state.allData.find(r => r[PRIMARY_KEY_COLUMN] === orderId);
+                            const originalValue = originalRowData ? String(originalRowData[colName] ?? '') : '';
+                            
+                            state.pendingChanges.get(orderId).set(colName, {
+                                newValue: rowData[colName],
+                                originalValue: originalValue,
+                                cellElement: null
+                            });
+                        }
+                    });
+                });
+                
+                savePendingChangesToLocalStorage();
+                showCustomAlert(`Đã lưu ${rowsToSend.length} thay đổi có chứa Mã Tracking. Vui lòng bấm "Cập nhật tất cả" để gửi dữ liệu.`, 'info', 5000);
+                render(); // Refresh để hiển thị highlight
+                return;
+            }
+            
+            // Logic cũ cho các thay đổi không có Mã Tracking
+            const updateBtn = document.getElementById('updateAll');
+            updateBtn.disabled = true;
+            const loadingToast = showCustomAlert(`Đang cập nhật ${rowsToSend.length} thay đổi đã dán...`, 'info', 0);
+            
+            try {
+                const response = await fetch(BATCH_UPDATE_API_URL, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(rowsToSend)
+                });
+                
+                if (!response.ok) {
+                    const errorResponse = await response.json();
+                    throw new Error(errorResponse.message || `Lỗi HTTP! status: ${response.status}`);
+                }
+                
+                const json = await response.json();
+                
+                if (json.success) {
+                    removeToast(loadingToast);
+                    showCustomAlert(`Cập nhật thành công ${json.summary?.updated || rowsToSend.length} đơn hàng từ dữ liệu đã dán!`, 'success');
+                    
+                    json.details?.forEach(detail => {
+                        if (detail.status === 'updated') {
+                            const updatedRowData = rowsToSend.find(r => r[PRIMARY_KEY_COLUMN] === detail.primaryKey);
+                            if (updatedRowData) {
+                                const index = state.allData.findIndex(r => r[PRIMARY_KEY_COLUMN] === updatedRowData[PRIMARY_KEY_COLUMN]);
+                                if (index !== -1) {
+                                    state.allData[index] = { ...state.allData[index], ...updatedRowData };
+                                }
+                                
+                                const orderChanges = state.pendingChanges.get(updatedRowData[PRIMARY_KEY_COLUMN]);
+                                if (orderChanges) {
+                                    Object.keys(updatedRowData).forEach(colName => {
+                                        if (colName !== PRIMARY_KEY_COLUMN) {
+                                            orderChanges.delete(colName);
+                                        }
+                                    });
+                                    if (orderChanges.size === 0) {
+                                        state.pendingChanges.delete(updatedRowData[PRIMARY_KEY_COLUMN]);
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    
+                    savePendingChangesToLocalStorage();
+                    render();
+                } else {
+                    removeToast(loadingToast);
+                    showCustomAlert(`Lỗi cập nhật hàng loạt: ${json.message || 'Lỗi không xác định.'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Lỗi khi cập nhật hàng loạt từ paste:', error);
+                removeToast(loadingToast);
+                showCustomAlert(`Lỗi kết nối: ${error.message}`, 'error');
+            } finally {
+                updateBtn.disabled = false;
+            }
+        }
         function toggleTrackingView() { /* ... Giữ nguyên ... */ state.showTrackingOrders = !state.showTrackingOrders; const btn = document.getElementById('toggleTrackingView'); if (state.showTrackingOrders) { btn.textContent = 'Xem đơn không có mã Tracking'; btn.classList.add('active'); } else { btn.textContent = 'Xem đơn có mã Tracking'; btn.classList.remove('active'); } render(); }
         function getCellValue(cell) { /* ... Giữ nguyên ... */ if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); return input ? input.value : cell.textContent; }
         function setCellValue(cell, value) { /* ... Giữ nguyên ... */ if (!cell) return; const select = cell.querySelector('select'); if (select) { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); return; } const input = cell.querySelector('input'); if (input) { input.value = value; input.dispatchEvent(new Event('blur', { bubbles: true })); return; } if (cell.isContentEditable) { cell.textContent = value; cell.dispatchEvent(new Event('blur', { bubbles: true })); } }
         function clearAllSelections() { /* ... Giữ nguyên ... */ document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected')); if (pasteAnchorCell) { pasteAnchorCell.classList.remove('paste-anchor'); pasteAnchorCell = null; } updateSelectionSummary(); }
         function updateSelectionSummary() { /* ... Giữ nguyên ... */ const summaryEl = document.getElementById('selectionSummary'); const transferBtn = document.getElementById('transferWarehouseBtn'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; const selectedOrderIds = new Set(); const orderIdColIndex = displayColumns.indexOf(PRIMARY_KEY_COLUMN); if (selectedCells.length === 0) { transferBtn.style.display = 'none'; transferBtn.disabled = true; return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (colIndex === orderIdColIndex) { const orderId = getCellValue(cell).trim(); if (orderId) { selectedOrderIds.add(orderId); } } if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d.-]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); if (selectedOrderIds.size > 0) { transferBtn.style.display = 'block'; transferBtn.disabled = false; } else { transferBtn.style.display = 'none'; transferBtn.disabled = true; } }
         async function transferSelectedOrders() { /* ... Giữ nguyên ... */ const transferBtn = document.getElementById('transferWarehouseBtn'); const originalText = transferBtn.textContent; transferBtn.disabled = true; transferBtn.textContent = 'Đang chuyển...'; const loadingToast = showCustomAlert('Đang chuyển kho...', 'info', 0); const selectedOrderIds = new Set(); const orderIdColIndex = displayColumns.indexOf(PRIMARY_KEY_COLUMN); document.querySelectorAll('td.cell-selected').forEach(cell => { if (cell.cellIndex === orderIdColIndex) { const orderId = getCellValue(cell).trim(); if (orderId) { selectedOrderIds.add({ "Mã đơn hàng": orderId }); } } }); if (selectedOrderIds.size === 0) { removeToast(loadingToast); showCustomAlert('Vui lòng chọn ít nhất một "Mã đơn hàng" để chuyển kho.', 'info'); transferBtn.disabled = false; transferBtn.textContent = originalText; return; } const maDonList = Array.from(selectedOrderIds); try { const response = await fetch(TRANSFER_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: maDonList }) }); if (!response.ok) { const errorResponse = await response.json(); throw new Error(errorResponse.message || `Lỗi HTTP! status: ${response.status}`); } const result = await response.json(); if (result && result.success) { clearAllSelections(); removeToast(loadingToast); showCustomAlert('Chuyển kho thành công!', 'success', 2000); await fetchMGTNoiBoOrder(); render(); } else { removeToast(loadingToast); showCustomAlert(`Chuyển kho không thành công: ${result.message || 'Lỗi không xác định.'}`, 'error'); } } catch (e) { console.error('Lỗi khi chuyển kho:', e); removeToast(loadingToast); showCustomAlert(`Lỗi kết nối hoặc xử lý: ${e.message}`, 'error'); } finally { transferBtn.disabled = false; transferBtn.textContent = originalText; } }
-        function setupInteractionHandlers() { /* ... Logic paste và copy giữ nguyên ... */ const tableBody = document.getElementById('tableBody'); if (!tableBody) return; let isSelecting = false, startCell = null; const selectCells = (start, end) => { clearAllSelections(); const tableRows = tableBody.rows; const minRow = Math.min(start.parentElement.rowIndex, end.parentElement.rowIndex); const maxRow = Math.max(start.parentElement.rowIndex, end.parentElement.rowIndex); const minCol = Math.min(start.cellIndex, end.cellIndex); const maxCol = Math.max(start.cellIndex, end.cellIndex); for (let i = 0; i < tableRows.length; i++) { const row = tableRows[i]; if (row.rowIndex >= minRow && row.rowIndex <= maxRow) { for (let j = minCol; j <= maxCol; j++) { if (row.cells[j]) row.cells[j].classList.add('cell-selected'); } } } if (start) { pasteAnchorCell = start; start.classList.add('paste-anchor'); } }; tableBody.addEventListener('mousedown', e => { if (e.button !== 0) return; const cell = e.target.closest('td'); if (!cell) return; e.preventDefault(); if (e.shiftKey && pasteAnchorCell) { selectCells(pasteAnchorCell, cell); updateSelectionSummary(); } else { isSelecting = true; clearAllSelections(); startCell = cell; pasteAnchorCell = cell; cell.classList.add('cell-selected'); cell.classList.add('paste-anchor'); updateSelectionSummary(); } }); tableBody.addEventListener('mousemove', e => { if (!isSelecting || !startCell) return; const currentCell = e.target.closest('td'); if (currentCell && currentCell !== startCell) { selectCells(startCell, currentCell); } }); document.addEventListener('mouseup', () => { if (isSelecting) { isSelecting = false; updateSelectionSummary(); } }); tableBody.addEventListener('dblclick', e => { const cell = e.target.closest('td.editable'); if (!cell) return; const input = cell.querySelector('input, select'); if (input) { input.focus(); } else if (cell.isContentEditable) { cell.focus(); document.execCommand('selectAll', false, null); document.getSelection().collapseToEnd(); } }); document.addEventListener('copy', e => { const selectedCells = document.querySelectorAll('td.cell-selected'); if (selectedCells.length === 0) return; e.preventDefault(); const rows = new Map(); selectedCells.forEach(cell => { const rowIndex = cell.parentElement.rowIndex; if (!rows.has(rowIndex)) rows.set(rowIndex, []); rows.get(rowIndex).push({ colIndex: cell.cellIndex, text: getCellValue(cell) }); }); const sortedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]); const copyText = sortedRows.map(([, cells]) => cells.sort((a, b) => a.colIndex - b[0]).map(cell => cell.text).join('\t')).join('\n'); e.clipboardData.setData('text/plain', copyText); showCustomAlert(`Đã sao chép ${selectedCells.length} ô.`, 'info', 2000); }); document.addEventListener('paste', e => { const activeEl = document.activeElement; if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) { return; } if (!pasteAnchorCell) return; e.preventDefault(); const pasteData = e.clipboardData.getData('text/plain'); if (!pasteData) return; const pastedRows = pasteData.split(/[\r\n]+/).map(row => row.split('\t')).filter(row => row.length > 0 && !(row.length === 1 && row[0] === '')); if (pastedRows.length === 0) return; if (pastedRows.length === 1 && pastedRows[0].length === 1) { const singleValue = pastedRows[0][0]; const editableSelected = document.querySelectorAll('td.cell-selected.editable'); if (editableSelected.length > 0) { editableSelected.forEach(cell => setCellValue(cell, singleValue)); showCustomAlert(`Đã dán giá trị vào ${editableSelected.length} ô.`, 'success', 2000); updateSelectionSummary(); return; } } const tableRows = Array.from(document.getElementById('tableBody').rows); let startRowIndex = tableRows.findIndex(row => row.rowIndex === pasteAnchorCell.parentElement.rowIndex); let startColIndex = pasteAnchorCell.cellIndex; if (startRowIndex < 0 || startColIndex < 0) return; const changesForBatchUpdate = new Map(); isPasting = true; pastedRows.forEach((rowData, i) => { const targetRow = tableRows[startRowIndex + i]; if (!targetRow) return; const orderId = targetRow.dataset.orderId; if (!orderId) return; if (!changesForBatchUpdate.has(orderId)) { changesForBatchUpdate.set(orderId, { [PRIMARY_KEY_COLUMN]: orderId }); } rowData.forEach((cellData, j) => { const targetCell = targetRow.cells[startColIndex + j]; if (targetCell && targetCell.classList.contains('editable')) { const colName = displayColumns[startColIndex + j]; const dataKey = columnMapping[colName] || colName; setCellValue(targetCell, cellData); let valueForApi = cellData; if (colName === "Ngày đóng hàng") { valueForApi = parseDateToISO(cellData); } changesForBatchUpdate.get(orderId)[dataKey] = valueForApi; } }); }); isPasting = false; const rowsToSend = Array.from(changesForBatchUpdate.values()); if (rowsToSend.length > 0) { batchUpdatePastedData(rowsToSend); } showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu.`, 'success', 2000); updateSelectionSummary(); }); document.addEventListener('keydown', e => { const activeEl = document.activeElement; if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) { return; } if (e.key === 'Delete' || e.key === 'Backspace') { const editableSelected = document.querySelectorAll('td.cell-selected.editable'); if (editableSelected.length > 0) { e.preventDefault(); editableSelected.forEach(cell => { setCellValue(cell, ''); }); if (editableSelected.length > 1) { showCustomAlert(`Đã xóa nội dung của ${editableSelected.length} ô.`, 'success', 2000); } updateSelectionSummary(); } } }); }
+        function setupInteractionHandlers() {
+            const tableBody = document.getElementById('tableBody');
+            if (!tableBody) return;
+            let isSelecting = false, startCell = null;
+            
+            const selectCells = (start, end) => {
+                clearAllSelections();
+                const tableRows = tableBody.rows;
+                const minRow = Math.min(start.parentElement.rowIndex, end.parentElement.rowIndex);
+                const maxRow = Math.max(start.parentElement.rowIndex, end.parentElement.rowIndex);
+                const minCol = Math.min(start.cellIndex, end.cellIndex);
+                const maxCol = Math.max(start.cellIndex, end.cellIndex);
+                
+                for (let i = 0; i < tableRows.length; i++) {
+                    const row = tableRows[i];
+                    if (row.rowIndex >= minRow && row.rowIndex <= maxRow) {
+                        for (let j = minCol; j <= maxCol; j++) {
+                            if (row.cells[j]) row.cells[j].classList.add('cell-selected');
+                        }
+                    }
+                }
+                
+                if (start) {
+                    pasteAnchorCell = start;
+                    start.classList.add('paste-anchor');
+                }
+            };
+
+            tableBody.addEventListener('mousedown', e => {
+                if (e.button !== 0) return;
+                const cell = e.target.closest('td');
+                if (!cell) return;
+                e.preventDefault();
+                
+                if (e.shiftKey && pasteAnchorCell) {
+                    selectCells(pasteAnchorCell, cell);
+                    updateSelectionSummary();
+                } else {
+                    isSelecting = true;
+                    clearAllSelections();
+                    startCell = cell;
+                    pasteAnchorCell = cell;
+                    cell.classList.add('cell-selected');
+                    cell.classList.add('paste-anchor');
+                    updateSelectionSummary();
+                }
+            });
+
+            tableBody.addEventListener('mousemove', e => {
+                if (!isSelecting || !startCell) return;
+                const currentCell = e.target.closest('td');
+                if (currentCell && currentCell !== startCell) {
+                    selectCells(startCell, currentCell);
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isSelecting) {
+                    isSelecting = false;
+                    updateSelectionSummary();
+                }
+            });
+
+            tableBody.addEventListener('dblclick', e => {
+                const cell = e.target.closest('td.editable');
+                if (!cell) return;
+                
+                const input = cell.querySelector('input, select');
+                if (input) {
+                    input.focus();
+                } else if (cell.isContentEditable) {
+                    cell.focus();
+                    document.execCommand('selectAll', false, null);
+                    document.getSelection().collapseToEnd();
+                }
+            });
+
+            document.addEventListener('copy', e => {
+                const selectedCells = document.querySelectorAll('td.cell-selected');
+                if (selectedCells.length === 0) return;
+                
+                e.preventDefault();
+                const rows = new Map();
+                
+                selectedCells.forEach(cell => {
+                    const rowIndex = cell.parentElement.rowIndex;
+                    if (!rows.has(rowIndex)) rows.set(rowIndex, []);
+                    rows.get(rowIndex).push({ colIndex: cell.cellIndex, text: getCellValue(cell) });
+                });
+                
+                const sortedRows = [...rows.entries()].sort((a, b) => a[0] - b[0]);
+                const copyText = sortedRows.map(([, cells]) => 
+                    cells.sort((a, b) => a.colIndex - b.colIndex).map(cell => cell.text).join('\t')
+                ).join('\n');
+                
+                e.clipboardData.setData('text/plain', copyText);
+                showCustomAlert(`Đã sao chép ${selectedCells.length} ô.`, 'info', 2000);
+            });
+
+            document.addEventListener('paste', e => {
+                const activeEl = document.activeElement;
+                if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) {
+                    return;
+                }
+                if (!pasteAnchorCell) return;
+                
+                e.preventDefault();
+                const pasteData = e.clipboardData.getData('text/plain');
+                if (!pasteData) return;
+                
+                const pastedRows = pasteData.split(/[\r\n]+/)
+                    .map(row => row.split('\t'))
+                    .filter(row => row.length > 0 && !(row.length === 1 && row[0] === ''));
+                
+                if (pastedRows.length === 0) return;
+
+                // Xử lý paste giá trị đơn vào nhiều ô được chọn
+                if (pastedRows.length === 1 && pastedRows[0].length === 1) {
+                    const singleValue = pastedRows[0][0];
+                    const editableSelected = document.querySelectorAll('td.cell-selected.editable');
+                    
+                    if (editableSelected.length > 0) {
+                        // Thu thập tất cả thông tin từ selected cells và map đúng Mã đơn hàng
+                        const changesForBatchUpdate = new Map();
+                        isPasting = true;
+                        
+                        editableSelected.forEach(cell => {
+                            const targetRow = cell.parentElement;
+                            const orderId = targetRow.dataset.orderId;
+                            if (!orderId) return;
+                            
+                            const colIndex = cell.cellIndex;
+                            const colName = displayColumns[colIndex];
+                            const dataKey = columnMapping[colName] || colName;
+                            
+                            // Đảm bảo đây là cột có thể chỉnh sửa
+                            if (!editableCols.includes(colName)) return;
+                            
+                            // Cập nhật giá trị trong UI
+                            setCellValue(cell, singleValue);
+                            
+                            // Chuẩn bị dữ liệu cho API với Mã đơn hàng làm khóa chính
+                            if (!changesForBatchUpdate.has(orderId)) {
+                                changesForBatchUpdate.set(orderId, { [PRIMARY_KEY_COLUMN]: orderId });
+                            }
+                            
+                            let valueForApi = singleValue;
+                            if (colName === "Ngày đóng hàng") {
+                                valueForApi = parseDateToISO(singleValue);
+                            }
+                            changesForBatchUpdate.get(orderId)[dataKey] = valueForApi;
+                        });
+                        
+                        isPasting = false;
+                        
+                        // Gửi batch update cho tất cả thay đổi
+                        const rowsToSend = Array.from(changesForBatchUpdate.values());
+                        if (rowsToSend.length > 0) {
+                            const hasTracking = hasTrackingChanges(rowsToSend);
+                            batchUpdatePastedData(rowsToSend);
+                            
+                            if (!hasTracking) {
+                                showCustomAlert(`Đã dán giá trị vào ${editableSelected.length} ô và cập nhật ${rowsToSend.length} đơn hàng.`, 'success', 3000);
+                            }
+                        }
+                        updateSelectionSummary();
+                        return;
+                    }
+                }
+
+                // Xử lý paste dữ liệu bảng (nhiều dòng, nhiều cột)
+                const tableRows = Array.from(document.getElementById('tableBody').rows);
+                let startRowIndex = tableRows.findIndex(row => row.rowIndex === pasteAnchorCell.parentElement.rowIndex);
+                let startColIndex = pasteAnchorCell.cellIndex;
+                
+                if (startRowIndex < 0 || startColIndex < 0) return;
+                
+                const changesForBatchUpdate = new Map();
+                isPasting = true;
+                
+                pastedRows.forEach((rowData, i) => {
+                    const targetRow = tableRows[startRowIndex + i];
+                    if (!targetRow) return;
+                    
+                    const orderId = targetRow.dataset.orderId;
+                    if (!orderId) return;
+                    
+                    // Khởi tạo object cho đơn hàng này với Mã đơn hàng làm khóa chính
+                    if (!changesForBatchUpdate.has(orderId)) {
+                        changesForBatchUpdate.set(orderId, { [PRIMARY_KEY_COLUMN]: orderId });
+                    }
+                    
+                    rowData.forEach((cellData, j) => {
+                        const targetCell = targetRow.cells[startColIndex + j];
+                        if (targetCell && targetCell.classList.contains('editable')) {
+                            const colName = displayColumns[startColIndex + j];
+                            const dataKey = columnMapping[colName] || colName;
+                            
+                            // Cập nhật UI
+                            setCellValue(targetCell, cellData);
+                            
+                            // Chuẩn bị dữ liệu cho API
+                            let valueForApi = cellData;
+                            if (colName === "Ngày đóng hàng") {
+                                valueForApi = parseDateToISO(cellData);
+                            }
+                            changesForBatchUpdate.get(orderId)[dataKey] = valueForApi;
+                        }
+                    });
+                });
+                
+                isPasting = false;
+                
+                // Gửi tất cả thay đổi qua batch update với mapping đúng Mã đơn hàng
+                const rowsToSend = Array.from(changesForBatchUpdate.values());
+                if (rowsToSend.length > 0) {
+                    const hasTracking = hasTrackingChanges(rowsToSend);
+                    batchUpdatePastedData(rowsToSend);
+                    
+                    if (!hasTracking) {
+                        showCustomAlert(`Đã dán ${pastedRows.length} dòng dữ liệu và cập nhật ${rowsToSend.length} đơn hàng.`, 'success', 3000);
+                    }
+                }
+                updateSelectionSummary();
+            });
+
+            document.addEventListener('keydown', e => {
+                const activeEl = document.activeElement;
+                if (activeEl && (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeEl.tagName) || activeEl.isContentEditable)) {
+                    return;
+                }
+                
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    const editableSelected = document.querySelectorAll('td.cell-selected.editable');
+                    if (editableSelected.length > 0) {
+                        e.preventDefault();
+                        
+                        // Thu thập tất cả thông tin để xóa và map đúng Mã đơn hàng
+                        const changesForBatchUpdate = new Map();
+                        
+                        editableSelected.forEach(cell => {
+                            const targetRow = cell.parentElement;
+                            const orderId = targetRow.dataset.orderId;
+                            if (!orderId) return;
+                            
+                            const colIndex = cell.cellIndex;
+                            const colName = displayColumns[colIndex];
+                            const dataKey = columnMapping[colName] || colName;
+                            
+                            if (!editableCols.includes(colName)) return;
+                            
+                            // Cập nhật UI
+                            setCellValue(cell, '');
+                            
+                            // Chuẩn bị dữ liệu cho API
+                            if (!changesForBatchUpdate.has(orderId)) {
+                                changesForBatchUpdate.set(orderId, { [PRIMARY_KEY_COLUMN]: orderId });
+                            }
+                            changesForBatchUpdate.get(orderId)[dataKey] = '';
+                        });
+                        
+                        // Gửi batch update cho việc xóa
+                        const rowsToSend = Array.from(changesForBatchUpdate.values());
+                        if (rowsToSend.length > 0) {
+                            const hasTracking = hasTrackingChanges(rowsToSend);
+                            batchUpdatePastedData(rowsToSend);
+                            
+                            if (!hasTracking && editableSelected.length > 1) {
+                                showCustomAlert(`Đã xóa nội dung của ${editableSelected.length} ô và cập nhật ${rowsToSend.length} đơn hàng.`, 'success', 2000);
+                            }
+                        }
+                        updateSelectionSummary();
+                    }
+                }
+            });
+        }
         
         // MỚI: Hàm hiển thị popover
         function showSyncPopover() {
