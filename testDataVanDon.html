@@ -969,7 +969,7 @@
       document.getElementById('status-popover').style.display = 'none';
     }
 
-    async function handleUpdateAllPending() {
+        async function handleUpdateAllPending() {
       const payload = Object.values(getPendingChanges());
 
       if (payload.length === 0) {
@@ -988,21 +988,40 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         });
-        const result = await response.json();
 
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Lỗi không xác định từ server');
+        // Kiểm tra xem response có hợp lệ không (ví dụ: lỗi mạng, lỗi server 500)
+        if (!response.ok) {
+            // Cố gắng đọc thông báo lỗi từ server nếu có
+            const errorResult = await response.json().catch(() => null);
+            throw new Error(errorResult?.message || `Lỗi từ server: ${response.statusText}`);
         }
 
-        showTempMessage(`Cập nhật thành công ${result.summary.updated} đơn hàng từ bộ nhớ. Tải lại dữ liệu...`);
+        const result = await response.json();
+
+        // Kiểm tra trạng thái thành công trong nội dung JSON trả về
+        if (!result.success) {
+          throw new Error(result.message || 'Server báo cáo cập nhật không thành công.');
+        }
+
+        // === PHẦN SỬA LỖI CHÍNH NẰM Ở ĐÂY ===
+        // 1. Tạo thông báo thành công dựa trên số lượng bản ghi đã gửi đi.
+        showTempMessage(`Cập nhật thành công ${payload.length} đơn hàng. Đang tải lại dữ liệu...`);
+
+        // 2. Xóa các thay đổi đang chờ trong localStorage vì chúng đã được cập nhật thành công.
         clearPendingChanges();
+        
+        // 3. Ẩn popover đi.
         hideStatusPopover();
-        setTimeout(loadData, 1000); // Reload data to show updated state
+        
+        // 4. Tải lại toàn bộ dữ liệu để đảm bảo giao diện đồng bộ 100% với server.
+        setTimeout(loadData, 1000); 
 
       } catch (error) {
         console.error("Lỗi khi cập nhật từ popover:", error);
-        showTempMessage(`Lỗi cập nhật. Các thay đổi vẫn được lưu.`, true);
+        // Hiển thị thông báo lỗi, không xóa thay đổi để người dùng có thể thử lại.
+        showTempMessage(`Lỗi cập nhật: ${error.message}. Các thay đổi vẫn được lưu.`, true);
       } finally {
+        // Luôn kích hoạt lại nút bấm dù thành công hay thất bại.
         updateBtn.disabled = false;
         updateBtn.textContent = originalText;
       }
@@ -1015,8 +1034,14 @@
       }
       if (confirm('Bạn có chắc muốn hủy tất cả các thay đổi chưa được lưu? Hành động này không thể hoàn tác.')) {
         clearPendingChanges();
-        showTempMessage('Đã hủy tất cả các thay đổi đang chờ.');
+        showTempMessage('Đã hủy tất cả các thay đổi đang chờ. Đang tải lại dữ liệu...');
+        
+        // 2. Ẩn popover
         hideStatusPopover();
+        
+        // 3. Tải lại toàn bộ dữ liệu từ server để khôi phục trạng thái gốc
+        // Đây là bước quan trọng nhất để sửa lỗi
+        setTimeout(loadData, 500); // Thêm một khoảng trễ nhỏ để người dùng đọc thông báo
       }
     }
 
