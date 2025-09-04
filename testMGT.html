@@ -172,13 +172,11 @@
             text-align: left;
             white-space: nowrap;
             background-color: white;
-            position: relative;
         }
 
         th {
             background-color: #3498db;
             color: white;
-            position: sticky;
             top: var(--filter-row-height);
             z-index: 20;
             font-weight: 500;
@@ -202,6 +200,7 @@
             display: flex;
             gap: 4px;
             align-items: center;
+            flex-direction: column;
         }
 
         .dual-filter-container input {
@@ -226,6 +225,7 @@
 
         button:hover {
             background-color: #2980b9;
+            color: white;
         }
 
         #downloadExcel {
@@ -603,6 +603,67 @@
             line-height: 14px;
             display: none; /* Hidden by default */
         }
+        
+        /* --- MỚI: CSS CHO BỘ LỌC MULTI-SELECT --- */
+        .multiselect-filter {
+            position: relative;
+            width: 100%;
+        }
+
+        .multiselect-display {
+            width: 100%;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 3px;
+            background-color: white;
+            font-size: 13px;
+            cursor: pointer;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: #8b8686;
+        }
+
+        .multiselect-dropdown {
+            display: none;
+            position: absolute;
+            background-color: white;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.15);
+            width: 200px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 50; /* Đảm bảo nó nổi lên trên các thành phần khác */
+            margin-top: 2px;
+        }
+
+        .multiselect-dropdown.show {
+            display: block;
+        }
+
+        .multiselect-item {
+            display: block;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #333;
+        }
+
+        .multiselect-item:hover {
+            background-color: #f0f0f0;
+        }
+
+        .multiselect-item input {
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        .multiselect-item label {
+            vertical-align: middle;
+            cursor: pointer;
+        }
     </style>
 </head>
 
@@ -655,6 +716,8 @@
         </div>
         <div>
             <button id="toggleTrackingView" class="tab-btn tracking-tab">Xem đơn có mã Tracking</button>
+            <!-- NÚT MỚI -->
+            <button id="toggleDuplicateTrackingView" class="tab-btn tracking-tab">Xem đơn trùng Mã tracking</button>
             <button id="transferWarehouseBtn" class="tab-btn" disabled
                 style="display: none; background-color: #f39c12; color: white;">Chuyển kho</button>
         </div>
@@ -767,6 +830,7 @@
             pendingChanges: new Map(),     // Thay đổi trong phiên làm việc hiện tại
             activeTeam: 'all',
             showTrackingOrders: false,
+            showDuplicateTrackingOrders: false, // <-- STATE MỚI
             filterValues: {},
             mgtNoiBoOrder: [],
             isMgtNoiBoOrderLoading: false,
@@ -864,21 +928,91 @@
         function populateMainFilters(data) { /* ... Giữ nguyên ... */ const marketFilter = document.getElementById('filterMarket'); const productFilter = document.getElementById('filterProduct'); const markets = [...new Set(data.map(row => row["Khu vực"]).filter(Boolean))].sort(); const products = [...new Set(data.map(row => row["Mặt hàng"]).filter(Boolean))].sort(); marketFilter.innerHTML = '<option value="">Tất cả Thị trường</option>'; productFilter.innerHTML = '<option value="">Tất cả Sản phẩm</option>'; markets.forEach(market => marketFilter.innerHTML += `<option value="${market}">${market}</option>`); products.forEach(product => productFilter.innerHTML += `<option value="${product}">${product}</option>`); }
 
         function getFilteredData() {
-            // SỬA ĐỔI: Khi lọc, không merge data nữa. Render sẽ tự xử lý việc hiển thị giá trị mới.
             const dataToFilter = [...state.allData];
             const mgtData = filterByCarrier(dataToFilter);
             
-            // ... Logic lọc còn lại giữ nguyên ...
-            let dataToRender = mgtData.filter(row => { const trackingCode = String(row["Mã Tracking"] || row["Mã_Tracking"] || ''); return state.showTrackingOrders ? trackingCode.trim() !== '' : !trackingCode.trim(); });
-            const market = document.getElementById('filterMarket').value; const product = document.getElementById('filterProduct').value; const dateFrom = document.getElementById('filterDateFrom').value; const dateTo = document.getElementById('filterDateTo').value;
+            let dataToRender = mgtData;
+
+            // Áp dụng các bộ lọc chính và bộ lọc cột trước
+            const market = document.getElementById('filterMarket').value; 
+            const product = document.getElementById('filterProduct').value; 
+            const dateFrom = document.getElementById('filterDateFrom').value; 
+            const dateTo = document.getElementById('filterDateTo').value;
             if (market) { dataToRender = dataToRender.filter(row => row["Khu vực"] === market); }
             if (product) { dataToRender = dataToRender.filter(row => row["Mặt hàng"] === product); }
             if (dateFrom) { const from = new Date(dateFrom); from.setHours(0, 0, 0, 0); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) >= from); }
             if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
             if (state.activeTeam === 'mgt_noi_bo') { if (state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) { state.totalFilteredOrders = 0; return []; } const orderedIds = new Set(state.mgtNoiBoOrder); dataToRender = dataToRender.filter(row => orderedIds.has(row["Mã đơn hàng"])); const orderIndexMap = new Map(state.mgtNoiBoOrder.map((id, index) => [id, index])); dataToRender.sort((a, b) => { const indexA = orderIndexMap.get(a[PRIMARY_KEY_COLUMN]); const indexB = orderIndexMap.get(b[PRIMARY_KEY_COLUMN]); return indexA - indexB; }); } else if (state.activeTeam !== 'all') { dataToRender = dataToRender.filter(row => row[TEAM_COLUMN_NAME] === state.activeTeam); }
-            const trackingIncludeRaw = state.filterValues['tracking_include'] || ''; const trackingExcludeRaw = state.filterValues['tracking_exclude'] || ''; const otherColumnFilters = Object.entries(state.filterValues).filter(([key, val]) => val.trim() !== '' && !key.startsWith('tracking_'));
-            if (otherColumnFilters.length > 0) { dataToRender = dataToRender.filter(row => { return otherColumnFilters.every(([col, filterValue]) => { const dataKey = columnMapping[col] || col; const cellValue = row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? ''; return String(cellValue).toLowerCase().includes(filterValue.toLowerCase()); }); }); }
+            
+            const trackingIncludeRaw = state.filterValues['tracking_include'] || ''; 
+            const trackingExcludeRaw = state.filterValues['tracking_exclude'] || ''; 
+            
+            // --- SỬA ĐỔI PHẦN LỌC CỘT ---
+            const otherColumnFilters = Object.entries(state.filterValues)
+                .filter(([key, val]) => !key.startsWith('tracking_') && ( (Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val.trim() !== '') ));
+
+            if (otherColumnFilters.length > 0) {
+                dataToRender = dataToRender.filter(row => {
+                    return otherColumnFilters.every(([col, filterValue]) => {
+                        const dataKey = columnMapping[col] || col;
+                        const cellValue = (row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? '').toString().trim();
+
+                        if (dataKey === "Trạng thái giao hàng") { // Logic lọc đặc biệt cho cột này
+                            const EMPTY_OPTION_VALUE = '__EMPTY__';
+                            const selectedStatuses = filterValue; // Đây là một mảng
+
+                            if (selectedStatuses.length === 0) return true; // Nếu mảng rỗng thì không lọc
+
+                            const hasEmptyFilter = selectedStatuses.includes(EMPTY_OPTION_VALUE);
+                            
+                            // Nếu ô trống và người dùng chọn "(Trống)"
+                            if (cellValue === '' && hasEmptyFilter) {
+                                return true;
+                            }
+                            
+                            // Nếu giá trị của ô có trong danh sách được chọn
+                            if (selectedStatuses.includes(cellValue)) {
+                                return true;
+                            }
+
+                            return false; // Không khớp điều kiện nào
+                        } else { // Logic lọc cũ cho các cột khác
+                            return cellValue.toLowerCase().includes(filterValue.toLowerCase());
+                        }
+                    });
+                });
+            }
+            // --- KẾT THÚC SỬA ĐỔI ---
+
             if (trackingIncludeRaw || trackingExcludeRaw) { const lowerInclude = trackingIncludeRaw.toLowerCase(); const lowerExclude = trackingExcludeRaw.toLowerCase(); dataToRender = dataToRender.filter(row => { const cellValue = String(row['Mã Tracking'] || ''); const lowerCellValue = cellValue.toLowerCase(); if (lowerExclude && lowerCellValue.includes(lowerExclude)) { return false; } if (lowerInclude) { if (lowerInclude.includes('\n')) { const codes = new Set(trackingIncludeRaw.split('\n').map(t => t.trim()).filter(Boolean)); if (!codes.has(cellValue.trim())) return false; } else { if (!lowerCellValue.includes(lowerInclude)) return false; } } return true; }); }
+            
+            // <-- LOGIC MỚI: Xử lý các chế độ xem tracking -->
+            if (state.showDuplicateTrackingOrders) {
+                const trackingCounts = new Map();
+                dataToRender.forEach(row => {
+                    const trackingCode = String(row["Mã Tracking"] || '').trim();
+                    if (trackingCode) {
+                        trackingCounts.set(trackingCode, (trackingCounts.get(trackingCode) || 0) + 1);
+                    }
+                });
+                const duplicateTrackings = new Set();
+                for (const [code, count] of trackingCounts.entries()) {
+                    if (count > 1) {
+                        duplicateTrackings.add(code);
+                    }
+                }
+                dataToRender = dataToRender.filter(row => {
+                    const trackingCode = String(row["Mã Tracking"] || '').trim();
+                    return duplicateTrackings.has(trackingCode);
+                });
+            } else { // Chỉ áp dụng bộ lọc có/không có tracking khi không ở chế độ xem trùng
+                 dataToRender = dataToRender.filter(row => {
+                    const trackingCode = String(row["Mã Tracking"] || row["Mã_Tracking"] || '');
+                    return state.showTrackingOrders ? trackingCode.trim() !== '' : !trackingCode.trim();
+                });
+            }
+            // <-- KẾT THÚC LOGIC MỚI -->
+
             if (state.activeTeam !== 'mgt_noi_bo') { const primarySortKey = 'Ngày Kế toán đối soát với FFM lần 2'; const secondarySortKey = PRIMARY_KEY_COLUMN; dataToRender.sort((a, b) => { const parseDate = (val) => { if (!val) return null; const date = new Date(val); return isNaN(date.getTime()) ? null : date; }; const dateA = parseDate(a[primarySortKey]); const dateB = parseDate(b[primarySortKey]); if (dateA === null && dateB === null) { } else if (dateA === null) { return 1; } else if (dateB === null) { return -1; } else { const dateComparison = dateA.getTime() - dateB.getTime(); if (dateComparison !== 0) { return dateComparison; } } const orderIdA = a[secondarySortKey] || ''; const orderIdB = b[secondarySortKey] || ''; return orderIdA.localeCompare(orderIdB); }); }
             
             state.totalFilteredOrders = dataToRender.length;
@@ -1055,7 +1189,194 @@
         
         // --- Tabs và Filters ---
         function createTabs(data) { /* ... Giữ nguyên ... */ const tabContainer = document.getElementById('tabContainer'); tabContainer.innerHTML = ''; const teams = [...new Set(data.map(row => row[TEAM_COLUMN_NAME]).filter(Boolean))].sort(); const createTab = (name, value) => { const button = document.createElement('button'); button.className = 'tab-btn'; button.textContent = name; button.dataset.team = value; if (value === state.activeTeam) { button.classList.add('active'); } button.addEventListener('click', async () => { state.activeTeam = value; state.currentPage = 1; document.querySelectorAll('#tabContainer .tab-btn').forEach(btn => btn.classList.remove('active')); button.classList.add('active'); if (value === 'mgt_noi_bo' && state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) { await fetchMGTNoiBoOrder(); } render(); }); return button; }; tabContainer.appendChild(createTab('Tất cả', 'all')); tabContainer.appendChild(createTab('MGT nội bộ', 'mgt_noi_bo')); teams.forEach(team => tabContainer.appendChild(createTab(team, team))); }
-        function setupColumnFilters() { /* ... Giữ nguyên ... */ const filterRow = document.getElementById('filterRow'); filterRow.innerHTML = ''; const storedFilterValues = localStorage.getItem('speegoColumnFilters'); if (storedFilterValues) { try { state.filterValues = JSON.parse(storedFilterValues); } catch (e) { console.error("Lỗi khi đọc filterValues từ localStorage:", e); state.filterValues = {}; } } else { state.filterValues = {}; } displayColumns.forEach((col, index) => { const th = document.createElement('th'); if (col === "Mã Tracking") { const container = document.createElement('div'); container.className = 'dual-filter-container'; const includeInput = document.createElement('input'); includeInput.type = 'text'; includeInput.className = 'filter-input'; includeInput.placeholder = 'Bao gồm...'; includeInput.value = state.filterValues['tracking_include'] || ''; includeInput.addEventListener('input', () => { state.filterValues['tracking_include'] = includeInput.value; localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues)); state.currentPage = 1; render(); }); const excludeInput = document.createElement('input'); excludeInput.type = 'text'; excludeInput.className = 'filter-input'; excludeInput.placeholder = 'Loại trừ...'; excludeInput.value = state.filterValues['tracking_exclude'] || ''; excludeInput.addEventListener('input', () => { state.filterValues['tracking_exclude'] = excludeInput.value; localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues)); state.currentPage = 1; render(); }); container.appendChild(includeInput); container.appendChild(excludeInput); th.appendChild(container); } else { const input = document.createElement('input'); input.type = 'text'; input.className = 'filter-input'; input.placeholder = `Lọc ${col}`; input.dataset.column = col; input.value = state.filterValues[col] || ''; input.addEventListener('input', () => { state.filterValues[col] = input.value; localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues)); state.currentPage = 1; render(); }); th.appendChild(input); } filterRow.appendChild(th); }); }
+        
+        function setupColumnFilters() {
+            const filterRow = document.getElementById('filterRow');
+            filterRow.innerHTML = '';
+            const storedFilterValues = localStorage.getItem('speegoColumnFilters');
+            if (storedFilterValues) {
+                try {
+                    state.filterValues = JSON.parse(storedFilterValues);
+                } catch (e) {
+                    console.error("Lỗi khi đọc filterValues từ localStorage:", e);
+                    state.filterValues = {};
+                }
+            } else {
+                state.filterValues = {};
+            }
+            displayColumns.forEach((col) => {
+                const th = document.createElement('th');
+
+                if (col === "Mã Tracking") {
+                    const container = document.createElement('div');
+                    container.className = 'dual-filter-container';
+                    const includeInput = document.createElement('input');
+                    includeInput.type = 'text';
+                    includeInput.className = 'filter-input';
+                    includeInput.placeholder = 'Bao gồm...';
+                    includeInput.value = state.filterValues['tracking_include'] || '';
+                    includeInput.addEventListener('input', () => {
+                        state.filterValues['tracking_include'] = includeInput.value;
+                        localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues));
+                        state.currentPage = 1;
+                        render();
+                    });
+                    const excludeInput = document.createElement('input');
+                    excludeInput.type = 'text';
+                    excludeInput.className = 'filter-input';
+                    excludeInput.placeholder = 'Loại trừ...';
+                    excludeInput.value = state.filterValues['tracking_exclude'] || '';
+                    excludeInput.addEventListener('input', () => {
+                        state.filterValues['tracking_exclude'] = excludeInput.value;
+                        localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues));
+                        state.currentPage = 1;
+                        render();
+                    });
+                    container.appendChild(includeInput);
+                    container.appendChild(excludeInput);
+                    th.appendChild(container);
+                } else if (col === "Trạng thái giao hàng") {
+                    // --- BẮT ĐẦU PHẦN THÊM MỚI ---
+                    const dataKey = columnMapping[col] || col;
+                    const ALL_OPTION_TEXT = 'Tất cả';
+                    const EMPTY_OPTION_TEXT = '(Trống)';
+                    const EMPTY_OPTION_VALUE = '__EMPTY__'; // Giá trị đặc biệt để đại diện cho ô trống
+
+                    const container = document.createElement('div');
+                    container.className = 'multiselect-filter';
+
+                    const display = document.createElement('button');
+                    display.className = 'multiselect-display';
+                    
+                    const dropdown = document.createElement('div');
+                    dropdown.className = 'multiselect-dropdown';
+
+                    // Lấy các giá trị duy nhất từ dữ liệu
+                    const uniqueStatuses = [...new Set(state.allData.map(row => (row[dataKey] || '').trim()).filter(Boolean))].sort();
+                    const options = [ALL_OPTION_TEXT, EMPTY_OPTION_TEXT, ...uniqueStatuses];
+                    
+                    let selectedValues = state.filterValues[dataKey] || [];
+
+                    const updateDisplay = () => {
+                        if (selectedValues.length === 0 || selectedValues.length === (uniqueStatuses.length + 1) ) { // +1 cho lựa chọn (Trống)
+                             display.textContent = 'Lọc ' + col;
+                             if(selectedValues.length === (uniqueStatuses.length + 1)){
+                                 //Nếu tất cả được chọn (trừ "Tất cả"), coi như không lọc
+                                 state.filterValues[dataKey] = [];
+                             }
+                        } else if (selectedValues.length === 1) {
+                            if (selectedValues[0] === EMPTY_OPTION_VALUE) {
+                                display.textContent = EMPTY_OPTION_TEXT;
+                            } else {
+                                display.textContent = selectedValues[0];
+                            }
+                        } else {
+                            display.textContent = `${selectedValues.length} đã chọn`;
+                        }
+                    };
+                    
+                    options.forEach(optionText => {
+                        const item = document.createElement('div');
+                        item.className = 'multiselect-item';
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        const label = document.createElement('label');
+
+                        checkbox.id = `filter-${dataKey}-${optionText}`;
+                        label.htmlFor = `filter-${dataKey}-${optionText}`;
+                        label.textContent = optionText;
+                        
+                        let optionValue = optionText;
+                        if(optionText === EMPTY_OPTION_TEXT) optionValue = EMPTY_OPTION_VALUE;
+
+                        if (optionText === ALL_OPTION_TEXT) {
+                            checkbox.checked = selectedValues.length === (uniqueStatuses.length + 1);
+                        } else {
+                            checkbox.checked = selectedValues.includes(optionValue);
+                        }
+                        
+                        item.appendChild(checkbox);
+                        item.appendChild(label);
+                        dropdown.appendChild(item);
+                    });
+
+                    dropdown.addEventListener('change', (e) => {
+                        const targetCheckbox = e.target;
+                        const optionText = targetCheckbox.parentElement.textContent;
+                        let optionValue = optionText;
+                        if(optionText === EMPTY_OPTION_TEXT) optionValue = EMPTY_OPTION_VALUE;
+
+                        if (optionText === ALL_OPTION_TEXT) {
+                            const allCheckboxes = dropdown.querySelectorAll('input[type="checkbox"]');
+                            selectedValues = [];
+                            if (targetCheckbox.checked) {
+                                allCheckboxes.forEach(cb => {
+                                    cb.checked = true;
+                                    const text = cb.parentElement.textContent;
+                                    if(text !== ALL_OPTION_TEXT) {
+                                        selectedValues.push(text === EMPTY_OPTION_TEXT ? EMPTY_OPTION_VALUE : text);
+                                    }
+                                });
+                            } else {
+                                allCheckboxes.forEach(cb => cb.checked = false);
+                            }
+                        } else {
+                            if (targetCheckbox.checked) {
+                                if (!selectedValues.includes(optionValue)) {
+                                    selectedValues.push(optionValue);
+                                }
+                            } else {
+                                selectedValues = selectedValues.filter(v => v !== optionValue);
+                            }
+                            // Cập nhật checkbox "Tất cả"
+                            const allCheckbox = dropdown.querySelector(`input[id="filter-${dataKey}-${ALL_OPTION_TEXT}"]`);
+                            allCheckbox.checked = selectedValues.length === uniqueStatuses.length + 1;
+                        }
+                        
+                        state.filterValues[dataKey] = selectedValues;
+                        localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues));
+                        updateDisplay();
+                        state.currentPage = 1;
+                        render();
+                    });
+
+                    display.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dropdown.classList.toggle('show');
+                    });
+                    
+                    container.appendChild(display);
+                    container.appendChild(dropdown);
+                    th.appendChild(container);
+                    updateDisplay();
+                    // --- KẾT THÚC PHẦN THÊM MỚI ---
+                } else {
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'filter-input';
+                    input.placeholder = `Lọc ${col}`;
+                    input.dataset.column = col;
+                    input.value = state.filterValues[col] || '';
+                    input.addEventListener('input', () => {
+                        state.filterValues[col] = input.value;
+                        localStorage.setItem('speegoColumnFilters', JSON.stringify(state.filterValues));
+                        state.currentPage = 1;
+                        render();
+                    });
+                    th.appendChild(input);
+                }
+                filterRow.appendChild(th);
+            });
+
+            // Thêm event listener để đóng dropdown khi click ra ngoài
+            document.addEventListener('click', (e) => {
+                document.querySelectorAll('.multiselect-dropdown.show').forEach(dropdown => {
+                    if (!dropdown.parentElement.contains(e.target)) {
+                        dropdown.classList.remove('show');
+                    }
+                });
+            });
+        }
         
         // MỚI: Cập nhật số lượng trên badge của nút đồng bộ
         function updateSyncButtonBadge() {
@@ -1074,6 +1395,9 @@
             document.getElementById('refreshData').addEventListener('click', refreshData);
             document.getElementById('updateAll').addEventListener('click', updateAllChangedRows);
             document.getElementById('toggleTrackingView').addEventListener('click', () => { toggleTrackingView(); state.currentPage = 1; });
+            // <-- EVENT LISTENER MỚI -->
+            document.getElementById('toggleDuplicateTrackingView').addEventListener('click', () => { toggleDuplicateTrackingView(); state.currentPage = 1; });
+
             document.getElementById('filterMarket').addEventListener('change', () => { state.currentPage = 1; render(); });
             document.getElementById('filterProduct').addEventListener('change', () => { state.currentPage = 1; render(); });
             document.getElementById('filterDateFrom').addEventListener('change', () => { state.currentPage = 1; render(); });
@@ -1294,7 +1618,53 @@
                 updateBtn.disabled = false;
             }
         }
-        function toggleTrackingView() { /* ... Giữ nguyên ... */ state.showTrackingOrders = !state.showTrackingOrders; const btn = document.getElementById('toggleTrackingView'); if (state.showTrackingOrders) { btn.textContent = 'Xem đơn không có mã Tracking'; btn.classList.add('active'); } else { btn.textContent = 'Xem đơn có mã Tracking'; btn.classList.remove('active'); } render(); }
+        
+        // HÀM ĐƯỢC CẬP NHẬT
+        function toggleTrackingView() {
+            state.showTrackingOrders = !state.showTrackingOrders;
+            // Nếu bật chế độ này, tắt chế độ xem trùng
+            if (state.showTrackingOrders) {
+                state.showDuplicateTrackingOrders = false;
+            }
+            updateTrackingButtonsUI();
+            render();
+        }
+
+        // HÀM MỚI
+        function toggleDuplicateTrackingView() {
+            state.showDuplicateTrackingOrders = !state.showDuplicateTrackingOrders;
+            // Nếu bật chế độ này, tắt chế độ xem có/không có tracking
+            if (state.showDuplicateTrackingOrders) {
+                state.showTrackingOrders = false;
+            }
+            updateTrackingButtonsUI();
+            render();
+        }
+
+        // HÀM MỚI: Đồng bộ giao diện các nút tracking
+        function updateTrackingButtonsUI() {
+            const trackingBtn = document.getElementById('toggleTrackingView');
+            const duplicateBtn = document.getElementById('toggleDuplicateTrackingView');
+
+            // Cập nhật nút xem đơn có/không có tracking
+            if (state.showTrackingOrders) {
+                trackingBtn.textContent = 'Xem đơn không có mã Tracking';
+                trackingBtn.classList.add('active');
+            } else {
+                trackingBtn.textContent = 'Xem đơn có mã Tracking';
+                trackingBtn.classList.remove('active');
+            }
+
+            // Cập nhật nút xem đơn trùng
+            if (state.showDuplicateTrackingOrders) {
+                duplicateBtn.textContent = 'Xem tất cả đơn';
+                duplicateBtn.classList.add('active');
+            } else {
+                duplicateBtn.textContent = 'Xem đơn trùng Mã tracking';
+                duplicateBtn.classList.remove('active');
+            }
+        }
+
         function getCellValue(cell) { /* ... Giữ nguyên ... */ if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); return input ? input.value : cell.textContent; }
         function setCellValue(cell, value) { /* ... Giữ nguyên ... */ if (!cell) return; const select = cell.querySelector('select'); if (select) { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); return; } const input = cell.querySelector('input'); if (input) { input.value = value; input.dispatchEvent(new Event('blur', { bubbles: true })); return; } if (cell.isContentEditable) { cell.textContent = value; cell.dispatchEvent(new Event('blur', { bubbles: true })); } }
         function clearAllSelections() { /* ... Giữ nguyên ... */ document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected')); if (pasteAnchorCell) { pasteAnchorCell.classList.remove('paste-anchor'); pasteAnchorCell = null; } updateSelectionSummary(); }
