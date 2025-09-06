@@ -588,6 +588,16 @@ function addPaymentRowForGroup(customerName, nvkd, debts) {
     }
 
     async function handleSaveChanges(tableKey) {
+        // --- BẮT ĐẦU ĐOẠN MÃ MỚI ---
+    // Kiểm tra cuối cùng trước khi lưu
+    const invalidRows = document.querySelectorAll(`#container-${tableKey} tbody tr[data-is-invalid="true"]`);
+    if (invalidRows.length > 0) {
+        showToast('Vui lòng sửa các lỗi nhập liệu (ô màu đỏ) trước khi lưu.', 'error');
+        // Cuộn đến lỗi đầu tiên để người dùng dễ thấy
+        invalidRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return; // Dừng hàm, không cho phép lưu
+    }
+    // --- KẾT THÚC ĐOẠN MÃ MỚI ---
     const updateBtn = document.getElementById('update-btn-khtn');
     updateBtn.disabled = true;
     updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
@@ -812,7 +822,20 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
         }
     }
 
-    function setChangesMade(tableKey, madeChanges) { const btn = document.getElementById(`update-btn-${tableKey}`); if (btn) btn.disabled = !madeChanges; }
+    function setChangesMade(tableKey, madeChanges) {
+    const btn = document.getElementById(`update-btn-${tableKey}`);
+    if (!btn) return;
+
+    // Kiểm tra xem có hàng nào trong bảng đang bị đánh dấu là không hợp lệ không
+    const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+    const hasInvalidRows = container.querySelectorAll('tbody tr[data-is-invalid="true"]').length > 0;
+
+    // Nút Lưu sẽ bị vô hiệu hóa nếu:
+    // 1. Không có thay đổi nào (madeChanges = false)
+    // HOẶC
+    // 2. Có ít nhất một hàng không hợp lệ (hasInvalidRows = true)
+    btn.disabled = !madeChanges || hasInvalidRows;
+}
     function hasPendingChanges(tableKey) { return (Object.keys(changeSet.create[tableKey] || {}).length + Object.keys(changeSet.update[tableKey] || {}).length + (changeSet.delete[tableKey] || []).length) > 0; }
     
     function calculateGrandTotal(tableKey) {
@@ -864,52 +887,75 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
     function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
     function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
     function setupCurrencyInput(input, tableKey) {
-  if (!input) return;
-  const f = () => {
-    const raw = input.value.replace(/\./g, '');
-    input.value = isNaN(raw) || raw.trim() === '' ? '' : Number(raw).toLocaleString('vi-VN');
+    if (!input) return;
 
-    // >>> GHI TRỰC TIẾP VÀO changeSet để dashboard tính ngay
-    try {
-      const tr = input.closest('tr');
-      const rowId = tr?.dataset.id;
-      const field = input.dataset.field;
-      if (tableKey && tr && rowId && field) {
-        const val = raw || '';
+    const processInput = (isBlurEvent = false) => {
+        const tr = input.closest('tr');
+        if (!tr) return;
 
-        // Nếu là dòng mới (đang nằm trong create)
-        if (changeSet.create[tableKey]?.[rowId]) {
-          changeSet.create[tableKey][rowId][field] = val;
-        } else {
-          // Nếu là dòng cũ → ghi vào update (chuẩn bị payload đầy đủ như handleCellEdit)
-          if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
-          if (!changeSet.update[tableKey][rowId]) {
-            const rowDataFromDOM = {};
-            originalTableData[tableKey].headers.forEach(h => {
-              const cell = tr.querySelector(`[data-field="${h}"]`);
-              if (cell) {
-                let v = cell.value;
-                if (cell.getAttribute('inputmode') === 'decimal') v = v.replace(/\./g, '');
-                
-                rowDataFromDOM[h] = v;
-              } else {
-                const originalRow = originalTableData[tableKey]?.data.find(r => r.id == rowId);
-                if (originalRow) rowDataFromDOM[h] = originalRow[h];
-              }
-            });
-            changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
-          }
-          changeSet.update[tableKey][rowId][field] = val;
+        // Luôn xóa trạng thái lỗi cũ trước khi kiểm tra lại
+        input.style.border = '';
+        input.style.backgroundColor = '';
+        delete tr.dataset.isInvalid; // Bỏ đánh dấu không hợp lệ
+
+        const rawValue = input.value.replace(/\./g, '');
+        let numericValue = isNaN(rawValue) || rawValue.trim() === '' ? 0 : Number(rawValue);
+
+        // --- BẮT ĐẦU LOGIC VALIDATION ---
+        if (input.dataset.field === 'Số tiền trả nợ') {
+            const debtCell = tr.querySelector('[data-field="Số tiền nợ"]');
+            if (debtCell) {
+                const maxDebtValue = parseFloat(debtCell.value.replace(/\./g, '')) || 0;
+
+                if (numericValue > maxDebtValue) {
+                    if (isBlurEvent) {
+                        showToast(`Số tiền trả (${numericValue.toLocaleString('vi-VN')}) không được lớn hơn số tiền nợ (${maxDebtValue.toLocaleString('vi-VN')})`, 'error');
+                    }
+                    input.style.border = '2px solid var(--error-color)';
+                    input.style.backgroundColor = '#fff0f0';
+                    tr.dataset.isInvalid = 'true'; // Đánh dấu hàng này là không hợp lệ
+                }
+            }
         }
-      }
-    } catch (e) {}
+        // --- KẾT THÚC LOGIC VALIDATION ---
 
-    updateTotals(tableKey || 'khtn');
-    updateDashboard();
-  };
-  input.addEventListener('input', f);
-  input.addEventListener('blur', f);
-  f();
+        input.value = numericValue === 0 && rawValue.trim() === '' ? '' : numericValue.toLocaleString('vi-VN');
+
+        try {
+            const rowId = tr.dataset.id;
+            const field = input.dataset.field;
+            if (tableKey && tr && rowId && field) {
+                 const finalValue = String(numericValue) || '';
+                 if (changeSet.create[tableKey]?.[rowId]) {
+                    changeSet.create[tableKey][rowId][field] = finalValue;
+                } else {
+                     if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
+                    if (!changeSet.update[tableKey][rowId]) {
+                        const rowDataFromDOM = {};
+                        originalTableData[tableKey].headers.forEach(h => {
+                            const cell = tr.querySelector(`[data-field="${h}"]`);
+                            let v = cell ? cell.value : originalTableData[tableKey]?.data.find(r => r.id == rowId)?.[h];
+                            if(cell && cell.getAttribute('inputmode') === 'decimal') v = v.replace(/\./g, '');
+                            rowDataFromDOM[h] = v;
+                        });
+                         changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
+                    }
+                     changeSet.update[tableKey][rowId][field] = finalValue;
+                }
+            }
+        } catch (e) { console.error("Lỗi khi cập nhật changeSet:", e); }
+
+        updateTotals(tableKey || 'khtn');
+        updateDashboard();
+        
+        // Gọi setChangesMade để cập nhật lại trạng thái nút Lưu sau mỗi lần nhập liệu
+        const hasPending = hasPendingChanges(tableKey);
+        setChangesMade(tableKey, hasPending);
+    };
+
+    input.addEventListener('input', () => processInput(false));
+    input.addEventListener('blur', () => processInput(true));
+    processInput();
 }
 
 
