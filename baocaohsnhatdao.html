@@ -3,6 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <title>Báo cáo học tập</title>
+  
+  <!-- ADDED: 1. Thêm thư viện Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <style>
     :root {
       --primary-color: #2c5282; /* Deep Blue */
@@ -215,6 +219,17 @@
       padding: 20px;
     }
     
+    /* ADDED: 3. CSS cho biểu đồ */
+    #progressChart {
+      margin-top: 20px;
+      margin-bottom: 30px;
+      padding: 20px;
+      background-color: white;
+      border-radius: var(--border-radius);
+      box-shadow: var(--box-shadow);
+      border: 1px solid var(--border-color);
+    }
+
     .report-section {
       border: 1px solid var(--border-color);
       padding: 25px;
@@ -329,6 +344,9 @@
         background-color: #f7fafc !important;
         box-shadow: none !important;
       }
+      #progressChart {
+          display: block !important;
+      }
     }
   </style>
 </head>
@@ -424,6 +442,10 @@
     </tbody>
   </table>
 
+  <!-- ADDED: 2. Thêm HTML cho biểu đồ -->
+  <div class="section-title">BIỂU ĐỒ TIẾN BỘ HỌC TẬP</div>
+  <canvas id="progressChart"></canvas>
+
   <div class="section-title">BÁO CÁO TỔNG KẾT</div>
   <div class="report-section">
     <div id="comment">
@@ -509,9 +531,9 @@ function displayTestData(data) {
     
     const getScoreClass = (score) => {
       if (score === null || isNaN(score)) return '';
-      if (score >= 90) return 'score-excellent';
-      if (score >= 70) return 'score-good';
-      if (score >= 50) return 'score-average';
+      if (score >= 9) return 'score-excellent';
+      if (score >= 7) return 'score-good';
+      if (score >= 5) return 'score-average';
       return 'score-poor';
     };
     
@@ -527,6 +549,80 @@ function displayTestData(data) {
     `).join('');
   } else {
     if (noTestDataRow) noTestDataRow.style.display = '';
+  }
+}
+
+// <!-- ADDED: 4. Hàm vẽ biểu đồ -->
+/**
+ * Hàm vẽ biểu đồ dựa trên dữ liệu đã xử lý.
+ * @param {Array<Object>} data - Mảng đối tượng điểm kiểm tra.
+ */
+function drawChart(data) {
+  const chartCanvas = document.getElementById('progressChart');
+  if (!chartCanvas) return;
+
+  // Ẩn biểu đồ nếu không có dữ liệu
+  const validData = data.filter(item => item.diem !== null && !isNaN(item.diem));
+  if (validData.length === 0) {
+    chartCanvas.style.display = 'none';
+    chartCanvas.previousElementSibling.style.display = 'none'; // Ẩn luôn cả tiêu đề
+    return;
+  }
+  
+  // Chuẩn bị nhãn (ngày và tên bài) và dữ liệu (điểm) cho biểu đồ
+  const labels = validData.map(item => [item.ngay, item.tenBaiKiemTra]);
+  const scores = validData.map(item => item.diem);
+  
+  try {
+    const ctx = chartCanvas.getContext('2d');
+    new Chart(ctx, {
+      type: 'line', // Loại biểu đồ là đường
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'Điểm bài kiểm tra',
+          data: scores,
+          backgroundColor: 'rgba(44, 82, 130, 0.1)',
+          borderColor: 'rgba(44, 82, 130, 1)',
+          borderWidth: 2,
+          pointBackgroundColor: 'rgba(44, 82, 130, 1)',
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          tension: 0.3,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              title: (tooltipItems) => `Ngày: ${tooltipItems[0].label.split(',')[0]}`,
+              label: (context) => {
+                const labelArray = context.chart.data.labels[context.dataIndex];
+                let label = ` ${context.parsed.y} điểm - ${labelArray[1]}`;
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            max: 10, // Giới hạn điểm tối đa thang 10
+            title: { display: true, text: 'Điểm số', font: { size: 14, weight: 'bold' } }
+          },
+          x: {
+            title: { display: true, text: 'Ngày kiểm tra', font: { size: 14, weight: 'bold' } }
+          }
+        }
+      }
+    });
+  } catch (e) {
+    console.error('Lỗi khi vẽ biểu đồ:', e);
+    chartCanvas.style.display = 'none';
   }
 }
 
@@ -587,6 +683,9 @@ function init() {
     };
   });
   displayTestData(testData);
+
+  // <!-- ADDED: Gọi hàm vẽ biểu đồ với dữ liệu điểm kiểm tra -->
+  drawChart(testData); 
 }
 
 document.addEventListener('DOMContentLoaded', init);
