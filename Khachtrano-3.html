@@ -251,6 +251,60 @@ thead tr:first-child th:not(:first-child) {
     const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
     const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ', 'Đơn giá', 'Số lượng'];
     
+    // === PHÂN QUYỀN (ADD) ===
+    const ALLOWED_CREATORS = ['hoa','hanh','xuyen']; // chỉ 3 người này được thêm mới
+    let currentPerms = { canCreate: false, canEditExisting: false, canDelete: false, isViewer: true };
+
+    function normalizeVi(str='') {
+      return str.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+    }
+    function computePerms(displayName) {
+      const name = normalizeVi(displayName||'');
+      const canCreate = ALLOWED_CREATORS.includes(name);
+      return {
+        canCreate,
+        canEditExisting: false, // không cho sửa các dòng đã có
+        canDelete: false,       // không ai được xoá
+        isViewer: !canCreate
+      };
+    }
+    function applyPermissions(tableKey) {
+      const perms = currentPerms;
+      const cfg = TABLE_CONFIG[tableKey];
+      if (!cfg || !cfg.containerId) return;
+
+      // Nút Lưu
+      const saveBtn = document.getElementById(`update-btn-${tableKey}`);
+      if (saveBtn) {
+        saveBtn.style.display = perms.isViewer ? 'none' : 'inline-flex';
+        saveBtn.disabled = perms.isViewer;
+      }
+
+      const container = document.getElementById(cfg.containerId);
+      if (!container) return;
+
+      // Ẩn/hiện dòng nhập mới
+      const inputRow = container.querySelector(`#input-row-${tableKey}`);
+      if (inputRow) inputRow.style.display = perms.canCreate ? '' : 'none';
+
+      // Khoá edit các dòng dữ liệu cũ
+      container.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+        const controls = tr.querySelectorAll('input, select, textarea');
+        controls.forEach(el => {
+          if (!perms.canEditExisting) {
+            if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
+            else el.setAttribute('readonly', 'readonly');
+          }
+        });
+      });
+
+      // Ẩn tất cả nút xoá
+      container.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.style.display = 'none';
+      });
+    }
+    // === HẾT PHÂN QUYỀN (ADD) ===
+
     let originalTableData = {};
     let changeSet = { create: {}, update: {}, delete: {} };
     let nhanSuList = [];
@@ -297,13 +351,12 @@ thead tr:first-child th:not(:first-child) {
         const readonlyAttr = (['Địa chỉ', 'Khu vực', 'SĐT', 'Số tiền nợ', 'Ngày nợ', 'Số ngày'].includes(originalHeader)) ? 'readonly' : '';
 
         // NHÁNH MỚI (khtn) — ƯU TIÊN map theo id, KHÔNG có id thì hiển thị nguyên giá trị (chính là tên KH)
-if (originalHeader === 'Tên Khách Hàng') {
-  const khn = originalTableData['khn']?.data || [];
-  const debt = khn.find(d => String(d.id) === String(value));
-  const displayValue = debt ? (debt['Tên Khách Hàng'] || '') : (value || '');
-  inputHtml = `<input type="text" data-field="${originalHeader}" value="${displayValue}" readonly>`;
-}
- else if (['Địa chỉ', 'Khu vực', 'Ghi chú'].includes(originalHeader)) {
+        if (originalHeader === 'Tên Khách Hàng') {
+          const khn = originalTableData['khn']?.data || [];
+          const debt = khn.find(d => String(d.id) === String(value));
+          const displayValue = debt ? (debt['Tên Khách Hàng'] || '') : (value || '');
+          inputHtml = `<input type="text" data-field="${originalHeader}" value="${displayValue}" readonly>`;
+        } else if (['Địa chỉ', 'Khu vực', 'Ghi chú'].includes(originalHeader)) {
             inputHtml = `<textarea data-field="${originalHeader}" ${readonlyAttr}>${formattedValue}</textarea>`;
         } else if (originalHeader === 'Giao hàng cho nợ') {
             const options = GIAO_HANG_NV_LIST.map(name => `<option value="${name}" ${name === formattedValue ? 'selected' : ''}>${name}</option>`).join('');
@@ -313,13 +366,13 @@ if (originalHeader === 'Tên Khách Hàng') {
         } else if (['Ngày trả', 'Ngày nợ'].includes(originalHeader)) {
             inputHtml = `<input type="date" data-field="${originalHeader}" value="${formatDateForInput(formattedValue)}" ${readonlyAttr}>`;
         } else if (['Số tiền trả nợ', 'Số tiền nợ'].includes(originalHeader)) {
-    const numericValue = (Number(String(formattedValue).replace(/\./g, '')) || 0).toLocaleString('vi-VN');
-    inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}" ${readonlyAttr}>`;
-} else if (originalHeader === 'SĐT') {
-    inputHtml = `<input type="tel" data-field="${originalHeader}" value="${formattedValue}" ${readonlyAttr} placeholder="Số điện thoại...">`;
-} else {
-    inputHtml = `<input type="text" data-field="${originalHeader}" value="${formattedValue}" ${readonlyAttr}>`;
-}
+            const numericValue = (Number(String(formattedValue).replace(/\./g, '')) || 0).toLocaleString('vi-VN');
+            inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}" ${readonlyAttr}>`;
+        } else if (originalHeader === 'SĐT') {
+            inputHtml = `<input type="tel" data-field="${originalHeader}" value="${formattedValue}" ${readonlyAttr} placeholder="Số điện thoại...">`;
+        } else {
+            inputHtml = `<input type="text" data-field="${originalHeader}" value="${formattedValue}" ${readonlyAttr}>`;
+        }
         return `<td>${inputHtml}</td>`;
     }
 
@@ -353,11 +406,10 @@ if (originalHeader === 'Tên Khách Hàng') {
 
         const bodyHtml = `<tbody>${inputRowHtml}${data.data.map(row => { 
             const rId = row['id']; 
-            // MỚI
-const cH = headers.map(h => {
-    if (localHiddenColumns.includes(h)) return `<td style="display: none;">${row[h] || ''}</td>`;
-    return createCellInput(h, row[h]);
-}).join('');
+            const cH = headers.map(h => {
+                if (localHiddenColumns.includes(h)) return `<td style="display: none;">${row[h] || ''}</td>`;
+                return createCellInput(h, row[h]);
+            }).join('');
 
             return `<tr data-id="${rId}" data-id-no="${row['id nợ'] || ''}"><td class="align-center"><span class="delete-btn" data-id="${rId}">&#10006;</span></td>${cH}</tr>`;
         }).join('')}</tbody>`;
@@ -366,6 +418,8 @@ const cH = headers.map(h => {
         setupEventListeners(tableKey, container);
         updateTotals(tableKey);
 
+        // === PHÂN QUYỀN (ADD) ===
+        applyPermissions(tableKey);
     }
     
     function updateVisibleRowCount(tableKey) {
@@ -393,95 +447,89 @@ const cH = headers.map(h => {
     }
 
     function handleCustomerNameSelectForPayment(e) {
-    const input = e.target;
-    const customerName = input.value.trim();
-    if (!customerName) return;
-
-    const khnData = originalTableData['khn']?.data || [];
-
-    // Lọc các khoản còn lại > 0 theo KH
-    const outstandingDebts = khnData.filter(d => d['Tên Khách Hàng'] === customerName && (d._conLai ?? 0) > 0 && !tempSelectedDebtIds.includes(d.id));
-    if (outstandingDebts.length === 0) {
-        showToast(`Không tìm thấy khoản nợ nào còn lại cho "${customerName}".`, 'warning');
-        input.value = '';
+      // === PHÂN QUYỀN (ADD) ===
+      if (!currentPerms.canCreate) {
+        showToast('Bạn không có quyền thêm mới.', 'error');
+        e.target.value = '';
         return;
+      }
+
+      const input = e.target;
+      const customerName = input.value.trim();
+      if (!customerName) return;
+
+      const khnData = originalTableData['khn']?.data || [];
+      const outstandingDebts = khnData.filter(d => d['Tên Khách Hàng'] === customerName && (d._conLai ?? 0) > 0 && !tempSelectedDebtIds.includes(d.id));
+      if (outstandingDebts.length === 0) {
+          showToast(`Không tìm thấy khoản nợ nào còn lại cho "${customerName}".`, 'warning');
+          input.value = '';
+          return;
+      }
+
+      const groupByNVKD = {};
+      for (const debt of outstandingDebts) {
+          const key = debt['Người chịu trách nhiệm'] || '(Chưa gán NVKD)';
+          if (!groupByNVKD[key]) groupByNVKD[key] = [];
+          groupByNVKD[key].push(debt);
+      }
+      Object.entries(groupByNVKD).forEach(([nvkd, debts]) => addPaymentRowForGroup(customerName, nvkd, debts));
+      input.value = '';
     }
 
-    // Gom theo NV Kinh doanh (Người chịu trách nhiệm)
-    const groupByNVKD = {};
-    for (const debt of outstandingDebts) {
-        const key = debt['Người chịu trách nhiệm'] || '(Chưa gán NVKD)';
-        if (!groupByNVKD[key]) groupByNVKD[key] = [];
-        groupByNVKD[key].push(debt);
+    function addPaymentRowForGroup(customerName, nvkd, debts) {
+        const tableKey = 'khtn';
+        const inputRow = document.getElementById(`input-row-${tableKey}`);
+        const headers = originalTableData[tableKey].headers;
+
+        const ids = debts.map(d => d.id);
+        const tongConLai = debts.reduce((s, d) => s + (d._conLai || 0), 0);
+
+        tempSelectedDebtIds.push(...ids);
+        calculateRemainingDebts();
+
+        const tempId = crypto.randomUUID();
+        const rowData = {};
+        headers.forEach(h => rowData[h] = '');
+
+        rowData['id'] = tempId;
+        rowData['id nợ'] = ids.join(',');
+        rowData['Tên Khách Hàng'] = customerName;
+        rowData['Khu vực'] = debts[0]['Khu vực'] || '';
+        rowData['Địa chỉ'] = debts[0]['Địa chỉ'] || '';
+        rowData['SĐT'] = debts[0]['SĐT'] || '';
+        rowData['Số tiền nợ'] = tongConLai;
+        rowData['Ngày nợ'] = '';
+        rowData['Giao hàng cho nợ'] = '';
+        rowData['Người chịu trách nhiệm'] = nvkd;
+        rowData['Ngày trả'] = formatDateForServer(new Date());
+        rowData['Số tiền trả nợ'] = '';
+
+        if (!changeSet.create[tableKey]) changeSet.create[tableKey] = {};
+        changeSet.create[tableKey][tempId] = rowData;
+
+        const newTr = document.createElement('tr');
+        newTr.dataset.id = tempId;
+        newTr.dataset.idNo = rowData['id nợ'] || '';
+        newTr.classList.add('row-new');
+
+        let localHiddenColumns = [...HIDDEN_COLUMNS, 'Ngày nợ', 'Số ngày'];
+        const cellsHtml = headers.map(h => {
+            if (localHiddenColumns.includes(h)) return `<td style="display: none;"></td>`;
+            return createCellInput(h, rowData[h]);
+        }).join('');
+
+        newTr.innerHTML = `<td class="align-center"><span class="delete-btn temp-delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
+        newTr.querySelectorAll('input[inputmode="decimal"]').forEach(inp => setupCurrencyInput(inp, 'khtn'));
+
+        inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
+        setChangesMade(tableKey, true);
+        updateTotals(tableKey);
+        updateDashboard();
+        updateVisibleRowCount(tableKey);
     }
-
-    // Tạo 1 dòng mới cho mỗi nhóm (KH, NVKD)
-    Object.entries(groupByNVKD).forEach(([nvkd, debts]) => addPaymentRowForGroup(customerName, nvkd, debts));
-
-    input.value = '';
-}
-
-// Tạo 1 dòng thanh toán gom (KH, NVKD)
-function addPaymentRowForGroup(customerName, nvkd, debts) {
-    const tableKey = 'khtn';
-    const inputRow = document.getElementById(`input-row-${tableKey}`);
-    const headers = originalTableData[tableKey].headers;
-
-    // Danh sách id nợ được gom + tổng còn lại
-    const ids = debts.map(d => d.id);
-    const tongConLai = debts.reduce((s, d) => s + (d._conLai || 0), 0);
-
-    // Ghi nhận để không “xổ” trùng
-    tempSelectedDebtIds.push(...ids);
-    calculateRemainingDebts();
-
-    // Dữ liệu dòng mới
-    const tempId = crypto.randomUUID();
-    const rowData = {};
-    headers.forEach(h => rowData[h] = ''); // init
-
-    rowData['id'] = tempId;
-    rowData['id nợ'] = ids.join(','); // GOM id nợ
-    rowData['Tên Khách Hàng'] = customerName; // hiển thị trực tiếp
-    rowData['Khu vực'] = debts[0]['Khu vực'] || '';
-    rowData['Địa chỉ'] = debts[0]['Địa chỉ'] || '';
-    rowData['SĐT'] = debts[0]['SĐT'] || '';
-    rowData['Số tiền nợ'] = tongConLai; // tổng còn nợ của nhóm
-    rowData['Ngày nợ'] = ''; // ẩn
-    rowData['Giao hàng cho nợ'] = ''; // để trống, vì gom theo NVKD
-    rowData['Người chịu trách nhiệm'] = nvkd;
-    rowData['Ngày trả'] = formatDateForServer(new Date());
-    rowData['Số tiền trả nợ'] = ''; // cho phép người dùng nhập
-    rowData['Số ngày'] = ''; // có thể tính khi lưu từng khoản
-
-    if (!changeSet.create[tableKey]) changeSet.create[tableKey] = {};
-    changeSet.create[tableKey][tempId] = rowData;
-
-    // Vẽ lên DOM
-    const newTr = document.createElement('tr');
-    newTr.dataset.id = tempId;
-    newTr.dataset.idNo = rowData['id nợ'] || '';
-    newTr.classList.add('row-new');
-
-    let localHiddenColumns = [...HIDDEN_COLUMNS, 'Ngày nợ', 'Số ngày'];
-    const cellsHtml = headers.map(h => {
-        if (localHiddenColumns.includes(h)) return `<td style="display: none;"></td>`;
-        return createCellInput(h, rowData[h]);
-    }).join('');
-
-    newTr.innerHTML = `<td class="align-center"><span class="delete-btn temp-delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
-    newTr.querySelectorAll('input[inputmode="decimal"]').forEach(inp => setupCurrencyInput(inp, 'khtn'));
-
-
-    inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
-    setChangesMade(tableKey, true);
-    updateTotals(tableKey);
-    updateDashboard();
-    updateVisibleRowCount(tableKey);
-}
-
 
     function addPaymentRowForDebt(debt) {
+        // vẫn giữ nguyên (không gọi trực tiếp trong luồng mới)
         const tableKey = 'khtn';
         const inputRow = document.getElementById(`input-row-${tableKey}`);
         const headers = originalTableData[tableKey].headers;
@@ -527,17 +575,42 @@ function addPaymentRowForGroup(customerName, nvkd, debts) {
         const table = container.querySelector('table'); if (!table) return;
         const tbody = table.querySelector('tbody');
         table.querySelectorAll('.filter-input').forEach(input => input.addEventListener('input', () => filterTable(tableKey)));
-        tbody.addEventListener('change', (e) => { const el = e.target; const tr = el.closest('tr'); if (tr && !tr.classList.contains('input-row')) handleCellEdit(e, tableKey); });
-        tbody.addEventListener('input', (e) => { if ((e.target.tagName === 'INPUT' && e.target.type === 'text' && !e.target.hasAttribute('inputmode')) || e.target.tagName === 'TEXTAREA') capitalizeFirstLetter(e.target); });
-        tbody.addEventListener('click', (e) => { if (e.target.classList.contains('temp-delete-btn')) { const tr = e.target.closest('tr'); const rowId = tr.dataset.id; const idNo = tr.dataset.idNo; if (idNo) { tempSelectedDebtIds = tempSelectedDebtIds.filter(id => id != idNo); updateDebtDatalist(); } if (changeSet.create[tableKey]?.[rowId]) delete changeSet.create[tableKey][rowId]; tr.remove(); updateTotals(tableKey); updateDashboard(); updateVisibleRowCount(tableKey); setChangesMade(tableKey, hasPendingChanges(tableKey)); } });
-       tbody.querySelectorAll('input[inputmode="decimal"]')
-  .forEach(inp => setupCurrencyInput(inp, tableKey));
-
+        tbody.addEventListener('change', (e) => { 
+            const el = e.target; 
+            const tr = el.closest('tr'); 
+            if (tr && !tr.classList.contains('input-row')) handleCellEdit(e, tableKey); 
+        });
+        tbody.addEventListener('input', (e) => { 
+            if ((e.target.tagName === 'INPUT' && e.target.type === 'text' && !e.target.hasAttribute('inputmode')) || e.target.tagName === 'TEXTAREA') capitalizeFirstLetter(e.target); 
+        });
+        tbody.addEventListener('click', (e) => { 
+            if (e.target.classList.contains('temp-delete-btn')) { 
+                const tr = e.target.closest('tr'); 
+                const rowId = tr.dataset.id; 
+                const idNo = tr.dataset.idNo; 
+                if (idNo) { 
+                    tempSelectedDebtIds = tempSelectedDebtIds.filter(id => id != idNo); 
+                    updateDebtDatalist(); 
+                } 
+                if (changeSet.create[tableKey]?.[rowId]) delete changeSet.create[tableKey][rowId]; 
+                tr.remove(); 
+                updateTotals(tableKey); 
+                updateDashboard(); 
+                updateVisibleRowCount(tableKey); 
+                setChangesMade(tableKey, hasPendingChanges(tableKey)); 
+            } 
+        });
+        tbody.querySelectorAll('input[inputmode="decimal"]').forEach(inp => setupCurrencyInput(inp, tableKey));
 
         table.querySelectorAll('.delete-btn:not(.temp-delete-btn)').forEach(btn => btn.addEventListener('click', (e) => handleDeleteClick(e, tableKey)));
         const inputRow = document.getElementById(`input-row-${tableKey}`);
         if (inputRow) { 
-            inputRow.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA') { e.preventDefault(); if (e.target.dataset.field !== 'Tên Khách Hàng') submitNewRow(tableKey); } }); 
+            inputRow.addEventListener('keydown', e => { 
+                if (e.key === 'Enter' && !e.shiftKey && e.target.tagName !== 'TEXTAREA') { 
+                    e.preventDefault(); 
+                    if (e.target.dataset.field !== 'Tên Khách Hàng') submitNewRow(tableKey); 
+                } 
+            }); 
             const customerNameInput = inputRow.querySelector('[data-field="Tên Khách Hàng"]');
             if (customerNameInput) {
                 customerNameInput.addEventListener('change', handleCustomerNameSelectForPayment);
@@ -547,6 +620,9 @@ function addPaymentRowForGroup(customerName, nvkd, debts) {
     }
 
     function handleCellEdit(e, tableKey) {
+        // === PHÂN QUYỀN (ADD) ===
+        if (!currentPerms.canEditExisting) return;
+
         const element = e.target; const tr = element.closest('tr'); const rowId = tr.dataset.id; const field = element.dataset.field;
         let newValue = (element.getAttribute('inputmode') === 'decimal') ? element.value.replace(/\./g, '') : element.value;
         if (!rowId) return;
@@ -561,201 +637,188 @@ function addPaymentRowForGroup(customerName, nvkd, debts) {
                 } else {
                     let value = cell.value;
                     if (cell.getAttribute('inputmode') === 'decimal') value = value.replace(/\./g, '');
-                    
-
                     rowDataFromDOM[h] = value;
                 }
             });
             changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
         }
         changeSet.update[tableKey][rowId][field] = newValue;
-        tr.classList.add('row-dirty');
+        const trElm = element.closest('tr');
+        if (trElm) trElm.classList.add('row-dirty');
         setChangesMade(tableKey, true);
         updateTotals(tableKey);
         updateDashboard();
     }
 
-    function handleDeleteClick(e, tableKey) { const rowId = e.target.dataset.id; const tr = e.target.closest('tr'); if (rowId && tr) { if (!changeSet.delete[tableKey]) changeSet.delete[tableKey] = []; changeSet.delete[tableKey].push(rowId); tr.classList.add('row-deleted'); setChangesMade(tableKey, true); tr.style.display = 'none'; updateTotals(tableKey); updateDashboard(); updateVisibleRowCount(tableKey); } }
+    function handleDeleteClick(e, tableKey) { 
+        // === PHÂN QUYỀN (ADD) === chặn xoá mọi lúc
+        showToast('Bạn không có quyền xóa.', 'error');
+        return;
+    }
 
     function submitNewRow(tableKey) {
+        // === PHÂN QUYỀN (ADD) ===
+        if (!currentPerms.canCreate) {
+          showToast('Bạn không có quyền thêm mới.', 'error');
+          return;
+        }
         const inputRow = document.getElementById(`input-row-${tableKey}`);
         const headers = originalTableData[tableKey].headers;
         const rowData = {};
         headers.forEach(h => { const i = inputRow.querySelector(`[data-field="${h}"]`); if (i) rowData[h] = i.value.replace(/\./g, ''); });
-        
-        // This function should not create new rows directly, it's handled by addPaymentRowForDebt
         showToast("Vui lòng chọn một khách hàng từ danh sách để thêm thanh toán.", "warning");
     }
 
     async function handleSaveChanges(tableKey) {
-        // --- BẮT ĐẦU ĐOẠN MÃ MỚI ---
-    // Kiểm tra cuối cùng trước khi lưu
-    const invalidRows = document.querySelectorAll(`#container-${tableKey} tbody tr[data-is-invalid="true"]`);
-    if (invalidRows.length > 0) {
-        showToast('Vui lòng sửa các lỗi nhập liệu (ô màu đỏ) trước khi lưu.', 'error');
-        // Cuộn đến lỗi đầu tiên để người dùng dễ thấy
-        invalidRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
-        return; // Dừng hàm, không cho phép lưu
-    }
-    // --- KẾT THÚC ĐOẠN MÃ MỚI ---
-    const updateBtn = document.getElementById('update-btn-khtn');
-    updateBtn.disabled = true;
-    updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
-
-    const toNum = (v) => parseFloat(String(v || '0').replace(/\./g, '')) || 0;
-    const deepClone = (o) => JSON.parse(JSON.stringify(o));
-
-    const config = TABLE_CONFIG[tableKey];
-
-    // Bản đồ khoản nợ gốc
-    const khnRows = originalTableData['khn']?.data || [];
-    const debtById = new Map(khnRows.map(r => [String(r.id), r]));
-
-    // Tính "còn lại" hiện tại của từng id nợ = Số tiền nợ - (tổng Số tiền trả nợ đã lưu lịch sử)
-    const remaining = {};
-    khnRows.forEach(d => { remaining[d.id] = toNum(d['Số tiền nợ']); });
-
-    const khtnSaved = originalTableData['khtn']?.data || [];
-    for (const p of khtnSaved) {
-        const raw = String(p['id nợ'] || '').trim();
-        const amount = toNum(p['Số tiền trả nợ']);
-        if (!raw || !amount) continue;
-
-        const ids = raw.includes(',') ? raw.split(',').map(s => s.trim()).filter(Boolean) : [raw];
-
-        // Phân bổ lịch sử cũ theo FIFO (Ngày nợ tăng dần)
-        let left = amount;
-        const ordered = ids.slice().sort((a, b) => {
-            const da = new Date(debtById.get(a)?.['Ngày nợ'] || 0);
-            const db = new Date(debtById.get(b)?.['Ngày nợ'] || 0);
-            return da - db;
-        });
-        for (const id of ordered) {
-            if (left <= 0) break;
-            const rem = remaining[id] ?? 0;
-            const take = Math.min(rem, left);
-            remaining[id] = rem - take;
-            left -= take;
+        // giữ kiểm tra invalid như bạn đang có
+        const invalidRows = document.querySelectorAll(`#container-${tableKey} tbody tr[data-is-invalid="true"]`);
+        if (invalidRows.length > 0) {
+            showToast('Vui lòng sửa các lỗi nhập liệu (ô màu đỏ) trước khi lưu.', 'error');
+            invalidRows[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            return;
         }
-    }
+        const updateBtn = document.getElementById('update-btn-khtn');
+        updateBtn.disabled = true;
+        updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
 
-    // Chuẩn bị create/update/delete cho khtn
-    const existingUpdates = Object.values(changeSet.update[tableKey] || {});
-    const existingDeletes = changeSet.delete[tableKey] || [];
+        const toNum = (v) => parseFloat(String(v || '0').replace(/\./g, '')) || 0;
+        const deepClone = (o) => JSON.parse(JSON.stringify(o));
+        const config = TABLE_CONFIG[tableKey];
 
-    const createsRaw = Object.values(changeSet.create[tableKey] || {});
-    const expandedCreates = [];
+        const khnRows = originalTableData['khn']?.data || [];
+        const debtById = new Map(khnRows.map(r => [String(r.id), r]));
+        const remaining = {};
+        khnRows.forEach(d => { remaining[d.id] = toNum(d['Số tiền nợ']); });
 
-    // Chẻ các dòng tạo mới (có thể là gom nhiều id nợ) -> nhiều dòng khtn chuẩn theo từng id nợ
-    for (const row of createsRaw) {
-        const ids = String(row['id nợ'] || '')
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean);
+        const khtnSaved = originalTableData['khtn']?.data || [];
+        for (const p of khtnSaved) {
+            const raw = String(p['id nợ'] || '').trim();
+            const amount = toNum(p['Số tiền trả nợ']);
+            if (!raw || !amount) continue;
 
-        let payLeft = toNum(row['Số tiền trả nợ']);
-        if (!payLeft || ids.length === 0) continue;
+            const ids = raw.includes(',') ? raw.split(',').map(s => s.trim()).filter(Boolean) : [raw];
 
-        // FIFO theo Ngày nợ
-        const ordered = ids.slice().sort((a, b) => {
-            const da = new Date(debtById.get(a)?.['Ngày nợ'] || 0);
-            const db = new Date(debtById.get(b)?.['Ngày nợ'] || 0);
-            return da - db;
-        });
-
-        for (const id of ordered) {
-            if (payLeft <= 0) break;
-            const rem = remaining[id] ?? 0;
-            if (rem <= 0) continue;
-
-            const take = Math.min(rem, payLeft);
-            const one = deepClone(row);
-            one['id nợ'] = id;                 // bám đúng id nợ
-            one['Số tiền trả nợ'] = take;      // phần trả cho id này
-
-            // Tính "Số ngày" theo ngày nợ của id cụ thể
-            const dNo = debtById.get(id)?.['Ngày nợ'];
-            const dTra = row['Ngày trả'] || formatDateForServer(new Date());
-            if (dNo && dTra) {
-                const diffTime = Math.abs(new Date(dTra) - new Date(dNo));
-                one['Số ngày'] = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            }
-
-            expandedCreates.push(one);
-            remaining[id] = rem - take;
-            payLeft -= take;
-        }
-    }
-
-    // Những id nợ còn lại <= 0 sau khi chẻ thì xoá khỏi bảng Khách Hàng Nợ
-    const idsToDeleteKhn = Object.keys(remaining).filter(id => (remaining[id] ?? 0) <= 0);
-
-    // Helper "ghi file": giữ nguyên logic phone với dấu nháy
-    const cleanData = (data) => {
-        return deepClone(data).map(row => {
-            Object.keys(row).forEach(key => {
-                if (key === 'SĐT' && row[key]) {
-                    const phoneStr = String(row[key]).trim();
-                    row[key] = "'" + phoneStr;
-                }
+            let left = amount;
+            const ordered = ids.slice().sort((a, b) => {
+                const da = new Date(debtById.get(a)?.['Ngày nợ'] || 0);
+                const db = new Date(debtById.get(b)?.['Ngày nợ'] || 0);
+                return da - db;
             });
-            return row;
-        });
-    };
+            for (const id of ordered) {
+                if (left <= 0) break;
+                const rem = remaining[id] ?? 0;
+                const take = Math.min(rem, left);
+                remaining[id] = rem - take;
+                left -= take;
+            }
+        }
 
-    const fetchPromises = [];
+        const existingUpdates = Object.values(changeSet.update[tableKey] || {});
+        const existingDeletes = changeSet.delete[tableKey] || [];
+        const createsRaw = Object.values(changeSet.create[tableKey] || {});
+        const expandedCreates = [];
 
-    // CREATE: dùng expandedCreates thay cho createData gốc
-    const createData = cleanData(expandedCreates);
-    if (createData.length > 0) {
-        fetchPromises.push(fetch(API_BASE_URL, {
-            method: 'POST', mode: 'no-cors',
-            body: JSON.stringify({ tableName: config.name, action: 'create', data: createData })
-        }));
+        for (const row of createsRaw) {
+            const ids = String(row['id nợ'] || '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+
+            let payLeft = toNum(row['Số tiền trả nợ']);
+            if (!payLeft || ids.length === 0) continue;
+
+            const ordered = ids.slice().sort((a, b) => {
+                const da = new Date(debtById.get(a)?.['Ngày nợ'] || 0);
+                const db = new Date(debtById.get(b)?.['Ngày nợ'] || 0);
+                return da - db;
+            });
+
+            for (const id of ordered) {
+                if (payLeft <= 0) break;
+                const rem = remaining[id] ?? 0;
+                if (rem <= 0) continue;
+
+                const take = Math.min(rem, payLeft);
+                const one = deepClone(row);
+                one['id nợ'] = id;
+                one['Số tiền trả nợ'] = take;
+
+                const dNo = debtById.get(id)?.['Ngày nợ'];
+                const dTra = row['Ngày trả'] || formatDateForServer(new Date());
+                if (dNo && dTra) {
+                    const diffTime = Math.abs(new Date(dTra) - new Date(dNo));
+                    one['Số ngày'] = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                }
+
+                expandedCreates.push(one);
+                remaining[id] = rem - take;
+                payLeft -= take;
+            }
+        }
+
+        const idsToDeleteKhn = Object.keys(remaining).filter(id => (remaining[id] ?? 0) <= 0);
+
+        const cleanData = (data) => {
+            return deepClone(data).map(row => {
+                Object.keys(row).forEach(key => {
+                    if (key === 'SĐT' && row[key]) {
+                        const phoneStr = String(row[key]).trim();
+                        row[key] = "'" + phoneStr;
+                    }
+                });
+                return row;
+            });
+        };
+
+        const fetchPromises = [];
+
+        // === PHÂN QUYỀN (ADD) === chỉ gửi CREATE nếu có quyền; UPDATE/DELETE bị chặn
+        const createData = currentPerms.canCreate ? cleanData(expandedCreates) : [];
+        if (createData.length > 0) {
+            fetchPromises.push(fetch(API_BASE_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ tableName: config.name, action: 'create', data: createData })
+            }));
+        }
+
+        const updateData = currentPerms.canEditExisting ? cleanData(existingUpdates) : [];
+        if (updateData.length > 0) {
+            fetchPromises.push(fetch(API_BASE_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData })
+            }));
+        }
+
+        const deleteIds = currentPerms.canDelete ? existingDeletes : [];
+        if (deleteIds.length > 0) {
+            fetchPromises.push(fetch(API_BASE_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ tableName: config.name, action: 'delete', data: { ids: deleteIds } })
+            }));
+        }
+
+        // Xoá các khoản nợ đã trả hết (khn) — vẫn cho phép vì đây là “dọn nợ” hệ thống, không phải xoá dữ liệu thanh toán
+        if (idsToDeleteKhn.length > 0) {
+            fetchPromises.push(fetch(API_BASE_URL, {
+                method: 'POST', mode: 'no-cors',
+                body: JSON.stringify({ tableName: TABLE_CONFIG['khn'].name, action: 'delete', data: { ids: idsToDeleteKhn } })
+            }));
+        }
+
+        try {
+            await Promise.all(fetchPromises);
+            showToast('Lưu thay đổi thành công!', 'success');
+
+            changeSet = { create: {}, update: {}, delete: {} };
+            tempSelectedDebtIds = [];
+            Object.keys(TABLE_CONFIG).forEach(k => TABLE_CONFIG[k].loaded = false);
+            await initApp(true);
+        } catch (error) {
+            showToast('Đã xảy ra lỗi khi lưu: ' + error.message, 'error');
+        } finally {
+            updateBtn.innerHTML = '<i class="fas fa-save"></i> Lưu Thay Đổi';
+        }
     }
-
-    // UPDATE các dòng khtn cũ (nếu có)
-    const updateData = cleanData(existingUpdates);
-    if (updateData.length > 0) {
-        fetchPromises.push(fetch(API_BASE_URL, {
-            method: 'POST', mode: 'no-cors',
-            body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData })
-        }));
-    }
-
-    // DELETE các dòng khtn bị xoá thủ công (nếu có)
-    const deleteIds = existingDeletes;
-    if (deleteIds.length > 0) {
-        fetchPromises.push(fetch(API_BASE_URL, {
-            method: 'POST', mode: 'no-cors',
-            body: JSON.stringify({ tableName: config.name, action: 'delete', data: { ids: deleteIds } })
-        }));
-    }
-
-    // DELETE các khoản nợ đã trả hết ở bảng KHÁCH HÀNG NỢ
-    if (idsToDeleteKhn.length > 0) {
-        fetchPromises.push(fetch(API_BASE_URL, {
-            method: 'POST', mode: 'no-cors',
-            body: JSON.stringify({ tableName: TABLE_CONFIG['khn'].name, action: 'delete', data: { ids: idsToDeleteKhn } })
-        }));
-    }
-
-    try {
-        await Promise.all(fetchPromises);
-        showToast('Lưu thay đổi thành công!', 'success');
-
-        // Reset thay đổi và reload để tính lại dashboard + còn nợ
-        changeSet = { create: {}, update: {}, delete: {} };
-        tempSelectedDebtIds = [];
-        Object.keys(TABLE_CONFIG).forEach(k => TABLE_CONFIG[k].loaded = false);
-        await initApp(true);
-    } catch (error) {
-        showToast('Đã xảy ra lỗi khi lưu: ' + error.message, 'error');
-    } finally {
-        updateBtn.innerHTML = '<i class="fas fa-save"></i> Lưu Thay Đổi';
-    }
-}
-
 
     async function loadData(tableKey, onComplete) {
         const config = TABLE_CONFIG[tableKey];
@@ -765,16 +828,16 @@ function addPaymentRowForGroup(customerName, nvkd, debts) {
             const response = await fetch(`${API_BASE_URL}?tableName=${encodeURIComponent(config.name)}`);
             if (!response.ok) throw new Error(`Lỗi mạng: ${response.statusText}`);
            originalTableData[tableKey] = await response.json();
-// Xử lý SĐT để đảm bảo giữ số 0 đầu
-if (originalTableData[tableKey] && originalTableData[tableKey].data) {
-    originalTableData[tableKey].data.forEach(row => {
-        if (row['SĐT'] && typeof row['SĐT'] === 'number') {
-            row['SĐT'] = String(row['SĐT']).padStart(10, '0');
-        } else if (row['SĐT']) {
-            row['SĐT'] = String(row['SĐT']).trim();
-        }
-    });
-}
+           // Xử lý SĐT để đảm bảo giữ số 0 đầu
+           if (originalTableData[tableKey] && originalTableData[tableKey].data) {
+              originalTableData[tableKey].data.forEach(row => {
+                  if (row['SĐT'] && typeof row['SĐT'] === 'number') {
+                      row['SĐT'] = String(row['SĐT']).padStart(10, '0');
+                  } else if (row['SĐT']) {
+                      row['SĐT'] = String(row['SĐT']).trim();
+                  }
+              });
+           }
             if (config.containerId) renderTable(tableKey, originalTableData[tableKey]);
             config.loaded = true;
             if (config.containerId) setChangesMade(tableKey, false);
@@ -810,6 +873,8 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
                 const userInfoEl = document.getElementById('user-info');
                 userInfoEl.innerHTML = `Xin chào, <strong>${user.name}</strong>! <a href="#" id="logout-btn">Đăng xuất</a>`;
                 document.getElementById('logout-btn').addEventListener('click', handleLogout);
+                // === PHÂN QUYỀN (ADD) ===
+                currentPerms = computePerms(user.name);
             }
             await fetchNhanSuAndLogin(); 
             const salesDatalist = document.getElementById('sales-person-list-options');
@@ -817,25 +882,23 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
             await Promise.all([loadData('khn'), loadData('khtn'), loadData('hth')]);
             calculateRemainingDebts();
             updateDashboard();
+
+            // === PHÂN QUYỀN (ADD) ===
+            applyPermissions('khtn');
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
         }
     }
 
     function setChangesMade(tableKey, madeChanges) {
-    const btn = document.getElementById(`update-btn-${tableKey}`);
-    if (!btn) return;
+        const btn = document.getElementById(`update-btn-${tableKey}`);
+        if (!btn) return;
 
-    // Kiểm tra xem có hàng nào trong bảng đang bị đánh dấu là không hợp lệ không
-    const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
-    const hasInvalidRows = container.querySelectorAll('tbody tr[data-is-invalid="true"]').length > 0;
+        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+        const hasInvalidRows = container.querySelectorAll('tbody tr[data-is-invalid="true"]').length > 0;
 
-    // Nút Lưu sẽ bị vô hiệu hóa nếu:
-    // 1. Không có thay đổi nào (madeChanges = false)
-    // HOẶC
-    // 2. Có ít nhất một hàng không hợp lệ (hasInvalidRows = true)
-    btn.disabled = !madeChanges || hasInvalidRows;
-}
+        btn.disabled = !madeChanges || hasInvalidRows;
+    }
     function hasPendingChanges(tableKey) { return (Object.keys(changeSet.create[tableKey] || {}).length + Object.keys(changeSet.update[tableKey] || {}).length + (changeSet.delete[tableKey] || []).length) > 0; }
     
     function calculateGrandTotal(tableKey) {
@@ -887,77 +950,71 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
     function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
     function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
     function setupCurrencyInput(input, tableKey) {
-    if (!input) return;
+      if (!input) return;
 
-    const processInput = (isBlurEvent = false) => {
-        const tr = input.closest('tr');
-        if (!tr) return;
+      const processInput = (isBlurEvent = false) => {
+          const tr = input.closest('tr');
+          if (!tr) return;
 
-        // Luôn xóa trạng thái lỗi cũ trước khi kiểm tra lại
-        input.style.border = '';
-        input.style.backgroundColor = '';
-        delete tr.dataset.isInvalid; // Bỏ đánh dấu không hợp lệ
+          input.style.border = '';
+          input.style.backgroundColor = '';
+          delete tr.dataset.isInvalid;
 
-        const rawValue = input.value.replace(/\./g, '');
-        let numericValue = isNaN(rawValue) || rawValue.trim() === '' ? 0 : Number(rawValue);
+          const rawValue = input.value.replace(/\./g, '');
+          let numericValue = isNaN(rawValue) || rawValue.trim() === '' ? 0 : Number(rawValue);
 
-        // --- BẮT ĐẦU LOGIC VALIDATION ---
-        if (input.dataset.field === 'Số tiền trả nợ') {
-            const debtCell = tr.querySelector('[data-field="Số tiền nợ"]');
-            if (debtCell) {
-                const maxDebtValue = parseFloat(debtCell.value.replace(/\./g, '')) || 0;
+          if (input.dataset.field === 'Số tiền trả nợ') {
+              const debtCell = tr.querySelector('[data-field="Số tiền nợ"]');
+              if (debtCell) {
+                  const maxDebtValue = parseFloat(debtCell.value.replace(/\./g, '')) || 0;
 
-                if (numericValue > maxDebtValue) {
-                    if (isBlurEvent) {
-                        showToast(`Số tiền trả (${numericValue.toLocaleString('vi-VN')}) không được lớn hơn số tiền nợ (${maxDebtValue.toLocaleString('vi-VN')})`, 'error');
-                    }
-                    input.style.border = '2px solid var(--error-color)';
-                    input.style.backgroundColor = '#fff0f0';
-                    tr.dataset.isInvalid = 'true'; // Đánh dấu hàng này là không hợp lệ
-                }
-            }
-        }
-        // --- KẾT THÚC LOGIC VALIDATION ---
+                  if (numericValue > maxDebtValue) {
+                      if (isBlurEvent) {
+                          showToast(`Số tiền trả (${numericValue.toLocaleString('vi-VN')}) không được lớn hơn số tiền nợ (${maxDebtValue.toLocaleString('vi-VN')})`, 'error');
+                      }
+                      input.style.border = '2px solid var(--error-color)';
+                      input.style.backgroundColor = '#fff0f0';
+                      tr.dataset.isInvalid = 'true';
+                  }
+              }
+          }
 
-        input.value = numericValue === 0 && rawValue.trim() === '' ? '' : numericValue.toLocaleString('vi-VN');
+          input.value = numericValue === 0 && rawValue.trim() === '' ? '' : numericValue.toLocaleString('vi-VN');
 
-        try {
-            const rowId = tr.dataset.id;
-            const field = input.dataset.field;
-            if (tableKey && tr && rowId && field) {
-                 const finalValue = String(numericValue) || '';
-                 if (changeSet.create[tableKey]?.[rowId]) {
-                    changeSet.create[tableKey][rowId][field] = finalValue;
-                } else {
-                     if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
-                    if (!changeSet.update[tableKey][rowId]) {
-                        const rowDataFromDOM = {};
-                        originalTableData[tableKey].headers.forEach(h => {
-                            const cell = tr.querySelector(`[data-field="${h}"]`);
-                            let v = cell ? cell.value : originalTableData[tableKey]?.data.find(r => r.id == rowId)?.[h];
-                            if(cell && cell.getAttribute('inputmode') === 'decimal') v = v.replace(/\./g, '');
-                            rowDataFromDOM[h] = v;
-                        });
-                         changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
-                    }
-                     changeSet.update[tableKey][rowId][field] = finalValue;
-                }
-            }
-        } catch (e) { console.error("Lỗi khi cập nhật changeSet:", e); }
+          try {
+              const rowId = tr.dataset.id;
+              const field = input.dataset.field;
+              if (tableKey && tr && rowId && field) {
+                   const finalValue = String(numericValue) || '';
+                   if (changeSet.create[tableKey]?.[rowId]) {
+                      changeSet.create[tableKey][rowId][field] = finalValue;
+                  } else {
+                       if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
+                      if (!changeSet.update[tableKey][rowId]) {
+                          const rowDataFromDOM = {};
+                          originalTableData[tableKey].headers.forEach(h => {
+                              const cell = tr.querySelector(`[data-field="${h}"]`);
+                              let v = cell ? cell.value : originalTableData[tableKey]?.data.find(r => r.id == rowId)?.[h];
+                              if(cell && cell.getAttribute('inputmode') === 'decimal') v = v.replace(/\./g, '');
+                              rowDataFromDOM[h] = v;
+                          });
+                           changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
+                      }
+                       changeSet.update[tableKey][rowId][field] = finalValue;
+                  }
+              }
+          } catch (e) { console.error("Lỗi khi cập nhật changeSet:", e); }
 
-        updateTotals(tableKey || 'khtn');
-        updateDashboard();
-        
-        // Gọi setChangesMade để cập nhật lại trạng thái nút Lưu sau mỗi lần nhập liệu
-        const hasPending = hasPendingChanges(tableKey);
-        setChangesMade(tableKey, hasPending);
-    };
+          updateTotals(tableKey || 'khtn');
+          updateDashboard();
+          const hasPending = hasPendingChanges(tableKey);
+          setChangesMade(tableKey, hasPending);
+      };
 
-    input.addEventListener('input', () => processInput(false));
-    input.addEventListener('blur', () => processInput(true));
-    processInput();
-}
-
+      input.addEventListener('input', () => processInput(false));
+      input.addEventListener('blur', () => processInput(true));
+      processInput();
+    }
 
     function exportToExcel(e) {
         const tableKey = e.currentTarget.dataset.tableKey;
@@ -973,15 +1030,15 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
         const headers = originalTableData[tableKey].headers.filter(h => !localHiddenColumns.includes(h));
         const headerRow = headers.map(h => headerMapping[h] || h);
         const dataRows = dataToExport.map(row => headers.map(h => {
-     if (h === 'Tên Khách Hàng') {
-        const debt = originalTableData['khn']?.data.find(d => d.id === row['id nợ']);
-        return debt ? debt['Tên Khách Hàng'] : 'Không rõ';
-    }
-    if (h === 'SĐT' && row[h]) {
-        return "'" + String(row[h]);
-    }
-    return row[h] ?? '';
-}));
+            if (h === 'Tên Khách Hàng') {
+                const debt = originalTableData['khn']?.data.find(d => d.id === row['id nợ']);
+                return debt ? debt['Tên Khách Hàng'] : 'Không rõ';
+            }
+            if (h === 'SĐT' && row[h]) {
+                return "'" + String(row[h]);
+            }
+            return row[h] ?? '';
+        }));
         
         const csvContent = [headerRow, ...dataRows].map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
         const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
