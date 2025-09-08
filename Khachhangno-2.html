@@ -285,6 +285,69 @@ thead tr:first-child th:not(:first-child) {
     const COLUMN_CONFIG = {
         'Người chịu trách nhiệm': { align: 'left', className: 'col-sales-staff' }, 'Địa chỉ': { align: 'left' }, 'Ghi chú': { align: 'left' }, 'Tên Khách Hàng': { align: 'left' }, 'Sản phẩm/Mặt hàng': { align: 'left' }, 'Tên sản phẩm': { align: 'left' }, 'SĐT': { align: 'left' }, 'Số tiền nợ': { align: 'right' }, 'Đơn giá': { align: 'right' }, 'Thành tiền': { align: 'right' }, 'Số tiền trả nợ': { align: 'right' }, 'Hạn trả nợ': { align: 'right' }, 'Số ngày': { align: 'right' }, 'Số lượng': { align: 'right' }, 'Ngày nợ': { align: 'center' }, 'Ngày trả': { align: 'center' }, 'Ngày thu hồi': { align: 'center' }, 'Ngày phải trả': { align: 'center' },
     };
+
+    // === PHÂN QUYỀN (ADD) ===
+    function normalizeVi(s='') {
+      return s.normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/đ/g,'d').replace(/Đ/g,'D')
+              .toLowerCase().trim();
+    }
+    const ALLOWED_CREATORS_RAW = ['Hoa', 'Hanh', 'Xuyen']; // whitelist gốc
+    const ALLOWED_CREATORS = ALLOWED_CREATORS_RAW.map(normalizeVi); // so sánh không dấu, lowercase
+
+    let currentPerms = { canCreate: false, canEditExisting: false, canDelete: false, isViewer: true };
+
+    function computePerms(displayName) {
+      const nameNorm = normalizeVi(displayName || '');
+      const canCreate = ALLOWED_CREATORS.includes(nameNorm);
+      return {
+        canCreate,
+        canEditExisting: false,  // theo yêu cầu: CHỈ nhập mới, không sửa dòng cũ
+        canDelete: false,        // không ai được xóa
+        isViewer: !canCreate
+      };
+    }
+
+    // Áp quyền vào UI mỗi bảng
+    function applyPermissions(tableKey) {
+      const perms = currentPerms;
+      const cfg = TABLE_CONFIG[tableKey];
+      if (!cfg || !cfg.containerId) return;
+
+      // Nút Lưu
+      const saveBtn = document.getElementById(`update-btn-${tableKey}`);
+      if (saveBtn) {
+        // viewer không cần hiện nút
+        saveBtn.style.display = perms.isViewer ? 'none' : 'inline-flex';
+        saveBtn.disabled = perms.isViewer;
+      }
+
+      const container = document.getElementById(cfg.containerId);
+      if (!container) return;
+
+      // Ẩn/hiện dòng nhập mới
+      const inputRow = container.querySelector(`#input-row-${tableKey}`);
+      if (inputRow) inputRow.style.display = perms.canCreate ? '' : 'none';
+
+      // Khóa edit các dòng dữ liệu cũ (không cho sửa)
+      container.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+        tr.classList.remove('row-dirty'); // tránh hiểu nhầm có thay đổi
+        const controls = tr.querySelectorAll('input, select, textarea');
+        controls.forEach(el => {
+          if (!perms.canEditExisting) {
+            if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
+            else el.setAttribute('readonly', 'readonly');
+          }
+        });
+      });
+
+      // Ẩn toàn bộ nút xóa
+      container.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.style.display = 'none';
+      });
+    }
+
     let originalTableData = {};
     let changeSet = { create: {}, update: {}, delete: {} };
     let nhanSuList = [];
@@ -535,6 +598,9 @@ else if (h === 'NV cho nợ') {
         setupEventListeners(tableKey, container);
         updateTotals(tableKey);
         highlightOverdueRows();
+        // === PHÂN QUYỀN (ADD) ===
+        applyPermissions(tableKey);
+
     }
 
     function updateTotals(tableKey) {
@@ -640,6 +706,9 @@ if (salesInput) {
     }
 
     function handleCellEdit(e, tableKey) {
+        // === PHÂN QUYỀN (ADD): chặn sửa nếu không có quyền ===
+        if (!currentPerms.canEditExisting) return;
+
         const element = e.target; const tr = element.closest('tr'); const rowId = tr.dataset.id; const field = element.dataset.field;
         let newValue = (element.getAttribute('inputmode') === 'decimal') ? element.value.replace(/\./g, '') : element.value;
         if (!rowId) return;
@@ -662,100 +731,130 @@ if (salesInput) {
     }
 
     function handleDeleteClick(e, tableKey) {
-        const rowId = e.target.dataset.id; const tr = e.target.closest('tr');
-        if (rowId && tr) { if (!changeSet.delete[tableKey]) changeSet.delete[tableKey] = []; changeSet.delete[tableKey].push(rowId); tr.classList.add('row-deleted'); setChangesMade(tableKey, true); tr.style.display = 'none'; updateTotals(tableKey); updateDashboard(); updateVisibleRowCount(tableKey); }
-    }
-
-    function submitNewRow(tableKey) {
-        const inputRow = document.getElementById(`input-row-${tableKey}`);
-        const headers = originalTableData[tableKey].headers;
-        const rowData = {};
-        headers.forEach(h => { const i = inputRow.querySelector(`[data-field="${h}"]`); if (i) rowData[h] = i.value.replace(/\./g, ''); });
-        
-        const maxDebtInput = document.getElementById('max-debt-input');
-        const maxDebtValue = maxDebtInput ? (parseFloat(maxDebtInput.value.replace(/\./g, '')) || 0) : 0;
-        if (maxDebtValue > 0) {
-            const customerName = rowData['Tên Khách Hàng'];
-            if (customerName) {
-                const currentDebt = calculateCustomerTotalDebt(customerName);
-                const newDebt = parseFloat(rowData['Số tiền nợ'] || '0');
-                if ((currentDebt + newDebt) > maxDebtValue) {
-                    showToast(`Nợ của KH (${(currentDebt + newDebt).toLocaleString('vi-VN')}) vượt hạn mức (${maxDebtValue.toLocaleString('vi-VN')}). Không thể thêm!`, 'error');
-                    return;
-                }
-            }
-        }
-        // --- Giới hạn theo NV Kinh doanh ---
-const maxSalesInput = document.getElementById('max-sales-debt-input');
-const maxSalesVal = maxSalesInput ? (parseFloat(maxSalesInput.value.replace(/\./g, '')) || 0) : 0;
-
-if (maxSalesVal > 0) {
-    const salesName = rowData['Người chịu trách nhiệm'];
-    if (salesName) {
-        const currentSalesDebt = calculateSalespersonTotalDebt(salesName);
-        const newDebt = parseFloat(rowData['Số tiền nợ'] || '0') || 0;
-        if ((currentSalesDebt + newDebt) > maxSalesVal) {
-            showToast(`Nợ của NVKD (${(currentSalesDebt + newDebt).toLocaleString('vi-VN')}) vượt hạn mức (${maxSalesVal.toLocaleString('vi-VN')}). Không thể thêm!`, 'error');
-            return;
-        }
-    }
+  // CHẶN XÓA TOÀN BỘ
+  showToast('Bạn không có quyền xóa.', 'error');
+  return;
 }
 
-        
-        if (!rowData['Tên Khách Hàng']) { showToast('Vui lòng nhập Tên Khách Hàng.', 'warning'); return; }
-        rowData['Ngày phải trả'] = formatDateForServer(calculateDueDate(rowData['Ngày nợ'], rowData['Hạn trả nợ']));
-        const tempId = crypto.randomUUID();
-        rowData['id'] = tempId;
-        if (!changeSet.create[tableKey]) changeSet.create[tableKey] = {};
-        changeSet.create[tableKey][tempId] = rowData;
-        const newTr = document.createElement('tr');
-        newTr.dataset.id = tempId; newTr.classList.add('row-new');
-        const cellsHtml = headers.map(h => HIDDEN_COLUMNS.includes(h) ? `<td style="display: none;"></td>` : createCellInput(h, rowData[h])).join('');
-        newTr.innerHTML = `<td class="align-center"><span class="delete-btn temp-delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
-        newTr.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
-        inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
-        inputRow.querySelectorAll('input, select, textarea').forEach(i => { 
-            const field = i.dataset.field;
-            if (field === 'Ngày nợ') { i.value = new Date().toISOString().slice(0, 10); } 
-            else if (field === 'Hạn trả nợ') { i.value = '30'; }
-            else if (i.tagName === 'SELECT') { i.selectedIndex = 0; } 
-            else if (!i.readOnly) { i.value = ''; } 
-        });
-        document.getElementById('current-customer-debt-display').style.display = 'none';
-        const csd = document.getElementById('current-sales-debt-display');
-if (csd) csd.style.display = 'none';
+    function submitNewRow(tableKey) {
+      // === PHÂN QUYỀN (ADD) ===
+      if (!currentPerms.canCreate) {
+        showToast('Bạn không có quyền thêm mới.', 'error');
+        return;
+      }
 
-        setChangesMade(tableKey, true);
-        updateTotals(tableKey);
-        updateDashboard();
-        updateVisibleRowCount(tableKey);
-        highlightOverdueRows();
-        inputRow.querySelector('[data-field="Hạn trả nợ"]').dispatchEvent(new Event('input', {bubbles: true}));
+      const inputRow = document.getElementById(`input-row-${tableKey}`);
+      const headers = originalTableData[tableKey].headers;
+      const rowData = {};
+      headers.forEach(h => { const i = inputRow.querySelector(`[data-field="${h}"]`); if (i) rowData[h] = i.value.replace(/\./g, ''); });
+      
+      const maxDebtInput = document.getElementById('max-debt-input');
+      const maxDebtValue = maxDebtInput ? (parseFloat(maxDebtInput.value.replace(/\./g, '')) || 0) : 0;
+      if (maxDebtValue > 0) {
+          const customerName = rowData['Tên Khách Hàng'];
+          if (customerName) {
+              const currentDebt = calculateCustomerTotalDebt(customerName);
+              const newDebt = parseFloat(rowData['Số tiền nợ'] || '0');
+              if ((currentDebt + newDebt) > maxDebtValue) {
+                  showToast(`Nợ của KH (${(currentDebt + newDebt).toLocaleString('vi-VN')}) vượt hạn mức (${maxDebtValue.toLocaleString('vi-VN')}). Không thể thêm!`, 'error');
+                  return;
+              }
+          }
+      }
+      // --- Giới hạn theo NV Kinh doanh ---
+      const maxSalesInput = document.getElementById('max-sales-debt-input');
+      const maxSalesVal = maxSalesInput ? (parseFloat(maxSalesInput.value.replace(/\./g, '')) || 0) : 0;
+
+      if (maxSalesVal > 0) {
+          const salesName = rowData['Người chịu trách nhiệm'];
+          if (salesName) {
+              const currentSalesDebt = calculateSalespersonTotalDebt(salesName);
+              const newDebt = parseFloat(rowData['Số tiền nợ'] || '0') || 0;
+              if ((currentSalesDebt + newDebt) > maxSalesVal) {
+                  showToast(`Nợ của NVKD (${(currentSalesDebt + newDebt).toLocaleString('vi-VN')}) vượt hạn mức (${maxSalesVal.toLocaleString('vi-VN')}). Không thể thêm!`, 'error');
+                  return;
+              }
+          }
+      }
+
+      if (!rowData['Tên Khách Hàng']) { showToast('Vui lòng nhập Tên Khách Hàng.', 'warning'); return; }
+      rowData['Ngày phải trả'] = formatDateForServer(calculateDueDate(rowData['Ngày nợ'], rowData['Hạn trả nợ']));
+      const tempId = crypto.randomUUID();
+      rowData['id'] = tempId;
+      if (!changeSet.create[tableKey]) changeSet.create[tableKey] = {};
+      changeSet.create[tableKey][tempId] = rowData;
+      const newTr = document.createElement('tr');
+      newTr.dataset.id = tempId; newTr.classList.add('row-new');
+      const cellsHtml = headers.map(h => HIDDEN_COLUMNS.includes(h) ? `<td style="display: none;"></td>` : createCellInput(h, rowData[h])).join('');
+      newTr.innerHTML = `<td class="align-center"><span class="delete-btn temp-delete-btn" data-id="${tempId}">&#10006;</span></td>` + cellsHtml;
+      newTr.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
+      inputRow.parentElement.insertBefore(newTr, inputRow.nextSibling);
+      inputRow.querySelectorAll('input, select, textarea').forEach(i => { 
+          const field = i.dataset.field;
+          if (field === 'Ngày nợ') { i.value = new Date().toISOString().slice(0, 10); } 
+          else if (field === 'Hạn trả nợ') { i.value = '30'; }
+          else if (i.tagName === 'SELECT') { i.selectedIndex = 0; } 
+          else if (!i.readOnly) { i.value = ''; } 
+      });
+      document.getElementById('current-customer-debt-display').style.display = 'none';
+      const csd = document.getElementById('current-sales-debt-display');
+      if (csd) csd.style.display = 'none';
+
+      setChangesMade(tableKey, true);
+      updateTotals(tableKey);
+      updateDashboard();
+      updateVisibleRowCount(tableKey);
+      highlightOverdueRows();
+      inputRow.querySelector('[data-field="Hạn trả nợ"]').dispatchEvent(new Event('input', {bubbles: true}));
     }
 
     async function handleSaveChanges(tableKey) {
         const updateBtn = document.getElementById('update-btn-khn');
         updateBtn.disabled = true; updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
         const config = TABLE_CONFIG[tableKey];
-        const fetchPromises = [];
+
         const cleanData = (data) => {
-    return JSON.parse(JSON.stringify(data)).map(row => {
-        Object.keys(row).forEach(key => {
-            if (key === 'SĐT' && row[key]) {
-                // Đảm bảo SĐT luôn được xử lý như chuỗi và thêm dấu ' ở đầu
+          return JSON.parse(JSON.stringify(data)).map(row => {
+            Object.keys(row).forEach(key => {
+              if (key === 'SĐT' && row[key]) {
                 const phoneStr = String(row[key]).trim();
-                row[key] = "'" + phoneStr;
-            }
-        });
-        return row;
-    });
-};
-        const createData = cleanData(Object.values(changeSet.create[tableKey] || {}));
-        if (createData.length > 0) fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'create', data: createData }) }));
-        const updateData = cleanData(Object.values(changeSet.update[tableKey] || {}));
-        if (updateData.length > 0) fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData }) }));
-        const deleteIds = changeSet.delete[tableKey] || [];
-        if (deleteIds.length > 0) fetchPromises.push(fetch(API_BASE_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ tableName: config.name, action: 'delete', data: { ids: deleteIds } }) }));
+                row[key] = "'" + phoneStr; // để giữ số 0 đầu khi vào Sheet
+              }
+            });
+            return row;
+          });
+        };
+
+        // Chỉ lấy phần được phép theo quyền
+        const createDataAll = Object.values(changeSet.create[tableKey] || {});
+        const updateDataAll = Object.values(changeSet.update[tableKey] || {});
+        const deleteIdsAll = changeSet.delete[tableKey] || [];
+
+        const createData = currentPerms.canCreate ? cleanData(createDataAll) : [];
+        const updateData = currentPerms.canEditExisting ? cleanData(updateDataAll) : [];
+        const deleteIds  = currentPerms.canDelete ? deleteIdsAll : [];
+
+        const fetchPromises = [];
+        if (createData.length > 0) {
+          fetchPromises.push(fetch(API_BASE_URL, {
+            method: 'POST', mode: 'no-cors',
+            body: JSON.stringify({ tableName: config.name, action: 'create', data: createData })
+          }));
+        }
+        // Theo yêu cầu: không cho sửa/xóa → 2 nhánh dưới đây gần như luôn skip
+        if (updateData.length > 0) {
+          fetchPromises.push(fetch(API_BASE_URL, {
+            method: 'POST', mode: 'no-cors',
+            body: JSON.stringify({ tableName: config.name, action: 'update', data: updateData })
+          }));
+        }
+        if (deleteIds.length > 0) {
+          fetchPromises.push(fetch(API_BASE_URL, {
+            method: 'POST', mode: 'no-cors',
+            body: JSON.stringify({ tableName: config.name, action: 'delete', data: { ids: deleteIds } })
+          }));
+        }
+
         try {
             await Promise.all(fetchPromises);
             showToast('Lưu thay đổi thành công!', 'success');
@@ -813,6 +912,9 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
     async function initApp(isReload = false) {
         const user = JSON.parse(sessionStorage.getItem('loggedInUser'));
         if (user) {
+            // === PHÂN QUYỀN (ADD) === tính quyền mọi lần
+            currentPerms = computePerms(user.name);
+
             if (!isReload) {
                 document.getElementById('login-overlay').style.display = 'none';
                 document.querySelector('.container').classList.add('visible');
@@ -828,6 +930,9 @@ if (originalTableData[tableKey] && originalTableData[tableKey].data) {
             updateDashboard();
             updateVisibleRowCount('khn');
             highlightOverdueRows();
+            // === PHÂN QUYỀN (ADD) ===
+            applyPermissions('khn');
+
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
         }
