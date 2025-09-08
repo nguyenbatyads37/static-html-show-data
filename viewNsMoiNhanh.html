@@ -566,6 +566,8 @@
     <button class="tablinks" onclick="openTab(event, 'KpiReport')">Báo cáo KPI</button>
     <button class="tablinks" onclick="openTab(event, 'DailyReport')">Báo cáo theo ngày</button>
     <button class="tablinks" onclick="openTab(event, 'MarketReport')">Hiệu quả MKT</button>
+    <!-- TAB MỚI: Báo cáo thủ công, ẩn mặc định -->
+    <button class="tablinks" onclick="openTab(event, 'ManualReport')" id="manual-report-tab-btn" style="display: none;">Báo cáo thủ công</button>
   </div>
   <!-- TAB 1: BÁO CÁO CHI TIẾT -->
   <div id="DetailedReport" class="tab-content">
@@ -987,6 +989,11 @@
       </div>
     </div>
   </div>
+  <!-- TAB MỚI: Nội dung báo cáo thủ công -->
+  <div id="ManualReport" class="tab-content">
+    <iframe id="manual-report-iframe" style="width: 100%; height: 85vh; border: none;" src=""></iframe>
+  </div>
+
   <!-- Cấu trúc HTML cho Modal -->
   <div id="daily-detail-modal" class="modal">
     <div class="modal-content">
@@ -1031,7 +1038,7 @@
     /**
     * @description URL của API để lấy dữ liệu báo cáo.
     */
-   const host = 'prod'
+   const host = 'local'
    const hostUse = host === 'local' ? 'http://localhost:8081' : 'https://n-api-gamma.vercel.app';
     const API_URL = `${hostUse}/report/generate?tableName=Báo cáo MKT`;
 
@@ -1207,6 +1214,7 @@
             return {
               idnv: (r["id_NS"] || '').trim(),
               ten: (r["Tên"] || 'N/A').trim(),
+              email: (r["Email"] || '').trim(),
               ngay: new Date(r["Ngày"]),
               ca: (r["ca"] || 'N/A').trim(),
               sanPham: (r["Sản_phẩm"] || 'N/A').trim(),
@@ -1247,12 +1255,16 @@
 
     function setupInitialReportView() {
       const idFromUrl = new URLSearchParams(window.location.search).get('id');
+      const manualTabBtn = document.getElementById('manual-report-tab-btn');
+
       if (!idFromUrl) {
         document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS';
         baseDataForReport = masterData;
+        manualTabBtn.style.display = 'none'; // Đảm bảo tab ẩn đi nếu không có ID
         return;
       }
-      const currentUser = masterData.find(emp => emp.idnv === idFromUrl);
+
+      const currentUser = masterData.find(emp => emp.idnv === idFromUrl || emp.email != '');
       if (currentUser) {
         if (currentUser.chucVu === 'leader') {
           document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
@@ -1261,10 +1273,25 @@
           document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ten}`;
           baseDataForReport = masterData.filter(r => (r.ten || '').trim() === currentUser.ten);
         }
+        
+        // --- LOGIC MỚI: HIỂN THỊ TAB VÀ TẠO URL CHO IFRAME ---
+        manualTabBtn.style.display = 'block'; // Hiển thị nút tab
+        const manualIframe = document.getElementById('manual-report-iframe');
+        
+        const hoten = encodeURIComponent(currentUser.ten);
+        // Giả định email được tạo từ idnv theo mẫu bạn cung cấp
+        const email = `${currentUser.idnv}@nashimart.io.vn`; 
+        const tableName = encodeURIComponent('Báo cáo MKT');
+        
+        // Cập nhật src cho iframe
+        manualIframe.src = `https://nguyenbatyads37.github.io/static-html-show-data/baoCaoThuCong.html?hoten=${hoten}&email=${email}&tableName=${tableName}`;
+        // --- KẾT THÚC LOGIC MỚI ---
+
       } else {
         alert(`ID "${idFromUrl}" không hợp lệ.`);
         document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
         baseDataForReport = [];
+        manualTabBtn.style.display = 'none'; // Ẩn tab nếu người dùng không hợp lệ
       }
     }
 
@@ -1401,7 +1428,11 @@
       const startDateVal = document.getElementById(`start-date-${tabPrefix}`).value;
       const endDateVal = document.getElementById(`end-date-${tabPrefix}`).value;
       const startDate = startDateVal ? new Date(startDateVal) : null;
+      startDate && startDate.setHours(0, 0, 0, 0);
+      
       const endDate = endDateVal ? new Date(endDateVal) : null;
+      endDate && endDate.setHours(23, 59, 59, 999);
+      
 
       if ((startDate && isNaN(startDate)) || (endDate && isNaN(endDate))) return [];
 
@@ -1423,7 +1454,9 @@
 
       // Áp dụng bộ lọc và lưu kết quả vào một biến
       const filteredDataResult = baseDataForReport.filter(r => {
-        const date = new Date(r.ngay);                // Ép kiểu ngày
+        const date = new Date(r.ngay);
+        date.setHours(0, 0, 0, 0); 
+        
         if (!r.ngay || isNaN(date)) return false;     // Loại nếu không có hoặc sai định dạng
         const isDateOk =
           (!startDate || date >= startDate) &&
@@ -1930,6 +1963,10 @@
         btn => btn.getAttribute('onclick').includes(`'${tabName}'`)
       );
       if (currentTabButton) currentTabButton.classList.add("active");
+
+      // Logic tải lại dữ liệu của các tab khi chuyển tab đã có sẵn ở đây.
+      // Khi chuyển từ tab "Báo cáo thủ công" sang tab khác, hàm apply... tương ứng sẽ được gọi,
+      // đảm bảo dữ liệu được làm mới.
       switch (tabName) {
         case 'KpiReport':
           applyTab3Filters();
@@ -1944,6 +1981,9 @@
           break;
         case 'DetailedReport':
           applyTab1Filters();
+          break;
+        case 'ManualReport':
+          // Không cần làm gì đặc biệt khi mở tab này vì iframe đã được tải
           break;
       }
     }
