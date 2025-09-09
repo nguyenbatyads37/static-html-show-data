@@ -66,7 +66,6 @@
             border-collapse: collapse;
             background-color: white;
             table-layout: auto;
-            /* Thay đổi thành auto để linh hoạt hơn */
         }
 
         th,
@@ -115,7 +114,6 @@
             height: auto;
             min-height: 42px;
             min-width: 150px;
-            /* Thêm chiều rộng tối thiểu cho input */
         }
 
         input:focus,
@@ -141,7 +139,6 @@
             gap: 0.5rem;
             justify-content: center;
             min-width: 80px;
-            /* Đảm bảo cột hành động có đủ không gian */
         }
 
         .action-buttons button {
@@ -177,7 +174,6 @@
             text-align: center;
             font-weight: bold;
             display: none;
-            /* Ẩn mặc định */
         }
 
         #responseMessage.visible {
@@ -287,19 +283,14 @@
     <script>
         // ===== CONFIG =====
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPV-zFzyw7eA6isg44DIuDfNFQVaEH4cS5KIseh70DvTiJ6maRK_ItX1kkhMqqRkpU/exec';
-        // ===== START: CODE ĐÃ SỬA (Thêm URL API nhân sự) =====
         const EMPLOYEE_API_URL = 'https://n-api-rouge.vercel.app/sheet/getSheets?rangeSheet=A:K&sheetName=Nh%C3%A2n%20s%E1%BB%B1&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54';
-        // ===== END: CODE ĐÃ SỬA =====
-
-
+        
         // ===== APP STATE =====
         let appData = {
-            // ===== START: CODE ĐÃ SỬA (employeeList sẽ được lấy từ API, cập nhật các list khác) =====
             employeeList: [],
             shiftList: ["Hết ca", "Giữa ca", "Cuối ca"],
             productList: ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Nám DR Hancy", "Kẹo Táo", "Gel Xương Khớp", "Gel XK Thái", "Gel XK Phi"],
             marketList: ["Nhật Bản", "Hàn Quốc", "Canada", "US", "Úc", "Anh"],
-            // ===== END: CODE ĐÃ SỬA =====
         };
         let tableHeaders = [];
         let userEmail = '';
@@ -336,64 +327,149 @@
             return today.toLocaleDateString('en-CA'); // YYYY-MM-DD
         }
 
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str || '';
-            return div.innerHTML;
+        // ===== START: SỬ DỤNG CÁC HÀM BẠN CUNG CẤP =====
+
+        // Hàm escape HTML để tránh XSS (từ code của bạn)
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') {
+                unsafe = String(unsafe);
+            }
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
 
-        function createOptions(list, selectedValue = '') {
-            return list.map(item => `<option value="${escapeHtml(item)}" ${item === selectedValue ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
+        // Phần 1: Hàm lấy danh sách nhân viên (từ code của bạn)
+        async function fetchEmployeeList() {
+            updateStatus('Đang tải danh sách nhân viên MKT...');
+            
+            try {
+                const response = await fetch(EMPLOYEE_API_URL);
+
+                if (!response.ok) {
+                    throw new Error(`Lỗi HTTP! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                // Debug: In ra cấu trúc dữ liệu để kiểm tra
+                console.log('API Response:', result);
+
+                // Kiểm tra cấu trúc dữ liệu linh hoạt hơn
+                let headers, rowObjects;
+                
+                if (result.headers && result.rows) {
+                    // Trường hợp API trả về {headers: [], rows: []}
+                    headers = result.headers;
+                    rowObjects = result.rows;
+                } else if (Array.isArray(result)) {
+                    // Trường hợp API trả về mảng trực tiếp
+                    rowObjects = result;
+                    // Lấy headers từ object đầu tiên
+                    headers = rowObjects.length > 0 ? Object.keys(rowObjects[0]) : [];
+                } else {
+                    throw new Error("Cấu trúc dữ liệu API không được hỗ trợ");
+                }
+
+                console.log('Headers:', headers);
+                console.log('Sample row:', rowObjects[0]);
+
+                // Kiểm tra tên cột linh hoạt hơn
+                const nameColumn = headers.find(h => 
+                    h.toLowerCase().includes('họ') && h.toLowerCase().includes('tên')
+                ) || 'Họ và Tên' || 'Họ Và Tên';
+                
+                const departmentColumn = headers.find(h => 
+                    h.toLowerCase().includes('bộ') && h.toLowerCase().includes('phận')
+                ) || 'Bộ phận';
+
+                console.log('Name column:', nameColumn);
+                console.log('Department column:', departmentColumn);
+
+                if (!headers.includes(nameColumn)) {
+                    throw new Error(`Không tìm thấy cột tên. Các cột có sẵn: ${headers.join(', ')}`);
+                }
+
+                if (!headers.includes(departmentColumn)) {
+                    throw new Error(`Không tìm thấy cột bộ phận. Các cột có sẵn: ${headers.join(', ')}`);
+                }
+
+                // Lọc nhân viên MKT
+                const mktEmployees = rowObjects
+                    .filter(row => {
+                        const dept = row[departmentColumn];
+                        const name = row[nameColumn];
+                        
+                        // Kiểm tra bộ phận (không phân biệt hoa thường)
+                        const isMKT = dept && dept.toString().toUpperCase().includes('MKT');
+                        const hasName = name && name.toString().trim() !== '';
+                        
+                        return isMKT && hasName;
+                    })
+                    .map(row => row[nameColumn].toString().trim())
+                    // Loại bỏ trùng lặp
+                    .filter((name, index, array) => array.indexOf(name) === index);
+
+                updateStatus(`Đã tải thành công ${mktEmployees.length} nhân viên MKT.`);
+                console.log('MKT Employees:', mktEmployees);
+                
+                return mktEmployees;
+
+            } catch (error) {
+                console.error("Lỗi chi tiết:", error);
+                updateStatus(`Lỗi khi tải danh sách nhân viên: ${error.message}`, true);
+                return [];
+            }
         }
+
+        // Phần 2: Hiển thị danh sách trong dropdown (từ code của bạn)
+        function populateEmployeeDatalist() {
+            try {
+                // Kiểm tra xem element datalist có tồn tại không
+                if (!employeeDatalist) {
+                    console.error('Không tìm thấy element với id "employee-datalist"');
+                    return;
+                }
+
+                // Kiểm tra dữ liệu
+                if (!appData.employeeList || !Array.isArray(appData.employeeList)) {
+                    console.error('appData.employeeList không hợp lệ:', appData.employeeList);
+                    return;
+                }
+
+                // Sắp xếp danh sách
+                const sortedList = [...appData.employeeList].sort((a, b) => 
+                    a.localeCompare(b, 'vi', { sensitivity: 'base' })
+                );
+
+                // Tạo HTML options
+                const optionsHtml = sortedList
+                    .map(name => `<option value="${escapeHtml(name)}"></option>`)
+                    .join('');
+
+                // Cập nhật datalist
+                employeeDatalist.innerHTML = optionsHtml;
+                
+                console.log(`Đã tạo ${sortedList.length} options cho datalist`);
+                
+            } catch (error) {
+                console.error('Lỗi khi tạo datalist:', error);
+            }
+        }
+
+        // ===== END: KẾT THÚC PHẦN CODE BẠN CUNG CẤP =====
 
         function formatNumberInput(input) {
             let value = input.value.replace(/[^0-9]/g, '');
             input.value = value ? new Intl.NumberFormat('de-DE').format(value) : '';
         }
 
-        // ===== CORE LOGIC =====
-
-        // ===== START: CODE ĐÃ SỬA (Hàm lấy danh sách nhân viên từ API) =====
-        async function fetchEmployeeList() {
-            updateStatus('Đang tải danh sách nhân viên MKT...');
-            try {
-                const response = await fetch(EMPLOYEE_API_URL);
-                if (!response.ok) {
-                    throw new Error(`Lỗi HTTP! status: ${response.status}`);
-                }
-                const result = await response.json();
-                const data = result.data;
-
-                if (!data || data.length < 2) { // Cần ít nhất 1 dòng header và 1 dòng dữ liệu
-                    throw new Error("API không trả về dữ liệu nhân sự hợp lệ.");
-                }
-
-                const headers = data[0];
-                const nameIndex = headers.indexOf("Họ và Tên");
-                const departmentIndex = headers.indexOf("Bộ phận");
-
-                if (nameIndex === -1 || departmentIndex === -1) {
-                    throw new Error("Không tìm thấy cột 'Họ và Tên' hoặc 'Bộ phận' trong dữ liệu từ API.");
-                }
-
-                // Lọc và lấy danh sách tên nhân viên thuộc bộ phận MKT
-                const mktEmployees = data
-                    .slice(1) // Bỏ qua dòng header
-                    .filter(row => row[departmentIndex] === "MKT" && row[nameIndex]) // Lọc theo bộ phận MKT và đảm bảo có tên
-                    .map(row => row[nameIndex]); // Chỉ lấy tên
-
-                updateStatus(`Đã tải thành công ${mktEmployees.length} nhân viên MKT.`);
-                return mktEmployees;
-
-            } catch (error) {
-                console.error("Lỗi khi tải danh sách nhân viên:", error);
-                updateStatus(`Lỗi khi tải danh sách nhân viên: ${error.message}. Sử dụng danh sách dự phòng.`, true);
-                // Trả về danh sách trống hoặc danh sách mặc định nếu có lỗi
-                return []; 
-            }
+        function createOptions(list, selectedValue = '') {
+            return list.map(item => `<option value="${escapeHtml(item)}" ${item === selectedValue ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
         }
-        // ===== END: CODE ĐÃ SỬA =====
-
 
         function renderTable(headers, data) {
             tableHeaders = headers;
@@ -535,7 +611,6 @@
 
             rowsToSubmit.forEach(row => {
                 ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường'].forEach(fieldName => {
-                    // Kiểm tra xem header này có tồn tại trong bảng không
                     const headerExists = Array.from(table.tHead.querySelectorAll('th')).some(th => th.textContent === fieldName);
                     if (headerExists) {
                         const input = row.querySelector(`[name="${fieldName.replace(' ', '_')}"]`) || row.querySelector(`[name="${fieldName}"]`);
@@ -652,38 +727,26 @@
         }
 
         async function fetchAndPopulateInitialData() {
-            updateStatus(`Đang tải dữ liệu từ sheet '${currentTableName}' cho ${userEmail}...`);
-            const url = new URL(SCRIPT_URL);
-            url.searchParams.append('tableName', currentTableName);
-            url.searchParams.append('email', userEmail);
-
+            updateStatus(`Đang tải dữ liệu từ sheet '${currentTableName}'...`);
             try {
                 const headerMkt = [
                     "id", "Tên", "Email", "Ngày", "ca", "Sản_phẩm", "Thị_trường", "page", "TKQC", "CPQC", "Via_log", "Số_Mess_Cmt", "Số đơn", "Doanh số", "Team", "id_NS", "Doanh số đi", "Số đơn hoàn hủy", "DS chốt", "DS sau hoàn hủy", "Số đơn hoàn hủy", "Doanh số sau ship", "Doanh số TC", "KPIs", "CPQC theo TKQC", "Báo cáo theo Page", "Trạng thái", "Cảnh báo"
-                ]
+                ];
                 const headerSale = [
                     "id", "Email", "Tên", "Ngày", "Ca", "Sản phẩm", "Thị trường", "Số Mess", "Phản hồi", "Đơn Mess", "Doanh số Mess", "id số mess", "id phản hồi", "Team", "Trạng thái", "Chi nhánh", "id_NS", "Doanh số đi", "Số đơn Hoàn huỷ", "Doanh số hoàn huỷ", "Số đơn thành công", "Doanh số thành công", "Khách mới", "Khách cũ", "Bán chéo"
-                ]
-                // Luôn bắt đầu với form trống, không tải dữ liệu cũ
+                ];
                 const result = {
                     headers: currentTableName === 'Báo cáo MKT' ? headerMkt : headerSale,
                     data: []
                 }
-                if (result.error) throw new Error(result.error);
                 renderTable(result.headers, result.data);
             } catch (error) {
-                updateStatus(`Không thể tải dữ liệu báo cáo. Lỗi: ${error.message}`, true);
+                updateStatus(`Không thể tải cấu trúc bảng. Lỗi: ${error.message}`, true);
                 tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Lỗi tải dữ liệu. Vui lòng kiểm tra lại URL hoặc liên hệ quản trị viên.</td></tr>`;
             }
         }
-
-        function populateEmployeeDatalist() {
-            // Sắp xếp danh sách nhân viên theo bảng chữ cái tiếng Việt
-            appData.employeeList.sort((a, b) => a.localeCompare(b, 'vi'));
-            employeeDatalist.innerHTML = appData.employeeList.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
-        }
         
-        // ===== START: CODE ĐÃ SỬA (Cập nhật hàm initializeApp để gọi API trước) =====
+        // Hàm khởi tạo chính của ứng dụng
         async function initializeApp() {
             const urlParams = new URLSearchParams(window.location.search);
             userEmail = urlParams.get('email');
@@ -696,13 +759,13 @@
                 return;
             }
             
-            // BƯỚC 1: Gọi API để lấy danh sách nhân viên trước tiên.
+            // 1. Lấy danh sách nhân viên bằng hàm mới của bạn
             appData.employeeList = await fetchEmployeeList();
             
-            // BƯỚC 2: Sau khi có danh sách, nạp nó vào thẻ datalist.
+            // 2. Tạo danh sách sổ xuống bằng hàm mới của bạn
             populateEmployeeDatalist();
             
-            // BƯỚC 3: Tiếp tục tải cấu trúc bảng và hiển thị dòng đầu tiên.
+            // 3. Lấy cấu trúc bảng và hiển thị dòng đầu tiên
             await fetchAndPopulateInitialData();
 
             updateStatus('Ứng dụng đã sẵn sàng.');
@@ -724,7 +787,6 @@
                 }
             });
         }
-        // ===== END: CODE ĐÃ SỬA =====
 
         document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
