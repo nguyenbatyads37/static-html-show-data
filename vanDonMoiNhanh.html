@@ -849,9 +849,7 @@
       </div>
     </div>
   </div>
-
-
-  <script>
+<script>
     const prod = 'https://n-api-gamma.vercel.app';
     const localhost = 'http://localhost:8081';
     const host = 'prod';
@@ -1665,89 +1663,252 @@
       const year = parseInt(parts[2], 10);
       return new Date(year, month, day);
     }
+
+    // =========================================================================
+    // === HÀM ĐÃ ĐƯỢC CHỈNH SỬA - applyAllFilters ===
+    // =========================================================================
     function applyAllFilters(config) {
-      const tableHead = document.getElementById(config.table.head);
-      const tableBody = document.getElementById(config.table.body);
-      if (!tableHead.querySelector('tr') || !tableBody) return;
-      const startDateVal = document.getElementById(config.controls.startDate).value;
-      const endDateVal = document.getElementById(config.controls.endDate).value;
-      const start = startDateVal ? new Date(startDateVal) : null;
-      const end = endDateVal ? new Date(endDateVal) : null;
-      if (start) start.setHours(0, 0, 0, 0);
-      if (end) end.setHours(23, 59, 59, 999);
-      const productValue = document.getElementById(config.controls.product).value;
-      const marketValue = config.controls.market ? document.getElementById(config.controls.market).value : '';
-      const staffValue = config.controls.staff ? document.getElementById(config.controls.staff).value : '';
-      const filterValues = {};
-      tableHead.querySelectorAll('[data-column]').forEach(filter => {
-        const colName = filter.dataset.column;
-        if (!filterValues[colName]) filterValues[colName] = {};
-        if (filter.dataset.filterType) {
-          filterValues[colName][filter.dataset.filterType] = filter.value.toLowerCase();
-        } else if (filter.classList.contains('multi-select-container')) {
-          const selected = Array.from(filter.querySelectorAll('input:checked:not(.select-all-cb)')).map(cb => cb.value);
-          if (selected.length > 0) filterValues[colName].multi = new Set(selected);
-        } else if (filter.tagName === 'SELECT') {
-          if (filter.value) filterValues[colName].single = filter.value;
-        } else if (filter.classList.contains('filter-input')) {
-          filterValues[colName].text = filter.value.toLowerCase();
-        }
-      });
-      const originalData = config.data();
-      const rows = tableBody.querySelectorAll('tr');
-      rows.forEach(tr => {
-        const rowIndex = parseInt(tr.dataset.rowIndex, 10);
-        if (isNaN(rowIndex)) return;
-        const rowData = originalData[rowIndex];
-        if (!rowData) return;
-        let isVisible = true;
-        if (start || end) {
-          const orderDate = parseDateStringFilter(rowData["Ngày lên đơn"] || rowData["Thời gian lên đơn"]);
-          if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) {
-            isVisible = false;
-          }
-        }
-        if (isVisible && productValue && (rowData["Mặt hàng"] || '') !== productValue) isVisible = false;
-        if (isVisible && marketValue && (rowData["Khu vực"] || rowData["khu vực"] || '') !== marketValue) isVisible = false;
-        if (isVisible && staffValue && (rowData["NV Vận đơn"] || rowData["NV_Vận_đơn"] || '') !== staffValue) isVisible = false;
-        if (isVisible) {
-          for (const colName in filterValues) {
-            const dataKey = columnDisplayMapping[colName] || colName;
-            let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (rowData['Khu vực'] || '') : ''));
-            const cellValueLower = String(cellValue).toLowerCase();
-            const colFilters = filterValues[colName];
-            if (colFilters.text && !cellValueLower.includes(colFilters.text)) {
-              isVisible = false;
-              break;
+        const tableHead = document.getElementById(config.table.head);
+        const tableBody = document.getElementById(config.table.body);
+        if (!tableHead.querySelector('tr') || !tableBody) return;
+        const startDateVal = document.getElementById(config.controls.startDate).value;
+        const endDateVal = document.getElementById(config.controls.endDate).value;
+        const start = startDateVal ? new Date(startDateVal) : null;
+        const end = endDateVal ? new Date(endDateVal) : null;
+        if (start) start.setHours(0, 0, 0, 0);
+        if (end) end.setHours(23, 59, 59, 999);
+        const productValue = document.getElementById(config.controls.product).value;
+        const marketValue = config.controls.market ? document.getElementById(config.controls.market).value : '';
+        const staffValue = config.controls.staff ? document.getElementById(config.controls.staff).value : '';
+        const filterValues = {};
+        tableHead.querySelectorAll('[data-column]').forEach(filter => {
+            const colName = filter.dataset.column;
+            if (!filterValues[colName]) filterValues[colName] = {};
+            if (filter.dataset.filterType) {
+            filterValues[colName][filter.dataset.filterType] = filter.value.toLowerCase();
+            } else if (filter.classList.contains('multi-select-container')) {
+            const selected = Array.from(filter.querySelectorAll('input:checked:not(.select-all-cb)')).map(cb => cb.value);
+            if (selected.length > 0) filterValues[colName].multi = new Set(selected);
+            } else if (filter.tagName === 'SELECT') {
+            if (filter.value) filterValues[colName].single = filter.value;
+            } else if (filter.classList.contains('filter-input')) {
+            filterValues[colName].text = filter.value.toLowerCase();
             }
-            if (colFilters.single && String(cellValue) !== colFilters.single) {
-              isVisible = false;
-              break;
+        });
+        const originalData = config.data();
+        const rows = tableBody.querySelectorAll('tr');
+        rows.forEach(tr => {
+            const rowIndex = parseInt(tr.dataset.rowIndex, 10);
+            if (isNaN(rowIndex)) return;
+            const rowData = originalData[rowIndex];
+            if (!rowData) return;
+            let isVisible = true;
+            if (start || end) {
+            const orderDate = parseDateStringFilter(rowData["Ngày lên đơn"] || rowData["Thời gian lên đơn"]);
+            if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) {
+                isVisible = false;
             }
-            if (colFilters.multi) {
-              const valueAsString = String(cellValue).trim();
-              const isBlank = !valueAsString;
-              const isMatch = (colFilters.multi.has('') && isBlank) || colFilters.multi.has(valueAsString);
-              if (!isMatch) {
+            }
+            if (isVisible && productValue && (rowData["Mặt hàng"] || '') !== productValue) isVisible = false;
+            if (isVisible && marketValue && (rowData["Khu vực"] || rowData["khu vực"] || '') !== marketValue) isVisible = false;
+            if (isVisible && staffValue && (rowData["NV Vận đơn"] || rowData["NV_Vận_đơn"] || '') !== staffValue) isVisible = false;
+            if (isVisible) {
+            for (const colName in filterValues) {
+                const dataKey = columnDisplayMapping[colName] || colName;
+                let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (rowData['Khu vực'] || '') : ''));
+                const cellValueLower = String(cellValue).toLowerCase();
+                const colFilters = filterValues[colName];
+
+                // === LOGIC MỚI ĐƯỢC THÊM VÀO ĐÂY ===
+                if (colFilters.state) { 
+                    const isBlank = !String(cellValue).trim(); 
+                    if (colFilters.state === 'empty' && !isBlank) {
+                        isVisible = false;
+                        break;
+                    }
+                    if (colFilters.state === 'not-empty' && isBlank) {
+                        isVisible = false;
+                        break;
+                    }
+                }
+                // === KẾT THÚC LOGIC MỚI ===
+
+                if (colFilters.text && !cellValueLower.includes(colFilters.text)) {
                 isVisible = false;
                 break;
-              }
+                }
+                if (colFilters.single && String(cellValue) !== colFilters.single) {
+                isVisible = false;
+                break;
+                }
+                if (colFilters.multi) {
+                const valueAsString = String(cellValue).trim();
+                const isBlank = !valueAsString;
+                const isMatch = (colFilters.multi.has('') && isBlank) || colFilters.multi.has(valueAsString);
+                if (!isMatch) {
+                    isVisible = false;
+                    break;
+                }
+                }
+                if (colFilters.contains && !cellValueLower.includes(colFilters.contains)) {
+                isVisible = false;
+                break;
+                }
+                if (colFilters.notcontains && colFilters.notcontains !== '' && cellValueLower.includes(colFilters.notcontains)) {
+                isVisible = false;
+                break;
+                }
             }
-            if (colFilters.contains && !cellValueLower.includes(colFilters.contains)) {
-              isVisible = false;
-              break;
             }
-            if (colFilters.notcontains && colFilters.notcontains !== '' && cellValueLower.includes(colFilters.notcontains)) {
-              isVisible = false;
-              break;
-            }
-          }
-        }
-        tr.style.display = isVisible ? '' : 'none';
-      });
-      updateSummaryInfo(config);
+            tr.style.display = isVisible ? '' : 'none';
+        });
+        updateSummaryInfo(config);
     }
-    function renderHeader(config) { const header = document.getElementById(config.table.head); const options = config.dynamicOptions(); header.innerHTML = ''; const tr = document.createElement('tr'); const fixedCount = getFixedColumnCount(); const debouncedFilter = () => { clearTimeout(filterDebounceTimer); filterDebounceTimer = setTimeout(() => applyAllFilters(config), 300) }; const immediateFilter = () => applyAllFilters(config); displayColumns.forEach((colName, index) => { const th = document.createElement('th'); th.textContent = colName; if (index < fixedCount) th.classList.add('fixed-column'); th.appendChild(document.createElement('br')); if (colName === "Mã Tracking") { const container = document.createElement('div'); container.className = 'tracking-filter-container'; const inputContains = document.createElement('input'); inputContains.type = 'text'; inputContains.placeholder = 'Chứa ký tự...'; inputContains.className = 'filter-input'; inputContains.dataset.column = colName; inputContains.dataset.filterType = 'contains'; inputContains.addEventListener('input', debouncedFilter); const inputNotContains = document.createElement('input'); inputNotContains.type = 'text'; inputNotContains.placeholder = 'Không chứa...'; inputNotContains.className = 'filter-input'; inputNotContains.dataset.column = colName; inputNotContains.dataset.filterType = 'notcontains'; inputNotContains.addEventListener('input', debouncedFilter); container.append(inputContains, inputNotContains); th.appendChild(container) } else if (singleSelectFilterCols.includes(colName) && options[colName]) { const filterElement = document.createElement('select'); filterElement.className = 'filter-select'; filterElement.dataset.column = colName; filterElement.add(new Option(`Tất cả ${colName}`, '')); options[colName].forEach(opt => filterElement.add(new Option(opt, opt))); filterElement.addEventListener('change', immediateFilter); th.appendChild(filterElement) } else if (options[colName]) { const container = document.createElement('div'); container.className = 'multi-select-container'; container.dataset.column = colName; const button = document.createElement('button'); button.className = 'multi-select-button'; button.textContent = `Tất cả ${colName}`; const dropdown = document.createElement('div'); dropdown.className = 'checkbox-dropdown'; const selectAllLabel = document.createElement('label'); const selectAllCheckbox = document.createElement('input'); selectAllCheckbox.type = 'checkbox'; selectAllCheckbox.className = 'select-all-cb'; selectAllLabel.style.fontWeight = 'bold'; selectAllLabel.style.borderBottom = '1px solid #ccc'; selectAllLabel.style.marginBottom = '4px'; selectAllLabel.append(selectAllCheckbox, ' (Tất cả)'); dropdown.appendChild(selectAllLabel); const createCheckbox = (value, text) => { const label = document.createElement('label'); const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.value = value; checkbox.addEventListener('change', () => { const allOptionCheckboxes = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:not(.select-all-cb)')); selectAllCheckbox.checked = allOptionCheckboxes.every(cb => cb.checked); const selectedCount = dropdown.querySelectorAll('input:checked:not(.select-all-cb)').length; button.textContent = selectedCount === 0 ? `Tất cả ${colName}` : `${selectedCount} lựa chọn`; immediateFilter(); }); label.append(checkbox, ` ${text}`); return label; }; dropdown.appendChild(createCheckbox('', '(Trống)')); options[colName].forEach(opt => dropdown.appendChild(createCheckbox(opt, opt))); selectAllCheckbox.addEventListener('change', (e) => { dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked); const selectedCount = e.target.checked ? dropdown.querySelectorAll('input:checked:not(.select-all-cb)').length : 0; button.textContent = selectedCount === 0 ? `Tất cả ${colName}` : `${selectedCount} lựa chọn`; immediateFilter(); }); button.addEventListener('click', e => { e.stopPropagation(); document.querySelectorAll('.checkbox-dropdown.show').forEach(d => { if (d !== dropdown) d.classList.remove('show') }); dropdown.classList.toggle('show') }); container.append(button, dropdown); th.appendChild(container) } else if (datalistFilterCols.includes(colName)) { const input = document.createElement('input'); input.type = 'text'; input.className = 'filter-input'; input.placeholder = `Lọc ${colName}...`; input.dataset.column = colName; const datalistId = `datalist-${colName.replace(/[^a-zA-Z0-9]/g, '-')}`; input.setAttribute('list', datalistId); const datalist = document.createElement('datalist'); datalist.id = datalistId; if (datalistOptions[colName]) { datalistOptions[colName].forEach(opt => { const option = document.createElement('option'); option.value = opt; datalist.appendChild(option) }) } input.addEventListener('input', debouncedFilter); th.append(input, datalist) } else { const filterElement = document.createElement('input'); filterElement.type = 'text'; filterElement.className = 'filter-input'; filterElement.placeholder = `Lọc ${colName}...`; filterElement.dataset.column = colName; filterElement.addEventListener('input', debouncedFilter); th.appendChild(filterElement) } tr.appendChild(th) }); header.appendChild(tr); window.addEventListener('click', e => { if (!e.target.closest('.multi-select-container')) { document.querySelectorAll('.checkbox-dropdown.show').forEach(d => d.classList.remove('show')) } }) }
+
+    // =========================================================================
+    // === HÀM ĐÃ ĐƯỢC CHỈNH SỬA - renderHeader ===
+    // =========================================================================
+    function renderHeader(config) { 
+        const header = document.getElementById(config.table.head); 
+        const options = config.dynamicOptions(); 
+        header.innerHTML = ''; 
+        const tr = document.createElement('tr'); 
+        const fixedCount = getFixedColumnCount(); 
+        const debouncedFilter = () => { clearTimeout(filterDebounceTimer); filterDebounceTimer = setTimeout(() => applyAllFilters(config), 300) }; 
+        const immediateFilter = () => applyAllFilters(config); 
+        displayColumns.forEach((colName, index) => { 
+            const th = document.createElement('th'); 
+            th.textContent = colName; 
+            if (index < fixedCount) th.classList.add('fixed-column'); 
+            th.appendChild(document.createElement('br')); 
+            
+            // === LOGIC CŨ ĐƯỢC THAY THẾ BẰNG LOGIC MỚI ===
+            if (colName === "Mã Tracking") {
+                const container = document.createElement('div');
+                container.className = 'tracking-filter-container';
+
+                const selectState = document.createElement('select');
+                selectState.className = 'filter-select';
+                selectState.style.marginBottom = '4px';
+                selectState.dataset.column = colName;
+                selectState.dataset.filterType = 'state';
+
+                selectState.add(new Option('Tình trạng mã', ''));
+                selectState.add(new Option('Tất cả có mã', 'not-empty'));
+                selectState.add(new Option('Trống', 'empty'));
+                selectState.addEventListener('change', immediateFilter);
+
+                const inputContains = document.createElement('input');
+                inputContains.type = 'text';
+                inputContains.placeholder = 'Chứa ký tự...';
+                inputContains.className = 'filter-input';
+                inputContains.dataset.column = colName;
+                inputContains.dataset.filterType = 'contains';
+                inputContains.addEventListener('input', debouncedFilter);
+
+                const inputNotContains = document.createElement('input');
+                inputNotContains.type = 'text';
+                inputNotContains.placeholder = 'Không chứa...';
+                inputNotContains.className = 'filter-input';
+                inputNotContains.dataset.column = colName;
+                inputNotContains.dataset.filterType = 'notcontains';
+                inputNotContains.addEventListener('input', debouncedFilter);
+
+                container.append(selectState, inputContains, inputNotContains);
+                th.appendChild(container);
+            // === KẾT THÚC PHẦN THAY THẾ ===
+
+            } else if (singleSelectFilterCols.includes(colName) && options[colName]) { 
+                const filterElement = document.createElement('select'); 
+                filterElement.className = 'filter-select'; 
+                filterElement.dataset.column = colName; 
+                filterElement.add(new Option(`Tất cả ${colName}`, '')); 
+                options[colName].forEach(opt => filterElement.add(new Option(opt, opt))); 
+                filterElement.addEventListener('change', immediateFilter); 
+                th.appendChild(filterElement) 
+            } else if (options[colName]) { 
+                const container = document.createElement('div'); 
+                container.className = 'multi-select-container'; 
+                container.dataset.column = colName; 
+                const button = document.createElement('button'); 
+                button.className = 'multi-select-button'; 
+                button.textContent = `Tất cả ${colName}`; 
+                const dropdown = document.createElement('div'); 
+                dropdown.className = 'checkbox-dropdown'; 
+                const selectAllLabel = document.createElement('label'); 
+                const selectAllCheckbox = document.createElement('input'); 
+                selectAllCheckbox.type = 'checkbox'; 
+                selectAllCheckbox.className = 'select-all-cb'; 
+                selectAllLabel.style.fontWeight = 'bold'; 
+                selectAllLabel.style.borderBottom = '1px solid #ccc'; 
+                selectAllLabel.style.marginBottom = '4px'; 
+                selectAllLabel.append(selectAllCheckbox, ' (Tất cả)'); 
+                dropdown.appendChild(selectAllLabel); 
+                const createCheckbox = (value, text) => { 
+                    const label = document.createElement('label'); 
+                    const checkbox = document.createElement('input'); 
+                    checkbox.type = 'checkbox'; checkbox.value = value; 
+                    checkbox.addEventListener('change', () => { 
+                        const allOptionCheckboxes = Array.from(dropdown.querySelectorAll('input[type="checkbox"]:not(.select-all-cb)')); 
+                        selectAllCheckbox.checked = allOptionCheckboxes.every(cb => cb.checked); 
+                        const selectedCount = dropdown.querySelectorAll('input:checked:not(.select-all-cb)').length; 
+                        button.textContent = selectedCount === 0 ? `Tất cả ${colName}` : `${selectedCount} lựa chọn`; immediateFilter(); 
+                    }); 
+                    label.append(checkbox, ` ${text}`); 
+                    return label; 
+                }; 
+                dropdown.appendChild(createCheckbox('', '(Trống)')); 
+                options[colName].forEach(opt => dropdown.appendChild(createCheckbox(opt, opt))); 
+                selectAllCheckbox.addEventListener('change', (e) => { 
+                    dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked); 
+                    const selectedCount = e.target.checked ? dropdown.querySelectorAll('input:checked:not(.select-all-cb)').length : 0; 
+                    button.textContent = selectedCount === 0 ? `Tất cả ${colName}` : `${selectedCount} lựa chọn`; 
+                    immediateFilter(); 
+                }); 
+                button.addEventListener('click', e => { 
+                    e.stopPropagation(); 
+                    document.querySelectorAll('.checkbox-dropdown.show').forEach(d => { if (d !== dropdown) d.classList.remove('show') }); 
+                    dropdown.classList.toggle('show') 
+                }); 
+                container.append(button, dropdown); 
+                th.appendChild(container) 
+            } else if (datalistFilterCols.includes(colName)) { 
+                const input = document.createElement('input'); 
+                input.type = 'text'; 
+                input.className = 'filter-input'; 
+                input.placeholder = `Lọc ${colName}...`; 
+                input.dataset.column = colName; 
+                const datalistId = `datalist-${colName.replace(/[^a-zA-Z0-9]/g, '-')}`; 
+                input.setAttribute('list', datalistId); 
+                const datalist = document.createElement('datalist'); 
+                datalist.id = datalistId; 
+                if (datalistOptions[colName]) { 
+                    datalistOptions[colName].forEach(opt => { 
+                        const option = document.createElement('option'); 
+                        option.value = opt; datalist.appendChild(option) 
+                    }) 
+                } 
+                input.addEventListener('input', debouncedFilter); 
+                th.append(input, datalist) 
+            } else { 
+                const filterElement = document.createElement('input'); 
+                filterElement.type = 'text'; 
+                filterElement.className = 'filter-input'; 
+                filterElement.placeholder = `Lọc ${colName}...`; 
+                filterElement.dataset.column = colName; 
+                filterElement.addEventListener('input', debouncedFilter); 
+                th.appendChild(filterElement) 
+            } 
+            tr.appendChild(th) 
+        }); 
+        header.appendChild(tr); 
+        window.addEventListener('click', e => { 
+            if (!e.target.closest('.multi-select-container')) { 
+                document.querySelectorAll('.checkbox-dropdown.show').forEach(d => d.classList.remove('show')) 
+            } 
+        }) 
+    }
+
     function renderTableBody(config, data) {
       const container = document.getElementById(config.table.body);
       container.innerHTML = '';
@@ -1942,7 +2103,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', () => { setupControls(); loadData() });
-  </script>
+</script>
 </body>
 
 </html>
