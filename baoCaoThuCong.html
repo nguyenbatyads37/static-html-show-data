@@ -632,7 +632,7 @@
             return isValid;
         }
 
-        async function handleSubmit(e) {
+              async function handleSubmit(e) {
             e.preventDefault();
             if (!validateForm()) return;
 
@@ -645,15 +645,31 @@
             tableBody.querySelectorAll('tr').forEach(row => {
                 let payload = null;
                 const actionData = {};
+                
+                // --- BẮT ĐẦU THAY ĐỔI TẠI ĐÂY ---
                 row.querySelectorAll('input, select').forEach(input => {
                     if (input.name) {
                         let value = input.value;
-                        if (input.name === 'Số Mess' || input.name === 'Phản hồi') {
+                        let key = input.name; // Sử dụng một biến tạm thời cho key
+
+                        // Xóa dấu chấm phân cách hàng nghìn cho các cột số
+                        if (['Số Mess', 'Phản hồi', 'Doanh số', 'CPQC'].includes(input.name)) {
                             value = value.replace(/\./g, '');
                         }
-                        actionData[input.name] = value;
+
+                        // === YÊU CẦU CỐT LÕI: Ánh xạ cột 'Doanh số' sang biến 'DS chốt' ===
+                        // Khi gặp cột có tên là 'Doanh số', chúng ta sẽ đổi key thành 'DS chốt'
+                        // để gửi về backend đúng với tên biến mong muốn.
+                        if (input.name === 'Doanh số') {
+                            key = 'DS chốt';
+                        }
+                        // ======================================================================
+
+                        actionData[key] = value;
                     }
                 });
+                // --- KẾT THÚC THAY ĐỔI ---
+                
                 actionData['Email'] = userEmail;
 
                 if (row.dataset.markedForDeletion === 'true') {
@@ -699,6 +715,32 @@
                 submitBtn.textContent = '🚀 Gửi báo cáo';
                 return;
             }
+
+            try {
+                const results = await Promise.all(apiPromises);
+                showResponseMessage(`Thành công! Đã xử lý ${results.length} thay đổi.`, true);
+
+                results.forEach(result => {
+                    const row = result.originalRow;
+                    if (row.dataset.markedForDeletion === 'true') {
+                        row.remove();
+                    } else if (row.dataset.isNew === 'true') {
+                        row.dataset.isNew = 'false';
+                        row.dataset.isDirty = 'false';
+                    } else if (row.dataset.isDirty === 'true') {
+                        row.dataset.isDirty = 'false';
+                    }
+                });
+
+            } catch (error) {
+                console.error('Lỗi khi gửi dữ liệu:', error);
+                showResponseMessage('Lỗi khi gửi dữ liệu: ' + error.message, false);
+                updateStatus('Gửi báo cáo thất bại: ' + error.message, true);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Gửi báo cáo';
+            }
+        }
 
             try {
                 const results = await Promise.all(apiPromises);
