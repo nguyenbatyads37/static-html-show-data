@@ -251,9 +251,6 @@
             font-size: 14px;
             color: #495057;
         }
-
-        /* CSS cho cột chiều rộng đã được loại bỏ vì header giờ là động */
-        /* Bạn có thể thêm lại nếu cần và điều chỉnh dựa trên các header thực tế */
     </style>
 </head>
 
@@ -294,9 +291,10 @@
         const EMPLOYEE_API_URL = 'https://n-api-rouge.vercel.app/sheet/getSheets?rangeSheet=A:K&sheetName=Nh%C3%A2n%20s%E1%BB%B1&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54';
         // ===== END: CODE ĐÃ SỬA =====
 
+
         // ===== APP STATE =====
         let appData = {
-            // ===== START: CODE ĐÃ SỬA (Khởi tạo employeeList rỗng và cập nhật các list khác) =====
+            // ===== START: CODE ĐÃ SỬA (employeeList sẽ được lấy từ API, cập nhật các list khác) =====
             employeeList: [],
             shiftList: ["Hết ca", "Giữa ca", "Cuối ca"],
             productList: ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Nám DR Hancy", "Kẹo Táo", "Gel Xương Khớp", "Gel XK Thái", "Gel XK Phi"],
@@ -355,19 +353,19 @@
 
         // ===== CORE LOGIC =====
 
-        // ===== START: CODE ĐÃ SỬA (Thêm hàm mới để lấy danh sách nhân sự) =====
+        // ===== START: CODE ĐÃ SỬA (Hàm lấy danh sách nhân viên từ API) =====
         async function fetchEmployeeList() {
             updateStatus('Đang tải danh sách nhân viên MKT...');
             try {
                 const response = await fetch(EMPLOYEE_API_URL);
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`Lỗi HTTP! status: ${response.status}`);
                 }
                 const result = await response.json();
                 const data = result.data;
 
-                if (!data || data.length < 1) {
-                    throw new Error("API không trả về dữ liệu nhân sự.");
+                if (!data || data.length < 2) { // Cần ít nhất 1 dòng header và 1 dòng dữ liệu
+                    throw new Error("API không trả về dữ liệu nhân sự hợp lệ.");
                 }
 
                 const headers = data[0];
@@ -375,12 +373,13 @@
                 const departmentIndex = headers.indexOf("Bộ phận");
 
                 if (nameIndex === -1 || departmentIndex === -1) {
-                    throw new Error("Không tìm thấy cột 'Họ và Tên' hoặc 'Bộ phận' trong dữ liệu.");
+                    throw new Error("Không tìm thấy cột 'Họ và Tên' hoặc 'Bộ phận' trong dữ liệu từ API.");
                 }
 
+                // Lọc và lấy danh sách tên nhân viên thuộc bộ phận MKT
                 const mktEmployees = data
                     .slice(1) // Bỏ qua dòng header
-                    .filter(row => row[departmentIndex] === "MKT") // Lọc theo bộ phận MKT
+                    .filter(row => row[departmentIndex] === "MKT" && row[nameIndex]) // Lọc theo bộ phận MKT và đảm bảo có tên
                     .map(row => row[nameIndex]); // Chỉ lấy tên
 
                 updateStatus(`Đã tải thành công ${mktEmployees.length} nhân viên MKT.`);
@@ -388,11 +387,13 @@
 
             } catch (error) {
                 console.error("Lỗi khi tải danh sách nhân viên:", error);
-                updateStatus(`Lỗi khi tải danh sách nhân viên: ${error.message}`, true);
-                return []; // Trả về mảng rỗng nếu có lỗi
+                updateStatus(`Lỗi khi tải danh sách nhân viên: ${error.message}. Sử dụng danh sách dự phòng.`, true);
+                // Trả về danh sách trống hoặc danh sách mặc định nếu có lỗi
+                return []; 
             }
         }
         // ===== END: CODE ĐÃ SỬA =====
+
 
         function renderTable(headers, data) {
             tableHeaders = headers;
@@ -534,8 +535,10 @@
 
             rowsToSubmit.forEach(row => {
                 ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường'].forEach(fieldName => {
-                    if (tableHeaders.includes(fieldName)) {
-                        const input = row.querySelector(`[name="${fieldName}"]`);
+                    // Kiểm tra xem header này có tồn tại trong bảng không
+                    const headerExists = Array.from(table.tHead.querySelectorAll('th')).some(th => th.textContent === fieldName);
+                    if (headerExists) {
+                        const input = row.querySelector(`[name="${fieldName.replace(' ', '_')}"]`) || row.querySelector(`[name="${fieldName}"]`);
                         if (input && !input.value.trim()) {
                             isValid = false;
                             input.closest('td').classList.add('error-cell');
@@ -543,6 +546,7 @@
                     }
                 });
             });
+
 
             if (!isValid) {
                 showResponseMessage('Lỗi: Vui lòng điền đầy đủ thông tin cho các ô màu đỏ.', false);
@@ -660,7 +664,7 @@
                 const headerSale = [
                     "id", "Email", "Tên", "Ngày", "Ca", "Sản phẩm", "Thị trường", "Số Mess", "Phản hồi", "Đơn Mess", "Doanh số Mess", "id số mess", "id phản hồi", "Team", "Trạng thái", "Chi nhánh", "id_NS", "Doanh số đi", "Số đơn Hoàn huỷ", "Doanh số hoàn huỷ", "Số đơn thành công", "Doanh số thành công", "Khách mới", "Khách cũ", "Bán chéo"
                 ]
-                // Giả lập không có dữ liệu ban đầu để bắt đầu với form trống
+                // Luôn bắt đầu với form trống, không tải dữ liệu cũ
                 const result = {
                     headers: currentTableName === 'Báo cáo MKT' ? headerMkt : headerSale,
                     data: []
@@ -674,11 +678,12 @@
         }
 
         function populateEmployeeDatalist() {
+            // Sắp xếp danh sách nhân viên theo bảng chữ cái tiếng Việt
             appData.employeeList.sort((a, b) => a.localeCompare(b, 'vi'));
             employeeDatalist.innerHTML = appData.employeeList.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
         }
-
-        // ===== START: CODE ĐÃ SỬA (Cập nhật hàm initializeApp thành async) =====
+        
+        // ===== START: CODE ĐÃ SỬA (Cập nhật hàm initializeApp để gọi API trước) =====
         async function initializeApp() {
             const urlParams = new URLSearchParams(window.location.search);
             userEmail = urlParams.get('email');
@@ -691,13 +696,13 @@
                 return;
             }
             
-            // Tải danh sách nhân viên trước
+            // BƯỚC 1: Gọi API để lấy danh sách nhân viên trước tiên.
             appData.employeeList = await fetchEmployeeList();
             
-            // Sau khi có danh sách nhân viên, mới populate datalist
+            // BƯỚC 2: Sau khi có danh sách, nạp nó vào thẻ datalist.
             populateEmployeeDatalist();
             
-            // Tiếp tục tải dữ liệu báo cáo
+            // BƯỚC 3: Tiếp tục tải cấu trúc bảng và hiển thị dòng đầu tiên.
             await fetchAndPopulateInitialData();
 
             updateStatus('Ứng dụng đã sẵn sàng.');
