@@ -290,13 +290,18 @@
     <script>
         // ===== CONFIG =====
         const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPV-zFzyw7eA6isg44DIuDfNFQVaEH4cS5KIseh70DvTiJ6maRK_ItX1kkhMqqRkpU/exec';
+        // ===== START: CODE ĐÃ SỬA (Thêm URL API nhân sự) =====
+        const EMPLOYEE_API_URL = 'https://n-api-rouge.vercel.app/sheet/getSheets?rangeSheet=A:K&sheetName=Nh%C3%A2n%20s%E1%BB%B1&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54';
+        // ===== END: CODE ĐÃ SỬA =====
 
         // ===== APP STATE =====
         let appData = {
-            employeeList: ["Trần Thị Ngọc Ánh", "Dương Thị Hạnh", "Dương Đức Mạnh", "Trần Thị Hồng Nhung", "Bùi Thị Thu Huyền", "Nguyễn Duy Đức", "Nguyễn Thị Thảo", "Đặng Thị Nga", "Phạm Thị Yến", "Phạm Thị Lệ", "Nguyễn Thị Ánh Nguyệt", "Đinh Thị Hoài Thư", "Nguyễn Mỹ Duyên", "Phạm Văn Đạt", "Nguyễn Anh Điệp", "Nguyễn Tiến Mạnh", "Giang Kiều Duyên", "Hoàng Thị Uyên", "Hoàng Thảo Nguyên", "Phạm Thị Huyền Trang", "Nguyễn Mạnh Tú", "Phan Thu Hương", "Trần Uy Vũ", "Nguyễn Thị Ánh Nguyệt 1", "Hồ Thanh Tiện", "Lê Nguyễn Mai Khanh", "Trần Thị Mỹ Vân", "Lê Thị Diễm Hằng", "Nguyễn Trung Luận", "Lê Hải Huyền Vy", "Trịnh Ngọc Thanh Phương", "Nguyễn Thị Lan Anh", "Nguyễn Thị Thanh Tuyền", "Nguyễn Thị Lan Anh 2", "Thái Thị Kim Chi", "Đỗ Thúy Hiền", "Nguyễn Thị Mỹ Uyên", "Mã Tuyết Nhi", "Nguyễn Thị Dương", "Trần Ngọc Kim Thùy", "Nguyễn Thùy Trang", "Vũ Thị Phương Thanh", "Phan Nhân", "Trang Trọng Tín", "Nguyễn Thị Thu Trang", "Nguyễn Tuyết Nhi", "Trần Thị Kim Anh", "Phạm Hải Yến", "Trần Thị Nhung", "Lê Ngọc Đài Trang", "Đỗ Thị Thu Hằng", "Mai Thị Lý", "Khổng Thị Ngọc"],
-            shiftList: ["Hết ca", "Cuối ca"],
-            productList: ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Nám DR Hancy", "Kẹo Táo", "Gel Xương Khớp"],
+            // ===== START: CODE ĐÃ SỬA (Khởi tạo employeeList rỗng và cập nhật các list khác) =====
+            employeeList: [],
+            shiftList: ["Hết ca", "Giữa ca", "Cuối ca"],
+            productList: ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Nám DR Hancy", "Kẹo Táo", "Gel Xương Khớp", "Gel XK Thái", "Gel XK Phi"],
             marketList: ["Nhật Bản", "Hàn Quốc", "Canada", "US", "Úc", "Anh"],
+            // ===== END: CODE ĐÃ SỬA =====
         };
         let tableHeaders = [];
         let userEmail = '';
@@ -350,6 +355,45 @@
 
         // ===== CORE LOGIC =====
 
+        // ===== START: CODE ĐÃ SỬA (Thêm hàm mới để lấy danh sách nhân sự) =====
+        async function fetchEmployeeList() {
+            updateStatus('Đang tải danh sách nhân viên MKT...');
+            try {
+                const response = await fetch(EMPLOYEE_API_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const result = await response.json();
+                const data = result.data;
+
+                if (!data || data.length < 1) {
+                    throw new Error("API không trả về dữ liệu nhân sự.");
+                }
+
+                const headers = data[0];
+                const nameIndex = headers.indexOf("Họ và Tên");
+                const departmentIndex = headers.indexOf("Bộ phận");
+
+                if (nameIndex === -1 || departmentIndex === -1) {
+                    throw new Error("Không tìm thấy cột 'Họ và Tên' hoặc 'Bộ phận' trong dữ liệu.");
+                }
+
+                const mktEmployees = data
+                    .slice(1) // Bỏ qua dòng header
+                    .filter(row => row[departmentIndex] === "MKT") // Lọc theo bộ phận MKT
+                    .map(row => row[nameIndex]); // Chỉ lấy tên
+
+                updateStatus(`Đã tải thành công ${mktEmployees.length} nhân viên MKT.`);
+                return mktEmployees;
+
+            } catch (error) {
+                console.error("Lỗi khi tải danh sách nhân viên:", error);
+                updateStatus(`Lỗi khi tải danh sách nhân viên: ${error.message}`, true);
+                return []; // Trả về mảng rỗng nếu có lỗi
+            }
+        }
+        // ===== END: CODE ĐÃ SỬA =====
+
         function renderTable(headers, data) {
             tableHeaders = headers;
             const thead = table.tHead || table.createTHead();
@@ -384,11 +428,9 @@
             const row = document.createElement('tr');
             row.dataset.rowId = `row${rowCounter}`;
             row.dataset.isNew = isNew.toString();
-            // ===== START: CODE ĐÃ SỬA (Thêm cờ 'dirty' để theo dõi thay đổi) =====
             if (!isNew) {
-                row.dataset.isDirty = 'false'; // Dòng cũ ban đầu chưa bị thay đổi
+                row.dataset.isDirty = 'false';
             }
-            // ===== END: CODE ĐÃ SỬA =====
 
             const actionCell = row.insertCell();
             actionCell.className = 'action-buttons';
@@ -482,16 +524,13 @@
             document.querySelectorAll('.error-cell').forEach(cell => cell.classList.remove('error-cell'));
             let isValid = true;
             const rowsToSubmit = tableBody.querySelectorAll('tr:not([data-marked-for-deletion="true"])');
-            const rowsToDelete = tableBody.querySelectorAll('tr[data-marked-for-deletion="true"]');
 
-            // ===== START: CODE ĐÃ SỬA (Sửa lại logic kiểm tra) =====
             const changedRows = Array.from(tableBody.querySelectorAll('tr')).filter(row => row.dataset.isNew === 'true' || row.dataset.isDirty === 'true' || row.dataset.markedForDeletion === 'true');
 
             if (changedRows.length === 0) {
                 showResponseMessage('Không có thay đổi nào để gửi.', false);
                 return false;
             }
-            // ===== END: CODE ĐÃ SỬA =====
 
             rowsToSubmit.forEach(row => {
                 ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường'].forEach(fieldName => {
@@ -550,9 +589,7 @@
                         action: 'create',
                         data: actionData
                     };
-                    // ===== START: CODE ĐÃ SỬA (Chỉ update dòng đã thay đổi) =====
                 } else if (row.dataset.isDirty === 'true') {
-                    // ===== END: CODE ĐÃ SỬA =====
                     payload = {
                         tableName: currentTableName,
                         action: 'update',
@@ -571,7 +608,7 @@
                             if (!result.success) {
                                 throw new Error(result.message || 'Một yêu cầu thất bại.');
                             }
-                            return { ...result, originalRow: row }; // Trả về row để xử lý sau
+                            return { ...result, originalRow: row };
                         });
                     apiPromises.push(promise);
                 }
@@ -588,19 +625,17 @@
                 const results = await Promise.all(apiPromises);
                 showResponseMessage(`Thành công! Đã xử lý ${results.length} thay đổi.`, true);
 
-                // ===== START: CODE ĐÃ SỬA (Cập nhật giao diện sau khi thành công) =====
                 results.forEach(result => {
                     const row = result.originalRow;
                     if (row.dataset.markedForDeletion === 'true') {
-                        row.remove(); // Xóa dòng khỏi DOM
+                        row.remove();
                     } else if (row.dataset.isNew === 'true') {
-                        row.dataset.isNew = 'false'; // Chuyển thành dòng cũ
-                        row.dataset.isDirty = 'false'; // Reset trạng thái
+                        row.dataset.isNew = 'false';
+                        row.dataset.isDirty = 'false';
                     } else if (row.dataset.isDirty === 'true') {
-                        row.dataset.isDirty = 'false'; // Reset trạng thái
+                        row.dataset.isDirty = 'false';
                     }
                 });
-                // ===== END: CODE ĐÃ SỬA =====
 
             } catch (error) {
                 console.error('Lỗi khi gửi dữ liệu:', error);
@@ -620,62 +655,12 @@
 
             try {
                 const headerMkt = [
-                    "id",
-                    "Tên",
-                    "Email",
-                    "Ngày",
-                    "ca",
-                    "Sản_phẩm",
-                    "Thị_trường",
-                    "page",
-                    "TKQC",
-                    "CPQC",
-                    "Via_log",
-                    "Số_Mess_Cmt",
-                    "Số đơn",
-                    "Doanh số",
-                    "Team",
-                    "id_NS",
-                    "Doanh số đi",
-                    "Số đơn hoàn hủy",
-                    "DS chốt",
-                    "DS sau hoàn hủy",
-                    "Số đơn hoàn hủy",
-                    "Doanh số sau ship",
-                    "Doanh số TC",
-                    "KPIs",
-                    "CPQC theo TKQC",
-                    "Báo cáo theo Page",
-                    "Trạng thái",
-                    "Cảnh báo"
+                    "id", "Tên", "Email", "Ngày", "ca", "Sản_phẩm", "Thị_trường", "page", "TKQC", "CPQC", "Via_log", "Số_Mess_Cmt", "Số đơn", "Doanh số", "Team", "id_NS", "Doanh số đi", "Số đơn hoàn hủy", "DS chốt", "DS sau hoàn hủy", "Số đơn hoàn hủy", "Doanh số sau ship", "Doanh số TC", "KPIs", "CPQC theo TKQC", "Báo cáo theo Page", "Trạng thái", "Cảnh báo"
                 ]
                 const headerSale = [
-                    "id",
-                    "Email",
-                    "Tên",
-                    "Ngày",
-                    "Ca",
-                    "Sản phẩm",
-                    "Thị trường",
-                    "Số Mess",
-                    "Phản hồi",
-                    "Đơn Mess",
-                    "Doanh số Mess",
-                    "id số mess",
-                    "id phản hồi",
-                    "Team",
-                    "Trạng thái",
-                    "Chi nhánh",
-                    "id_NS",
-                    "Doanh số đi",
-                    "Số đơn Hoàn huỷ",
-                    "Doanh số hoàn huỷ",
-                    "Số đơn thành công",
-                    "Doanh số thành công",
-                    "Khách mới",
-                    "Khách cũ",
-                    "Bán chéo"
+                    "id", "Email", "Tên", "Ngày", "Ca", "Sản phẩm", "Thị trường", "Số Mess", "Phản hồi", "Đơn Mess", "Doanh số Mess", "id số mess", "id phản hồi", "Team", "Trạng thái", "Chi nhánh", "id_NS", "Doanh số đi", "Số đơn Hoàn huỷ", "Doanh số hoàn huỷ", "Số đơn thành công", "Doanh số thành công", "Khách mới", "Khách cũ", "Bán chéo"
                 ]
+                // Giả lập không có dữ liệu ban đầu để bắt đầu với form trống
                 const result = {
                     headers: currentTableName === 'Báo cáo MKT' ? headerMkt : headerSale,
                     data: []
@@ -693,6 +678,7 @@
             employeeDatalist.innerHTML = appData.employeeList.map(item => `<option value="${escapeHtml(item)}"></option>`).join('');
         }
 
+        // ===== START: CODE ĐÃ SỬA (Cập nhật hàm initializeApp thành async) =====
         async function initializeApp() {
             const urlParams = new URLSearchParams(window.location.search);
             userEmail = urlParams.get('email');
@@ -704,31 +690,36 @@
                 updateStatus('Lỗi: URL thiếu tham số "email" hoặc "tableName". Vui lòng kiểm tra lại.', true);
                 return;
             }
-
-            updateStatus('Ứng dụng đã sẵn sàng.');
+            
+            // Tải danh sách nhân viên trước
+            appData.employeeList = await fetchEmployeeList();
+            
+            // Sau khi có danh sách nhân viên, mới populate datalist
             populateEmployeeDatalist();
+            
+            // Tiếp tục tải dữ liệu báo cáo
             await fetchAndPopulateInitialData();
 
+            updateStatus('Ứng dụng đã sẵn sàng.');
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
 
             form.addEventListener('submit', handleSubmit);
             addRowBtn.addEventListener('click', () => addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail }, null, true));
 
-            // ===== START: CODE ĐÃ SỬA (Thêm event listener để theo dõi thay đổi) =====
             tableBody.addEventListener('input', e => {
                 if (e.target && e.target.closest) {
                     const row = e.target.closest('tr');
                     if (row && row.dataset.isNew !== 'true') {
-                        row.dataset.isDirty = 'true'; // Đánh dấu dòng đã bị thay đổi
+                        row.dataset.isDirty = 'true';
                     }
                     if (e.target.matches('[name="Số Mess"]') || e.target.matches('[name="Phản hồi"]')) {
                         formatNumberInput(e.target);
                     }
                 }
             });
-            // ===== END: CODE ĐÃ SỬA =====
         }
+        // ===== END: CODE ĐÃ SỬA =====
 
         document.addEventListener('DOMContentLoaded', initializeApp);
     </script>
