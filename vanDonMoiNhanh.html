@@ -1718,20 +1718,29 @@
                 let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (rowData['Khu vực'] || '') : ''));
                 const cellValueLower = String(cellValue).toLowerCase();
                 const colFilters = filterValues[colName];
-
-                // === LOGIC MỚI ĐƯỢC THÊM VÀO ĐÂY ===
+                
+                // THAY ĐỔI BẮT ĐẦU: Thêm logic lọc cho "Toàn số"
                 if (colFilters.state) { 
-                    const isBlank = !String(cellValue).trim(); 
-                    if (colFilters.state === 'empty' && !isBlank) {
-                        isVisible = false;
-                        break;
-                    }
-                    if (colFilters.state === 'not-empty' && isBlank) {
-                        isVisible = false;
-                        break;
+                    const valueString = String(cellValue).trim();
+                    const isBlank = !valueString; 
+                    if (colFilters.state === 'empty') {
+                        if (!isBlank) {
+                            isVisible = false;
+                            break;
+                        }
+                    } else if (colFilters.state === 'not-empty') {
+                        if (isBlank) {
+                            isVisible = false;
+                            break;
+                        }
+                    } else if (colFilters.state === 'numeric-start') {
+                         if (isBlank || !/^\d/.test(valueString)) {
+                            isVisible = false;
+                            break;
+                        }
                     }
                 }
-                // === KẾT THÚC LOGIC MỚI ===
+                // THAY ĐỔI KẾT THÚC
 
                 if (colFilters.text && !cellValueLower.includes(colFilters.text)) {
                 isVisible = false;
@@ -1782,7 +1791,6 @@
             if (index < fixedCount) th.classList.add('fixed-column'); 
             th.appendChild(document.createElement('br')); 
             
-            // === LOGIC CŨ ĐƯỢC THAY THẾ BẰNG LOGIC MỚI ===
             if (colName === "Mã Tracking") {
                 const container = document.createElement('div');
                 container.className = 'tracking-filter-container';
@@ -1796,6 +1804,9 @@
                 selectState.add(new Option('Tình trạng mã', ''));
                 selectState.add(new Option('Tất cả có mã', 'not-empty'));
                 selectState.add(new Option('Trống', 'empty'));
+                // THAY ĐỔI BẮT ĐẦU: Thêm tùy chọn "Toàn số"
+                selectState.add(new Option('Toàn số', 'numeric-start'));
+                // THAY ĐỔI KẾT THÚC
                 selectState.addEventListener('change', immediateFilter);
 
                 const inputContains = document.createElement('input');
@@ -1816,7 +1827,6 @@
 
                 container.append(selectState, inputContains, inputNotContains);
                 th.appendChild(container);
-            // === KẾT THÚC PHẦN THAY THẾ ===
 
             } else if (singleSelectFilterCols.includes(colName) && options[colName]) { 
                 const filterElement = document.createElement('select'); 
