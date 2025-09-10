@@ -777,7 +777,7 @@
     * @description URL của API để lấy dữ liệu báo cáo.
     */
     const host = 'prod'
-    const hostUse = host === 'local' ? 'http://localhost:8081' : 'https://lumi-navy.vercel.app';
+    const hostUse = host === 'local' ? 'http://localhost:8081' : 'https://n-api-gamma.vercel.app';
     const API_URL = `${hostUse}/report/generate?tableName=Báo cáo MKT`;
 
     /**
@@ -924,19 +924,15 @@
     // =================================================================================
     // --- III. TẢI VÀ XỬ LÝ DỮ LIỆU ---
     // =================================================================================
-    const EMPLOYEE_API_URL = 'https://n-api-rouge.vercel.app/sheet/getSheets?rangeSheet=A:K&sheetName=Nh%C3%A2n%20s%E1%BB%B1&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54';
-
     //lấy dữ liệu nhân viên
-    async function fetchEmployeeData() {
+    async function fetchEmployeeData(result) {
       try {
-        const response = await fetch(EMPLOYEE_API_URL);
-        const result = await response.json();
-        return result.rows
+        return result
           .filter(r => r["Họ Và Tên"] && String(r["Họ Và Tên"]).trim() !== '')
           .map(r => ({
             idnv: (r["id"] || '').trim(),
             ten: (r["Họ Và Tên"] || 'N/A').trim(),
-            email: (r["email"] || '').trim(),
+            email: (r["Email"] || '').trim(),
             team: (r["Team"] || 'N/A').trim(),
             chucVu: (r["Vị trí"] || '').trim().toLowerCase(),
             chiNhanh: (r["chi nhánh"] || 'N/A').trim(),
@@ -950,16 +946,10 @@
     async function fetchAndProcessData() {
       showLoader();
       try {
-        // const response = await fetch(API_URL);
-        // const result = await response.json();
-        //tạo promise all để fetch 2 api song song
-        const [reportResponse, employeeResponse] = await Promise.all([
-          fetch(API_URL),
-          fetchEmployeeData()
-        ]);
-        employeeData = employeeResponse;
-        const reportResponseJson = await reportResponse.json();
-        masterData = reportResponseJson.data
+        const response = await fetch(API_URL);
+        const result = await response.json();
+        employeeData = await fetchEmployeeData(result.employeeData || { rows: [] });
+        masterData = result.data
           .filter(r => r["Tên"] && String(r["Tên"]).trim() !== '')
           .map(r => {
             const dsChot = Number(r["Doanh số"]) || 0;
@@ -1023,7 +1013,6 @@
           document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${currentUser.team}`;
 
           baseDataForReport = masterData.filter(r => (r.team || '').trim() === currentUser.team);
-          console.log('Leader data:', baseDataForReport);
 
         } else {
           document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ten}`;
