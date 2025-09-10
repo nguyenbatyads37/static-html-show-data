@@ -1,4 +1,12 @@
 <!DOCTYPE html>
+<!--
+===== ENHANCED NUMBER INPUT HANDLING =====
+- Tự động format và làm sạch input số nguyên
+- Hỗ trợ các format nhập khác nhau như 300.000,777 hoặc 777,000.333
+- Validation real-time khi nhập và khi rời khỏi trường
+- Làm sạch dữ liệu trước khi gửi lên server
+- Áp dụng cho tất cả các trường: Số Mess, Phản hồi, Đơn Mess, Doanh số Mess, CPQC, Số_Mess_Cmt, Số đơn, Doanh số
+-->
 <html lang="vi">
 
 <head>
@@ -409,9 +417,44 @@
             }
         }
 
+        // ===== IMPROVED NUMBER FORMATTING =====
+        // Xử lý format số với nhiều trường hợp nhập liệu khác nhau
         function formatNumberInput(input) {
-            let value = input.value.replace(/[^0-9]/g, '');
-            input.value = value ? new Intl.NumberFormat('de-DE').format(value) : '';
+            // Lưu vị trí con trỏ
+            const cursorPosition = input.selectionStart;
+            const oldLength = input.value.length;
+            
+            // Loại bỏ tất cả ký tự không phải số (bao gồm dấu phẩy, chấm, khoảng trắng)
+            let cleanValue = input.value.replace(/[^0-9]/g, '');
+            
+            // Nếu có giá trị thì format, không thì để trống
+            let formattedValue = cleanValue ? new Intl.NumberFormat('de-DE').format(cleanValue) : '';
+            
+            // Cập nhật giá trị
+            input.value = formattedValue;
+            
+            // Tính toán vị trí con trỏ mới (để giữ vị trí sau khi format)
+            const newLength = formattedValue.length;
+            const lengthDiff = newLength - oldLength;
+            const newCursorPosition = Math.max(0, cursorPosition + lengthDiff);
+            
+            // Đặt lại vị trí con trỏ
+            input.setSelectionRange(newCursorPosition, newCursorPosition);
+        }
+        
+        // ===== VALIDATION FOR NUMBER FIELDS =====
+        // Kiểm tra và cảnh báo nếu giá trị không hợp lệ
+        function validateNumberField(input) {
+            const cleanValue = input.value.replace(/[^0-9]/g, '');
+            if (input.value && !cleanValue) {
+                input.style.borderColor = '#dc3545';
+                input.title = 'Vui lòng chỉ nhập số nguyên';
+                return false;
+            } else {
+                input.style.borderColor = '';
+                input.title = '';
+                return true;
+            }
         }
 
         function createOptions(list, selectedValue = '') {
@@ -487,9 +530,23 @@
                                     <button type="button" class="addSimilar" onclick="addSimilarRow(this)">➕</button>
                                  </div>`;
                         break;
-                    case 'Số Mess': case 'Phản hồi':
-                        const formattedValue = value ? new Intl.NumberFormat('de-DE').format(value) : '';
-                        inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue}" autocomplete="off">`;
+                    case 'Số Mess': case 'Phản hồi': case 'Đơn Mess': case 'Doanh số Mess':
+                        // ===== IMPROVED: Enhanced number input for better user experience =====
+                        const formattedValue1 = value ? new Intl.NumberFormat('de-DE').format(value) : '';
+                        inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue1}" 
+                                    placeholder="Chỉ nhập số nguyên (VD: 300000)" 
+                                    pattern="[0-9.,\\s]*" 
+                                    title="Chỉ được nhập số nguyên. Hệ thống sẽ tự động format."
+                                    autocomplete="off">`;
+                        break;
+                    case 'CPQC': case 'Số_Mess_Cmt': case 'Số đơn': case 'Doanh số':
+                        // ===== IMPROVED: Enhanced number input for better user experience =====
+                        const formattedValue2 = value ? new Intl.NumberFormat('de-DE').format(value) : '';
+                        inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue2}" 
+                                    placeholder="Chỉ nhập số nguyên (VD: 777000)" 
+                                    pattern="[0-9.,\\s]*" 
+                                    title="Chỉ được nhập số nguyên. Hệ thống sẽ tự động format."
+                                    autocomplete="off">`;
                         break;
                     case 'id':
                         inputHtml = `<input name="${header}" value="${value || crypto.randomUUID()}" readonly>`;
@@ -576,8 +633,11 @@
                 row.querySelectorAll('input, select').forEach(input => {
                     if (input.name) {
                         let value = input.value;
-                        if (['Số Mess', 'Phản hồi', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'].includes(input.name)) {
-                            value = value.replace(/\./g, '');
+                        // ===== IMPROVED: Clean number data before sending =====
+                        // Làm sạch dữ liệu số trước khi gửi - loại bỏ tất cả định dạng
+                        const numberFields = ['Số Mess', 'Phản hồi', 'Đơn Mess', 'Doanh số Mess', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'];
+                        if (numberFields.includes(input.name)) {
+                            value = value.replace(/[^0-9]/g, ''); // Chỉ giữ lại số
                         }
                         // ===== MODIFIED =====: Đảm bảo trường Email luôn được cập nhật đúng
                         // Mặc dù đã tự động điền, nhưng nếu ô Email bị ẩn, giá trị có thể không được lấy đúng
@@ -711,11 +771,22 @@
                     handleNameChange(e);
                 }
 
-                // Sự kiện định dạng số
-                if (e.target && (e.target.matches('[name="Số Mess"]') || e.target.matches('[name="Phản hồi"]') || e.target.matches('[name="CPQC"]') || e.target.matches('[name="Số_Mess_Cmt"]') || e.target.matches('[name="Số đơn"]') || e.target.matches('[name="Doanh số"]'))) {
+                // ===== IMPROVED: Enhanced number field handling =====
+                // Sự kiện định dạng số cho tất cả các trường số
+                const numberFields = ['Số Mess', 'Phản hồi', 'Đơn Mess', 'Doanh số Mess', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'];
+                if (e.target && numberFields.some(field => e.target.matches(`[name="${field}"]`))) {
                     formatNumberInput(e.target);
                 }
             });
+
+            // ===== IMPROVED: Add blur event for validation =====
+            // Validation khi user rời khỏi trường input
+            tableBody.addEventListener('blur', e => {
+                const numberFields = ['Số Mess', 'Phản hồi', 'Đơn Mess', 'Doanh số Mess', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'];
+                if (e.target && numberFields.some(field => e.target.matches(`[name="${field}"]`))) {
+                    validateNumberField(e.target);
+                }
+            }, true); // true để capture phase
         }
 
         document.addEventListener('DOMContentLoaded', initializeApp);
