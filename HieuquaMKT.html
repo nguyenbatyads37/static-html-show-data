@@ -435,7 +435,7 @@
         // =================================================================================
         // --- I. KHAI BÁO BIẾN TOÀN CỤC & CẤU HÌNH ---
         // =================================================================================
-        const API_URL = 'https://script.google.com/macros/s/AKfycbxJXU9NJ0zjXRLWRPVDlwv-b0ilYcb16yUGgaPOCQ0som3KPW8j5kPVmzLA0_6v13n2/exec?tableName=Báo cáo MKT';
+        const API_URL = 'https://lumi-navy.vercel.app/report/generate?tableName=Báo cáo MKT';
         const CHART_COLORS = ['#4CAF50', '#2196F3', '#FFC107', '#F44336', '#9C27B0', '#009688', '#FF9800', '#795548', '#607D8B', '#E91E63', '#3F51B5', '#8BC34A'];
         const MARKET_GROUPS = {
             'Châu Á': ['Hàn Quốc', 'Nhật Bản', 'VN'],
@@ -471,7 +471,6 @@
                 });
             });
 
-            // Lắng nghe sự kiện cho các checkbox "Ca" (sử dụng event delegation)
             document.getElementById('ca-filter-mkt').addEventListener('change', (e) => {
                 if (e.target.type === 'checkbox') {
                     applyTab4Filters();
@@ -494,8 +493,8 @@
                         ngay: new Date(r["Ngày"]),
                         sanPham: (r["Sản_phẩm"] || 'N/A').trim(),
                         thiTruong: (r["Thị_trường"] || 'N/A').trim(),
-                        team: (r["Team"] || 'N/A').trim(),
-                        ca: (r["ca"] || 'N/A').trim(), // SỬA LỖI: Đổi "Ca" thành "ca"
+                        team: (r["Team"] || 'Khác').trim(),
+                        ca: (r["ca"] || 'N/A').trim(),
                         cpqc: Number(r["CPQC"]) || 0,
                         soMessCmt: Number(r["Số_Mess_Cmt"]) || 0,
                         soDonThucTe: Number(r["Số đơn thực tế"]) || 0,
@@ -517,14 +516,13 @@
             const products = [...new Set(masterData.map(r => r.sanPham).filter(Boolean))].sort();
             const markets = [...new Set(masterData.map(r => r.thiTruong).filter(Boolean))].sort();
             const teams = [...new Set(masterData.map(r => r.team).filter(Boolean))].sort();
-            const cas = [...new Set(masterData.map(r => r.ca).filter(Boolean))].sort(); // LẤY DỮ LIỆU "ca"
+            const cas = [...new Set(masterData.map(r => r.ca).filter(Boolean))].sort();
 
             const createOptions = (items) => items.map(item => `<option value="${item}">${item}</option>`).join('');
             document.getElementById('product-filter-mkt').innerHTML = createOptions(products);
             document.getElementById('market-filter-mkt').innerHTML = createOptions(markets);
             document.getElementById('team-filter-mkt').innerHTML = createOptions(teams);
 
-            // TẠO CHECKBOX CHO BỘ LỌC "CA"
             const caContainer = document.getElementById('ca-filter-mkt');
             caContainer.innerHTML = cas.map(caValue => `
             <div class="checkbox-item">
@@ -575,29 +573,34 @@
             }, 50);
         }
 
+        // ---------- START: SỬA LỖI BỘ LỌC NGÀY ----------
         function getFilteredDataForMkt() {
             const startDate = new Date(document.getElementById('start-date-mkt').value);
+            startDate.setHours(0, 0, 0, 0); // Đảm bảo ngày bắt đầu tính từ 00:00:00
+
             const endDate = new Date(document.getElementById('end-date-mkt').value);
-            endDate.setHours(23, 59, 59, 999);
+            endDate.setHours(23, 59, 59, 999); // Đảm bảo ngày kết thúc tính đến hết ngày
+
             const selectedProducts = Array.from(document.getElementById('product-filter-mkt').selectedOptions).map(opt => opt.value);
             const selectedMarkets = Array.from(document.getElementById('market-filter-mkt').selectedOptions).map(opt => opt.value);
             const selectedTeams = Array.from(document.getElementById('team-filter-mkt').selectedOptions).map(opt => opt.value);
-            // LẤY GIÁ TRỊ TỪ CÁC CHECKBOX "CA" ĐÃ CHỌN
             const selectedCas = Array.from(document.querySelectorAll('.ca-filter-checkbox:checked')).map(cb => cb.value);
 
             return masterData.filter(r => {
                 const date = new Date(r.ngay);
                 if (isNaN(date)) return false;
+                
+                // Bây giờ so sánh sẽ luôn chính xác
                 const isDateOk = date >= startDate && date <= endDate;
                 const isProductOk = selectedProducts.length === 0 || selectedProducts.includes(r.sanPham);
                 const isMarketOk = selectedMarkets.length === 0 || selectedMarkets.includes(r.thiTruong);
                 const isTeamOk = selectedTeams.length === 0 || selectedTeams.includes(r.team);
-                // THÊM ĐIỀU KIỆN LỌC THEO "CA"
                 const isCaOk = selectedCas.length === 0 || selectedCas.includes(r.ca);
 
-                return isDateOk && isProductOk && isMarketOk && isTeamOk && isCaOk; // ÁP DỤNG BỘ LỌC "CA"
+                return isDateOk && isProductOk && isMarketOk && isTeamOk && isCaOk;
             });
         }
+        // ---------- END: SỬA LỖI BỘ LỌC NGÀY ----------
 
         function renderMktTable(data, prefix, showMarket) {
             const container = document.getElementById(`${prefix}-market-mkt`);
@@ -605,7 +608,7 @@
             if (!container || !tableBody) return;
             container.style.display = data.length > 0 ? 'block' : 'none';
             if (data.length === 0) {
-                const colspan = 10; // Cập nhật colspan
+                const colspan = 10;
                 tableBody.innerHTML = `<tr><td colspan="${colspan}" class="text-center">Không có dữ liệu.</td></tr>`;
                 if (prefix === 'overall-summary') container.style.display = 'block';
                 return;
@@ -665,9 +668,7 @@
 
 
         function createMktRow(productName, marketName, data, showMarket, className = '') {
-            // TÍNH TOÁN LẠI SỐ ĐƠN (TT)
             const soDonTT = data.soDonThucTe - data.soDonHoanHuyThucTe;
-
             const costPercent = data.dsSauHoanHuyThucTe > 0 ? data.cpqc / data.dsSauHoanHuyThucTe : 0;
             const avgOrderValue = soDonTT > 0 ? data.dsSauHoanHuyThucTe / soDonTT : 0;
             const cpsThucTe = soDonTT > 0 ? data.cpqc / soDonTT : 0;
@@ -740,7 +741,6 @@
             updateChart(charts.mktProductSalesChart, sortedProducts.map(([, p]) => p.dsSauHoanHuyThucTe));
             updateChart(charts.mktProductCpqcChart, sortedProducts.map(([, p]) => p.cpqc));
 
-            // CẬP NHẬT BIỂU ĐỒ VỚI SỐ LIỆU MỚI
             const cpsData = sortedProducts.map(([, p]) => {
                 const soDonTT = p.soDonThucTe - p.soDonHoanHuyThucTe;
                 return soDonTT > 0 ? p.cpqc / soDonTT : 0;
@@ -860,7 +860,10 @@
 
         function formatDate(dateObj) {
             if (!(dateObj instanceof Date) || isNaN(dateObj)) return '';
-            return `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
+             // Sửa lại để xử lý đúng timezone của người dùng
+            const userTimezoneOffset = dateObj.getTimezoneOffset() * 60000;
+            const localDate = new Date(dateObj.getTime() + userTimezoneOffset);
+            return `${String(localDate.getDate()).padStart(2, '0')}/${String(localDate.getMonth() + 1).padStart(2, '0')}/${localDate.getFullYear()}`;
         }
 
         function formatCurrency(v) {
@@ -897,6 +900,8 @@
             } = getDateRange(selection);
             document.getElementById('start-date-mkt').value = startDate.toLocaleDateString('en-CA');
             document.getElementById('end-date-mkt').value = endDate.toLocaleDateString('en-CA');
+            // Sau khi thay đổi ngày, tự động áp dụng bộ lọc
+            applyTab4Filters();
         }
 
         function getDateRange(selection) {
@@ -909,18 +914,12 @@
             switch (selection) {
                 case 'thisWeek':
                     startDate = new Date(now.setDate(now.getDate() - dayOfWeek));
-                    startDate.setHours(0, 0, 0, 0);
-                    endDate = new Date(startDate);
-                    endDate.setDate(startDate.getDate() + 6);
-                    endDate.setHours(23, 59, 59, 999);
                     break;
                 case 'lastWeek':
                     startDate = new Date();
                     startDate.setDate(new Date().getDate() - dayOfWeek - 7);
-                    startDate.setHours(0, 0, 0, 0);
                     endDate = new Date(startDate);
                     endDate.setDate(startDate.getDate() + 6);
-                    endDate.setHours(23, 59, 59, 999);
                     break;
                 case 'thisMonth':
                     startDate = new Date(currentYear, currentMonth, 1);
@@ -939,6 +938,12 @@
                     }
                     break;
             }
+            // Mặc định cho các trường hợp còn lại
+            if(selection === 'thisWeek') {
+                endDate = new Date(startDate);
+                endDate.setDate(startDate.getDate() + 6);
+            }
+
             return {
                 startDate,
                 endDate
