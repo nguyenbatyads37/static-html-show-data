@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Báo Cáo Sale LumiGlobal</title>
+    <title>Báo Cáo LumiGlobal</title>
     <style>
         :root {
             --primary-color: #0056b3;
@@ -135,7 +135,6 @@
         }
 
         .action-buttons {
-            display: flex;
             gap: 0.5rem;
             justify-content: center;
             min-width: 80px;
@@ -143,6 +142,14 @@
 
         .action-buttons button {
             padding: 0.4rem 0.6rem;
+        }
+        
+        .removeRow {
+            background-color: #6c757d;
+        }
+
+        .removeRow:hover {
+            background-color: #5a6268;
         }
 
         .add-row-btn {
@@ -207,19 +214,6 @@
             background-color: #138496;
         }
 
-        .removeRow {
-            background-color: #6c757d;
-        }
-
-        .removeRow:hover {
-            background-color: #5a6268;
-        }
-
-        tr[data-marked-for-deletion="true"] {
-            text-decoration: line-through;
-            opacity: 0.6;
-        }
-
         .input-container {
             display: flex;
             align-items: center;
@@ -282,12 +276,15 @@
 
     <script>
         // ===== CONFIG =====
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwPV-zFzyw7eA6isg44DIuDfNFQVaEH4cS5KIseh70DvTiJ6maRK_ItX1kkhMqqRkpU/exec';
+        const host = 'prod';
+        const hostUse = host === 'local' ? 'http://localhost:8081' : 'https://n-api-gamma.vercel.app';
+        const SCRIPT_URL = `${hostUse}/bulk-insert`;
+        const SPREADSHEET_ID = '1ylYT0UAcahij5UtDikKyJFWT3gIyRZsuFsYQ5aUTi2Y';
         const EMPLOYEE_API_URL = 'https://n-api-rouge.vercel.app/sheet/getSheets?rangeSheet=A:K&sheetName=Nh%C3%A2n%20s%E1%BB%B1&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54';
         
         // ===== APP STATE =====
         let appData = {
-            employeeList: [],
+            employeeDetails: [], // ===== MODIFIED =====: Lưu trữ object nhân viên chi tiết
             shiftList: ["Hết ca", "Giữa ca", "Cuối ca"],
             productList: ["Fitgum CAFE 20X", "Kem Body", "Bakuchiol Retinol", "Serum sâm", "Glutathione Collagen", "Glutathione Collagen NEW", "DG", "Nám DR Hancy", "Kẹo Táo", "Gel Xương Khớp", "Gel XK Thái", "Gel XK Phi"],
             marketList: ["Nhật Bản", "Hàn Quốc", "Canada", "US", "Úc", "Anh"],
@@ -296,8 +293,7 @@
         let userEmail = '';
         let currentTableName = '';
         let employeeNameFromUrl = '';
-        let rowCounter = 0;
-
+        
         // ===== DOM ELEMENTS =====
         const table = document.getElementById('dataTable');
         const tableBody = document.getElementById('tableBody');
@@ -324,12 +320,9 @@
 
         function getToday() {
             const today = new Date();
-            return today.toLocaleDateString('en-CA'); // YYYY-MM-DD
+            return today.toLocaleDateString('en-CA');
         }
 
-        // ===== START: SỬ DỤNG CÁC HÀM BẠN CUNG CẤP =====
-
-        // Hàm escape HTML để tránh XSS (từ code của bạn)
         function escapeHtml(unsafe) {
             if (typeof unsafe !== 'string') {
                 unsafe = String(unsafe);
@@ -341,82 +334,56 @@
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
-
-        // Phần 1: Hàm lấy danh sách nhân viên (từ code của bạn)
+        
+        // ===== MODIFIED =====: Lưu trữ chi tiết thông tin nhân viên
         async function fetchEmployeeList() {
-            updateStatus('Đang tải danh sách nhân viên MKT...');
-            
+            updateStatus('Đang tải danh sách nhân viên...');
             try {
                 const response = await fetch(EMPLOYEE_API_URL);
-
-                if (!response.ok) {
-                    throw new Error(`Lỗi HTTP! status: ${response.status}`);
-                }
-
+                if (!response.ok) throw new Error(`Lỗi HTTP! status: ${response.status}`);
                 const result = await response.json();
-                
-                // Debug: In ra cấu trúc dữ liệu để kiểm tra
-                console.log('API Response:', result);
 
-                // Kiểm tra cấu trúc dữ liệu linh hoạt hơn
                 let headers, rowObjects;
-                
                 if (result.headers && result.rows) {
-                    // Trường hợp API trả về {headers: [], rows: []}
                     headers = result.headers;
                     rowObjects = result.rows;
                 } else if (Array.isArray(result)) {
-                    // Trường hợp API trả về mảng trực tiếp
                     rowObjects = result;
-                    // Lấy headers từ object đầu tiên
                     headers = rowObjects.length > 0 ? Object.keys(rowObjects[0]) : [];
                 } else {
                     throw new Error("Cấu trúc dữ liệu API không được hỗ trợ");
                 }
 
-                console.log('Headers:', headers);
-                console.log('Sample row:', rowObjects[0]);
+                // Helper để tìm tên cột một cách linh hoạt
+                const findHeader = (keywords) => headers.find(h => keywords.every(kw => h.toLowerCase().includes(kw))) || null;
 
-                // Kiểm tra tên cột linh hoạt hơn
-                const nameColumn = headers.find(h => 
-                    h.toLowerCase().includes('họ') && h.toLowerCase().includes('tên')
-                ) || 'Họ và Tên' || 'Họ Và Tên';
-                
-                const departmentColumn = headers.find(h => 
-                    h.toLowerCase().includes('bộ') && h.toLowerCase().includes('phận')
-                ) || 'Bộ phận';
+                const nameCol = findHeader(['họ', 'tên']) || 'Họ và Tên';
+                const deptCol = findHeader(['bộ', 'phận']) || 'Bộ phận';
+                const emailCol = findHeader(['email']) || 'email';
+                const teamCol = findHeader(['team']) || 'Team';
+                const idCol = findHeader(['id']) || 'id';
+                const branchCol = findHeader(['chi nhánh']) || 'chi nhánh';
 
-                console.log('Name column:', nameColumn);
-                console.log('Department column:', departmentColumn);
+                const targetDept = currentTableName === 'Báo cáo MKT' ? 'MKT' : 'Sale';
 
-                if (!headers.includes(nameColumn)) {
-                    throw new Error(`Không tìm thấy cột tên. Các cột có sẵn: ${headers.join(', ')}`);
-                }
-
-                if (!headers.includes(departmentColumn)) {
-                    throw new Error(`Không tìm thấy cột bộ phận. Các cột có sẵn: ${headers.join(', ')}`);
-                }
-
-                // Lọc nhân viên MKT
-                const mktEmployees = rowObjects
+                const filteredEmployees = rowObjects
                     .filter(row => {
-                        const dept = row[departmentColumn];
-                        const name = row[nameColumn];
-                        
-                        // Kiểm tra bộ phận (không phân biệt hoa thường)
-                        const isMKT = dept && dept.toString().toUpperCase().includes('MKT');
-                        const hasName = name && name.toString().trim() !== '';
-                        
-                        return isMKT && hasName;
+                        const dept = row[deptCol];
+                        const name = row[nameCol];
+                        return dept && dept.toString().toUpperCase().includes(targetDept.toUpperCase()) && name && name.toString().trim() !== '';
                     })
-                    .map(row => row[nameColumn].toString().trim())
-                    // Loại bỏ trùng lặp
-                    .filter((name, index, array) => array.indexOf(name) === index);
-
-                updateStatus(`Đã tải thành công ${mktEmployees.length} nhân viên MKT.`);
-                console.log('MKT Employees:', mktEmployees);
+                    .map(row => ({
+                        // Chuẩn hóa tên thuộc tính để dễ sử dụng
+                        name: row[nameCol]?.toString().trim(),
+                        email: row[emailCol]?.toString().trim() || '',
+                        team: row[teamCol]?.toString().trim() || '',
+                        id_ns: row[idCol]?.toString().trim() || '',
+                        branch: row[branchCol]?.toString().trim() || ''
+                    }))
+                    .filter((emp, idx, arr) => arr.findIndex(e => e.name === emp.name) === idx); // Loại bỏ tên trùng lặp
                 
-                return mktEmployees;
+                updateStatus(`Đã tải thành công ${filteredEmployees.length} nhân viên ${targetDept}.`);
+                return filteredEmployees;
 
             } catch (error) {
                 console.error("Lỗi chi tiết:", error);
@@ -424,43 +391,23 @@
                 return [];
             }
         }
-
-        // Phần 2: Hiển thị danh sách trong dropdown (từ code của bạn)
+        
+        // ===== MODIFIED =====: Tạo datalist từ danh sách chi tiết
         function populateEmployeeDatalist() {
             try {
-                // Kiểm tra xem element datalist có tồn tại không
-                if (!employeeDatalist) {
-                    console.error('Không tìm thấy element với id "employee-datalist"');
-                    return;
-                }
-
-                // Kiểm tra dữ liệu
-                if (!appData.employeeList || !Array.isArray(appData.employeeList)) {
-                    console.error('appData.employeeList không hợp lệ:', appData.employeeList);
-                    return;
-                }
-
-                // Sắp xếp danh sách
-                const sortedList = [...appData.employeeList].sort((a, b) => 
-                    a.localeCompare(b, 'vi', { sensitivity: 'base' })
+                if (!employeeDatalist || !appData.employeeDetails || !Array.isArray(appData.employeeDetails)) return;
+                
+                const sortedList = [...appData.employeeDetails].sort((a, b) => 
+                    a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })
                 );
-
-                // Tạo HTML options
                 const optionsHtml = sortedList
-                    .map(name => `<option value="${escapeHtml(name)}"></option>`)
+                    .map(emp => `<option value="${escapeHtml(emp.name)}"></option>`)
                     .join('');
-
-                // Cập nhật datalist
                 employeeDatalist.innerHTML = optionsHtml;
-                
-                console.log(`Đã tạo ${sortedList.length} options cho datalist`);
-                
             } catch (error) {
                 console.error('Lỗi khi tạo datalist:', error);
             }
         }
-
-        // ===== END: KẾT THÚC PHẦN CODE BẠN CUNG CẤP =====
 
         function formatNumberInput(input) {
             let value = input.value.replace(/[^0-9]/g, '');
@@ -471,17 +418,18 @@
             return list.map(item => `<option value="${escapeHtml(item)}" ${item === selectedValue ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
         }
 
-        function renderTable(headers, data) {
+        function renderTable(headers) {
             tableHeaders = headers;
             const thead = table.tHead || table.createTHead();
             thead.innerHTML = '';
             tableBody.innerHTML = '';
 
             const headerRow = thead.insertRow();
+            
             const actionTh = document.createElement('th');
             actionTh.textContent = 'Hành động';
             headerRow.appendChild(actionTh);
-
+            
             headers.forEach(header => {
                 const th = document.createElement('th');
                 th.textContent = header;
@@ -490,29 +438,18 @@
                 }
                 headerRow.appendChild(th);
             });
-
-            if (data && data.length > 0) {
-                updateStatus(`Tìm thấy ${data.length} bản ghi. Đang hiển thị...`);
-                data.forEach(rowData => addNewRow(rowData, null, false));
-            } else {
-                updateStatus(`Không tìm thấy báo cáo nào. Bắt đầu với một dòng mới.`);
-                addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail }, null, true);
-            }
+            
+            updateStatus(`Bắt đầu với một dòng mới.`);
+            addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail });
         }
 
-        function addNewRow(data = {}, insertAfterElement = null, isNew = true) {
-            rowCounter++;
+        function addNewRow(data = {}, insertAfterElement = null) {
             const row = document.createElement('tr');
-            row.dataset.rowId = `row${rowCounter}`;
-            row.dataset.isNew = isNew.toString();
-            if (!isNew) {
-                row.dataset.isDirty = 'false';
-            }
 
             const actionCell = row.insertCell();
             actionCell.className = 'action-buttons';
             actionCell.innerHTML = `<button type="button" class="removeRow" onclick="removeRow(this)">❌</button>`;
-
+            
             tableHeaders.forEach(header => {
                 const cell = row.insertCell();
                 const value = data[header] || '';
@@ -520,30 +457,24 @@
                 if (['id', 'id phản hồi', 'id số mess', 'team', 'id_ns', 'trạng thái', 'chi nhánh', 'doanh số đi', 'số đơn hoàn huỷ', 'doanh số hoàn huỷ', 'số đơn thành công', 'doanh số thành công', 'khách mới', 'khách cũ', 'bán chéo', 'bán chéo team', 'id_ns', 'doanh số đi', 'số đơn hoàn hủy', 'ds chốt', 'ds sau hoàn hủy', 'số đơn sau hoàn hủy', 'doanh số sau ship', 'doanh số tc', 'kpis', 'cpqc theo tkqc', 'báo cáo theo page', 'trạng thái', 'cảnh báo'].includes(header.toLowerCase())) {
                     cell.classList.add('hidden-col');
                 }
+                
                 switch (header) {
                     case 'Ngày':
                         inputHtml = `<input name="${header}" type="date" value="${value ? new Date(value).toLocaleDateString('en-CA') : getToday()}">`;
                         break;
-                    case 'Ca':
-                    case 'ca':
+                    case 'Ca': case 'ca':
                         inputHtml = `<select name="${header}"><option value="">-- Chọn ca --</option>${createOptions(appData.shiftList, value)}</select>`;
                         break;
-                    case 'Sản phẩm':
-                    case 'Sản_phẩm':
+                    case 'Sản phẩm': case 'Sản_phẩm':
                         inputHtml = `<select name="${header}"><option value="">-- Chọn sản phẩm --</option>${createOptions(appData.productList, value)}</select>`;
                         break;
-                    case 'Thị trường':
-                    case 'Thị_trường':
+                    case 'Thị trường': case 'Thị_trường':
                         inputHtml = `<div class="input-container">
                                     <select name="${header}"><option value="">-- Chọn thị trường --</option>${createOptions(appData.marketList, value)}</select>
                                     <button type="button" class="addSimilar" onclick="addSimilarRow(this)">➕</button>
                                  </div>`;
                         break;
-                    case 'Số Mess':
-                        const formattedValue1 = value ? new Intl.NumberFormat('de-DE').format(value) : '';
-                        inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue1}" autocomplete="off">`;
-                        break;
-                    case 'Phản hồi':
+                    case 'Số Mess': case 'Phản hồi':
                         const formattedValue = value ? new Intl.NumberFormat('de-DE').format(value) : '';
                         inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue}" autocomplete="off">`;
                         break;
@@ -567,22 +498,11 @@
 
         window.removeRow = (button) => {
             const row = button.closest('tr');
-            if (row.dataset.isNew === 'true') {
-                row.remove();
+            if (tableBody.rows.length <= 1) {
+                alert('Bạn không thể xóa dòng cuối cùng.');
                 return;
             }
-            row.dataset.markedForDeletion = 'true';
-            row.querySelectorAll('input, select, .addSimilar').forEach(el => el.disabled = true);
-            button.textContent = '↩️';
-            button.onclick = () => undoRemove(button);
-        }
-
-        window.undoRemove = (button) => {
-            const row = button.closest('tr');
-            delete row.dataset.markedForDeletion;
-            row.querySelectorAll('input, select, .addSimilar').forEach(el => el.disabled = false);
-            button.textContent = '❌';
-            button.onclick = () => removeRow(button);
+            row.remove();
         }
 
         window.addSimilarRow = (button) => {
@@ -590,30 +510,28 @@
             const data = {};
             currentRow.querySelectorAll('input, select').forEach(input => {
                 const name = input.name;
-                if (name && name !== 'id' && name !== 'Số Mess' && name !== 'Phản hồi') {
+                if (name && name !== 'id' && name !== 'Số Mess' && name !== 'Phản hồi' && name !== 'Số_Mess_Cmt' && name !== 'CPQC' && name !== 'Số đơn' && name !== 'Doanh số') {
                     data[name] = input.value;
                 }
             });
-            addNewRow(data, currentRow, true);
+            addNewRow(data, currentRow);
         }
 
         function validateForm() {
             document.querySelectorAll('.error-cell').forEach(cell => cell.classList.remove('error-cell'));
             let isValid = true;
-            const rowsToSubmit = tableBody.querySelectorAll('tr:not([data-marked-for-deletion="true"])');
-
-            const changedRows = Array.from(tableBody.querySelectorAll('tr')).filter(row => row.dataset.isNew === 'true' || row.dataset.isDirty === 'true' || row.dataset.markedForDeletion === 'true');
-
-            if (changedRows.length === 0) {
-                showResponseMessage('Không có thay đổi nào để gửi.', false);
+            const rowsToSubmit = tableBody.querySelectorAll('tr');
+            
+            if (rowsToSubmit.length === 0) {
+                 showResponseMessage('Không có dữ liệu để gửi.', false);
                 return false;
             }
 
             rowsToSubmit.forEach(row => {
-                ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường'].forEach(fieldName => {
-                    const headerExists = Array.from(table.tHead.querySelectorAll('th')).some(th => th.textContent === fieldName);
+                ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường', 'ca', 'Sản_phẩm', 'Thị_trường'].forEach(fieldName => {
+                    const headerExists = tableHeaders.includes(fieldName);
                     if (headerExists) {
-                        const input = row.querySelector(`[name="${fieldName.replace(' ', '_')}"]`) || row.querySelector(`[name="${fieldName}"]`);
+                        const input = row.querySelector(`[name="${fieldName}"]`);
                         if (input && !input.value.trim()) {
                             isValid = false;
                             input.closest('td').classList.add('error-cell');
@@ -621,7 +539,6 @@
                     }
                 });
             });
-
 
             if (!isValid) {
                 showResponseMessage('Lỗi: Vui lòng điền đầy đủ thông tin cho các ô màu đỏ.', false);
@@ -640,81 +557,59 @@
             submitBtn.textContent = 'Đang gửi...';
             updateStatus('Bắt đầu quá trình gửi dữ liệu...');
 
-            const apiPromises = [];
-
+            const rowsData = [];
             tableBody.querySelectorAll('tr').forEach(row => {
-                let payload = null;
-                const actionData = {};
-                row.querySelectorAll('input, select').forEach(input => {
+                const rowObject = {};
+                 row.querySelectorAll('input, select').forEach(input => {
                     if (input.name) {
                         let value = input.value;
-                        if (input.name === 'Số Mess' || input.name === 'Phản hồi') {
-                            value = value.replace(/\./g, '');
+                        if (['Số Mess', 'Phản hồi', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'].includes(input.name)) {
+                           value = value.replace(/\./g, '');
                         }
-                        actionData[input.name] = value;
+                        // ===== MODIFIED =====: Đảm bảo trường Email luôn được cập nhật đúng
+                        // Mặc dù đã tự động điền, nhưng nếu ô Email bị ẩn, giá trị có thể không được lấy đúng
+                        // Cách làm hiện tại đã đúng vì nó lặp qua tất cả input, kể cả input ẩn.
+                        rowObject[input.name] = value;
                     }
                 });
-                actionData['Email'] = userEmail;
-
-                if (row.dataset.markedForDeletion === 'true') {
-                    payload = {
-                        tableName: currentTableName,
-                        action: 'delete',
-                        data: { id: actionData.id }
-                    };
-                } else if (row.dataset.isNew === 'true') {
-                    payload = {
-                        tableName: currentTableName,
-                        action: 'create',
-                        data: actionData
-                    };
-                } else if (row.dataset.isDirty === 'true') {
-                    payload = {
-                        tableName: currentTableName,
-                        action: 'update',
-                        data: actionData
-                    };
+                // Gán lại email từ biến toàn cục userEmail nếu ô Email trống (dự phòng)
+                if (!rowObject['Email']) {
+                    rowObject['Email'] = userEmail;
                 }
-
-                if (payload) {
-                    const promise = fetch(SCRIPT_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                        body: JSON.stringify(payload)
-                    })
-                        .then(res => res.json())
-                        .then(result => {
-                            if (!result.success) {
-                                throw new Error(result.message || 'Một yêu cầu thất bại.');
-                            }
-                            return { ...result, originalRow: row };
-                        });
-                    apiPromises.push(promise);
-                }
+                rowsData.push(rowObject);
             });
-
-            if (apiPromises.length === 0) {
-                showResponseMessage('Không có thay đổi nào để gửi.', true);
-                submitBtn.disabled = false;
-                submitBtn.textContent = '🚀 Gửi báo cáo';
-                return;
-            }
-
+            
+            const payload = {
+                sheetName: currentTableName,
+                spreadsheetId: SPREADSHEET_ID,
+                fields: tableHeaders,
+                rows: rowsData,
+                settings: {
+                    checkDuplicates: true,
+                    validateData: true,
+                    returnDetails: true
+                }
+            };
+            
             try {
-                const results = await Promise.all(apiPromises);
-                showResponseMessage(`Thành công! Đã xử lý ${results.length} thay đổi.`, true);
-
-                results.forEach(result => {
-                    const row = result.originalRow;
-                    if (row.dataset.markedForDeletion === 'true') {
-                        row.remove();
-                    } else if (row.dataset.isNew === 'true') {
-                        row.dataset.isNew = 'false';
-                        row.dataset.isDirty = 'false';
-                    } else if (row.dataset.isDirty === 'true') {
-                        row.dataset.isDirty = 'false';
-                    }
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
+                
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || `Lỗi HTTP: ${response.status}`);
+                }
+                
+                const summary = result.summary;
+                showResponseMessage(`Thành công! Đã thêm ${summary.added} dòng. Trùng lặp: ${summary.duplicates}. Lỗi: ${summary.validationErrors}.`, true);
+                updateStatus('Gửi báo cáo thành công.');
+                
+                tableBody.innerHTML = '';
+                addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail });
 
             } catch (error) {
                 console.error('Lỗi khi gửi dữ liệu:', error);
@@ -725,28 +620,54 @@
                 submitBtn.textContent = '🚀 Gửi báo cáo';
             }
         }
+        
+        async function fetchAndRenderTableStructure() {
+            updateStatus(`Đang chuẩn bị bảng '${currentTableName}'...`);
+             try {
+                const headerMkt = ["id", "Tên", "Email", "Ngày", "ca", "Sản_phẩm", "Thị_trường", "page", "TKQC", "CPQC", "Via_log", "Số_Mess_Cmt", "Số đơn", "Doanh số", "Team", "id_NS", "Doanh số đi", "Số đơn hoàn hủy", "DS chốt", "DS sau hoàn hủy", "Số đơn hoàn hủy", "Doanh số sau ship", "Doanh số TC", "KPIs", "CPQC theo TKQC", "Báo cáo theo Page", "Trạng thái", "Cảnh báo"];
+                const headerSale = ["id", "Email", "Tên", "Ngày", "Ca", "Sản phẩm", "Thị trường", "Số Mess", "Phản hồi", "Đơn Mess", "Doanh số Mess", "id số mess", "id phản hồi", "Team", "Trạng thái", "Chi nhánh", "id_NS", "Doanh số đi", "Số đơn Hoàn huỷ", "Doanh số hoàn huỷ", "Số đơn thành công", "Doanh số thành công", "Khách mới", "Khách cũ", "Bán chéo"];
+                
+                const headersForTable = currentTableName === 'Báo cáo MKT' ? headerMkt : headerSale;
+                renderTable(headersForTable);
 
-        async function fetchAndPopulateInitialData() {
-            updateStatus(`Đang tải dữ liệu từ sheet '${currentTableName}'...`);
-            try {
-                const headerMkt = [
-                    "id", "Tên", "Email", "Ngày", "ca", "Sản_phẩm", "Thị_trường", "page", "TKQC", "CPQC", "Via_log", "Số_Mess_Cmt", "Số đơn", "Doanh số", "Team", "id_NS", "Doanh số đi", "Số đơn hoàn hủy", "DS chốt", "DS sau hoàn hủy", "Số đơn hoàn hủy", "Doanh số sau ship", "Doanh số TC", "KPIs", "CPQC theo TKQC", "Báo cáo theo Page", "Trạng thái", "Cảnh báo"
-                ];
-                const headerSale = [
-                    "id", "Email", "Tên", "Ngày", "Ca", "Sản phẩm", "Thị trường", "Số Mess", "Phản hồi", "Đơn Mess", "Doanh số Mess", "id số mess", "id phản hồi", "Team", "Trạng thái", "Chi nhánh", "id_NS", "Doanh số đi", "Số đơn Hoàn huỷ", "Doanh số hoàn huỷ", "Số đơn thành công", "Doanh số thành công", "Khách mới", "Khách cũ", "Bán chéo"
-                ];
-                const result = {
-                    headers: currentTableName === 'Báo cáo MKT' ? headerMkt : headerSale,
-                    data: []
-                }
-                renderTable(result.headers, result.data);
             } catch (error) {
                 updateStatus(`Không thể tải cấu trúc bảng. Lỗi: ${error.message}`, true);
                 tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Lỗi tải dữ liệu. Vui lòng kiểm tra lại URL hoặc liên hệ quản trị viên.</td></tr>`;
             }
         }
+
+        // ===== NEW FUNCTION =====
+        function handleNameChange(event) {
+            const nameInput = event.target;
+            const selectedName = nameInput.value;
+            const currentRow = nameInput.closest('tr');
+
+            if (!currentRow) return;
+
+            const employee = appData.employeeDetails.find(emp => emp.name === selectedName);
+
+            // Tìm các ô input trong hàng hiện tại
+            const emailInput = currentRow.querySelector('[name="Email"]');
+            const teamInput = currentRow.querySelector('[name="Team"]');
+            const idNsInput = currentRow.querySelector('[name="id_NS"]');
+            const branchInput = currentRow.querySelector('[name="Chi nhánh"]');
+
+            if (employee) {
+                // Nếu tìm thấy nhân viên, cập nhật các trường
+                if (emailInput) emailInput.value = employee.email || '';
+                if (teamInput) teamInput.value = employee.team || '';
+                if (idNsInput) idNsInput.value = employee.id_ns || '';
+                if (branchInput) branchInput.value = employee.branch || '';
+            } else {
+                // Nếu không tìm thấy (ví dụ: người dùng xóa tên), xóa các trường liên quan
+                // Giữ lại email mặc định của người dùng đang đăng nhập
+                if (emailInput) emailInput.value = userEmail; 
+                if (teamInput) teamInput.value = '';
+                if (idNsInput) idNsInput.value = '';
+                if (branchInput) branchInput.value = '';
+            }
+        }
         
-        // Hàm khởi tạo chính của ứng dụng
         async function initializeApp() {
             const urlParams = new URLSearchParams(window.location.search);
             userEmail = urlParams.get('email');
@@ -759,31 +680,27 @@
                 return;
             }
             
-            // 1. Lấy danh sách nhân viên bằng hàm mới của bạn
-            appData.employeeList = await fetchEmployeeList();
-            
-            // 2. Tạo danh sách sổ xuống bằng hàm mới của bạn
+            // ===== MODIFIED =====: Gán kết quả vào employeeDetails
+            appData.employeeDetails = await fetchEmployeeList();
             populateEmployeeDatalist();
-            
-            // 3. Lấy cấu trúc bảng và hiển thị dòng đầu tiên
-            await fetchAndPopulateInitialData();
+            await fetchAndRenderTableStructure();
 
             updateStatus('Ứng dụng đã sẵn sàng.');
             addRowBtn.disabled = false;
             submitBtn.disabled = false;
 
             form.addEventListener('submit', handleSubmit);
-            addRowBtn.addEventListener('click', () => addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail }, null, true));
+            addRowBtn.addEventListener('click', () => addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail }));
+            
+             tableBody.addEventListener('input', e => {
+                // Sự kiện tự động điền thông tin nhân viên
+                if (e.target && e.target.getAttribute('name') === 'Tên') {
+                    handleNameChange(e);
+                }
 
-            tableBody.addEventListener('input', e => {
-                if (e.target && e.target.closest) {
-                    const row = e.target.closest('tr');
-                    if (row && row.dataset.isNew !== 'true') {
-                        row.dataset.isDirty = 'true';
-                    }
-                    if (e.target.matches('[name="Số Mess"]') || e.target.matches('[name="Phản hồi"]')) {
-                        formatNumberInput(e.target);
-                    }
+                // Sự kiện định dạng số
+                if (e.target && (e.target.matches('[name="Số Mess"]') || e.target.matches('[name="Phản hồi"]') || e.target.matches('[name="CPQC"]') || e.target.matches('[name="Số_Mess_Cmt"]') || e.target.matches('[name="Số đơn"]') || e.target.matches('[name="Doanh số"]'))) {
+                    formatNumberInput(e.target);
                 }
             });
         }
