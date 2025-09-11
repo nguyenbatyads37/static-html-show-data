@@ -476,139 +476,120 @@
             const hideLoader = () => loader.classList.remove('visible');
             let globalData = []; // Lưu trữ toàn bộ dữ liệu
 
-            function parseDateString(dateString) {
-                if (!dateString) return null;
-                const str = String(dateString).trim();
-                if (str.includes('-') || str.includes('T')) {
-                    const d = new Date(str);
-                    if (!isNaN(d.getTime())) return d;
-                }
-                const parts = str.match(/^(\d{1,2})[/\-](\d{1,2})[/\-](\d{4})/);
-                if (parts) {
-                    const d = new Date(Date.UTC(parseInt(parts[3], 10), parseInt(parts[2], 10) - 1, parseInt(parts[1], 10)));
-                    if (!isNaN(d.getTime())) return d;
-                }
-                if (/^\d+(\.\d+)?$/.test(str)) {
-                    const d = new Date(Date.UTC(0, 0, parseFloat(str) - 1));
-                    if (!isNaN(d.getTime())) return d;
-                }
-                return null;
-            }
-
-            function formatDateDisplay(dateObj) {
-                if (!dateObj || isNaN(dateObj.getTime())) return '';
-                const day = String(dateObj.getUTCDate()).padStart(2, '0');
-                const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0');
-                const year = dateObj.getUTCFullYear();
-                return `${day}/${month}/${year}`;
-            }
-
-            function formatDateForInputLocal(date) {
-                if (!date) return '';
-                return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-            }
+            // ===================================================================
+            // SỬA LỖI: CÁC HÀM CHUẨN HÓA VÀ XỬ LÝ DỮ LIỆU ĐA DẠNG
+            // ===================================================================
+            
+            /**
+             * Chuẩn hóa một chuỗi ngày tháng (ví dụ: dd/mm/yyyy, Excel serial) thành định dạng YYYY-MM-DD.
+             * Đây là chìa khóa để so sánh ngày tháng chính xác.
+             * @param {string | number | null} input - Giá trị ngày tháng đầu vào.
+             * @returns {string} - Chuỗi ngày tháng ở định dạng 'YYYY-MM-DD' hoặc chuỗi rỗng nếu không hợp lệ.
+             */
             function normalizeDateToYMD(input) {
-  if (!input) return '';
-  const str = String(input).trim();
+                if (!input) return '';
+                const str = String(input).trim();
 
-  // ISO / có 'T' / có '-'
-  const d1 = new Date(str);
-  if (!isNaN(d1.getTime())) {
-    const y = d1.getFullYear();
-    const m = String(d1.getMonth() + 1).padStart(2, '0');
-    const d = String(d1.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
+                // 1. Thử phân tích cú pháp các định dạng chuẩn (ISO, có 'T', có '-')
+                const d1 = new Date(str);
+                if (!isNaN(d1.getTime())) {
+                    const y = d1.getFullYear();
+                    const m = String(d1.getMonth() + 1).padStart(2, '0');
+                    const d = String(d1.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                }
 
-  // dd/mm/yyyy hoặc dd-mm-yyyy
-  const m1 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-  if (m1) {
-    const y = +m1[3];
-    const m = String(+m1[2]).padStart(2, '0');
-    const d = String(+m1[1]).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
+                // 2. Thử phân tích cú pháp định dạng dd/mm/yyyy hoặc dd-mm-yyyy
+                const m1 = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                if (m1) {
+                    const y = +m1[3];
+                    const m = String(+m1[2]).padStart(2, '0');
+                    const d = String(+m1[1]).padStart(2, '0');
+                    return `${y}-${m}-${d}`;
+                }
 
-  // serial ngày (Excel)
-  if (/^\d+(\.\d+)?$/.test(str)) {
-    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
-    const d = new Date(excelEpoch.getTime() + (parseFloat(str) * 86400000));
-    if (!isNaN(d.getTime())) {
-      const y = d.getUTCFullYear();
-      const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-      const day = String(d.getUTCDate()).padStart(2, '0');
-      return `${y}-${m}-${day}`;
-    }
-  }
+                // 3. Thử phân tích cú pháp số sê-ri ngày của Excel
+                if (/^\d+(\.\d+)?$/.test(str)) {
+                    const excelEpoch = new Date(Date.UTC(1899, 11, 30));
+                    const d = new Date(excelEpoch.getTime() + (parseFloat(str) * 86400000));
+                    if (!isNaN(d.getTime())) {
+                    const y = d.getUTCFullYear();
+                    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+                    const day = String(d.getUTCDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                    }
+                }
 
-  return '';
-}
-// Chuyển chuỗi tiền tệ (ví dụ "120.000 ₫", "500k", "1.2m") thành số (VND)
-function parseMoneyToNumber(str) {
-  if (str == null) return NaN;
-  let s = String(str).toLowerCase().trim();
+                return ''; // Trả về chuỗi rỗng nếu không thể phân tích cú pháp
+            }
 
-  // bỏ ký tự tiền tệ / dấu ngăn cách
-  s = s.replace(/[₫\s,]/g, '');
+            /**
+             * Chuyển chuỗi tiền tệ (ví dụ "120.000 ₫", "500k", "1.2m") thành số (VND).
+             * @param {string | number | null} str - Chuỗi tiền tệ cần chuyển đổi.
+             * @returns {number} - Giá trị số, hoặc NaN nếu không hợp lệ.
+             */
+            function parseMoneyToNumber(str) {
+                if (str == null) return NaN;
+                let s = String(str).toLowerCase().trim();
 
-  // hậu tố k, m, b
-  const match = s.match(/^([<>]=?|=)?\s*([0-9]*\.?[0-9]+)\s*([kmb])?$/i);
-  if (match) {
-    const num = parseFloat(match[2]);
-    const suffix = (match[3] || '').toLowerCase();
-    let mul = 1;
-    if (suffix === 'k') mul = 1_000;
-    if (suffix === 'm') mul = 1_000_000;
-    if (suffix === 'b') mul = 1_000_000_000;
-    return num * mul;
-  }
+                s = s.replace(/[₫\s,]/g, '');
 
-  // nếu không có hậu tố, cố gắng lấy chỉ-digit
-  const digits = s.replace(/[^\d.]/g, '');
-  if (digits.includes('.')) {
-    // trường hợp "100.000" thực ra là phân cách nghìn => bỏ mọi dấu chấm rồi parseInt
-    const noDots = digits.replace(/\./g, '');
-    return parseInt(noDots || '0', 10);
-  }
-  return parseInt(digits || '0', 10);
-}
+                const match = s.match(/^([<>]=?|=)?\s*([0-9]*\.?[0-9]+)\s*([kmb])?$/i);
+                if (match) {
+                    const num = parseFloat(match[2]);
+                    const suffix = (match[3] || '').toLowerCase();
+                    let mul = 1;
+                    if (suffix === 'k') mul = 1_000;
+                    if (suffix === 'm') mul = 1_000_000;
+                    if (suffix === 'b') mul = 1_000_000_000;
+                    return num * mul;
+                }
 
-// Kiểm tra một amount (number) khớp với biểu thức người dùng
-// Hỗ trợ: ">500k", ">=1m", "< 200000", "100k-300k", "=150000", "150000"
-function matchAmount(amount, exprRaw) {
-  if (isNaN(amount)) return false;
-  const expr = String(exprRaw).toLowerCase().trim().replace(/\s+/g, '');
+                const digits = s.replace(/[^\d.]/g, '');
+                if (digits.includes('.')) {
+                    const noDots = digits.replace(/\./g, '');
+                    return parseInt(noDots || '0', 10);
+                }
+                return parseInt(digits || '0', 10);
+            }
 
-  // khoảng a-b
-  const range = expr.match(/^([0-9]*\.?[0-9]+[kmb]?)-([0-9]*\.?[0-9]+[kmb]?)$/i);
-  if (range) {
-    const a = parseMoneyToNumber(range[1]);
-    const b = parseMoneyToNumber(range[2]);
-    if (isNaN(a) || isNaN(b)) return false;
-    const min = Math.min(a, b);
-    const max = Math.max(a, b);
-    return amount >= min && amount <= max;
-  }
+            /**
+             * Kiểm tra một số tiền có khớp với biểu thức lọc của người dùng hay không.
+             * Hỗ trợ: ">500k", ">=1m", "< 200000", "100k-300k", "=150000", "150000".
+             * @param {number} amount - Số tiền cần kiểm tra.
+             * @param {string} exprRaw - Biểu thức lọc từ người dùng.
+             * @returns {boolean} - True nếu khớp, false nếu không.
+             */
+            function matchAmount(amount, exprRaw) {
+                if (isNaN(amount)) return false;
+                const expr = String(exprRaw).toLowerCase().trim().replace(/\s+/g, '');
 
-  // so sánh >, <, >=, <=, =
-  const cmp = expr.match(/^(>=|<=|>|<|=)?([0-9]*\.?[0-9]+[kmb]?)$/i);
-  if (cmp) {
-    const op = cmp[1] || '=';
-    const val = parseMoneyToNumber(cmp[2]);
-    if (isNaN(val)) return false;
-    if (op === '>')  return amount >  val;
-    if (op === '>=') return amount >= val;
-    if (op === '<')  return amount <  val;
-    if (op === '<=') return amount <= val;
-    return amount === val; // '=' hoặc không ghi toán tử
-  }
+                const range = expr.match(/^([0-9]*\.?[0-9]+[kmb]?)-([0-9]*\.?[0-9]+[kmb]?)$/i);
+                if (range) {
+                    const a = parseMoneyToNumber(range[1]);
+                    const b = parseMoneyToNumber(range[2]);
+                    if (isNaN(a) || isNaN(b)) return false;
+                    const min = Math.min(a, b);
+                    const max = Math.max(a, b);
+                    return amount >= min && amount <= max;
+                }
 
-  // fallback: chứa chuỗi số (ít dùng)
-  const digits = expr.replace(/[^\d]/g, '');
-  const amtDigits = String(Math.round(amount)).replace(/[^\d]/g, '');
-  return amtDigits.includes(digits);
-}
-
+                const cmp = expr.match(/^(>=|<=|>|<|=)?([0-9]*\.?[0-9]+[kmb]?)$/i);
+                if (cmp) {
+                    const op = cmp[1] || '=';
+                    const val = parseMoneyToNumber(cmp[2]);
+                    if (isNaN(val)) return false;
+                    if (op === '>')  return amount >  val;
+                    if (op === '>=') return amount >= val;
+                    if (op === '<')  return amount <  val;
+                    if (op === '<=') return amount <= val;
+                    return amount === val;
+                }
+                
+                const digits = expr.replace(/[^\d]/g, '');
+                const amtDigits = String(Math.round(amount)).replace(/[^\d]/g, '');
+                return amtDigits.includes(digits);
+            }
 
             
             // --- XỬ LÝ DỮ LIỆU CHÍNH ---
@@ -630,7 +611,6 @@ function matchAmount(amount, exprRaw) {
                 fetch(apiUrl)
                     .then(response => response.json())
                     .then(data => {
-                        // console.log("Dữ liệu tải về:", data);
                         handleData(data);
                     })
                     .catch(error => {
@@ -645,9 +625,8 @@ function matchAmount(amount, exprRaw) {
             // =========== MODULE CHO CHI TIẾT VẬN ĐƠN (TAB 2) ================
             // ===================================================================
             const detailApp = {
-    tableCache: new Map(), // <— thêm dòng này
-    init: function () {
-
+                tableCache: new Map(),
+                init: function () {
                     this.setupControls();
                 },
                 showError: function (tableId, message) {
@@ -656,10 +635,8 @@ function matchAmount(amount, exprRaw) {
                     const summaryBar = container.querySelector('.summary-bar');
                     if (!summaryBar) return;
                     
-                    // Xóa các bảng cũ
                     container.querySelectorAll('.region-container').forEach(c => c.remove());
 
-                    // Hiển thị thông báo
                     const errorContainer = document.createElement('div');
                     errorContainer.className = 'region-container';
                     errorContainer.innerHTML = `<div class="no-data" style="margin-top:20px;">${message}</div>`;
@@ -806,15 +783,17 @@ function matchAmount(amount, exprRaw) {
                     if (selectedDeliveryStatuses.length > 0) filteredData = filteredData.filter(r => selectedDeliveryStatuses.includes(r["Trạng thái giao hàng NB"] || ''));
                     if (selectedPaymentStatuses.length > 0) filteredData = filteredData.filter(r => selectedPaymentStatuses.includes(r["Trạng thái thu tiền"] || ''));
 
-                   if (startDate || endDate) {
-  filteredData = filteredData.filter(row => {
-    const ymd = normalizeDateToYMD(row["Ngày lên đơn"]); // chuẩn hoá => 'YYYY-MM-DD'
-    if (!ymd) return false;
-    if (startDate && ymd < startDate) return false;
-    if (endDate && ymd > endDate) return false;
-    return true;
-  });
-}
+                    // SỬA LỖI: LOGIC LỌC NGÀY ĐÃ ĐƯỢC CẬP NHẬT
+                    if (startDate || endDate) {
+                        filteredData = filteredData.filter(row => {
+                            // Luôn chuẩn hóa ngày từ dữ liệu về định dạng YYYY-MM-DD trước khi so sánh
+                            const ymd = normalizeDateToYMD(row["Ngày lên đơn"]);
+                            if (!ymd) return false; // Bỏ qua nếu không phải là ngày hợp lệ
+                            if (startDate && ymd < startDate) return false;
+                            if (endDate && ymd > endDate) return false;
+                            return true;
+                        });
+                    }
 
                     if (nameQuery) {
                         filteredData = filteredData.filter(r =>
@@ -841,26 +820,23 @@ function matchAmount(amount, exprRaw) {
                         filteredData = filteredData.filter(row => {
                             return Object.entries(columnFilters).every(([column, filter]) => {
                                 const colMap = { "Nhân sự Marketing": "Nhân viên Marketing", "Nhân sự Sale": "Nhân viên Sale" };
-let cellValue = row[colMap[column] || column] || '';
+                                let cellValue = row[colMap[column] || column] || '';
 
-if (filter.type === 'multiselect') {
-  return filter.value.has(String(cellValue));
-}
+                                if (filter.type === 'multiselect') {
+                                    return filter.value.has(String(cellValue));
+                                }
 
-if (filter.type === 'date') {
-  const ymd = normalizeDateToYMD(cellValue);
-  return ymd === filter.value;
-}
+                                if (filter.type === 'date') {
+                                    const ymd = normalizeDateToYMD(cellValue);
+                                    return ymd === filter.value;
+                                }
 
-// TEXT: riêng cột tiền thì so sánh số, còn lại dùng includes
-if (column === 'Tổng tiền VNĐ') {
-  const amount = parseMoneyToNumber(cellValue);
-  return matchAmount(amount, filter.value);
-}
+                                if (column === 'Tổng tiền VNĐ') {
+                                    const amount = parseMoneyToNumber(cellValue);
+                                    return matchAmount(amount, filter.value);
+                                }
 
-// Mặc định: lọc chứa chuỗi
-return String(cellValue).toLowerCase().includes(filter.value);
-
+                                return String(cellValue).toLowerCase().includes(filter.value);
                             });
                         });
                     }
@@ -870,62 +846,56 @@ return String(cellValue).toLowerCase().includes(filter.value);
                 },
                 updateSummaryBar(data) {
                     const totalCount = data.length;
-                    const totalAmount = data.reduce((sum, row) => sum + (parseFloat(String(row["Tổng tiền VNĐ"] || 0).replace(/[^\d.-]/g, '')) || 0), 0);
+                    const totalAmount = data.reduce((sum, row) => sum + (parseMoneyToNumber(row["Tổng tiền VNĐ"]) || 0), 0);
                     document.getElementById('totalOrdersCount').textContent = totalCount.toLocaleString('vi-VN');
                     document.getElementById('totalOrdersAmount').textContent = new Intl.NumberFormat('vi-VN').format(totalAmount) + ' ₫';
                 },
                 renderTables: function (data) {
-  const container = document.getElementById('DonChiTiet');
+                    const container = document.getElementById('DonChiTiet');
 
-  // 3 bảng cố định: HCM, Hà Nội, Chưa phân Team
-  const headers = ["Mã đơn hàng","Mã Tracking","Ngày lên đơn","Thông tin khách hàng","Phone*","Mặt hàng","Số lượng mặt hàng 1","Tổng tiền VNĐ","Nhân sự Marketing","Nhân sự Sale","NV Vận đơn","Đơn vị vận chuyển","Trạng thái giao hàng NB","Kết quả Check","Trạng thái thu tiền"];
+                    const headers = ["Mã đơn hàng","Mã Tracking","Ngày lên đơn","Thông tin khách hàng","Phone*","Mặt hàng","Số lượng mặt hàng 1","Tổng tiền VNĐ","Nhân sự Marketing","Nhân sự Sale","NV Vận đơn","Đơn vị vận chuyển","Trạng thái giao hàng NB","Kết quả Check","Trạng thái thu tiền"];
 
-  const groups = {
-    "HCM": data.filter(r => (r["Team"] || '').toLowerCase() === "hcm"),
-    "Hà Nội": data.filter(r => {
-      const t = (r["Team"] || '').toLowerCase();
-      return t === "hà nội" || t === "ha noi";
-    }),
-    "Chưa phân Team": data.filter(r => !r["Team"])
-  };
+                    const groups = {
+                        "HCM": data.filter(r => (r["Team"] || '').toLowerCase() === "hcm"),
+                        "Hà Nội": data.filter(r => {
+                        const t = (r["Team"] || '').toLowerCase();
+                        return t === "hà nội" || t === "ha noi";
+                        }),
+                        "Chưa phân Team": data.filter(r => !r["Team"])
+                    };
 
-  const summaryBar = container.querySelector('.summary-bar');
+                    const summaryBar = container.querySelector('.summary-bar');
+                    // Xóa các bảng cũ trước khi render lại
+                    container.querySelectorAll('.region-container').forEach(c => c.remove());
+                    this.tableCache.clear();
 
-  Object.entries(groups).forEach(([teamName, teamData]) => {
-    const safeId = `table-team-${teamName.replace(/\s+/g, '-').toLowerCase()}`;
+                    Object.entries(groups).forEach(([teamName, teamData]) => {
+                        const safeId = `table-team-${teamName.replace(/\s+/g, '-').toLowerCase()}`;
 
-    // Tạo khung bảng + header 1 lần, sau đó chỉ cập nhật tbody
-    if (!this.tableCache.has(teamName)) {
-      const teamContainer = document.createElement('div');
-      teamContainer.className = 'region-container';
-      teamContainer.innerHTML = `
-        <h3 class="region-header">Team: ${teamName} (<span class="team-count">0</span> đơn)</h3>
-        <div class="table-wrapper">
-          <table id="${safeId}">
-            <thead></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      `;
-      summaryBar.parentNode.insertBefore(teamContainer, summaryBar.nextSibling);
+                        const teamContainer = document.createElement('div');
+                        teamContainer.className = 'region-container';
+                        teamContainer.innerHTML = `
+                            <h3 class="region-header">Team: ${teamName} (<span class="team-count">0</span> đơn)</h3>
+                            <div class="table-wrapper">
+                            <table id="${safeId}">
+                                <thead></thead>
+                                <tbody></tbody>
+                            </table>
+                            </div>
+                        `;
+                        container.appendChild(teamContainer); // Chèn vào cuối container
+                        
+                        this.tableCache.set(teamName, { container: teamContainer, tableId: safeId, headers });
 
-      this.renderTableHeader(safeId, headers);
-      this.tableCache.set(teamName, { container: teamContainer, tableId: safeId, headers });
-    }
-
-    // Cập nhật tbody + số đơn
-    const { container: teamContainer, tableId } = this.tableCache.get(teamName);
-    this.renderTableBody(tableId, headers, teamData);
-    teamContainer.querySelector('.team-count').textContent = teamData.length.toLocaleString('vi-VN');
-
-    // luôn hiển thị cả 3 bảng; nếu muốn ẩn bảng trống thì đổi thành: teamContainer.style.display = teamData.length ? '' : 'none';
-    teamContainer.style.display = '';
-  });
-},
-
+                        this.renderTableHeader(safeId, headers);
+                        this.renderTableBody(safeId, headers, teamData);
+                        teamContainer.querySelector('.team-count').textContent = teamData.length.toLocaleString('vi-VN');
+                        teamContainer.style.display = teamData.length ? '' : 'none'; // Ẩn bảng nếu không có dữ liệu
+                    });
+                },
                 renderTableHeader: function(tableId, headers) {
                     const table = document.getElementById(tableId);
-                    if (!table || table.querySelector('thead').innerHTML !== '') return; // Chỉ render 1 lần
+                    if (!table || table.querySelector('thead').innerHTML !== '') return;
 
                     const thead = table.querySelector('thead');
                     const titleRow = thead.insertRow();
@@ -974,51 +944,48 @@ return String(cellValue).toLowerCase().includes(filter.value);
                     });
                 },
                 renderTableBody: function (tableId, headers, data) {
-  const tbody = document.getElementById(tableId)?.querySelector('tbody');
-  if (!tbody) return;
-  tbody.innerHTML = '';
+                    const tbody = document.getElementById(tableId)?.querySelector('tbody');
+                    if (!tbody) return;
+                    tbody.innerHTML = '';
 
-  const colMap = { "Nhân sự Marketing": "Nhân viên Marketing", "Nhân sự Sale": "Nhân viên Sale" };
-  const frag = document.createDocumentFragment();
+                    const colMap = { "Nhân sự Marketing": "Nhân viên Marketing", "Nhân sự Sale": "Nhân viên Sale" };
+                    const frag = document.createDocumentFragment();
 
-  data.forEach(row => {
-    const tr = document.createElement('tr');
+                    data.forEach(row => {
+                        const tr = document.createElement('tr');
 
-    headers.forEach(header => {
-      const td = document.createElement('td');
-      let value = row[colMap[header] || header] || '';
+                        headers.forEach(header => {
+                        const td = document.createElement('td');
+                        let value = row[colMap[header] || header] || '';
 
-      if (header === "Ngày lên đơn") {
-        // hiển thị dd/mm/yyyy từ Y-M-D
-        const ymd = normalizeDateToYMD(row["Ngày lên đơn"]);
-        if (ymd) {
-          const [y,m,d] = ymd.split('-');
-          td.textContent = `${d}/${m}/${y}`;
-        } else {
-          td.textContent = '';
-        }
-      } else if (header === "Tổng tiền VNĐ") {
-        const num = parseFloat(String(value).replace(/[^\d.-]/g, '')) || 0;
-        td.textContent = new Intl.NumberFormat('vi-VN').format(num) + ' ₫';
-      } else {
-        td.textContent = value;
-      }
+                        if (header === "Ngày lên đơn") {
+                            const ymd = normalizeDateToYMD(row["Ngày lên đơn"]);
+                            if (ymd) {
+                                const [y,m,d] = ymd.split('-');
+                                td.textContent = `${d}/${m}/${y}`; // Hiển thị dd/mm/yyyy
+                            } else {
+                                td.textContent = ''; // Hoặc giá trị gốc: value
+                            }
+                        } else if (header === "Tổng tiền VNĐ") {
+                            const num = parseMoneyToNumber(value);
+                            td.textContent = isNaN(num) ? '0 ₫' : new Intl.NumberFormat('vi-VN').format(num) + ' ₫';
+                        } else {
+                            td.textContent = value;
+                        }
 
-      tr.appendChild(td);
-    });
+                        tr.appendChild(td);
+                        });
 
-    frag.appendChild(tr);
-  });
+                        frag.appendChild(tr);
+                    });
 
-  tbody.appendChild(frag);
-},
-
+                    tbody.appendChild(frag);
+                },
                 createColumnMultiSelect: function(header, items) {
                     const container = document.createElement('div');
                     container.className = 'multi-select-container column-filter';
                     container.dataset.column = header;
 
-                    const uniqueId = `col-filter-${header.replace(/\W/g, '')}`;
                     const button = document.createElement('button');
                     button.textContent = `Tất cả (${items.length})`;
                     const dropdown = document.createElement('div');
@@ -1055,26 +1022,6 @@ return String(cellValue).toLowerCase().includes(filter.value);
                     const totalCount = dropdown.querySelectorAll('input[type="checkbox"]:not(.select-all)').length;
                     button.textContent = (selectedCount === 0 || selectedCount === totalCount) ? `Tất cả (${totalCount})` : `${selectedCount} đã chọn`;
                 },
-                renderTableRows: function (tableId, headers, data) {
-                    const tbody = document.getElementById(tableId)?.querySelector('tbody');
-                    if (!tbody) return;
-                    tbody.innerHTML = '';
-
-                    const colMap = { "Nhân sự Marketing": "Nhân viên Marketing", "Nhân sự Sale": "Nhân viên Sale" };
-                    const fragment = document.createDocumentFragment();
-                    data.forEach(row => {
-                        const tr = document.createElement('tr');
-                        headers.forEach(header => {
-                            const cell = tr.insertCell();
-                            let value = row[colMap[header] || header] || '';
-                            if (header === "Ngày lên đơn") cell.textContent = formatDateDisplay(parseDateString(value));
-                            else if (header === "Tổng tiền VNĐ") cell.textContent = new Intl.NumberFormat('vi-VN').format(parseFloat(String(value).replace(/[^\d.-]/g, '')) || 0) + ' ₫';
-                            else cell.textContent = value;
-                        });
-                        fragment.appendChild(tr);
-                    });
-                    tbody.appendChild(fragment);
-                }
             };
 
             // --- KHỞI TẠO ỨNG DỤNG ---
