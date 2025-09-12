@@ -95,12 +95,31 @@ header img{
 }
 
 /* Table */
+/* Table (cho phép kéo giãn cột) */
 .table-container{overflow:auto;max-height:65vh;background:#fff;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.06);}
-table{width:100%;border-collapse:collapse;font-size:13px;}
-thead th{
-  position:sticky;top:0;background:#22c55e;color:#fff;
-  font-weight:700;padding:8px;text-align:center;
+table{
+  border-collapse:collapse;
+  font-size:13px;
+  width:max-content;     /* cho phép nở ngang khi kéo */
+  min-width:100%;        /* không nhỏ hơn khung */
+  table-layout:fixed;    /* giữ width đã set cho cột */
 }
+thead th{
+  position:sticky; top:0; background:#22c55e; color:#fff;
+  font-weight:700; padding:8px; text-align:center; white-space:nowrap;
+}
+thead th + th{ box-shadow:-1px 0 0 rgba(255,255,255,.45) inset; }
+
+/* Tay nắm kéo cột */
+.col-resizer{
+  position:absolute; top:0; right:0; bottom:0;
+  width:12px; cursor:col-resize; user-select:none; z-index:99;
+}
+.col-resizer::after{
+  content:''; position:absolute; right:5px; top:20%; bottom:20%;
+  width:2px; background:#e5e7eb;
+}
+
 tbody td{padding:8px;border-bottom:1px solid #f1f5f9;}
 tbody tr:nth-child(even){background:#fafafa;}
 tbody tr:hover{background:#fffbe6;}
@@ -453,7 +472,8 @@ tbody td input,tbody td select,tbody td textarea{
           <thead>
             <tr>
               <th style="width: 50px;">Xóa</th>
-              ${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}
+              ${displayedHeaders.map(h => `<th data-field="${h}">${headerMapping[h] || h}</th>`).join('')}
+
             </tr>
           </thead>`;
 
@@ -473,10 +493,14 @@ tbody td input,tbody td select,tbody td textarea{
 
         // Ghép table vào sau toolbox
         const tableEl = document.createElement('table');
-        tableEl.innerHTML = `${headerHtml}${bodyHtml}<tfoot></tfoot>`;
-        container.appendChild(tableEl);
+tableEl.innerHTML = `${headerHtml}${bodyHtml}<tfoot></tfoot>`;
+container.appendChild(tableEl);
 
-        setupEventListeners(tableKey, container);
+/* Kích hoạt kéo giãn cột */
+makeColumnsResizable(tableEl);
+
+setupEventListeners(tableKey, container);
+
         updateTotals(tableKey);
 
         // Phân quyền
@@ -635,6 +659,64 @@ tbody td input,tbody td select,tbody td textarea{
         updateDashboard();
         updateVisibleRowCount(tableKey);
     }
+    function makeColumnsResizable(table){
+  if (!table) return;
+  const headerThs = Array.from(table.querySelectorAll('thead th[data-field]'));
+
+  headerThs.forEach((th, displayIdx) => {
+    th.style.position = 'relative';              // để tay nắm bám đúng
+    const field = th.dataset.field;
+
+    const handle = document.createElement('div');
+    handle.className = 'col-resizer';
+    th.appendChild(handle);
+
+    let startX = 0, startW = 0;
+
+    const onMouseDown = (e) => {
+      startX = e.pageX;
+      startW = th.getBoundingClientRect().width;
+      document.body.classList.add('resizing-col');
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      e.preventDefault();
+    };
+
+    const onMouseMove = (e) => {
+      const dx = e.pageX - startX;
+      const newW = Math.max(100, startW + dx);
+      th.style.width = newW + 'px';
+      th.style.minWidth = newW + 'px';
+
+      // đồng bộ TD của cột này: tìm control có data-field tương ứng
+      table.querySelectorAll('tbody tr').forEach(tr => {
+        const ctrl = tr.querySelector(`[data-field="${CSS.escape(field)}"]`);
+        if (ctrl) {
+          const td = ctrl.closest('td');
+          td.style.width = newW + 'px';
+          td.style.minWidth = newW + 'px';
+        }
+      });
+
+      // đồng bộ tfoot (cột 0 của tfoot là "Tổng cộng")
+      const tfRow = table.querySelector('tfoot tr');
+      if (tfRow && tfRow.children[displayIdx + 1]) {
+        const td = tfRow.children[displayIdx + 1];
+        td.style.width = newW + 'px';
+        td.style.minWidth = newW + 'px';
+      }
+    };
+
+    const onMouseUp = () => {
+      document.body.classList.remove('resizing-col');
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    handle.addEventListener('mousedown', onMouseDown);
+  });
+}
+
     
     function setupEventListeners(tableKey, container) {
         if (!container) return;
