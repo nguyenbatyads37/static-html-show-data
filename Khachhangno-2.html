@@ -691,6 +691,9 @@ if (addBtn) addBtn.style.display = perms.canCreate ? '' : 'none';
     let changeSet = { create: {}, update: {}, delete: {} };
     let nhanSuList = [];
     let customerList = [];
+    // Bộ lọc tạm dùng cho form thêm (không ảnh hưởng ô lọc UI)
+const TEMP_FILTERS = { khn: {} };
+
 
     function calculateCustomerTotalDebt(customerName) {
         if (!customerName) return 0;
@@ -965,6 +968,9 @@ filters.innerHTML = `
       <button type="button" id="btn-add-${tableKey}" class="action-btn update-btn add-btn-inline">
         <i class="fa fa-plus"></i> Thêm
       </button>
+      <button type="button" id="btn-clear-${tableKey}" class="action-btn export-btn add-btn-inline">
++       <i class="fa fa-filter-circle-xmark"></i> Xóa lọc
++     </button>
     </summary>
 
     <div class="add-grid" id="add-form-${tableKey}">
@@ -1070,27 +1076,38 @@ filters.innerHTML = `
       if (ngayNo)  ngayNo.addEventListener('input', updateDueDateFromForm);
       if (hanNo)   hanNo.addEventListener('input', updateDueDateFromForm);
       updateDueDateFromForm();
+      
 
       // Hiển thị nợ hiện tại KH & NVKD khi gõ trong form
       const khInp = addForm?.querySelector('[data-field="Tên Khách Hàng"]');
-      if (khInp) {
-        khInp.addEventListener('input', (e) => {
-          const name = e.target.value.trim();
-          const wrap = controls.querySelector('#current-customer-debt-display-ext');
-          const valEl = controls.querySelector('#current-customer-debt-value-ext');
-          if (name) {
-            const cur = calculateCustomerTotalDebt(name);
-            valEl.textContent = `${cur.toLocaleString('vi-VN')} VNĐ`;
-            wrap.style.display = 'block';
-          } else {
-            wrap.style.display = 'none';
-          }
+if (khInp) {
+  khInp.addEventListener('input', (e) => {
+    const name = e.target.value.trim();
 
-          // đồng thời lọc bảng theo KH đang nhập
-          const khFilter = controls.querySelector('.filter-input[data-header="Tên Khách Hàng"]');
-          if (khFilter) { khFilter.value = name; filterTable(tableKey); }
-        });
+    // (1) Chỉ hiển thị nợ hiện tại nếu có phần tử
+    const wrap = controls.querySelector('#current-customer-debt-display-ext');
+    const valEl = controls.querySelector('#current-customer-debt-value-ext');
+    if (wrap && valEl) {
+      if (name) {
+        const cur = calculateCustomerTotalDebt(name);
+        valEl.textContent = `${cur.toLocaleString('vi-VN')} VNĐ`;
+        wrap.style.display = 'block';
+      } else {
+        wrap.style.display = 'none';
       }
+    }
+
+    // (2) Đồng bộ filter + lọc bảng
+    // (2) Thiết lập lọc tạm và lọc bảng
+if (!TEMP_FILTERS.khn) TEMP_FILTERS.khn = {};
+if (name) TEMP_FILTERS.khn['Tên Khách Hàng'] = name;
+else delete TEMP_FILTERS.khn['Tên Khách Hàng'];
+
+filterTable('khn');
+
+  });
+}
+
       const nvInp = addForm?.querySelector('[data-field="Người chịu trách nhiệm"]');
       if (nvInp) {
         nvInp.addEventListener('input', (e) => {
@@ -1118,6 +1135,27 @@ if (addBtn) {
     submitNewRowFromExternalForm(tableKey, addForm, container);
   });
 }
+// Nút Xóa lọc
+const clearBtn = controls.querySelector(`#btn-clear-${tableKey}`);
+if (clearBtn) {
+  clearBtn.addEventListener('click', (ev) => {
+    ev.stopPropagation(); // không gập/mở <details>
+
+    // 1) Xóa các ô lọc hiển thị trong panel
+    controls.querySelectorAll('.filters-panel .filter-input')
+      .forEach(inp => { inp.value = ''; });
+
+    // 2) Xóa luôn bộ lọc tạm khi gõ trong form thêm
+    if (TEMP_FILTERS[tableKey]) TEMP_FILTERS[tableKey] = {};
+
+    // 3) Áp lại lọc + cập nhật đếm
+    filterTable(tableKey);
+    updateVisibleRowCount(tableKey);
+
+    showToast('Đã xóa bộ lọc', 'success');
+  });
+}
+
 
     }
 
@@ -1609,6 +1647,14 @@ if (addBtn) {
   const textFilters = allFilterInputs
     .filter(i => !i.dataset.role) // không phải 2 ô ngày
     .map(i => ({ header: i.dataset.header, value: i.value.trim().toLowerCase() }));
+    // Gộp thêm bộ lọc tạm từ form thêm (nếu có)
+const tmp = TEMP_FILTERS[tableKey] || {};
+Object.entries(tmp).forEach(([header, val]) => {
+  if (val != null && String(val).trim() !== '') {
+    textFilters.push({ header, value: String(val).trim().toLowerCase() });
+  }
+});
+
 
   const hasAnyText = textFilters.some(f => f.value !== '');
   const hasStart   = !!startStr;
