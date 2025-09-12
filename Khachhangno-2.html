@@ -569,10 +569,13 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
                     inputHtml = `<input type="date" data-field="${originalHeader}" value="${formatDateForInput(formattedValue)}">`; break;
                 case 'Ngày phải trả':
                     inputHtml = `<input type="date" data-field="${originalHeader}" value="${formatDateForInput(formattedValue)}" readonly>`; break;
-                case 'Số tiền nợ': case 'Đơn giá': case 'Số lượng':
-                    const cleanValue = String(formattedValue).replace(/\./g, '');
-                    const numericValue = isNaN(Number(cleanValue)) ? '' : Number(cleanValue).toLocaleString('vi-VN');
-                    inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}">`; break;
+                case 'Số tiền nợ': case 'Đơn giá': case 'Số lượng': {
+    const cleanValue = String(formattedValue ?? '').replace(/[^\d]/g,'');
+    const numericValue = cleanValue ? formatThousands(cleanValue) : '';
+    inputHtml = `<input type="text" inputmode="decimal" data-field="${originalHeader}" value="${numericValue}">`;
+    break;
+}
+
                 case 'Hạn trả nợ':
                     const defaultOptions = [15, 30, 45, 60];
                     const currentValue = formattedValue || '30';
@@ -1218,8 +1221,43 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
     function capitalizeFirstLetter(input) { if (input.value.length > 0) input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1); }
     function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
     function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
-    function setupCurrencyInput(input) { if (!input) return; const f = () => { const r = input.value.replace(/\./g, ''); input.value = isNaN(r) || r.trim() === '' ? '' : Number(r).toLocaleString('vi-VN'); }; input.addEventListener('input', f); input.addEventListener('blur', f); f(); }
-    
+    // === helpers ===
+const formatThousands = (s) =>
+  String(s ?? '')
+    .replace(/[^\d]/g, '')                // chỉ giữ số
+    .replace(/\B(?=(\d{3})+(?!\d))/g, '.');  // chèn dấu "."
+function finalizeCurrency(el){
+  if (!el || !el.getAttribute || el.getAttribute('inputmode') !== 'decimal') return;
+  const raw = String(el.value || '').replace(/[^\d]/g, '');
+  el.value = raw ? raw.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
+}
+
+
+
+    function setupCurrencyInput(input) {
+  if (!input || input.__currencyBound) return;
+  input.__currencyBound = true;
+
+  let composing = false;
+
+  input.addEventListener('compositionstart', () => composing = true);
+  input.addEventListener('compositionend', () => { composing = false; });
+
+  // Chỉ format khi kết thúc nhập
+  const finalize = () => { if (!composing) finalizeCurrency(input); };
+  input.addEventListener('blur', finalize);
+  input.addEventListener('change', finalize);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === 'Tab') finalize();
+  });
+
+  // Format giá trị ban đầu (nếu có)
+  finalizeCurrency(input);
+}
+
+
+
+
     function exportToExcel(e) {
         const tableKey = e.currentTarget.dataset.tableKey;
         if (!tableKey || !originalTableData[tableKey]?.data) return showToast('Không có dữ liệu để xuất.', 'warning');
@@ -1319,26 +1357,39 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
   }
 
   document.addEventListener('keydown', (e) => {
-    const active = document.activeElement;
-    if (!active) return;
+  const active = document.activeElement;
+  if (!active) return;
 
-    // Enter / Shift+Enter
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      focusNextPrev(active, !e.shiftKey);
-      return;
-    }
+  // Enter / Shift+Enter
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    finalizeCurrency(active); // ✅ thêm dòng này
+    focusNextPrev(active, !e.shiftKey);
+    return;
+  }
 
-    // Arrow keys (bỏ Ctrl)
-    if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)) {
-      e.preventDefault();
-      if (e.key === 'ArrowRight') focusByDirection(active,'right');
-      if (e.key === 'ArrowLeft')  focusByDirection(active,'left');
-      if (e.key === 'ArrowUp')    focusByDirection(active,'up');
-      if (e.key === 'ArrowDown')  focusByDirection(active,'down');
-    }
-  }, true);
+  // Arrow keys (bỏ Ctrl)
+  if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)) {
+    e.preventDefault();
+    finalizeCurrency(active); // ✅ thêm dòng này
+    if (e.key === 'ArrowRight') focusByDirection(active,'right');
+    if (e.key === 'ArrowLeft')  focusByDirection(active,'left');
+    if (e.key === 'ArrowUp')    focusByDirection(active,'up');
+    if (e.key === 'ArrowDown')  focusByDirection(active,'down');
+  }
+}, true);
+
 })();
+// đảm bảo bất kỳ input decimal nào khi rời focus đều được format lại
+document.addEventListener('focusout', (e) => {
+  const t = e.target;
+  if (t && t.getAttribute && t.getAttribute('inputmode') === 'decimal') {
+    requestAnimationFrame(() => finalizeCurrency(t));
+  }
+}, true);
+
+
+
 </script>
 </body>
 </html> 
