@@ -303,6 +303,86 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
 
 /* Cho phép hàng lọc co lại theo cột, không phá bố cục */
 .table-container{ overflow: auto }
+/* Hàng tổng dưới cùng */
+tfoot td:first-child{ width:56px }                  /* khớp cột Xóa */
+tfoot td.total-label{
+  white-space:nowrap;                               /* không xuống dòng */
+  font-weight:800; color:#065f46;
+  text-transform:uppercase; letter-spacing:.3px;
+}
+tfoot td{ vertical-align:middle }
+
+/* Căn tiêu đề và cụm nút cùng 1 hàng */
+.table-title{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:10px;
+}
+.table-title h2{
+  margin:0;
+  font-size:22px;
+  font-weight:800;
+}
+
+/* Cụm đếm bản ghi + nút nằm bên phải */
+.table-title .controls-wrapper{
+  margin-left:auto;              /* đẩy sang phải */
+  display:flex;
+  align-items:center;
+  gap:8px;                       /* khoảng cách giữa pill & nút */
+  white-space:nowrap;            /* tránh xuống dòng sớm */
+}
+
+/* Responsive: màn hình hẹp thì cho xuống dòng đẹp */
+@media (max-width: 640px){
+  .table-title{
+    flex-direction:column;
+    align-items:flex-start;
+    gap:8px;
+  }
+  .table-title .controls-wrapper{
+    margin-left:0;
+    flex-wrap:wrap;
+    white-space:normal;
+  }
+}
+
+/* --- TÁCH KHỐI: Filters và Add-panel là 2 card riêng --- */
+.table-controls{
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;                /* bỏ padding bọc ngoài để hết khoảng trắng */
+}
+
+/* Card cho khối Tìm kiếm */
+.table-controls .filters-row{
+  background: #fff;
+  border: 1px solid rgba(2,6,23,.06);
+  border-radius: 14px;
+  box-shadow: 0 6px 16px rgba(2,6,23,.06);
+  padding: 10px 12px;
+  margin-bottom: 10px;       /* khoảng cách gọn giữa 2 khối */
+  gap: 8px;                  /* giảm khoảng cách ô */
+}
+
+/* Card cho khối Thêm khoản nợ mới */
+.table-controls .add-panel{
+  background: #fff;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(2,6,23,.05);
+  padding: 10px;             /* gọn hơn */
+  margin-top: 0;             /* tránh cách xa filters */
+}
+
+/* Tối ưu khoảng trắng trong form thêm */
+.table-controls .add-panel summary{ padding: 6px 2px; margin-bottom: 6px; }
+.table-controls .add-grid{ gap: 10px; }             /* thu khoảng cách các field */
+.table-controls .add-actions{ margin-top: 8px; }    /* gọn nút Thêm */
+.table-controls .add-grid textarea{ min-height: 76px; } /* vừa mắt hơn */
 
 </style>
 
@@ -1066,20 +1146,44 @@ filters.innerHTML = `
     }
 
     function updateTotals(tableKey) {
-        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId); if (!container) return;
-        const table = container.querySelector('table'); if (!table) return;
-        const tfoot = table.querySelector('tfoot'); if (!tfoot) return;
-        const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).slice(1).map(th => Object.keys(headerMapping).find(key => headerMapping[key] === th.textContent) || th.textContent);
-        const visibleRows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none' && !row.classList.contains('debt-paid-off'));
-        let totalRowHtml = '<td>Tổng cộng</td>';
-        headers.forEach(header => {
-            if (NUMERIC_COLUMNS_FOR_TOTAL.includes(header) && header !== 'Hạn trả nợ') {
-                const total = visibleRows.reduce((sum, row) => { const input = row.querySelector(`[data-field="${header}"]`); return sum + (parseFloat((input ? input.value || '0' : '0').replace(/\./g, '')) || 0); }, 0);
-                totalRowHtml += `<td class="align-right">${total.toLocaleString('vi-VN')}</td>`;
-            } else { totalRowHtml += '<td></td>'; }
-        });
-        tfoot.innerHTML = `<tr>${totalRowHtml}</tr>`;
+  const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+  if (!container) return;
+  const table = container.querySelector('table');
+  if (!table) return;
+  const tfoot = table.querySelector('tfoot');
+  if (!tfoot) return;
+
+  // Lấy headers hiển thị (đã bỏ cột Xóa bằng slice(1))
+  const headers = Array.from(table.querySelectorAll('thead tr:first-child th'))
+    .slice(1)
+    .map(th => Object.keys(headerMapping).find(k => headerMapping[k] === th.textContent) || th.textContent);
+
+  // Chỉ tính trên các dòng đang hiển thị và chưa “đã tất toán”
+  const visibleRows = Array.from(table.querySelectorAll('tbody tr'))
+    .filter(row => row.style.display !== 'none' && !row.classList.contains('debt-paid-off'));
+
+  // Bắt đầu: 1 ô trống cho cột Xóa + 1 ô nhãn “Tổng cộng”
+  let cells = ['<td></td>', '<td class="total-label align-left">Tổng cộng</td>'];
+
+  // Duyệt từng header: cột 1 (đầu tiên) đã dùng cho nhãn → để trống,
+  // các cột số thì tính tổng và căn phải.
+  headers.forEach((header, idx) => {
+    if (idx === 0) { cells.push('<td></td>'); return; }
+    if (NUMERIC_COLUMNS_FOR_TOTAL.includes(header) && header !== 'Hạn trả nợ') {
+      const total = visibleRows.reduce((sum, row) => {
+        const input = row.querySelector(`[data-field="${header}"]`);
+        const val = input ? (input.value || '0').replace(/\./g, '') : '0';
+        return sum + (parseFloat(val) || 0);
+      }, 0);
+      cells.push(`<td class="align-right">${total.toLocaleString('vi-VN')}</td>`);
+    } else {
+      cells.push('<td></td>');
     }
+  });
+
+  tfoot.innerHTML = `<tr>${cells.join('')}</tr>`;
+}
+
 
     function setupEventListeners(tableKey, container) {
         if (!container) return;
