@@ -1000,72 +1000,83 @@ tbody td input,tbody td select,tbody td textarea{
     function capitalizeFirstLetter(input) { if (input.value.length > 0) input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1); }
     function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
     function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
-    function setupCurrencyInput(input, tableKey) {
-      if (!input) return;
+    // ==== Currency helpers (KHTN) ====
+const formatThousands = (s) =>
+  String(s ?? '').replace(/[^\d]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
 
-      const processInput = (isBlurEvent = false) => {
-          const tr = input.closest('tr');
-          if (!tr) return;
+function finalizeCurrencyKHTN(input, tableKey = 'khtn') {
+  if (!input || input.getAttribute('inputmode') !== 'decimal') return;
 
-          input.style.border = '';
-          input.style.backgroundColor = '';
-          delete tr.dataset.isInvalid;
+  const tr = input.closest('tr');
+  // reset hiển thị lỗi
+  if (tr) { input.style.border=''; input.style.backgroundColor=''; delete tr.dataset.isInvalid; }
 
-          const rawValue = input.value.replace(/\./g, '');
-          let numericValue = isNaN(rawValue) || rawValue.trim() === '' ? 0 : Number(rawValue);
+  const raw = String(input.value || '').replace(/[^\d]/g,'');
+  const num = raw ? Number(raw) : 0;
 
-          if (input.dataset.field === 'Số tiền trả nợ') {
-              const debtCell = tr.querySelector('[data-field="Số tiền nợ"]');
-              if (debtCell) {
-                  const maxDebtValue = parseFloat(debtCell.value.replace(/\./g, '')) || 0;
-
-                  if (numericValue > maxDebtValue) {
-                      if (isBlurEvent) {
-                          showToast(`Số tiền trả (${numericValue.toLocaleString('vi-VN')}) không được lớn hơn số tiền nợ (${maxDebtValue.toLocaleString('vi-VN')})`, 'error');
-                      }
-                      input.style.border = '2px solid var(--error-color)';
-                      input.style.backgroundColor = '#fff0f0';
-                      tr.dataset.isInvalid = 'true';
-                  }
-              }
-          }
-
-          input.value = numericValue === 0 && rawValue.trim() === '' ? '' : numericValue.toLocaleString('vi-VN');
-
-          try {
-              const rowId = tr.dataset.id;
-              const field = input.dataset.field;
-              if (tableKey && tr && rowId && field) {
-                   const finalValue = String(numericValue) || '';
-                   if (changeSet.create[tableKey]?.[rowId]) {
-                      changeSet.create[tableKey][rowId][field] = finalValue;
-                  } else {
-                       if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
-                      if (!changeSet.update[tableKey][rowId]) {
-                          const rowDataFromDOM = {};
-                          originalTableData[tableKey].headers.forEach(h => {
-                              const cell = tr.querySelector(`[data-field="${h}"]`);
-                              let v = cell ? cell.value : originalTableData[tableKey]?.data.find(r => r.id == rowId)?.[h];
-                              if(cell && cell.getAttribute('inputmode') === 'decimal') v = v.replace(/\./g, '');
-                              rowDataFromDOM[h] = v;
-                          });
-                           changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
-                      }
-                       changeSet.update[tableKey][rowId][field] = finalValue;
-                  }
-              }
-          } catch (e) { console.error("Lỗi khi cập nhật changeSet:", e); }
-
-          updateTotals(tableKey || 'khtn');
-          updateDashboard();
-          const hasPending = hasPendingChanges(tableKey);
-          setChangesMade(tableKey, hasPending);
-      };
-
-      input.addEventListener('input', () => processInput(false));
-      input.addEventListener('blur', () => processInput(true));
-      processInput();
+  // Không cho "Số tiền khách trả" > "Số tiền còn nợ"
+  if (tr && input.dataset.field === 'Số tiền trả nợ') {
+    const debtCell = tr.querySelector('[data-field="Số tiền nợ"]');
+    const max = debtCell ? Number(String(debtCell.value||'').replace(/[^\d]/g,'')) : 0;
+    if (num > max) {
+      input.style.border = '2px solid var(--danger)';
+      input.style.backgroundColor = '#fff0f0';
+      tr.dataset.isInvalid = 'true';
     }
+  }
+
+  // hiển thị theo định dạng
+  input.value = raw ? formatThousands(raw) : '';
+
+  // cập nhật changeSet
+  if (!tr) return;
+  const rowId = tr.dataset.id;
+  const field = input.dataset.field;
+  if (!rowId || !field) return;
+
+  if (changeSet.create[tableKey]?.[rowId]) {
+    changeSet.create[tableKey][rowId][field] = String(num);
+  } else {
+    if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
+    if (!changeSet.update[tableKey][rowId]) {
+      const rowDataFromDOM = {};
+      (originalTableData[tableKey]?.headers || []).forEach(h => {
+        const cell = tr.querySelector(`[data-field="${h}"]`);
+        let v = cell ? cell.value : (originalTableData[tableKey]?.data.find(r => r.id == rowId)?.[h]);
+        if (cell && cell.getAttribute('inputmode') === 'decimal') v = v.replace(/[^\d]/g,'');
+        rowDataFromDOM[h] = v;
+      });
+      changeSet.update[tableKey][rowId] = { ...rowDataFromDOM, id: rowId };
+    }
+    changeSet.update[tableKey][rowId][field] = String(num);
+  }
+
+  updateTotals(tableKey);
+  updateDashboard();
+  setChangesMade(tableKey, hasPendingChanges(tableKey));
+}
+
+    function setupCurrencyInput(input, tableKey) {
+  if (!input || input.__currencyBound) return;
+  input.__currencyBound = true;
+
+  let composing = false;
+  input.addEventListener('compositionstart', () => composing = true);
+  input.addEventListener('compositionend', () => { composing = false; });
+
+  const finalize = () => { if (!composing) finalizeCurrencyKHTN(input, tableKey); };
+
+  // ✅ chỉ format/ký sổ khi rời ô hoặc Enter/Tab
+  input.addEventListener('blur', finalize);
+  input.addEventListener('change', finalize);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === 'Tab') finalize();
+  });
+
+  // format giá trị ban đầu (nếu có)
+  finalize();
+}
+
 
     function exportToExcel(e) {
         const tableKey = e.currentTarget.dataset.tableKey;
@@ -1160,6 +1171,7 @@ tbody td input,tbody td select,tbody td textarea{
     // Enter/Shift+Enter: tới ô sau/trước
     if (e.key === 'Enter') {
       e.preventDefault();
+      finalizeCurrencyKHTN(active); 
       focusNextPrev(active, !e.shiftKey);
       return;
     }
@@ -1167,6 +1179,7 @@ tbody td input,tbody td select,tbody td textarea{
     // Mũi tên: nhảy ngay theo không gian (không cần Ctrl)
     if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)) {
       e.preventDefault();
+       finalizeCurrencyKHTN(active); 
       if (e.key === 'ArrowRight') focusByDirection(active, 'right');
       if (e.key === 'ArrowLeft')  focusByDirection(active, 'left');
       if (e.key === 'ArrowUp')    focusByDirection(active, 'up');
@@ -1174,6 +1187,13 @@ tbody td input,tbody td select,tbody td textarea{
     }
   }, true);
 })();
+document.addEventListener('focusout', (e) => {
+  const t = e.target;
+  if (t && t.getAttribute && t.getAttribute('inputmode') === 'decimal') {
+    requestAnimationFrame(() => finalizeCurrencyKHTN(t));
+  }
+}, true);
+
 </script>
 </body>
 </html>
