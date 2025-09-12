@@ -383,7 +383,13 @@ tfoot td{ vertical-align:middle }
 .table-controls .add-grid{ gap: 10px; }             /* thu khoảng cách các field */
 .table-controls .add-actions{ margin-top: 8px; }    /* gọn nút Thêm */
 .table-controls .add-grid textarea{ min-height: 76px; } /* vừa mắt hơn */
-
+/* Tách controls ra khỏi bảng, có khoảng cách gọn */
+#controls-khn {
+  margin-bottom: 12px;
+}
+.status-indicator {
+  display: none !important;
+}
 </style>
 
 </head>
@@ -462,9 +468,16 @@ tfoot td{ vertical-align:middle }
                     <button class="export-btn action-btn" data-table-key="khn"><i class="fas fa-file-excel"></i> Tải Excel</button>
                 </div>
             </div>
-            <div class="table-container" id="container-khn">
-                <p class="status-indicator">Đang tải dữ liệu...</p>
-            </div>
+            <!-- Controls tách riêng, KHÔNG cuộn -->
+<div id="controls-khn"></div>
+
+<!-- Chỉ bảng nằm trong khung cuộn -->
+<div class="table-container">
+  <div id="container-khn">
+    <p class="status-indicator">Đang tải dữ liệu...</p>
+  </div>
+</div>
+
         </div>
 
         <footer>
@@ -777,17 +790,16 @@ const FILTERABLE_HEADERS = [
     function createExternalControls(tableKey, headers, displayedHeaders) {
       const cfg = TABLE_CONFIG[tableKey];
       if (!cfg?.containerId) return;
-      const container = document.getElementById(cfg.containerId);
-      if (!container) return;
+      const controlsHost = document.getElementById(`controls-${tableKey}`);
+if (!controlsHost) return;
+ // ✅ Thêm dòng này để có container của bảng
+  const container = document.getElementById(cfg.containerId);
+// Nếu đã tạo rồi thì giữ nguyên
+if (controlsHost.querySelector('.table-controls')) return;
 
-      // Nếu đã tạo rồi thì giữ nguyên
-      if (container.querySelector('.table-controls')) return;
+const controls = document.createElement('div');
+controls.className = 'table-controls';
 
-      // Xóa nội dung cũ (đang là "Đang tải..." hoặc bảng cũ), để chèn controls + bảng mới
-      container.innerHTML = '';
-
-      const controls = document.createElement('div');
-      controls.className = 'table-controls';
 
       // ====== Bộ lọc (external) ======
      const filters = document.createElement('div');
@@ -920,7 +932,8 @@ filters.innerHTML = `
       controls.appendChild(addPanel);
 
       // Chèn controls lên đầu container
-      container.appendChild(controls);
+      controlsHost.appendChild(controls);
+
 
       // Gắn sự kiện tìm kiếm
       controls.querySelectorAll('.filter-input').forEach(inp => {
@@ -1191,7 +1204,12 @@ filters.innerHTML = `
         const tbody = table.querySelector('tbody');
 
         // Lọc: lấy từ toolbox (vì .filter-input đặt trong container)
-        container.querySelectorAll('.filter-input').forEach(input => input.addEventListener('input', () => filterTable(tableKey)));
+            // Lọc: lấy filter từ controlsHost (ngoài bảng)
+    const controlsHost = document.getElementById(`controls-${tableKey}`);
+    if (controlsHost) {
+      controlsHost.querySelectorAll('.filter-input')
+        .forEach(input => input.addEventListener('input', () => filterTable(tableKey)));
+    }
 
         // Edit cell (giữ nguyên — nhưng sẽ không hiệu lực vì canEditExisting=false)
         tbody.addEventListener('change', (e) => {
@@ -1451,7 +1469,15 @@ filters.innerHTML = `
   if (!tbody) return;
 
   const rows = Array.from(tbody.querySelectorAll('tr'));
-  const allFilterInputs = Array.from(container.querySelectorAll('.filter-input'));
+
+// ❌ Bỏ chỗ lấy từ container
+  // const allFilterInputs = Array.from(container.querySelectorAll('.filter-input'));
+
+  // ✅ Lấy filter-input từ controlsHost (ngoài bảng)
+  const controlsHost = document.getElementById(`controls-${tableKey}`);
+  const allFilterInputs = controlsHost
+    ? Array.from(controlsHost.querySelectorAll('.filter-input'))
+    : [];
 
   // --- tách lọc ngày & text ---
   const startInput = allFilterInputs.find(i => i.dataset.role === 'date-start');
