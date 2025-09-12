@@ -38,30 +38,80 @@ body{background:var(--bg);color:var(--ink);line-height:1.55;}
 .main-container.visible{display:block;}
 
 /* Header – gradient band */
+/* ===== Header (gradient, co giãn an toàn, không absolute) ===== */
 header{
-  display:flex;align-items:center;gap:20px;position:relative;
-  margin-bottom:20px;padding:16px;border-radius:14px;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;              /* hẹp thì tự xuống dòng, không đè nhau */
+  gap:16px;
+  margin-bottom:20px;
+  padding:16px;
+  border-radius:14px;
   background:linear-gradient(90deg,#6366f1, #22c55e, #f59e0b);
-  color:#fff;border:none;
+  color:#fff;
+  border:none;
 }
+
+/* Logo */
 header img{
-  height:100px;width:100px;border-radius:50%;
-  border:3px solid #fff;box-shadow:0 6px 16px rgba(0,0,0,.2);flex-shrink:0;object-fit:cover;
+  height:88px;                 /* tuỳ chỉnh */
+  width:88px;
+  border-radius:50%;
+  border:3px solid #fff;
+  box-shadow:0 6px 16px rgba(0,0,0,.2);
+  flex-shrink:0;
+  object-fit:cover;
+  order:1;                     /* 1) logo */
 }
-.header-title{position:absolute;left:50%;transform:translateX(-50%);text-align:center;}
-.header-title h1{font-size:26px;font-weight:800;letter-spacing:.2px;}
-.header-title h2{font-size:20px;font-weight:600;opacity:.95;}
-.contact-info{font-size:14px;line-height:1.4;color:#fff;}
+
+/* Thông tin liên hệ */
+.contact-info{
+  font-size:14px; line-height:1.4; color:#fff;
+  order:2;                     /* 2) địa chỉ + hotline */
+  min-width:220px;             /* tránh bóp quá nhỏ */
+}
 .contact-info .address{font-weight:700;margin-bottom:4px}
 .contact-info .hotline{font-weight:700;color:#fff}
 
-/* User pill */
+/* Tiêu đề: BỎ absolute, cho vào dòng flex và căn giữa */
+.header-title{
+  order:3;                     /* 3) tiêu đề */
+  flex:1;                      /* chiếm phần còn lại để canh giữa */
+  text-align:center;
+  margin-inline:8px;
+}
+.header-title h1{font-size:26px;font-weight:800;letter-spacing:.2px;margin:0}
+.header-title h2{font-size:20px;font-weight:600;opacity:.95;margin:0}
+
+/* User pill: BỎ absolute, đẩy về phải bằng margin-left:auto */
 #user-info{
-  position:absolute;top:10px;right:10px;background:#fff;color:var(--ink);
-  padding:6px 12px;border-radius:999px;font-size:14px;font-weight:600;
+  order:4;                     /* 4) pill user ở cuối hàng */
+  margin-left:auto;            /* dạt sang phải */
+  background:#fff;
+  color:#111827;
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:14px;
+  font-weight:600;
   box-shadow:0 4px 12px rgba(0,0,0,.12);
+  white-space:nowrap;
 }
 #user-info #logout-btn{color:var(--danger);margin-left:8px;text-decoration:none}
+
+/* Responsive: trên màn hẹp, cho tiêu đề chiếm riêng 1 dòng */
+@media (max-width: 768px){
+  header img{height:72px;width:72px}
+  /* đưa tiêu đề xuống dưới để khỏi chen chúc */
+  .header-title{
+    flex-basis:100%;
+    order:4;
+    margin-top:4px;
+  }
+  #user-info{ order:3; }       /* pill user nằm cùng hàng logo/địa chỉ */
+  .header-title h1{font-size:20px}
+  .header-title h2{font-size:16px}
+}
+
 
 /* Tabs */
 .tab-container{
@@ -932,7 +982,11 @@ if (originalHeader === 'Tên Khách Hàng') {
             if (!sourceData || !data.headers) { container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>'; return; }
 
             const headers = data.headers;
-            const displayedHeaders = headers.filter(h => !HIDDEN_COLUMNS.includes(h));
+            // Ẩn riêng cột "Số tiền nợ" cho bảng tonghop-khtn
+let localHiddenColumns = [...HIDDEN_COLUMNS];
+if (tableKey === 'tonghop-khtn') localHiddenColumns.push('Số tiền nợ');
+
+const displayedHeaders = headers.filter(h => !localHiddenColumns.includes(h));
             const headerHtml = `<thead><tr>${displayedHeaders.map(h => `<th>${headerMapping[h] || h}</th>`).join('')}</tr></thead>`;
             const bodyHtml = `<tbody>${sourceData.map(row => {
                 const cellsHtml = displayedHeaders.map(h => {
@@ -1370,6 +1424,7 @@ updateNvDataLists();
         function hasPendingChanges(tableKey) { return (Object.keys(changeSet.create[tableKey] || {}).length + Object.keys(changeSet.update[tableKey] || {}).length + (changeSet.delete[tableKey] || []).length) > 0; }
 
         // --- FILTERING LOGIC ---
+        
         function filterTable(tableKey) {
             const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
             const filters = Array.from(container.querySelectorAll('.filter-input'));
