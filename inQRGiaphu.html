@@ -5,10 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quản lý mã QR thiết bị - Lọc theo ID</title>
 <style>
+    :root { --cell-size: 3cm; }
+
     /* --- Cài đặt chung & Giao diện điều khiển (Screen only) --- */
     @media screen {
         body {
-            font-family: sans-serif;
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -38,16 +40,18 @@
             gap: 10px;
         }
         .controls label {
-            font-weight: bold;
+            font-weight: 600;
         }
         .controls input[type="number"] {
-            width: 80px;
-            padding: 8px;
+            width: 90px;
+            padding: 8px 10px;
             font-size: 1em;
             border: 1px solid #ccc;
-            border-radius: 4px;
+            border-radius: 8px;
             text-align: center;
+            background: #fff;
         }
+        #loading-message { color: #333; font-size: 0.95em; }
     }
 
     /* --- Header (Logo và Tiêu đề) --- */
@@ -68,9 +72,10 @@
     }
     .header-title {
         font-size: 2em;
-        font-weight: bold;
+        font-weight: 800;
         color: #333;
         margin: 0;
+        letter-spacing: .2px;
     }
 
     /* --- Cấu trúc trang A4 --- */
@@ -80,7 +85,7 @@
         padding: 1.5cm;
         background-color: white;
         box-sizing: border-box;
-        border: 1px solid #999; 
+        border: 1px solid #999;
     }
     @media screen {
         .a4-landscape {
@@ -103,6 +108,7 @@
         border: 2px solid #555;
         background-color: #f0f0f0;
         overflow: hidden;
+        border-radius: 4px;
     }
     .image-container img {
         width: 100%;
@@ -114,13 +120,14 @@
         padding: 4px;
         text-align: center;
         font-size: 0.7em;
-        font-weight: bold;
+        font-weight: 700;
         background-color: #fff;
         border: 1px solid #ccc;
         border-top: none;
         width: var(--cell-size);
         box-sizing: border-box;
         word-wrap: break-word;
+        border-radius: 0 0 4px 4px;
     }
 
     /* --- Cài đặt cho IN ẤN --- */
@@ -143,7 +150,7 @@
 
 <div class="controls-container">
     <div class="controls">
-        <label for="sizeInput">Nhập kích thước QR (cm):</label>
+        <label for="sizeInput">Kích thước QR (cm):</label>
         <input type="number" id="sizeInput" min="1" max="20" value="3" step="0.1">
     </div>
     <div id="loading-message">Đang tải dữ liệu, vui lòng chờ...</div>
@@ -152,122 +159,156 @@
 <div id="print-area"></div>
 
 <script>
-    const sizeInput = document.getElementById('sizeInput');
-    const printArea = document.getElementById('print-area');
-    const loadingMessage = document.getElementById('loading-message');
-    
-    let qrData = [];
+  const sizeInput = document.getElementById('sizeInput');
+  const printArea = document.getElementById('print-area');
+  const loadingMessage = document.getElementById('loading-message');
 
-    // --- HÀM Lấy danh sách ID từ URL ---
-    function getIdsFromUrl() {
-        const urlParams = new URLSearchParams(window.location.search);
-        const idsParam = urlParams.get('id'); // Lấy tham số 'id'
-        if (idsParam) {
-            return idsParam.split(','); // Tách chuỗi thành mảng các ID
-        }
-        return null; // Trả về null nếu không có tham số 'id'
+  let qrData = [];
+
+  // --- Lấy danh sách ID từ URL: ?id=1,2,3 ---
+  function getIdsFromUrl() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const idsParam = urlParams.get('id');
+    if (!idsParam) return null;
+    return idsParam.split(',').map(s => s.trim()).filter(Boolean);
+  }
+
+  // --- Chuẩn hoá lấy ID từ item ---
+  function getItemId(item) {
+    // Các khoá có thể dùng làm ID
+    const candidates = [
+      'id', 'ID', 'Id',
+      'Mã', 'Mã thiết bị', 'Mã thiết bị/QR', 'Mã QR', 'Mã vạch (ID)'
+    ];
+    for (const key of candidates) {
+      if (key in item && item[key] !== null && item[key] !== undefined) {
+        return String(item[key]);
+      }
+    }
+    return undefined;
+  }
+
+  // --- Tìm mảng dữ liệu trong payload JSON ---
+  function extractArrayFromPayload(payload) {
+    if (Array.isArray(payload)) return payload;
+
+    // Các khoá hay gặp
+    const knownKeys = ['data', 'quanLyThietBi', 'items', 'records', 'rows', 'result', 'values', 'list', 'entries'];
+    for (const k of knownKeys) {
+      if (Array.isArray(payload?.[k])) return payload[k];
     }
 
-    async function fetchData() {
-        // --- LINK DATA MỚI ---
-        const apiUrl = 'https://script.google.com/macros/s/AKfycbybvnxUxoQyjk9-3SJMVIlFYJwJVHEn4UJQalRiPf42k4qS3YibwSXKLXyJKkWXAnU1/exec';
-        try {
-            const response = await fetch(apiUrl);
-            if (!response.ok) throw new Error(`Lỗi mạng: ${response.status}`);
-            const data = await response.json();
-            
-            // --- ĐIỀU CHỈNH 1: Thay đổi "data.data" thành "data.quanLyThietBi" ---
-            let allData = data.quanLyThietBi; 
+    // Quét value đầu tiên là mảng
+    const firstArray = Object.values(payload || {}).find(v => Array.isArray(v));
+    if (firstArray) return firstArray;
 
-            // Kiểm tra xem allData có phải là một mảng hay không để tránh lỗi
-            if (!Array.isArray(allData)) {
-                throw new Error("Dữ liệu nhận được không phải là một danh sách hợp lệ.");
-            }
+    return null;
+  }
 
-            // --- LOGIC LỌC DỮ LIỆU ---
-            const idsToDisplay = getIdsFromUrl();
-            if (idsToDisplay) {
-                // Nếu có ID trong URL, chỉ giữ lại những item có ID trùng khớp
-                qrData = allData.filter(item => idsToDisplay.includes(String(item.id)));
-                loadingMessage.textContent = `Đã lọc và tải ${qrData.length} mã QR.`;
-            } else {
-                // Nếu không có ID, hiển thị tất cả
-                qrData = allData;
-                loadingMessage.textContent = `Đã tải tất cả ${qrData.length} mã QR.`;
-            }
-            
-            generateAllPages(); 
-        } catch (error) {
-            console.error('Không thể lấy dữ liệu:', error);
-            loadingMessage.textContent = `Lỗi! Không thể tải dữ liệu. ${error.message}`;
-        }
+  async function fetchData() {
+    const apiUrl = 'https://script.google.com/macros/s/AKfycbybvnxUxoQyjk9-3SJMVIlFYJwJVHEn4UJQalRiPf42k4qS3YibwSXKLXyJKkWXAnU1/exec';
+    try {
+      const response = await fetch(apiUrl, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`Lỗi mạng: ${response.status}`);
+
+      const data = await response.json();
+      console.log('Payload nhận được:', data);
+
+      const allData = extractArrayFromPayload(data);
+      if (!allData) {
+        throw new Error('Dữ liệu nhận được không phải là một danh sách hợp lệ (không tìm thấy mảng).');
+      }
+
+      const idsToDisplay = getIdsFromUrl();
+      if (idsToDisplay && idsToDisplay.length) {
+        qrData = allData.filter(item => {
+          const idStr = getItemId(item);
+          return idStr && idsToDisplay.includes(idStr);
+        });
+        loadingMessage.textContent = `Đã lọc và tải ${qrData.length} mã QR theo ID trong URL.`;
+      } else {
+        qrData = allData;
+        loadingMessage.textContent = `Đã tải tất cả ${qrData.length} mã QR.`;
+      }
+
+      generateAllPages();
+    } catch (error) {
+      console.error('Không thể lấy dữ liệu:', error);
+      loadingMessage.textContent = `Lỗi! Không thể tải dữ liệu. ${error.message}`;
+      printArea.innerHTML = '<p style="text-align:center;color:#b91c1c">Không có dữ liệu để hiển thị. Kiểm tra endpoint hoặc tham số ID.</p>';
+    }
+  }
+
+  function generateAllPages() {
+    const cellSize = parseFloat(sizeInput.value);
+    if (!cellSize || cellSize <= 0) return;
+
+    document.documentElement.style.setProperty('--cell-size', `${cellSize}cm`);
+    printArea.innerHTML = '';
+
+    if (!Array.isArray(qrData) || qrData.length === 0) {
+      printArea.innerHTML = '<p style="text-align: center;">Không có dữ liệu để hiển thị. Vui lòng kiểm tra lại ID trong URL hoặc dữ liệu nguồn.</p>';
+      return;
     }
 
-    function generateAllPages() {
-        const cellSize = parseFloat(sizeInput.value); 
-        if (!cellSize || cellSize <= 0) return;
-        
-        document.documentElement.style.setProperty('--cell-size', `${cellSize}cm`);
-        printArea.innerHTML = '';
+    // Bố cục A4 ngang – đã trừ padding 1.5cm hai bên => còn 29.7 - 3; 21 - 3
+    const pageContentWidthCM = 29.7 - 3;
+    const pageContentHeightCM = 21 - 3;
+    const gapCM = 0.4;
+    const captionHeightApproximationCM = 0.7;
+    const headerHeightCM = 3.5;
 
-        if (qrData.length === 0) {
-            printArea.innerHTML = '<p style="text-align: center;">Không có dữ liệu để hiển thị. Vui lòng kiểm tra lại ID trong URL.</p>';
-            return;
-        }
+    const itemTotalWidthCM = cellSize + gapCM;
+    const itemTotalHeightCM = cellSize + captionHeightApproximationCM + gapCM;
 
-        const pageContentWidthCM = 29.7 - 3;
-        const pageContentHeightCM = 21 - 3;
-        const gapCM = 0.4;
-        const captionHeightApproximationCM = 0.7;
-        const headerHeightCM = 3.5; // Chiều cao ước tính của header & khoảng trống
+    const colsPerPage = Math.max(1, Math.floor(pageContentWidthCM / itemTotalWidthCM));
+    const initialRows = Math.max(1, Math.floor((pageContentHeightCM - headerHeightCM) / itemTotalHeightCM));
+    const itemsPerPage = colsPerPage * initialRows;
+    const totalPages = Math.ceil(qrData.length / itemsPerPage);
 
-        const itemTotalWidthCM = cellSize + gapCM;
-        const itemTotalHeightCM = cellSize + captionHeightApproximationCM + gapCM;
-        
-        const colsPerPage = Math.floor(pageContentWidthCM / itemTotalWidthCM);
-        const initialRows = Math.floor((pageContentHeightCM - headerHeightCM) / itemTotalHeightCM);
-        const itemsPerPage = (colsPerPage * initialRows) > 0 ? (colsPerPage * initialRows) : 1;
-        const totalPages = Math.ceil(qrData.length / itemsPerPage);
+    for (let i = 0; i < totalPages; i++) {
+      const startIndex = i * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageData = qrData.slice(startIndex, endIndex);
 
-        for (let i = 0; i < totalPages; i++) {
-            const startIndex = i * itemsPerPage;
-            const endIndex = startIndex + itemsPerPage;
-            const pageData = qrData.slice(startIndex, endIndex);
+      const a4Page = document.createElement('div');
+      a4Page.className = 'a4-landscape';
 
-            const a4Page = document.createElement('div');
-            a4Page.className = 'a4-landscape';
+      const header = `
+        <header class="page-header">
+          <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F87f535c0.%E1%BA%A2nh.054502.png" alt="Logo" class="logo">
+          <h1 class="header-title">Quản lý mã QR thiết bị</h1>
+        </header>
+      `;
 
-            const header = `
-                <header class="page-header">
-                    <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F87f535c0.%E1%BA%A2nh.054502.png" alt="Logo" class="logo">
-                    <h1 class="header-title">Quản lý mã QR thiết bị</h1>
-                </header>
-            `;
+      let gridContent = '';
+      pageData.forEach(item => {
+        // Các khoá khả dĩ cho ảnh QR và tên hiển thị
+        const maVach = item['Mã vạch'] || item['QR'] || item['QR_URL'] || item['qr'] || item['image'] || '';
+        const tenQR =
+          item['Tên QR'] || item['Tên'] || item['Ten'] || item['Name'] ||
+          item['Thiết bị'] || item['Device'] || getItemId(item) || 'Không có tên';
 
-            let gridContent = '';
-            pageData.forEach(item => {
-                // --- ĐIỀU CHỈNH 2: Sử dụng cú pháp ngoặc vuông [] để truy cập thuộc tính tiếng Việt ---
-                const maVach = item['Mã vạch'];
-                const tenQR = item['Tên QR'];
+        gridContent += `
+          <div class="grid-item">
+            <div class="image-container">
+              <img src="${maVach}" alt="Mã QR cho ${tenQR}"
+                   onerror="this.onerror=null; this.src='https://via.placeholder.com/200?text=L%E1%BB%97i+%E1%BA%A2nh';">
+            </div>
+            <div class="caption">${tenQR}</div>
+          </div>
+        `;
+      });
 
-                gridContent += `
-                    <div class="grid-item">
-                        <div class="image-container">
-                            <img src="${maVach}" alt="Mã QR cho ${tenQR}" onerror="this.onerror=null; this.src='https.via.placeholder.com/200?text=Lỗi+Ảnh';">
-                        </div>
-                        <div class="caption">${tenQR}</div>
-                    </div>
-                `;
-            });
-
-            a4Page.innerHTML = header + `<div class="grid-container">${gridContent}</div>`;
-            printArea.appendChild(a4Page);
-        }
+      a4Page.innerHTML = header + `<div class="grid-container">${gridContent}</div>`;
+      printArea.appendChild(a4Page);
     }
+  }
 
-    sizeInput.addEventListener('input', generateAllPages);
-    window.addEventListener('load', fetchData);
+  sizeInput.addEventListener('input', generateAllPages);
+  window.addEventListener('load', fetchData);
 </script>
 
 </body>
 </html>
+
