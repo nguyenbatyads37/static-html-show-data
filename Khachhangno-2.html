@@ -1105,6 +1105,7 @@ filters.innerHTML = `
 
       // Chèn controls lên đầu container
       controlsHost.appendChild(controls);
+      syncGlobalDebtTermToForm();    // form vừa render xong -> kéo giá trị số ngày từ dashboard vào
 
 
       // Gắn sự kiện tìm kiếm
@@ -1904,6 +1905,17 @@ function makeColumnsResizable(table){
         link.download = `BaoCao_CongNo_${new Date().toISOString().slice(0, 10)}.csv`;
         document.body.appendChild(link); link.click(); document.body.removeChild(link);
     }
+     // --- Đồng bộ "Số Ngày Nợ Tối Đa" (dashboard) -> "Hạn trả nợ" (form thêm) ---
+function syncGlobalDebtTermToForm() {
+  const g = document.getElementById('custom-debt-term-input');           // ô số ngày ở dashboard
+  const debtTermInput = document.querySelector(
+    '#add-form-khn input[data-field="Hạn trả nợ"]'                       // ô "Hạn trả nợ" trong form thêm
+  );
+  if (!g || !debtTermInput) return;
+  debtTermInput.value = g.value || '';
+  // bắn event để logic tính 'Ngày phải trả' trong form chạy lại
+  debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
+}
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-form').addEventListener('submit', handleLogin);
@@ -1914,19 +1926,11 @@ function makeColumnsResizable(table){
         setupCurrencyInput(document.getElementById('max-sales-debt-input'));
 
         const customDebtTermInput = document.getElementById('custom-debt-term-input');
-        if (customDebtTermInput) {
-            customDebtTermInput.addEventListener('input', (e) => {
-                const days = e.target.value;
-                // Đồng bộ với form ngoài bảng nếu có
-                const addForm = document.querySelector('#container-khn #add-form-khn');
-                if (!addForm) return;
-                const debtTermInput = addForm.querySelector('input[data-field="Hạn trả nợ"]');
-                if (debtTermInput) {
-                    debtTermInput.value = days;
-                    debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            });
-        }
+if (customDebtTermInput) {
+  // gõ số ngày ở dashboard -> đẩy sang "Hạn trả nợ" của form thêm
+  customDebtTermInput.addEventListener('input', syncGlobalDebtTermToForm);
+}
+
 
         const deliveryDatalist = document.getElementById('delivery-staff-list-options');
         if (deliveryDatalist) {
