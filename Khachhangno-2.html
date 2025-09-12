@@ -138,6 +138,13 @@ header img{
 /* .filters-row .label::before{ ... }  <-- ĐÃ GỠ */
 
 /* Inputs */
+/* Nhãn mini cho từng ô lọc */
+.filters-row .field{ display:flex; flex-direction:column; gap:4px; }
+.filters-row .field label{
+  font-size:11px; font-weight:800; letter-spacing:.2px; text-transform:uppercase; color:#334155;
+  background:#f1f5f9; border:1px solid #e2e8f0; border-radius:999px; padding:4px 8px; width:max-content;
+}
+
 .table-controls .filter-input{
   border:1px solid var(--border);background:#fff;height:38px;padding:8px 12px;border-radius:999px;
   box-shadow:0 1px 0 rgba(2,6,23,.04);transition:border-color .15s, box-shadow .15s
@@ -267,6 +274,35 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
 .align-left  { text-align: left; }
 .align-right { text-align: right; }
 .align-center{ text-align: center; }
+/* Compact filters */
+.table-controls{ padding:10px }
+.filters-row{
+  gap:8px;
+  grid-template-columns:120px repeat(auto-fit,minmax(140px,1fr));
+  align-items:center;
+}
+.filters-row .label{ font-size:13px }
+.table-controls .filter-input{
+  height:32px;                 /* ↓ thấp hơn */
+  font-size:13px;
+  padding:6px 10px;
+  border-radius:10px;          /* pill nhỏ hơn */
+  min-width:0;                 /* tránh nở quá to */
+}
+
+/* Responsive: đẩy nhãn lên 1 dòng riêng khi hẹp */
+@media (max-width: 1100px){
+  .filters-row{
+    grid-template-columns: repeat(3,minmax(0,1fr));
+  }
+  .filters-row .label{
+    grid-column: 1 / -1;
+    margin-bottom: 2px;
+  }
+}
+
+/* Cho phép hàng lọc co lại theo cột, không phá bố cục */
+.table-container{ overflow: auto }
 
 </style>
 
@@ -372,6 +408,15 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
     const HIDDEN_COLUMNS = ['id', 'id nợ'];
     const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
     const NV_GIAO_HANG_HEADERS = ['Giao hàng cho nợ']; // bỏ 'NV cho nợ'
+    // Chỉ các cột trong danh sách này mới có ô lọc
+const FILTERABLE_HEADERS = [
+  'Tên Khách Hàng',
+  'Khu vực',
+  'Người chịu trách nhiệm',
+  'SĐT',
+  'Ngày nợ',
+  'Ngày phải trả'
+];
 
     const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ', 'Đơn giá', 'Số lượng', 'Hạn trả nợ', 'Số ngày'];
     const COLUMN_CONFIG = {
@@ -665,72 +710,131 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
       controls.className = 'table-controls';
 
       // ====== Bộ lọc (external) ======
-      const filters = document.createElement('div');
-      filters.className = 'filters-row';
-      filters.innerHTML = `
-        <div class="label"><i class="fa fa-filter"></i> Tìm kiếm</div>
-        ${displayedHeaders.map(h => {
-          const ph = headerMapping[h] || h;
-          return `<input class="filter-input" data-header="${h}" placeholder="${ph}..." />`;
-        }).join('')}
-      `;
+     const filters = document.createElement('div');
+filters.className = 'filters-row';
+filters.innerHTML = `
+  <div class="label"><i class="fa fa-filter"></i> Tìm kiếm</div>
+  ${
+    displayedHeaders
+      .filter(h => FILTERABLE_HEADERS.includes(h))
+      .map(h => {
+        const ph = headerMapping[h] || h;
+        if (h === 'Ngày nợ') {
+          return `
+            <div class="field">
+              <label>Ngày nợ</label>
+              <input class="filter-input" type="date"
+                     data-header="Ngày nợ" data-role="date-start"
+                     aria-label="Ngày nợ" title="Ngày nợ">
+            </div>`;
+        }
+        if (h === 'Ngày phải trả') {
+          return `
+            <div class="field">
+              <label>Ngày đến hạn</label>
+              <input class="filter-input" type="date"
+                     data-header="Ngày phải trả" data-role="date-end"
+                     aria-label="Ngày đến hạn" title="Ngày đến hạn">
+            </div>`;
+        }
+        // Các cột text bình thường
+        return `
+          <div class="field">
+            <label>${ph}</label>
+            <input class="filter-input" data-header="${h}" placeholder="${ph}..." />
+          </div>`;
+      })
+      .join('')
+  }
+`;
+
+
+
 
       // ====== Form thêm mới (external) ======
       const addPanel = document.createElement('div');
       addPanel.className = 'add-panel';
       addPanel.innerHTML = `
-        <details open>
-          <summary><b>➕ Thêm khoản nợ mới</b></summary>
-          <div class="add-grid" id="add-form-${tableKey}">
-            ${headers.map(h => {
-              if (HIDDEN_COLUMNS.includes(h)) return `<input type="hidden" data-field="${h}">`;
-              const disp = headerMapping[h] || h;
-              if (['Địa chỉ', 'Sản phẩm/Mặt hàng', 'Ghi chú'].includes(h)) {
-                return `<div class="field"><label>${disp}</label><textarea data-field="${h}" placeholder="${disp}..."></textarea></div>`;
-              } else if (h === 'Tên Khách Hàng') {
-                return `<div class="field"><label>${disp}</label><input type="text" list="customer-list-options" data-field="${h}" placeholder="Nhập tên Khách Hàng..."></div>`;
-              } else if (NV_GIAO_HANG_HEADERS.includes(h)) {
-                const o = GIAO_HANG_NV_LIST.map(n => `<option value="${n}">${n}</option>`).join('');
-                return `<div class="field"><label>${disp}</label><select data-field="${h}"><option value="">-- Chọn --</option>${o}</select></div>`;
-              } else if (h === 'NV cho nợ') {
-                return `<div class="field"><label>${disp}</label><input type="text" list="delivery-staff-list-options" data-field="${h}" placeholder="Nhập tên NV giao hàng..."></div>`;
-              } else if (h === 'Người chịu trách nhiệm') {
-                return `<div class="field"><label>${disp}</label><input type="text" list="sales-person-list-options" data-field="${h}" placeholder="${disp}..."></div>`;
-              } else {
-                switch (h) {
-                  case 'SĐT':
-                    return `<div class="field"><label>${disp}</label><input type="tel" data-field="${h}" placeholder="Số điện thoại..."></div>`;
-                  case 'Ngày nợ':
-                    return `<div class="field"><label>${disp}</label><input type="date" data-field="${h}" value="${new Date().toISOString().slice(0,10)}"></div>`;
-                  case 'Hạn trả nợ':
-                    return `<div class="field"><label>${disp}</label><input type="number" data-field="Hạn trả nợ" placeholder="Ngày" value="30"></div>`;
-                  case 'Ngày phải trả':
-                    return `<div class="field"><label>${disp}</label><input type="date" data-field="${h}" readonly></div>`;
-                  case 'Số tiền nợ':
-                  case 'Số lượng':
-                  case 'Đơn giá':
-                    return `<div class="field"><label>${disp}</label><input type="text" inputmode="decimal" data-field="${h}" placeholder="0"></div>`;
-                  default:
-                    return `<div class="field"><label>${disp}</label><input type="text" data-field="${h}" placeholder="${disp}..."></div>`;
-                }
-              }
-            }).join('')}
-          </div>
-          <div class="add-actions">
-            <button type="button" id="btn-add-${tableKey}" class="action-btn update-btn"><i class="fa fa-plus"></i> Thêm</button>
-          </div>
+  <details open>
+    <summary><b>➕ Thêm khoản nợ mới</b></summary>
+    <div class="add-grid" id="add-form-${tableKey}">
+      ${headers.map(h => {
+        if (HIDDEN_COLUMNS.includes(h)) return `<input type="hidden" data-field="${h}">`;
+        const disp = headerMapping[h] || h;
 
-          <!-- Hiển thị nợ hiện tại (bản riêng cho form ngoài, tránh trùng ID) -->
-          <div id="current-sales-debt-display-ext" class="debt-control-group" style="display:none;margin-top:8px;">
-            <p class="debt-label">Nợ hiện tại của NVKD:</p>
-            <p id="current-sales-debt-value-ext">0 VNĐ</p>
-          </div>
-          <div id="current-customer-debt-display-ext" class="debt-control-group" style="display:none;margin-top:8px;">
-            <p class="debt-label">Nợ hiện tại của KH:</p>
-            <p id="current-customer-debt-value-ext">0 VNĐ</p>
-          </div>
-        </details>
-      `;
+        // chỉ còn 2 field dùng textarea
+        if (['Sản phẩm/Mặt hàng', 'Ghi chú'].includes(h)) {
+          return `<div class="field"><label>${disp}</label>
+                    <textarea data-field="${h}" placeholder="${disp}..."></textarea>
+                  </div>`;
+        }
+
+        // Địa chỉ = input 1 dòng
+        if (h === 'Địa chỉ') {
+          return `<div class="field"><label>${disp}</label>
+                    <input type="text" data-field="${h}" placeholder="${disp}..." autocomplete="street-address">
+                  </div>`;
+        }
+
+        if (h === 'Tên Khách Hàng') {
+          return `<div class="field"><label>${disp}</label>
+                    <input type="text" list="customer-list-options" data-field="${h}" placeholder="Nhập tên Khách Hàng...">
+                  </div>`;
+        }
+        if (NV_GIAO_HANG_HEADERS.includes(h)) {
+          const o = GIAO_HANG_NV_LIST.map(n => `<option value="${n}">${n}</option>`).join('');
+          return `<div class="field"><label>${disp}</label>
+                    <select data-field="${h}"><option value="">-- Chọn --</option>${o}</select>
+                  </div>`;
+        }
+        if (h === 'NV cho nợ') {
+          return `<div class="field"><label>${disp}</label>
+                    <input type="text" list="delivery-staff-list-options" data-field="${h}" placeholder="Nhập tên NV giao hàng...">
+                  </div>`;
+        }
+        if (h === 'Người chịu trách nhiệm') {
+          return `<div class="field"><label>${disp}</label>
+                    <input type="text" list="sales-person-list-options" data-field="${h}" placeholder="${disp}...">
+                  </div>`;
+        }
+
+        switch (h) {
+          case 'SĐT':
+            return `<div class="field"><label>${disp}</label>
+                      <input type="tel" data-field="${h}" placeholder="Số điện thoại...">
+                    </div>`;
+          case 'Ngày nợ':
+            return `<div class="field"><label>${disp}</label>
+                      <input type="date" data-field="${h}" value="${new Date().toISOString().slice(0,10)}">
+                    </div>`;
+          case 'Hạn trả nợ':
+            return `<div class="field"><label>${disp}</label>
+                      <input type="number" data-field="Hạn trả nợ" placeholder="Ngày" value="30">
+                    </div>`;
+          case 'Ngày phải trả':
+            return `<div class="field"><label>${disp}</label>
+                      <input type="date" data-field="${h}" readonly>
+                    </div>`;
+          case 'Số tiền nợ':
+          case 'Số lượng':
+          case 'Đơn giá':
+            return `<div class="field"><label>${disp}</label>
+                      <input type="text" inputmode="decimal" data-field="${h}" placeholder="0">
+                    </div>`;
+          default:
+            return `<div class="field"><label>${disp}</label>
+                      <input type="text" data-field="${h}" placeholder="${disp}...">
+                    </div>`;
+        }
+      }).join('')}
+    </div>
+    <div class="add-actions">
+      <button type="button" id="btn-add-${tableKey}" class="action-btn update-btn"><i class="fa fa-plus"></i> Thêm</button>
+    </div>
+    ...
+  </details>
+`;
+
 
       controls.appendChild(filters);
       controls.appendChild(addPanel);
@@ -1238,46 +1342,101 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
     function calculateDueDate(s, d) { if (!s || d == null) return null; try { const sD = new Date(s); const dA = parseInt(d, 10); if (isNaN(sD.getTime()) || isNaN(dA)) return null; sD.setUTCDate(sD.getUTCDate() + dA); return sD; } catch (e) { return null; } }
     
     function filterTable(tableKey) {
-        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
-        const filters = Array.from(container.querySelectorAll('.filter-input'));
-        const tbody = container.querySelector('tbody');
-        if (!tbody) return;
-        const rows = tbody.querySelectorAll('tr');
-        const filterValues = filters.map(f => ({ header: f.dataset.header, value: f.value.trim().toLowerCase() }));
-        
-        const hasActiveFilters = filterValues.some(f => f.value !== '');
-        if (hasActiveFilters) {
-            const allKhnData = [...(originalTableData.khn?.data || [])];
-            const filteredKhn = allKhnData.filter(row => {
-                for (const filter of filterValues) {
-                    if (!filter.value) continue;
-                    const cellValue = String(row[filter.header] || '').toLowerCase();
-                    if (!cellValue.includes(filter.value)) return false;
-                }
-                return true;
-            });
-            const filteredDebtIds = new Set(filteredKhn.map(r => r.id));
-            const filteredCustomerNames = new Set(filteredKhn.map(r => r['Tên Khách Hàng']));
-            const filteredKhtn = (originalTableData.khtn?.data || []).filter(row => filteredDebtIds.has(row['id nợ']));
-            const filteredHth = (originalTableData.hth?.data || []).filter(row => filteredCustomerNames.has(row['Tên Khách Hàng']));
-            updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
-        } else {
-            updateDashboard();
-        }
+  const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
+  const tbody = container.querySelector('tbody');
+  if (!tbody) return;
 
-        rows.forEach(row => {
-            let matchesFilters = true;
-            for (const filter of filterValues) {
-                if (!filter.value) continue;
-                const cell = row.querySelector(`[data-field="${filter.header}"]`);
-                const cellValue = cell ? (cell.value || cell.textContent).toLowerCase() : '';
-                if (!cellValue.includes(filter.value)) { matchesFilters = false; break; }
-            }
-            row.style.display = (matchesFilters) ? '' : 'none';
-        });
-        updateTotals(tableKey);
-        highlightOverdueRows();
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  const allFilterInputs = Array.from(container.querySelectorAll('.filter-input'));
+
+  // --- tách lọc ngày & text ---
+  const startInput = allFilterInputs.find(i => i.dataset.role === 'date-start');
+  const endInput   = allFilterInputs.find(i => i.dataset.role === 'date-end');
+  const startStr = startInput?.value || '';
+  const endStr   = endInput?.value   || '';
+
+  const textFilters = allFilterInputs
+    .filter(i => !i.dataset.role) // không phải 2 ô ngày
+    .map(i => ({ header: i.dataset.header, value: i.value.trim().toLowerCase() }));
+
+  const hasAnyText = textFilters.some(f => f.value !== '');
+  const hasStart   = !!startStr;
+  const hasEnd     = !!endStr;
+
+  // helper so sánh ngày (yyyy-mm-dd) theo ngày, bỏ giờ
+  const toYmd = d => (d ? new Date(d).toISOString().slice(0,10) : '');
+  const parseSafe = s => (s ? new Date(s + 'T00:00:00') : null); // tránh lệch múi giờ
+
+  const startDate = parseSafe(startStr);
+  const endDate   = parseSafe(endStr);
+
+  // --- lọc DOM theo điều kiện ---
+  rows.forEach(row => {
+    let ok = true;
+
+    // 1) Lọc text (nếu có)
+    if (ok && hasAnyText) {
+      for (const f of textFilters) {
+        if (!f.value) continue;
+        const cell = row.querySelector(`[data-field="${f.header}"]`);
+        const val = (cell ? (cell.value || cell.textContent) : '').toLowerCase();
+        if (!val.includes(f.value)) { ok = false; break; }
+      }
     }
+
+    // 2) Lọc ngày theo 3 quy tắc
+    if (ok && (hasStart || hasEnd)) {
+      const startCell = row.querySelector('[data-field="Ngày nợ"]');
+      const endCell   = row.querySelector('[data-field="Ngày phải trả"]');
+
+      const rowStart = parseSafe(startCell?.value || startCell?.textContent || '');
+      const rowEnd   = parseSafe(endCell?.value   || endCell?.textContent   || '');
+
+      // Nếu thiếu dữ liệu ngày trong dòng thì coi là không khớp
+      if (!rowStart || !rowEnd) ok = false;
+      else {
+        if (hasStart && !hasEnd) {
+          // (1) Chỉ chọn Ngày nợ -> lấy các khoản nợ bắt đầu từ ngày đó trở đi
+          ok = (rowStart >= startDate);
+        } else if (!hasStart && hasEnd) {
+          // (2) Chỉ chọn Ngày đến hạn -> chỉ đúng ngày đó (so sánh đúng YYYY-MM-DD)
+          ok = (toYmd(rowEnd) === toYmd(endDate));
+        } else {
+          // (3) Chọn cả 2 -> bắt đầu >= start và kết thúc <= end
+          ok = (rowStart >= startDate && rowEnd <= endDate);
+        }
+      }
+    }
+
+    row.style.display = ok ? '' : 'none';
+  });
+
+  // --- cập nhật tổng & dashboard theo dữ liệu đã lọc ---
+  updateTotals(tableKey);
+  highlightOverdueRows();
+
+  // Cập nhật dashboard dựa trên dữ liệu đã lọc (khi có bất kỳ filter)
+  const anyFilterActive =
+    hasAnyText || hasStart || hasEnd;
+
+  if (anyFilterActive) {
+    const visibleIds = new Set(
+      rows.filter(r => r.style.display !== 'none' && !r.classList.contains('debt-paid-off'))
+          .map(r => r.dataset.id)
+    );
+    const filteredKhn = (originalTableData.khn?.data || []).filter(r => visibleIds.has(r.id));
+    const filteredDebtIds = new Set(filteredKhn.map(r => r.id));
+    const filteredCustomerNames = new Set(filteredKhn.map(r => r['Tên Khách Hàng']));
+
+    const filteredKhtn = (originalTableData.khtn?.data || []).filter(r => filteredDebtIds.has(r['id nợ']));
+    const filteredHth  = (originalTableData.hth?.data  || []).filter(r => filteredCustomerNames.has(r['Tên Khách Hàng']));
+
+    updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
+  } else {
+    updateDashboard();
+  }
+}
+
 
     function capitalizeFirstLetter(input) { if (input.value.length > 0) input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1); }
     function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
