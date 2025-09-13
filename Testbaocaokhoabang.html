@@ -33,7 +33,6 @@
       display: flex;
     }
 
-    /* --- GIAO DIỆN MỚI --- */
     .controls-panel {
       width: 280px;
       height: 100vh;
@@ -93,9 +92,14 @@
       opacity: 0.9;
       transform: translateY(-2px);
     }
+    
+    .controls-panel .loader {
+        font-style: italic;
+        color: var(--text-light);
+    }
 
     .report-wrapper {
-      margin-left: 280px; /* Bằng với chiều rộng của panel */
+      margin-left: 280px;
       width: calc(100% - 280px);
       padding: 40px 20px;
       background-color: #f8f1f1;
@@ -122,7 +126,7 @@
       position: relative;
       overflow: hidden;
       border: 1px solid rgba(167, 29, 42, 0.2);
-      display: none; /* Ẩn ban đầu */
+      display: none;
     }
 
     .trf-container::before {
@@ -198,7 +202,7 @@
         <div class="control-group">
             <label for="class-select">Chọn Lớp:</label>
             <select id="class-select">
-                <option value="">Đang tải danh sách lớp...</option>
+                <option value="" class="loader">Đang tải danh sách lớp...</option>
             </select>
         </div>
         <div class="control-group">
@@ -274,11 +278,7 @@
                     <th>Trạng thái</th>
                     </tr>
                 </thead>
-                <tbody id="tableBody">
-                    <tr class="no-data-row">
-                    <td colspan="5" class="no-data">Không có dữ liệu học tập</td>
-                    </tr>
-                </tbody>
+                <tbody id="tableBody"></tbody>
             </table>
 
             <div class="section-title">ĐIỂM KIỂM TRA CÁC NGÀY</div>
@@ -291,11 +291,7 @@
                     <th>Điểm</th>
                     </tr>
                 </thead>
-                <tbody id="testScoreBody">
-                    <tr class="no-data-row">
-                    <td colspan="4" class="no-data">Không có dữ liệu điểm kiểm tra</td>
-                    </tr>
-                </tbody>
+                <tbody id="testScoreBody"></tbody>
             </table>
 
             <div class="section-title">BIỂU ĐỒ TIẾN BỘ HỌC TẬP</div>
@@ -317,8 +313,8 @@
         </div>
     </div>
   <script>
-    // Biến toàn cục để lưu trữ toàn bộ dữ liệu
     let allStudentData = [];
+    let allTestNameData = [];
 
     function normalizeDate(dateStr) {
       if (!dateStr) return '';
@@ -336,15 +332,9 @@
 
     function drawChart(data) {
       const chartContainer = document.querySelector('.chart-container');
-      if (!data || data.length === 0) {
-        chartContainer.style.display = 'none';
-        return;
-      }
+      if (!data || data.length === 0) { chartContainer.style.display = 'none'; return; }
       const validData = data.filter(item => item.diem !== null && !isNaN(item.diem));
-      if (validData.length === 0) {
-        chartContainer.style.display = 'none';
-        return;
-      }
+      if (validData.length === 0) { chartContainer.style.display = 'none'; return; }
       
       chartContainer.style.display = 'block';
       const labels = validData.map(item => `${item.ngay} - ${item.tenBaiKiemTra}`);
@@ -363,10 +353,7 @@
             scales: { y: { beginAtZero: true, max: 100, title: { display: true, text: 'Điểm số (%)', font: { size: 14, weight: 'bold' } }, ticks: { callback: (val) => val + ' %' } }, x: { title: { display: true, text: 'Ngày kiểm tra', font: { size: 14, weight: 'bold' } } } }
           }
         });
-      } catch (e) {
-        console.error('Lỗi khi vẽ biểu đồ:', e);
-        chartContainer.style.display = 'none';
-      }
+      } catch (e) { console.error('Lỗi khi vẽ biểu đồ:', e); chartContainer.style.display = 'none'; }
     }
 
     function renderReport(studentRecords) {
@@ -387,6 +374,10 @@
 
         studentRecords.forEach(record => {
             const recordDate = normalizeDate(record['Ngày']);
+            const classSessionId = record['Mã Lớp'];
+            // TÌM TÊN BÀI KIỂM TRA TƯƠNG ỨNG VỚI MÃ LỚP
+            const testNames = allTestNameData.find(tn => tn['Mã lớp'] === classSessionId);
+
             let dailyScores = [];
             
             for (const key in record) {
@@ -394,7 +385,9 @@
                     const score = parseFloat(record[key]);
                     if (!isNaN(score)) {
                         const scoreAsPercent = score * 100;
-                        allTestData.push({ ngay: recordDate, tenBaiKiemTra: 'Bài ' + key, diem: scoreAsPercent });
+                        // LẤY TÊN BÀI KIỂM TRA TỪ OBJECT ĐÃ TÌM THẤY
+                        const testName = (testNames && testNames[key]) ? testNames[key] : 'Bài ' + key;
+                        allTestData.push({ ngay: recordDate, tenBaiKiemTra: testName, diem: scoreAsPercent });
                         dailyScores.push(scoreAsPercent);
                     }
                 }
@@ -416,9 +409,25 @@
 
         document.getElementById('tableBody').innerHTML = dailyLearningData.map((item, index) => `<tr><td class="center-text">${index + 1}</td><td>${item.ngay}</td><td class="center-text">${item.chuyenCan}</td><td class="center-text">${item.diemTB !== null ? item.diemTB.toFixed(0) + ' %' : 'N/A'}</td><td>${item.trangThai}</td></tr>`).join('');
         document.getElementById('testScoreBody').innerHTML = allTestData.map((item, index) => `<tr><td class="center-text">${index + 1}</td><td>${item.ngay}</td><td>${item.tenBaiKiemTra}</td><td class="center-text">${item.diem.toFixed(0)} %</td></tr>`).join('');
-        if (attendanceCount > 0) document.getElementById('attendance').textContent = ((totalAttendanceRaw / attendanceCount) * 100).toFixed(0) + ' %';
-        if (allTestData.length > 0) document.getElementById('test-score').textContent = (allTestData.reduce((s, i) => s + i.diem, 0) / allTestData.length).toFixed(0) + ' %';
+
+        let avgAttendance = 0;
+        let avgTestScore = 0;
+
+        if (attendanceCount > 0) {
+            avgAttendance = (totalAttendanceRaw / attendanceCount) * 100;
+            document.getElementById('attendance').textContent = avgAttendance.toFixed(0) + ' %';
+        }
+        if (allTestData.length > 0) {
+            avgTestScore = allTestData.reduce((s, i) => s + i.diem, 0) / allTestData.length;
+            document.getElementById('test-score').textContent = avgTestScore.toFixed(0) + ' %';
+        }
+        
         document.getElementById('homework').textContent = '100 %';
+
+        // TÍNH TOÁN % TÍCH LŨY
+        const accumulatedScore = (avgAttendance * 0.3) + (avgTestScore * 0.7);
+        document.getElementById('stars').textContent = accumulatedScore.toFixed(0) + ' %';
+
         drawChart(allTestData);
     }
     
@@ -456,7 +465,6 @@
         studentSelect.disabled = false;
     }
 
-    // --- HÀM KHỞI TẠO CHÍNH ---
     function init() {
       const webAppUrl = 'https://script.google.com/macros/s/AKfycbxM_mtnAoNHa_JAgswNnIllHLkWXc8MwIB3juuSn_tpRKq1UoFu6vlUkpR4lrgmuSQ/exec';
       const script = document.createElement('script');
@@ -469,27 +477,18 @@
       });
 
       document.getElementById('view-report-btn').addEventListener('click', () => {
-          const className = document.getElementById('class-select').value;
           const studentName = document.getElementById('student-select').value;
-
-          if (!className || !studentName) {
-              alert('Vui lòng chọn Lớp và Tên Học Sinh.');
-              return;
-          }
-
-          const studentRecords = allStudentData.filter(record => record['Tên HS'] === studentName && record['Lớp'] === className);
-          if (studentRecords.length > 0) {
-              renderReport(studentRecords);
-          } else {
-              alert('Không tìm thấy dữ liệu cho học sinh đã chọn.');
-          }
+          if (!studentName) { alert('Vui lòng chọn một Học Sinh.'); return; }
+          const studentRecords = allStudentData.filter(record => record['Tên HS'] === studentName);
+          if (studentRecords.length > 0) renderReport(studentRecords);
+          else alert('Không tìm thấy dữ liệu cho học sinh đã chọn.');
       });
     }
 
-    // Hàm callback toàn cục để nhận dữ liệu từ JSONP
     function handleDataResponse(apiData) {
-        if (apiData.ok) {
-            allStudentData = apiData.data['Điểm danh'];
+        if (apiData.ok && apiData.data) {
+            allStudentData = apiData.data['Điểm danh'] || [];
+            allTestNameData = apiData.data['Tên bài kiểm tra'] || [];
             populateClassSelector();
         } else {
             console.error("Lỗi dữ liệu từ API:", apiData);
