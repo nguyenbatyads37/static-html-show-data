@@ -499,6 +499,7 @@
             });
         }
 
+        // Cập nhật function addNewRow để luôn áp dụng logic tự động điền
         function addNewRow(data = {}, insertAfterElement = null) {
             const row = document.createElement('tr');
 
@@ -506,15 +507,32 @@
             actionCell.className = 'action-buttons';
             actionCell.innerHTML = `<button type="button" class="removeRow" onclick="removeRow(this)">❌</button>`;
 
-            const userFind = appData.employeeDetails.find(emp => emp.email.toLowerCase() === userEmail.toLowerCase());
-            if (userFind) {
-                data['Tên'] = data['Họ Và Tên'] || userFind.name;
-                data['Email'] = data['Email'] || userFind.email;
-                data['Team'] = data['Team'] || userFind.team;
-                data['id_NS'] = data['id'] || userFind.id_ns;
-                data['Chi nhánh'] = data['chi nhánh'] || userFind.branch;
+            // ===== IMPROVED: Tự động điền thông tin nhân viên dựa trên tên =====
+            let employeeToUse = null;
+            
+            // Trường hợp 1: Nếu data có 'Tên', tìm thông tin nhân viên theo tên đó
+            if (data['Tên']) {
+                employeeToUse = appData.employeeDetails.find(emp => emp.name === data['Tên']);
+            }
+            
+            // Trường hợp 2: Nếu không có tên hoặc không tìm thấy, dùng thông tin từ userEmail
+            if (!employeeToUse) {
+                employeeToUse = appData.employeeDetails.find(emp => emp.email.toLowerCase() === userEmail.toLowerCase());
+            }
+
+            // Áp dụng thông tin nhân viên nếu tìm thấy
+            if (employeeToUse) {
+                data['Tên'] = data['Tên'] || employeeToUse.name;
+                data['Email'] = data['Email'] || employeeToUse.email;
+                data['Team'] = data['Team'] || employeeToUse.team;
+                data['id_NS'] = data['id_NS'] || employeeToUse.id_ns;
+                data['Chi nhánh'] = data['Chi nhánh'] || employeeToUse.branch;
             } else {
+                // Fallback: chỉ gán email nếu không tìm thấy thông tin nhân viên
                 data['Email'] = data['Email'] || userEmail;
+                if (employeeNameFromUrl) {
+                    data['Tên'] = data['Tên'] || employeeNameFromUrl;
+                }
             }
 
             tableHeaders.forEach(header => {
@@ -586,11 +604,13 @@
             row.remove();
         }
 
+        // Cập nhật function addSimilarRow để copy tên từ hàng hiện tại
         window.addSimilarRow = (button) => {
             const currentRow = button.closest('tr');
             const data = {};
             currentRow.querySelectorAll('input, select').forEach(input => {
                 const name = input.name;
+                // ===== IMPROVED: Bao gồm cả trường 'Tên' để tự động điền thông tin nhân viên =====
                 if (name && name !== 'id' && name !== 'Số Mess' && name !== 'Phản hồi' && name !== 'Số_Mess_Cmt' && name !== 'CPQC' && name !== 'Số đơn' && name !== 'Doanh số') {
                     data[name] = input.value;
                 }
