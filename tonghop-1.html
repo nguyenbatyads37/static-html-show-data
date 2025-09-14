@@ -619,6 +619,7 @@ tbody td input,tbody td select,tbody td textarea{
         const HIDDEN_COLUMNS = ['id', 'id nợ'];
         const GIAO_HANG_NV_LIST = ['Hoa', 'Phong', 'minh', 'duy', 'Tuấn Lái xe', 'Hà (Nam)', 'Xuyến', 'Hoà', 'Hạnh', 'Hà (Nữ)'];
         const COL_NV_GIAO = 'NV cho nợ';
+        const COL_GH_NHAN_TIEN = 'Giao hàng nhận tiền'; // <-- thêm
         const NUMERIC_COLUMNS_FOR_TOTAL = ['Số tiền nợ', 'Thành tiền', 'Số tiền trả nợ', 'Đơn giá', 'Số lượng'];
         const COLUMN_CONFIG = {
             'Người chịu trách nhiệm': { align: 'left' }, 'Địa chỉ': { align: 'left' }, 'Ghi chú': { align: 'left' }, 'Tên Khách Hàng': { align: 'left' }, 'Sản phẩm/Mặt hàng': { align: 'left' }, 'Tên sản phẩm': { align: 'left' }, 'SĐT': { align: 'left' }, 'Số tiền nợ': { align: 'right' }, 'Đơn giá': { align: 'right' }, 'Thành tiền': { align: 'right' }, 'Số tiền trả nợ': { align: 'right' }, 'Hạn trả nợ': { align: 'right' }, 'Số ngày': { align: 'right' }, 'Số lượng': { align: 'right' }, 'Ngày nợ': { align: 'center' }, 'Ngày trả': { align: 'center' }, 'Ngày thu hồi': { align: 'center' }, 'Ngày phải trả': { align: 'center' },
@@ -663,16 +664,12 @@ function tryAddNvKdToken(rawValue) {
   const norm = s => s.trim().replace(/\s+/g, ' ').toLowerCase();
 
   // Ưu tiên match theo nhanSuList; không có thì vẫn cho thêm tự do
-  const matched =
-    nhanSuList.find(n => norm(n) === norm(v)) ||
-    nhanSuList.find(n => norm(n).includes(norm(v)));
-  const finalName = matched || v;
+  const matched = nhanSuList.find(n => norm(n) === norm(v)); // chỉ khớp chính xác
+const finalName = matched || v;
+if (filterNvKdSelected.some(n => norm(n) === norm(finalName))) return;
+filterNvKdSelected.push(finalName);
+renderNvKdTokens();
 
-  // Không thêm trùng
-  if (filterNvKdSelected.map(norm).includes(norm(finalName))) return;
-
-  filterNvKdSelected.push(finalName);
-  renderNvKdTokens();
 }
 
 function getNvKdSelected() {
@@ -988,6 +985,8 @@ if (originalHeader === 'Tên Khách Hàng') {
 
                 else if (textareaColumns.includes(originalHeader)) { inputHtml = `<textarea data-field="${originalHeader}">${formattedValue}</textarea>`; }
                 else if (originalHeader === COL_NV_GIAO) {
+  inputHtml = `<input type="text" list="giao-hang-list-options" data-field="${originalHeader}" value="${formattedValue}">`;
+}                else if (originalHeader === COL_GH_NHAN_TIEN) { // <-- thêm
   inputHtml = `<input type="text" list="giao-hang-list-options" data-field="${originalHeader}" value="${formattedValue}">`;
 }
 
@@ -1458,52 +1457,57 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
         function handleLogout() { sessionStorage.removeItem('loggedInUser'); location.reload(); }
         
         function updateNvDataLists() {
-            // Cập nhật NV Kinh doanh từ tất cả các bảng
-            const allNvKinhDoanh = [];
-            ['khn', 'khtn', 'hth'].forEach(tableKey => {
-                if (originalTableData[tableKey]?.data) {
-                    originalTableData[tableKey].data.forEach(row => {
-                        if (row['Người chịu trách nhiệm']) {
-                            allNvKinhDoanh.push(row['Người chịu trách nhiệm']);
-                        }
-                    });
-                }
-            });
-            
-            // SỬA: Lấy từ cột 'NV cho nợ' thay vì 'Giao hàng cho nợ'
-            const allNvGiaoHang = [];
-            ['khn', 'khtn', 'hth'].forEach(tableKey => {
-                if (originalTableData[tableKey]?.data) {
-                    originalTableData[tableKey].data.forEach(row => {
-                        if (row['NV cho nợ']) {  // ← SỬA TẠI ĐÂY
-                            allNvGiaoHang.push(row['NV cho nợ']);
-                        }
-                    });
-                }
-            });
-            
-            // Kết hợp với danh sách từ nhanSuList và GIAO_HANG_NV_LIST
-            const combinedNvKinhDoanh = [...nhanSuList, ...allNvKinhDoanh];
-            const combinedNvGiaoHang = [...GIAO_HANG_NV_LIST, ...allNvGiaoHang];
-            
-            // Chuẩn hóa và loại bỏ trùng lặp
-            const uniqueNvKinhDoanh = [...new Set(combinedNvKinhDoanh)]
-                .map(name => name ? String(name).trim().replace(/\s+/g, ' ') : '')
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b, 'vi'));
-                
-            const uniqueNvGiaoHang = [...new Set(combinedNvGiaoHang)]
-                .map(name => name ? String(name).trim().replace(/\s+/g, ' ') : '')
-                .filter(Boolean)
-                .sort((a, b) => a.localeCompare(b, 'vi'));
-            
-            // Cập nhật datalist
-            document.getElementById('sales-person-list-options').innerHTML = 
-                uniqueNvKinhDoanh.map(name => `<option value="${name}"></option>`).join('');
-            
-            document.getElementById('giao-hang-list-options').innerHTML = 
-                uniqueNvGiaoHang.map(name => `<option value="${name}"></option>`).join('');
-        }
+  // Gom NV Kinh doanh từ mọi bảng
+  const allNvKinhDoanh = [];
+  ['khn', 'khtn', 'hth'].forEach(tableKey => {
+    if (originalTableData[tableKey]?.data) {
+      originalTableData[tableKey].data.forEach(row => {
+        if (row['Người chịu trách nhiệm']) allNvKinhDoanh.push(row['Người chịu trách nhiệm']);
+      });
+    }
+  });
+
+  // Gom NV Giao hàng từ cả 2 cột:
+  // - NV cho nợ (ở khn/khtn/hth)
+  // - Giao hàng nhận tiền (ở khtn)
+  const allNvGiaoHang_fromNVChoNo = [];
+  ['khn', 'khtn', 'hth'].forEach(tableKey => {
+    if (originalTableData[tableKey]?.data) {
+      originalTableData[tableKey].data.forEach(row => {
+        if (row[COL_NV_GIAO]) allNvGiaoHang_fromNVChoNo.push(row[COL_NV_GIAO]);
+      });
+    }
+  });
+
+  const allNvGiaoHang_fromNhanTien = [];
+  if (originalTableData['khtn']?.data) {
+    originalTableData['khtn'].data.forEach(row => {
+      if (row[COL_GH_NHAN_TIEN]) allNvGiaoHang_fromNhanTien.push(row[COL_GH_NHAN_TIEN]);
+    });
+  }
+
+  const combinedNvKinhDoanh = [...nhanSuList, ...allNvKinhDoanh];
+
+  // gợi ý cho datalist gồm sẵn list cứng + 2 nguồn ở trên
+  const combinedNvGiaoHang = [
+    ...GIAO_HANG_NV_LIST,
+    ...allNvGiaoHang_fromNVChoNo,
+    ...allNvGiaoHang_fromNhanTien
+  ];
+
+  const norm = s => s ? String(s).trim().replace(/\s+/g, ' ') : '';
+  const uniqueNvKinhDoanh = [...new Set(combinedNvKinhDoanh.map(norm))].filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b,'vi'));
+  const uniqueNvGiaoHang = [...new Set(combinedNvGiaoHang.map(norm))].filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b,'vi'));
+
+  document.getElementById('sales-person-list-options').innerHTML =
+    uniqueNvKinhDoanh.map(n => `<option value="${n}"></option>`).join('');
+
+  document.getElementById('giao-hang-list-options').innerHTML =
+    uniqueNvGiaoHang.map(n => `<option value="${n}"></option>`).join('');
+}
+
         async function initApp(isReload = false) {
             const user = JSON.parse(sessionStorage.getItem('loggedInUser'));
             if (user) {
@@ -1674,61 +1678,45 @@ updateNvDataLists();
         // =========================================================================
         // START: FIXED FILTERING LOGIC
         // =========================================================================
-        function applySummaryFilters() {
+       function applySummaryFilters() {
   const startDate = document.getElementById('filter-start-date').value;
-  const endDate = document.getElementById('filter-end-date').value;
+  const endDate   = document.getElementById('filter-end-date').value;
 
-  // DÙNG LẠI 3 HÀM TOKEN CỦA BẠN
   const selectedNvGiaoHang = getNvGiaoSelected();
   const selectedNvKinhDoanh = getNvKdSelected();
-  const selectedCustomers = getCustomerSelected();
-
+  const selectedCustomers   = getCustomerSelected();
   const region = document.getElementById('filter-region').value.trim().toLowerCase();
-  
+
   const allKhnData = originalTableData['khn']?.data || [];
   const allKhtnData = originalTableData['khtn']?.data || [];
-  const allHthData = originalTableData['hth']?.data || [];
+  const allHthData  = originalTableData['hth']?.data || [];
 
+  // --- 1) Lọc KHN (dùng cho bảng Nợ) — CÓ áp NV giao (NV cho nợ)
   const filteredKhn = allKhnData.filter(row => {
-    // --- LỌC THEO NGÀY: Y HỆT CODE THAM CHIẾU ---
+    // lọc theo ngày nợ/phải trả
     let checkDate = true;
-
     if (startDate && endDate) {
-      // Ngày nợ >= Từ ngày VÀ Ngày phải trả <= Tới ngày
       const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
       const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
-      const startDateFilter = new Date(startDate);
-      const endDateFilter = new Date(endDate);
-      checkDate = ngayNo && ngayPhaiTra &&
-                  (ngayNo >= startDateFilter) &&
-                  (ngayPhaiTra <= endDateFilter);
+      const s = new Date(startDate), e = new Date(endDate);
+      checkDate = ngayNo && ngayPhaiTra && (ngayNo >= s) && (ngayPhaiTra <= e);
     } else if (startDate && !endDate) {
-      // Chỉ Từ ngày: lọc theo Ngày nợ >= Từ ngày
       const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
-      const startDateFilter = new Date(startDate);
-      checkDate = ngayNo && (ngayNo >= startDateFilter);
+      const s = new Date(startDate); checkDate = ngayNo && (ngayNo >= s);
     } else if (!startDate && endDate) {
-      // Chỉ Tới ngày: lọc theo Ngày phải trả <= Tới ngày
       const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
-      const endDateFilter = new Date(endDate);
-      checkDate = ngayPhaiTra && (ngayPhaiTra <= endDateFilter);
+      const e = new Date(endDate); checkDate = ngayPhaiTra && (ngayPhaiTra <= e);
     }
 
-    // --- GIỐNG CODE THAM CHIẾU: so sánh tên theo lowercase ---
-    const rowNvGiao = String(row[COL_NV_GIAO] || '')
-  .trim().replace(/\s+/g, ' ').toLowerCase();
+    // NV giao (so ở cột NV cho nợ)
+    const rowNvGiao = String(row[COL_NV_GIAO] || '').trim().replace(/\s+/g,' ').toLowerCase();
+    const checkNvGiao = selectedNvGiaoHang.length === 0 ||
+      selectedNvGiaoHang.some(n => rowNvGiao.includes(String(n).trim().replace(/\s+/g,' ').toLowerCase()));
 
-    const checkNvGiao = selectedNvGiaoHang.length === 0 || selectedNvGiaoHang.some(name => {
-      const normalized = name.trim().replace(/\s+/g, ' ').toLowerCase();
-      return rowNvGiao.includes(normalized);
-    });
-
-    const rowNvKd = String(row['Người chịu trách nhiệm'] || '')
-      .trim().replace(/\s+/g, ' ').toLowerCase();
-    const checkNvKd = selectedNvKinhDoanh.length === 0 || selectedNvKinhDoanh.some(name => {
-      const normalized = name.trim().replace(/\s+/g, ' ').toLowerCase();
-      return rowNvKd.includes(normalized);
-    });
+    // NVKD, KH, khu vực
+    const rowNvKd = String(row['Người chịu trách nhiệm'] || '').trim().replace(/\s+/g,' ').toLowerCase();
+    const checkNvKd = selectedNvKinhDoanh.length === 0 ||
+      selectedNvKinhDoanh.some(n => rowNvKd === String(n).trim().replace(/\s+/g,' ').toLowerCase());
 
     const checkCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(row['Tên Khách Hàng']);
     const checkRegion = !region || (row['Khu vực'] && String(row['Khu vực']).toLowerCase().includes(region));
@@ -1736,24 +1724,73 @@ updateNvDataLists();
     return checkDate && checkNvGiao && checkNvKd && checkCustomer && checkRegion;
   });
 
-  const filteredKhnIds = new Set(filteredKhn.map(r => r.id));
+  // --- 2) Tập KHN nền để ghép sang KHTN (KHÔNG áp NV giao)
+  const khnBaseForKhtn = allKhnData.filter(row => {
+    // ngày (như trên)
+    let checkDate = true;
+    if (startDate && endDate) {
+      const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
+      const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
+      const s = new Date(startDate), e = new Date(endDate);
+      checkDate = ngayNo && ngayPhaiTra && (ngayNo >= s) && (ngayPhaiTra <= e);
+    } else if (startDate && !endDate) {
+      const ngayNo = row['Ngày nợ'] ? new Date(formatDateForInput(row['Ngày nợ'])) : null;
+      const s = new Date(startDate); checkDate = ngayNo && (ngayNo >= s);
+    } else if (!startDate && endDate) {
+      const ngayPhaiTra = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
+      const e = new Date(endDate); checkDate = ngayPhaiTra && (ngayPhaiTra <= e);
+    }
+
+    const rowNvKd = String(row['Người chịu trách nhiệm'] || '').trim().replace(/\s+/g,' ').toLowerCase();
+    const checkNvKd = selectedNvKinhDoanh.length === 0 ||
+      selectedNvKinhDoanh.some(n => rowNvKd === String(n).trim().replace(/\s+/g,' ').toLowerCase());
+
+    const checkCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(row['Tên Khách Hàng']);
+    const checkRegion = !region || (row['Khu vực'] && String(row['Khu vực']).toLowerCase().includes(region));
+
+    return checkDate && checkNvKd && checkCustomer && checkRegion;
+  });
+  const khnBaseIds = new Set(khnBaseForKhtn.map(r => r.id));
+
+  // --- 3) Lọc KHTN
+  const filteredKhtn = allKhtnData.filter(row => {
+    // phải thuộc 1 khoản nợ trong khn-base
+    if (!khnBaseIds.has(row['id nợ'])) return false;
+
+    // nếu có chọn NV giao thì so ở cột "Giao hàng nhận tiền"
+    if (selectedNvGiaoHang.length > 0) {
+      const rowGiaoNhan = String(row[COL_GH_NHAN_TIEN] || '').trim().replace(/\s+/g,' ').toLowerCase();
+      const okNvGiao = selectedNvGiaoHang.some(n =>
+        rowGiaoNhan.includes(String(n).trim().replace(/\s+/g,' ').toLowerCase())
+      );
+      if (!okNvGiao) return false;
+    }
+
+    // lọc ngày cho KHTN theo "Ngày trả" (tuỳ chọn, hợp với bộ lọc trên cùng)
+    if (startDate || endDate) {
+      const payDate = row['Ngày trả'] ? new Date(formatDateForInput(row['Ngày trả'])) : null;
+      if (startDate && (!payDate || payDate < new Date(startDate))) return false;
+      if (endDate   && (!payDate || payDate > new Date(endDate)))   return false;
+    }
+
+    return true;
+  });
+
+  // --- 4) (tuỳ) Hàng thu hồi – giữ như cũ
   const filteredCustomerNames = new Set(filteredKhn.map(r => r['Tên Khách Hàng']));
-
-  // Chỉ lấy trả nợ thuộc các khoản nợ đã lọc
-  const filteredKhtn = allKhtnData.filter(row => filteredKhnIds.has(row['id nợ']));
-
-  // Hàng thu hồi: KH nằm trong filteredKhn và (Ngày thu hồi trong khoảng nếu có chọn)
   const filteredHth = allHthData.filter(row => {
     if (!filteredCustomerNames.has(row['Tên Khách Hàng'])) return false;
     const rowDate = row['Ngày thu hồi'] ? new Date(formatDateForInput(row['Ngày thu hồi'])) : null;
     return (!startDate || (rowDate && rowDate >= new Date(startDate))) &&
-           (!endDate || (rowDate && rowDate <= new Date(endDate)));
+           (!endDate   || (rowDate && rowDate <= new Date(endDate)));
   });
 
-  renderSummaryTable('tonghop-khn', originalTableData['khn'], filteredKhn);
+  // --- 5) Render + dashboard
+  renderSummaryTable('tonghop-khn',  originalTableData['khn'],  filteredKhn);
   renderSummaryTable('tonghop-khtn', originalTableData['khtn'], filteredKhtn);
   updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
 }
+
 
         // =========================================================================
         // END: FIXED FILTERING LOGIC
