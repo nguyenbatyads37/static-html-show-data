@@ -621,7 +621,7 @@
                             <th rowspan="2" class="sortable-header header-tonghop">Tổng đơn lên nội bộ</th>
                             <th rowspan="2" class="sortable-header header-tonghop">Tổng đơn đủ đkien đẩy vh</th>
                             <th rowspan="2" class="sortable-header header-tonghop">Tổng đơn lên vận hành</th>
-                            <th rowspan="2" class="sortable-header header-tonghop">Tổng đơn chưa lên vận hành</th>
+                            <th rowspan="2" class="sortable-header header-tonghop">Tổng đơn lên vận hành chưa mã chưa lên vận hành</th>
                             <th rowspan="2" class="sortable-header header-tonghop">Đơn OK chưa đẩy đi</th>
                             <th rowspan="2" class="sortable-header header-lenvanhanh">Giao Thành Công</th>
                             <th rowspan="2" class="sortable-header header-lenvanhanh">Đang Giao</th>
@@ -818,7 +818,10 @@
                     "Chưa Giao": { count: 0 },
                     "Hoàn": { count: 0 },
                     "chờ check": { count: 0 },
-                    "Trống trạng thái": { count: 0 }
+                    "Trống trạng thái": { count: 0 },
+                    "Tổng đơn OK": { count: 0 },
+                    "Tổng đơn có dvvc": { count: 0 },
+                    "Tổng đơn có mã tracking": { count: 0 }
                 }),
                 updateDetailedSummaryTable: function (filteredData) {
                     const tbody = document.getElementById('summaryTableBody');
@@ -961,11 +964,18 @@
                             stats["Tổng đơn lên nội bộ"].count++;
                             if (ketQuaCheck === "OK") {
                                 stats["Tổng đơn đủ đkien đẩy vh"].count++;
+                                stats["Tổng đơn OK"].count++;
                                 if (dvvc === "") {
                                     stats["Đơn Ok chưa đẩy đi"].count++;
                                 }
                             }
                             if (maTracking !== "") {
+                                stats["Tổng đơn có mã tracking"].count++;
+                            }
+                            if(dvvc !== "") {
+                                stats["Tổng đơn có dvvc"].count++; // Đếm lại cho chắc chắn
+                            }
+                            if (['chờ check', 'Hủy'].includes(delivery) === false) {
                                 stats["Tổng đơn lên vận hành"].count++;
                             }
                             if (dvvc !== "" && maTracking === "") {
@@ -978,12 +988,14 @@
                                 stats["Đã Thanh Toán (có bill)"].count++;
                                 stats["Đã Thanh Toán (có bill)"].amount += amount;
                             }
+                            if(ketQuaCheck === "OK" && payment === "" && delivery === "") {
+                                stats["Trống trạng thái"].count++;
+                            }
                             if (delivery.includes("Giao Thành Công")) stats["Giao Thành Công"].count++;
                             else if (delivery.includes("Đang Giao")) stats["Đang Giao"].count++;
                             else if (delivery.includes("Chưa Giao")) stats["Chưa Giao"].count++;
                             else if (delivery.includes("Hoàn")) stats["Hoàn"].count++;
                             else if (delivery.includes("chờ check")) stats["chờ check"].count++;
-                            else if (delivery === "") stats["Trống trạng thái"].count++;
                         });
                     });
                     this.lastSummaryRows = Object.keys(staffStats).map(staff => {
@@ -1004,9 +1016,9 @@
                             returned: s["Hoàn"].count,
                             pendingCheck: s["chờ check"].count,
                             emptyStatus: s["Trống trạng thái"].count,
-                            shipRate: s["Tổng đơn lên nội bộ"].count > 0 ? (s["Tổng đơn lên vận hành"].count / s["Tổng đơn lên nội bộ"].count * 100) : 0,
+                            shipRate: s["Tổng đơn có dvvc"].count > 0 ? (s["Tổng đơn có dvvc"].count / s["Tổng đơn OK"].count * 100) : 0,
                             paymentRate: s["Giao Thành Công"].count > 0 ? (s["Đã Thanh Toán (có bill)"].count / s["Giao Thành Công"].count * 100) : 0,
-                            feeRate: s["Tổng đơn lên vận hành"].count > 0 ? (s["Giao Thành Công"].count / s["Tổng đơn lên vận hành"].count * 100) : 0,
+                            feeRate: s["Giao Thành Công"].count > 0 ? (s["Giao Thành Công"].count / s["Tổng đơn có mã tracking"].count * 100) : 0,
                             ttThanhCongTrenDonTinhPhi: s["Tổng đơn lên vận hành"].count > 0 ? (s["Đã Thanh Toán (có bill)"].count / s["Tổng đơn lên vận hành"].count * 100) : 0,
                             billOkTrenGiaoThanhCong: s["Giao Thành Công"].count > 0 ? ((s["Đã Thanh Toán (có bill)"].count + s["Bill 1 phần"].count) / s["Giao Thành Công"].count * 100) : 0
                         };
@@ -1020,8 +1032,8 @@
                     if (g) {
                         const tr = document.createElement('tr');
                         tr.className = 'summary-grand-total total-row';
-                        const feeRateTotal = g["Tổng đơn lên vận hành"].count > 0 ? (g["Giao Thành Công"].count / g["Tổng đơn lên vận hành"].count * 100) : 0;
-                        tr.innerHTML = `<td>TỔNG TOÀN BỘ</td><td>${g["Đã Thanh Toán (có bill)"].count}</td><td>${new Intl.NumberFormat('vi-VN').format(g["Đã Thanh Toán (có bill)"].amount)} ₫</td><td>${g["Bill 1 phần"].count}</td><td>${g["Tổng đơn lên nội bộ"].count}</td><td>${g["Tổng đơn đủ đkien đẩy vh"].count}</td><td>${g["Tổng đơn lên vận hành"].count}</td><td>${g["Tổng đơn chưa lên vận hành"].count}</td><td>${g["Đơn Ok chưa đẩy đi"].count}</td><td>${g["Giao Thành Công"].count}</td><td>${g["Đang Giao"].count}</td><td>${g["Chưa Giao"].count}</td><td>${g["Hoàn"].count}</td><td>${g["chờ check"].count}</td><td>${g["Trống trạng thái"].count}</td><td>${(g["Tổng đơn lên nội bộ"].count > 0 ? (g["Tổng đơn lên vận hành"].count / g["Tổng đơn lên nội bộ"].count * 100) : 0).toFixed(1)}%</td><td>${(g["Giao Thành Công"].count > 0 ? (g["Đã Thanh Toán (có bill)"].count / g["Giao Thành Công"].count * 100) : 0).toFixed(1)}%</td><td>${feeRateTotal.toFixed(1)}%</td><td>${(g["Tổng đơn lên vận hành"].count > 0 ? (g["Đã Thanh Toán (có bill)"].count / g["Tổng đơn lên vận hành"].count * 100) : 0).toFixed(1)}%</td><td>${(g["Giao Thành Công"].count > 0 ? ((g["Đã Thanh Toán (có bill)"].count + g["Bill 1 phần"].count) / g["Giao Thành Công"].count * 100) : 0).toFixed(1)}%</td>`;
+                        const feeRateTotal = g["Giao Thành Công"].count > 0 ? (g["Giao Thành Công"].count / g["Tổng đơn có mã tracking"].count * 100) : 0;
+                        tr.innerHTML = `<td>TỔNG TOÀN BỘ</td><td>${g["Đã Thanh Toán (có bill)"].count}</td><td>${new Intl.NumberFormat('vi-VN').format(g["Đã Thanh Toán (có bill)"].amount)} ₫</td><td>${g["Bill 1 phần"].count}</td><td>${g["Tổng đơn lên nội bộ"].count}</td><td>${g["Tổng đơn đủ đkien đẩy vh"].count}</td><td>${g["Tổng đơn lên vận hành"].count}</td><td>${g["Tổng đơn chưa lên vận hành"].count}</td><td>${g["Đơn Ok chưa đẩy đi"].count}</td><td>${g["Giao Thành Công"].count}</td><td>${g["Đang Giao"].count}</td><td>${g["Chưa Giao"].count}</td><td>${g["Hoàn"].count}</td><td>${g["chờ check"].count}</td><td>${g["Trống trạng thái"].count}</td><td>${(g["Tổng đơn có dvvc"].count > 0 ? (g["Tổng đơn có dvvc"].count / g["Tổng đơn OK"].count * 100) : 0).toFixed(1)}%</td><td>${(g["Giao Thành Công"].count > 0 ? (g["Đã Thanh Toán (có bill)"].count / g["Giao Thành Công"].count * 100) : 0).toFixed(1)}%</td><td>${feeRateTotal.toFixed(1)}%</td><td>${(g["Tổng đơn lên vận hành"].count > 0 ? (g["Đã Thanh Toán (có bill)"].count / g["Tổng đơn lên vận hành"].count * 100) : 0).toFixed(1)}%</td><td>${(g["Giao Thành Công"].count > 0 ? ((g["Đã Thanh Toán (có bill)"].count + g["Bill 1 phần"].count) / g["Giao Thành Công"].count * 100) : 0).toFixed(1)}%</td>`;
                         tbody.appendChild(tr);
                     }
                     let rows = [...this.lastSummaryRows];
