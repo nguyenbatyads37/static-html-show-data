@@ -716,16 +716,20 @@ const FILTERABLE_HEADERS = [
 
     let currentPerms = { canCreate: false, canEditExisting: false, canDelete: false, isViewer: true };
 
-    function computePerms(displayName) {
-      const nameNorm = normalizeVi(displayName || '');
-      const canCreate = ALLOWED_CREATORS.includes(nameNorm);
-      return {
-        canCreate,
-        canEditExisting: false,  // theo yêu cầu: CHỈ nhập mới, không sửa dòng cũ
-        canDelete: false,        // không ai được xóa
-        isViewer: !canCreate
-      };
-    }
+    function computePerms(displayName, username) {
+  const nameNorm = normalizeVi(displayName || '');
+  const userNorm = normalizeVi(username || '');
+
+  // Admin: full quyền
+  if (userNorm === 'admin') {
+    return { canCreate: true, canEditExisting: true, canDelete: true, isViewer: false };
+  }
+
+  // Người thường theo whitelist
+  const canCreate = ALLOWED_CREATORS.includes(nameNorm);
+  return { canCreate, canEditExisting: false, canDelete: false, isViewer: !canCreate };
+}
+
 
     // Áp quyền vào UI mỗi bảng
     function applyPermissions(tableKey) {
@@ -754,21 +758,27 @@ if (addBtn) addBtn.style.display = perms.canCreate ? '' : 'none';
 
 
       // Khóa edit các dòng dữ liệu cũ (không cho sửa)
-      container.querySelectorAll('tbody tr[data-id]').forEach(tr => {
-        tr.classList.remove('row-dirty');
-        const controls = tr.querySelectorAll('input, select, textarea');
-        controls.forEach(el => {
-          if (!perms.canEditExisting) {
-            if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
-            else el.setAttribute('readonly', 'readonly');
-          }
-        });
-      });
+       // Khóa/mở khóa theo quyền
+ container.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+   tr.classList.remove('row-dirty');
+   tr.querySelectorAll('input, select, textarea').forEach(el => {
+     if (perms.canEditExisting) {
+       el.removeAttribute('readonly');
+       el.removeAttribute('disabled');
+     } else {
+       if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
+       else el.setAttribute('readonly', 'readonly');
+     }
+   });
+ });
 
-      // Ẩn toàn bộ nút xóa
-      container.querySelectorAll('.delete-btn').forEach(btn => {
-        btn.style.display = 'none';
-      });
+ // Hiện/ẩn nút xóa theo quyền
+ container.querySelectorAll('.delete-btn').forEach(btn => {
+  btn.style.display = perms.canDelete ? '' : 'none';
+});
+
+
+      
     }
 
     let originalTableData = {};
@@ -1530,10 +1540,30 @@ if (clearBtn) {
     }
 
     function handleDeleteClick(e, tableKey) {
-      // CHẶN XÓA TOÀN BỘ
-      showToast('Bạn không có quyền xóa.', 'error');
-      return;
-    }
+  const btn = e.currentTarget || e.target;
+  const rowId = btn?.dataset?.id;
+  if (!rowId) return;
+
+  if (!currentPerms.canDelete) {
+    showToast('Bạn không có quyền xóa.', 'error');
+    return;
+  }
+
+  if (!changeSet.delete[tableKey]) changeSet.delete[tableKey] = [];
+  if (!changeSet.delete[tableKey].includes(rowId)) {
+    changeSet.delete[tableKey].push(rowId);
+  }
+
+  const tr = btn.closest('tr');
+  if (tr) tr.style.display = 'none';
+
+  setChangesMade(tableKey, true);
+  updateTotals(tableKey);
+  updateDashboard();
+  updateVisibleRowCount(tableKey);
+  showToast('Đã đánh dấu xóa. Nhấn "Lưu Thay Đổi" để áp dụng.', 'success');
+}
+
 
     async function handleSaveChanges(tableKey) {
         const updateBtn = document.getElementById('update-btn-khn');
@@ -1627,7 +1657,10 @@ if (clearBtn) {
             nhanSuList = [...new Set(personnelData.data.map(user => user['Họ và tên']))].filter(Boolean).sort();
             if (username && password) {
                 const foundUser = personnelData.data.find(user => user['Tên đăng nhập'] === username && user['Passwword'] == password);
-                if (foundUser) { sessionStorage.setItem('loggedInUser', JSON.stringify({ name: foundUser['Họ và tên'] })); await initApp();
+                if (foundUser) {  sessionStorage.setItem('loggedInUser', JSON.stringify({
+   name: foundUser['Họ và tên'],
+  username: foundUser['Tên đăng nhập']
+ })); await initApp();
                 } else { errorEl.textContent = 'Tên đăng nhập hoặc mật khẩu không đúng.'; }
             }
         } catch (error) { if(errorEl) errorEl.textContent = 'Lỗi kết nối hoặc không tìm thấy bảng Nhân sự.';
@@ -1641,7 +1674,8 @@ if (clearBtn) {
         const user = JSON.parse(sessionStorage.getItem('loggedInUser'));
         if (user) {
             // === PHÂN QUYỀN (ADD) === tính quyền mọi lần
-            currentPerms = computePerms(user.name);
+            currentPerms = computePerms(user.name, user.username);
+
 
             if (!isReload) {
                 document.getElementById('login-overlay').style.display = 'none';
