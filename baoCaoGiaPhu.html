@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bảng điều khiển Quản lý Tài sản</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .fade-in {
+        animation: fadeIn 0.5s ease-in-out;
+      }
+      body, html {
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-100">
+    
+    <div id="loading-spinner" class="flex items-center justify-center h-screen bg-gray-100">
+      <div class="flex flex-col items-center">
+        <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-indigo-500"></div>
+        <p class="mt-4 text-lg text-gray-600">Đang tải dữ liệu...</p>
+      </div>
+    </div>
+
+    <div id="error-message" class="hidden flex items-center justify-center h-screen bg-gray-100">
+      <div class="text-center p-8 bg-white rounded-lg shadow-md">
+        <h2 class="text-2xl font-bold text-red-600 mb-4">Lỗi</h2>
+        <p class="text-gray-700" id="error-text"></p>
+      </div>
+    </div>
+
+    <div id="app-content" class="hidden min-h-screen bg-gray-100 text-gray-800">
+      <header class="bg-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-center items-center h-16">
+            <div class="flex-shrink-0">
+                <h1 class="text-2xl font-bold text-gray-900">Bảng điều khiển Quản lý Tài sản</h1>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <main class="p-4 sm:p-6 lg:p-8">
+        <div id="summary-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <!-- Summary cards will be injected here -->
+        </div>
+        
+        <div class="bg-white rounded-lg shadow-lg p-4 sm:p-6">
+            <div class="border-b border-gray-200 mb-4">
+                <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                    <button id="tab-devices" class="border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Thiết bị / Máy móc</button>
+                    <button id="tab-software" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Phần mềm</button>
+                    <button id="tab-equipment" class="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm">Trang bị</button>
+                </nav>
+            </div>
+            
+            <div id="asset-table-container">
+                <!-- Asset table will be injected here -->
+            </div>
+
+            <div id="charts-container" class="mt-8 pt-6 border-t border-gray-200">
+                <!-- Charts will be injected here -->
+            </div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module">
+      const BASE_URL = "https://n-api-rouge.vercel.app/sheet/getSheets";
+      const SPREADSHEET_ID = "1IT0g9VRadtlazhkR3Q8w0NUeuSGk7XDa214a9GaOHL0";
+      
+      const Tab = {
+          DEVICES: 'devices',
+          SOFTWARE: 'software',
+          EQUIPMENT: 'equipment',
+      };
+
+      let devices = [];
+      let software = [];
+      let equipment = [];
+      let activeTab = Tab.DEVICES;
+      let activeCharts = [];
+
+      const loadingSpinner = document.getElementById('loading-spinner');
+      const appContent = document.getElementById('app-content');
+      const errorMessage = document.getElementById('error-message');
+      const errorText = document.getElementById('error-text');
+      
+      const fetchSheetData = async (sheetName) => {
+          const url = new URL(BASE_URL);
+          url.searchParams.append('rangeSheet', 'A:K');
+          url.searchParams.append('sheetName', sheetName);
+          url.searchParams.append('spreadsheetId', SPREADSHEET_ID);
+          
+          const response = await fetch(url.toString());
+          
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status} for sheet: ${sheetName}`);
+          }
+          
+          const data = await response.json();
+          return data.rows || [];
+      };
+
+      const formatCurrency = (value) => {
+        const num = Number(value) || 0;
+        return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(num);
+      };
+
+      const getIconSVG = (iconName, className = 'h-8 w-8') => {
+        const icons = {
+          'scale': `<path stroke-linecap="round" stroke-linejoin="round" d="M12 3v17.25m0 0c-1.472 0-2.882.265-4.185.75M12 20.25c1.472 0 2.882.265 4.185.75M18.75 4.97A48.416 48.416 0 0 0 12 4.5c-2.291 0-4.545.16-6.75.47m13.5 0c1.01.143 2.01.317 3 .52m-3-.52v2.653c0 .621-.504 1.125-1.125 1.125H4.875c-.621 0-1.125-.504-1.125-1.125V5.493m18.75 0c1.01.143 2.01.317 3 .52m-3-.52v2.653c0 .621-.504 1.125-1.125 1.125H4.875c-.621 0-1.125-.504-1.125-1.125V5.493m18.75 0c1.01.143 2.01.317 3 .52M3.75 5.493c-1.01.143-2.01.317-3 .52m3-.52V2.843c0-.621.504-1.125 1.125-1.125h13.5c.621 0 1.125.504 1.125 1.125v2.653" />`,
+          'computer-desktop': `<path stroke-linecap="round" stroke-linejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-1.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25A2.25 2.25 0 0 1 5.25 3h13.5A2.25 2.25 0 0 1 21 5.25Z" />`,
+          'circle-stack': `<path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c-3.181 0-5.965.564-8.25 1.5c-2.285-.936-5.069-1.5-8.25-1.5" />`,
+          'exclamation-triangle': `<path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />`,
+        };
+        return `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="${className}">${icons[iconName] || ''}</svg>`;
+      }
+
+      const createSummaryCard = ({ title, value, icon, isWarning = false }) => {
+        const iconColor = isWarning ? 'text-yellow-500' : 'text-indigo-500';
+        const bgColor = isWarning ? 'bg-yellow-100' : 'bg-indigo-100';
+        return `
+          <div class="bg-white rounded-lg shadow-md p-5 flex items-center space-x-4 fade-in">
+            <div class="rounded-full p-3 ${bgColor}">
+              ${getIconSVG(icon, `h-8 w-8 ${iconColor}`)}
+            </div>
+            <div>
+              <p class="text-sm text-gray-500 font-medium">${title}</p>
+              <p class="text-2xl font-bold text-gray-900">${value}</p>
+            </div>
+          </div>
+        `;
+      };
+
+      const getExpiryStatus = (dateStr) => {
+        if (!dateStr) return { days: Infinity, color: 'bg-transparent', text: 'N/A', status: 'N/A' };
+        const parts = dateStr.split('/');
+        if (parts.length !== 3) return { days: Infinity, color: 'bg-transparent', text: 'Invalid Date', status: 'N/A' };
+
+        const expiryDate = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const diffTime = expiryDate.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays < 0) return { days: diffDays, color: 'bg-red-100 text-red-800', text: `Hết hạn ${Math.abs(diffDays)} ngày`, status: 'Đã hết hạn' };
+        if (diffDays <= 30) return { days: diffDays, color: 'bg-yellow-100 text-yellow-800', text: `Còn ${diffDays} ngày`, status: 'Sắp hết hạn' };
+        return { days: diffDays, color: 'bg-green-100 text-green-800', text: `Còn ${diffDays} ngày`, status: 'Còn hạn' };
+      };
+
+      const renderTable = () => {
+        const container = document.getElementById('asset-table-container');
+        if (!container) return;
+
+        let headers = [];
+        let rowsHtml = '';
+        let data = [];
+
+        switch (activeTab) {
+            case Tab.DEVICES:
+                headers = ["Tên thiết bị", "Model", "Số lượng", "Giá thành", "Ngày mua", "Tình trạng", "Phòng ban", "QR Code"];
+                data = devices;
+                rowsHtml = data.map(item => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item["Tên thiết bị"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["NCC / Brand / Model"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${item["Số lượng"] || '0'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(item["Giá thành"] || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Ngày mua"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Tình trạng"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Phòng ban"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-500"><a href="${item["QR Code"]}" target="_blank" rel="noopener noreferrer">View QR</a></td>
+                    </tr>
+                `).join('');
+                break;
+            case Tab.SOFTWARE:
+                headers = ["Tên phần mềm", "Giá thành", "Ngày mua", "Ngày hết hiệu lực", "Trạng thái", "Phòng ban", "Người chịu trách nhiệm"];
+                data = software;
+                rowsHtml = data.map(item => {
+                    const status = getExpiryStatus(item["Ngày hết hiệu lực"]);
+                    return `
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item["Tên phần mềm"] || ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(item["Giá thành"] || 0)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Ngày mua"] || ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Ngày hết hiệu lực"] || ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm"><span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${status.color}">${status.text}</span></td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Phòng ban"] || ''}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Người chịu trách nhiệm soát"] || ''}</td>
+                        </tr>
+                    `;
+                }).join('');
+                break;
+            case Tab.EQUIPMENT:
+                headers = ["Tên trang bị", "Model", "Số lượng", "Giá thành", "Ngày mua", "Phòng ban", "QR Code"];
+                data = equipment;
+                rowsHtml = data.map(item => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${item["Tên trang bị"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["NCC / Brand / Model"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${item["Số lượng"] || '0'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${formatCurrency(item["Giá thành"] || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Ngày mua"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${item["Phòng ban"] || ''}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-500"><a href="${item["QR Code"]}" target="_blank" rel="noopener noreferrer">View QR</a></td>
+                    </tr>
+                `).join('');
+                break;
+        }
+
+        if (data.length === 0) {
+          container.innerHTML = `<div class="text-center py-10 text-gray-500">Không có dữ liệu để hiển thị.</div>`;
+          return;
+        }
+
+        container.innerHTML = `
+          <div class="overflow-x-auto fade-in">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-100">
+                <tr>
+                  ${headers.map(header => {
+                    // *** CẬP NHẬT: Căn phải cho tiêu đề cột số ***
+                    const numericHeaders = ["Số lượng", "Giá thành"];
+                    const alignmentClass = numericHeaders.includes(header) ? 'text-right' : 'text-left';
+                    return `
+                      <th scope="col" class="px-6 py-3 ${alignmentClass} text-xs font-medium text-gray-600 uppercase tracking-wider">
+                        ${header}
+                      </th>
+                    `;
+                  }).join('')}
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+        `;
+      };
+      
+      const renderCharts = () => {
+        const container = document.getElementById('charts-container');
+        activeCharts.forEach(chart => chart.destroy());
+        activeCharts = [];
+        container.innerHTML = '';
+
+        const safeParseInt = (val) => parseInt(val, 10) || 0;
+        const safeParseFloat = (val) => parseFloat(val) || 0;
+
+        if (activeTab === Tab.DEVICES || activeTab === Tab.EQUIPMENT) {
+            const data = activeTab === Tab.DEVICES ? devices : equipment;
+            if (data.length === 0) return;
+
+            // *** CẬP NHẬT: Thêm div bao quanh canvas để giới hạn kích thước ***
+            container.innerHTML = `
+                <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Phân tích tài sản theo Phòng ban</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="relative mx-auto w-full max-w-md"><canvas id="valueByDeptChart"></canvas></div>
+                    <div class="relative mx-auto w-full max-w-md"><canvas id="countByDeptChart"></canvas></div>
+                </div>
+            `;
+
+            const dataByDept = data.reduce((acc, item) => {
+                const dept = item['Phòng ban'] || 'Chưa phân loại';
+                if (!acc[dept]) {
+                    acc[dept] = { value: 0, count: 0 };
+                }
+                acc[dept].value += safeParseFloat(item['Giá thành']) * safeParseInt(item['Số lượng']);
+                acc[dept].count += safeParseInt(item['Số lượng']);
+                return acc;
+            }, {});
+
+            const labels = Object.keys(dataByDept);
+            const valueData = labels.map(label => dataByDept[label].value);
+            const countData = labels.map(label => dataByDept[label].count);
+            
+            const backgroundColors = ['#4F46E5', '#F59E0B', '#10B981', '#EF4444', '#6366F1', '#8B5CF6', '#D946EF'];
+
+            const valueCtx = document.getElementById('valueByDeptChart').getContext('2d');
+            const valueChart = new Chart(valueCtx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Tổng giá trị',
+                        data: valueData,
+                        backgroundColor: backgroundColors,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'Phân bổ Giá trị Tài sản theo Phòng ban' }
+                    }
+                }
+            });
+            activeCharts.push(valueChart);
+
+            const countCtx = document.getElementById('countByDeptChart').getContext('2d');
+            const countChart = new Chart(countCtx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Số lượng',
+                        data: countData,
+                        backgroundColor: backgroundColors[0],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Phân bổ Số lượng Tài sản theo Phòng ban' }
+                    }
+                }
+            });
+            activeCharts.push(countChart);
+
+        } else if (activeTab === Tab.SOFTWARE) {
+            if (software.length === 0) return;
+
+            // *** CẬP NHẬT: Thêm div bao quanh canvas để giới hạn kích thước ***
+            container.innerHTML = `
+                <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Phân tích Phần mềm</h3>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div class="relative mx-auto w-full max-w-md"><canvas id="statusChart"></canvas></div>
+                    <div class="relative mx-auto w-full max-w-md"><canvas id="costByDeptChart"></canvas></div>
+                </div>
+            `;
+
+            const statusCounts = software.reduce((acc, item) => {
+                const status = getExpiryStatus(item['Ngày hết hiệu lực']).status;
+                acc[status] = (acc[status] || 0) + 1;
+                return acc;
+            }, {});
+
+            const costByDept = software.reduce((acc, item) => {
+                const dept = item['Phòng ban'] || 'Chưa phân loại';
+                if (!acc[dept]) {
+                    acc[dept] = 0;
+                }
+                acc[dept] += safeParseFloat(item['Giá thành']);
+                return acc;
+            }, {});
+
+            const statusCtx = document.getElementById('statusChart').getContext('2d');
+            const statusChart = new Chart(statusCtx, {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(statusCounts),
+                    datasets: [{
+                        data: Object.values(statusCounts),
+                        backgroundColor: ['#10B981', '#F59E0B', '#EF4444', '#6B7280'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { position: 'top' },
+                        title: { display: true, text: 'Tình trạng Bản quyền Phần mềm' }
+                    }
+                }
+            });
+            activeCharts.push(statusChart);
+
+            const costCtx = document.getElementById('costByDeptChart').getContext('2d');
+            const costChart = new Chart(costCtx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(costByDept),
+                    datasets: [{
+                        label: 'Chi phí',
+                        data: Object.values(costByDept),
+                        backgroundColor: '#4F46E5',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    plugins: {
+                        legend: { display: false },
+                        title: { display: true, text: 'Chi phí Phần mềm theo Phòng ban' }
+                    },
+                    scales: {
+                        y: {
+                            ticks: {
+                                callback: function(value) {
+                                    return formatCurrency(value);
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            activeCharts.push(costChart);
+        }
+      };
+      
+      const updateTabs = () => {
+        const tabs = {
+            [Tab.DEVICES]: document.getElementById('tab-devices'),
+            [Tab.SOFTWARE]: document.getElementById('tab-software'),
+            [Tab.EQUIPMENT]: document.getElementById('tab-equipment'),
+        };
+
+        Object.values(tabs).forEach(tab => {
+            tab.className = 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm';
+        });
+
+        if (tabs[activeTab]) {
+            tabs[activeTab].className = 'border-indigo-500 text-indigo-600 whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm';
+        }
+      };
+
+      const setupTabListeners = () => {
+          document.getElementById('tab-devices').addEventListener('click', () => {
+              activeTab = Tab.DEVICES;
+              updateTabs();
+              renderTable();
+              renderCharts();
+          });
+          document.getElementById('tab-software').addEventListener('click', () => {
+              activeTab = Tab.SOFTWARE;
+              updateTabs();
+              renderTable();
+              renderCharts();
+          });
+          document.getElementById('tab-equipment').addEventListener('click', () => {
+              activeTab = Tab.EQUIPMENT;
+              updateTabs();
+              renderTable();
+              renderCharts();
+          });
+      };
+
+      const renderDashboard = () => {
+        const safeParseInt = (val) => parseInt(val, 10) || 0;
+        const safeParseFloat = (val) => parseFloat(val) || 0;
+
+        const deviceValue = devices.reduce((acc, item) => acc + safeParseFloat(item['Giá thành']) * safeParseInt(item['Số lượng']), 0);
+        const equipmentValue = equipment.reduce((acc, item) => acc + safeParseFloat(item['Giá thành']) * safeParseInt(item['Số lượng']), 0);
+        const softwareValue = software.reduce((acc, item) => acc + safeParseFloat(item['Giá thành']), 0);
+        const totalValue = deviceValue + equipmentValue + softwareValue;
+        
+        const totalPhysicalAssets = devices.reduce((acc, item) => acc + safeParseInt(item['Số lượng']), 0) + equipment.reduce((acc, item) => acc + safeParseInt(item['Số lượng']), 0);
+
+        const expiringSoonCount = software.filter(item => {
+            const status = getExpiryStatus(item['Ngày hết hiệu lực']);
+            return status.status === 'Sắp hết hạn';
+        }).length;
+
+        const summaryContainer = document.getElementById('summary-cards');
+        summaryContainer.innerHTML = `
+          ${createSummaryCard({ title: "Tổng giá trị tài sản", value: formatCurrency(totalValue), icon: 'scale' })}
+          ${createSummaryCard({ title: "Thiết bị & Trang bị", value: totalPhysicalAssets.toLocaleString('vi-VN'), icon: 'computer-desktop' })}
+          ${createSummaryCard({ title: "Số lượng phần mềm", value: software.length.toLocaleString('vi-VN'), icon: 'circle-stack' })}
+          ${createSummaryCard({ title: "Phần mềm sắp hết hạn", value: expiringSoonCount.toLocaleString('vi-VN'), icon: 'exclamation-triangle', isWarning: expiringSoonCount > 0 })}
+        `;
+        
+        renderTable();
+        renderCharts();
+      };
+      
+      document.addEventListener('DOMContentLoaded', async () => {
+        try {
+          const [deviceData, softwareData, equipmentData] = await Promise.all([
+            fetchSheetData('Quản lý thiết bị/ máy móc'),
+            fetchSheetData('Quản lý phần mềm'),
+            fetchSheetData('Quản lý trang bị'),
+          ]);
+          devices = deviceData;
+          software = softwareData;
+          equipment = equipmentData;
+
+          renderDashboard();
+          setupTabListeners();
+          
+          loadingSpinner.classList.add('hidden');
+          appContent.classList.remove('hidden');
+          appContent.classList.add('fade-in');
+
+        } catch (err) {
+          console.error(err);
+          errorText.textContent = 'Không thể tải dữ liệu tài sản. Vui lòng kiểm tra lại kết nối mạng hoặc đường dẫn API và thử lại sau.';
+          loadingSpinner.classList.add('hidden');
+          errorMessage.classList.remove('hidden');
+        }
+      });
+    </script>
+  </body>
+</html>
