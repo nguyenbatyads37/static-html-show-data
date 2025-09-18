@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quét QR hoặc Nhập Text</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            flex-direction: column;
+        }
+        .container {
+            width: 90%;
+            max-width: 500px;
+            text-align: center;
+        }
+        #qr-input {
+            width: calc(100% - 80px);
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        #scan-btn {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            border: 1px solid #007bff;
+            background-color: #007bff;
+            color: white;
+            border-radius: 5px;
+        }
+        #reader {
+            width: 100%;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Quét mã QR hoặc Nhập liệu</h1>
+        <div>
+            <input type="text" id="qr-input" placeholder="Nhập dữ liệu hoặc quét QR...">
+            <button id="scan-btn">Quét QR</button>
+        </div>
+        <div id="reader" style="display: none;"></div>
+    </div>
+
+    <!-- Tích hợp thư viện html5-qrcode -->
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <script>
+        const qrInput = document.getElementById('qr-input');
+        const scanBtn = document.getElementById('scan-btn');
+        const readerDiv = document.getElementById('reader');
+
+        let html5QrCode = null;
+
+        // Hàm xử lý khi quét thành công
+        function onScanSuccess(decodedText, decodedResult) {
+            console.log(`Kết quả quét: ${decodedText}`, decodedResult);
+            qrInput.value = decodedText; // Điền kết quả vào ô input
+
+            // Dừng quét sau khi thành công
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then((ignore) => {
+                    readerDiv.style.display = 'none';
+                    scanBtn.textContent = 'Quét QR';
+                }).catch((err) => {
+                    console.error("Lỗi khi dừng quét: ", err);
+                });
+            }
+        }
+
+        // Hàm xử lý khi quét thất bại (không bắt buộc)
+        function onScanFailure(error) {
+            // console.warn(`Lỗi quét: ${error}`);
+        }
+
+        scanBtn.addEventListener('click', () => {
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+
+            if (html5QrCode.isScanning) {
+                // Nếu đang quét thì dừng lại
+                html5QrCode.stop().then((ignore) => {
+                    readerDiv.style.display = 'none';
+                    scanBtn.textContent = 'Quét QR';
+                }).catch((err) => {
+                    console.error("Lỗi khi dừng quét: ", err);
+                });
+            } else {
+                // Bắt đầu quét
+                readerDiv.style.display = 'block';
+                scanBtn.textContent = 'Dừng Quét';
+
+                // Cấu hình trình quét
+                const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+
+                // Bắt đầu quét bằng camera sau (environment)
+                html5QrCode.start({ facingMode: "environment" }, config, onScanSuccess, onScanFailure)
+                    .catch((err) => {
+                        console.error("Không thể bắt đầu quét: ", err);
+                        // Nếu không có camera sau, thử camera trước
+                        html5QrCode.start({ facingMode: "user" }, config, onScanSuccess, onScanFailure)
+                            .catch((err) => {
+                                alert("Không tìm thấy camera hoặc không có quyền truy cập.");
+                                readerDiv.style.display = 'none';
+                                scanBtn.textContent = 'Quét QR';
+                            });
+                    });
+            }
+        });
+    </script>
+
+</body>
+</html>
