@@ -443,6 +443,17 @@
                     <button id="detailPaymentStatusFilterBtn">Tất cả Trạng thái thu tiền</button>
                     <div id="detailPaymentStatusDropdown" class="checkbox-dropdown"></div>
                 </div>
+                <div class="multi-select-container">
+                    <button id="detailTrackingFilterBtn">Tất cả mã tracking</button>
+                    <div id="detailTrackingDropdown" class="checkbox-dropdown" style="min-width: 200px;">
+                        <label style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+                            <input type="checkbox" id="detailTrackingSelectAll"> Chọn tất cả
+                        </label>
+                        <label><input type="checkbox" value="not-empty"> Tất cả có mã</label>
+                        <label><input type="checkbox" value="empty"> Trống</label>
+                        <label><input type="checkbox" value="numeric-start"> Toàn số</label>
+                    </div>
+                </div>
             </div>
             <div class="right-controls">
                 <div class="date-filter">
@@ -659,6 +670,21 @@
                     this.populateMultiSelect('detailProductDropdown', 'detailProductSelectAll', allProducts, () => { this.updateFilterButtonText('detailProductFilterBtn', 'detailProductDropdown', 'detailProductSelectAll', 'Sản phẩm'); changeCallback(); });
                     this.populateMultiSelect('detailMarketDropdown', 'detailMarketSelectAll', allMarkets, () => { this.updateFilterButtonText('detailMarketFilterBtn', 'detailMarketDropdown', 'detailMarketSelectAll', 'Khu vực'); changeCallback(); });
                     this.populateMultiSelect('detailTeamDropdown', 'detailTeamSelectAll', allTeams, () => { this.updateFilterButtonText('detailTeamFilterBtn', 'detailTeamDropdown', 'detailTeamSelectAll', 'Team'); changeCallback(); });
+                    
+                    // Xử lý đặc biệt cho tracking dropdown
+                    const trackingDropdown = document.getElementById('detailTrackingDropdown');
+                    if (trackingDropdown) {
+                        trackingDropdown.addEventListener('change', (e) => {
+                            if (e.target.id === 'detailTrackingSelectAll') {
+                                trackingDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+                            } else {
+                                const allCb = document.getElementById('detailTrackingSelectAll');
+                                if (allCb) allCb.checked = trackingDropdown.querySelectorAll('input:checked:not(#detailTrackingSelectAll)').length === 3;
+                            }
+                            this.updateFilterButtonText('detailTrackingFilterBtn', 'detailTrackingDropdown', 'detailTrackingSelectAll', 'mã tracking');
+                            changeCallback();
+                        });
+                    }
                 },
                 populateMultiSelect: function(dropdownId, selectAllId, items, changeCallback) {
                     const dropdown = document.getElementById(dropdownId);
@@ -707,6 +733,7 @@
                     this.setupMultiSelectDropdown('detailCheckResultFilterBtn', 'detailCheckResultDropdown');
                     this.setupMultiSelectDropdown('detailDeliveryStatusFilterBtn', 'detailDeliveryStatusDropdown');
                     this.setupMultiSelectDropdown('detailPaymentStatusFilterBtn', 'detailPaymentStatusDropdown');
+                    this.setupMultiSelectDropdown('detailTrackingFilterBtn', 'detailTrackingDropdown');
 
                     document.getElementById('detailClearFilters')?.addEventListener('click', () => {
                         document.getElementById('detailStartDateFilter').value = '';
@@ -729,7 +756,7 @@
                            { type: 'Team', prefix: 'Team' }, { type: 'Staff', prefix: 'NV' },
                            { type: 'Product', prefix: 'Sản phẩm' }, { type: 'Market', prefix: 'Khu vực' },
                            { type: 'CheckResult', prefix: 'Kết quả check' }, { type: 'DeliveryStatus', prefix: 'Trạng thái GH' },
-                           { type: 'PaymentStatus', prefix: 'Trạng thái TT' }
+                           { type: 'PaymentStatus', prefix: 'Trạng thái TT' }, { type: 'Tracking', prefix: 'mã tracking' }
                         ];
 
                         filterConfigs.forEach(config => {
@@ -774,6 +801,7 @@
                     const selectedProducts = getSelected('detailProductDropdown', 'detailProductSelectAll');
                     const selectedMarkets = getSelected('detailMarketDropdown', 'detailMarketSelectAll');
                     const selectedTeams = getSelected('detailTeamDropdown', 'detailTeamSelectAll');
+                    const selectedTracking = getSelected('detailTrackingDropdown', 'detailTrackingSelectAll');
 
                     if (selectedStaff.length > 0) filteredData = filteredData.filter(row => selectedStaff.includes(row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''));
                     if (selectedProducts.length > 0) filteredData = filteredData.filter(row => selectedProducts.includes(row["Mặt hàng"] || ''));
@@ -782,6 +810,27 @@
                     if (selectedCheckResults.length > 0) filteredData = filteredData.filter(r => selectedCheckResults.includes(r["Kết quả Check"] || ''));
                     if (selectedDeliveryStatuses.length > 0) filteredData = filteredData.filter(r => selectedDeliveryStatuses.includes(r["Trạng thái giao hàng NB"] || ''));
                     if (selectedPaymentStatuses.length > 0) filteredData = filteredData.filter(r => selectedPaymentStatuses.includes(r["Trạng thái thu tiền"] || ''));
+                    
+                    // Thêm logic lọc tracking
+                    if (selectedTracking.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const trackingValue = (row["Mã Tracking"] || "").trim();
+                            const isEmpty = !trackingValue;
+                            
+                            return selectedTracking.some(filter => {
+                                switch (filter) {
+                                    case 'empty':
+                                        return isEmpty;
+                                    case 'not-empty':
+                                        return !isEmpty;
+                                    case 'numeric-start':
+                                        return !isEmpty && /^\d/.test(trackingValue);
+                                    default:
+                                        return false;
+                                }
+                            });
+                        });
+                    }
 
                     // SỬA LỖI: LOGIC LỌC NGÀY ĐÃ ĐƯỢC CẬP NHẬT
                     if (startDate || endDate) {
