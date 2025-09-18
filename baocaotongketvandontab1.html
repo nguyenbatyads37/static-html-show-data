@@ -566,6 +566,17 @@
                     <div class="multi-select-container"><button id="reportMarketFilterBtn">Tất cả khu vực</button>
                         <div id="reportMarketDropdown" class="checkbox-dropdown"></div>
                     </div>
+                    <div class="multi-select-container">
+                        <button id="reportTrackingFilterBtn">Tất cả mã tracking</button>
+                        <div id="reportTrackingDropdown" class="checkbox-dropdown" style="min-width: 200px;">
+                            <label style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;">
+                                <input type="checkbox" id="reportTrackingSelectAll"> Chọn tất cả
+                            </label>
+                            <label><input type="checkbox" value="not-empty"> Tất cả có mã</label>
+                            <label><input type="checkbox" value="empty"> Trống</label>
+                            <label><input type="checkbox" value="numeric-start"> Toàn số</label>
+                        </div>
+                    </div>
                     <button id="reportClearFilters" class="clear-filter-btn">Xóa lọc</button>
                 </div>
             </div>
@@ -1074,14 +1085,15 @@
                         document.getElementById('reportStartDateFilter').value = '';
                         document.getElementById('reportEndDateFilter').value = '';
                         document.getElementById('quick-date-vandon').value = '';
-                        ['reportProductDropdown', 'reportMarketDropdown', 'reportStaffDropdown', 'reportTeamDropdown'].forEach(id => document.getElementById(id)?.querySelectorAll('input').forEach(cb => cb.checked = false));
+                        ['reportProductDropdown', 'reportMarketDropdown', 'reportStaffDropdown', 'reportTeamDropdown', 'reportTrackingDropdown'].forEach(id => document.getElementById(id)?.querySelectorAll('input').forEach(cb => cb.checked = false));
                         this.updateProductFilterButtonText();
                         this.updateMarketFilterButtonText();
                         this.updateStaffFilterButtonText();
                         this.updateTeamFilterButtonText();
+                        this.updateTrackingFilterButtonText();
                         this.applyAllFilters();
                     });
-                    ['reportStaffFilterBtn', 'reportTeamFilterBtn', 'reportProductFilterBtn', 'reportMarketFilterBtn'].forEach(id => {
+                    ['reportStaffFilterBtn', 'reportTeamFilterBtn', 'reportProductFilterBtn', 'reportMarketFilterBtn', 'reportTrackingFilterBtn'].forEach(id => {
                         const btn = document.getElementById(id), dropdown = document.getElementById(id.replace('FilterBtn', 'Dropdown'));
                         if (btn && dropdown) {
                             btn.addEventListener('click', e => {
@@ -1102,6 +1114,22 @@
                     const populate = (dropdownId, selectAllId, items, callback) => {
                         const dropdown = document.getElementById(dropdownId);
                         if (!dropdown) return;
+                        
+                        // Thêm điều kiện đặc biệt cho tracking dropdown
+                        if (dropdownId === 'reportTrackingDropdown') {
+                            dropdown.addEventListener('change', e => {
+                                if (e.target.id === selectAllId) {
+                                    dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+                                } else {
+                                    const allCb = document.getElementById(selectAllId);
+                                    if (allCb) allCb.checked = dropdown.querySelectorAll(`input:checked:not(#${selectAllId})`).length === 3;
+                                }
+                                callback();
+                                this.applyAllFilters();
+                            });
+                            return;
+                        }
+                        
                         dropdown.innerHTML = `<label style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;"><input type="checkbox" id="${selectAllId}"> Chọn tất cả</label>`;
                         items.forEach(item => {
                             dropdown.innerHTML += `<label><input type="checkbox" value="${item.replace(/"/g, '&quot;')}"> ${item}</label>`;
@@ -1121,10 +1149,12 @@
                     populate('reportTeamDropdown', 'reportTeamSelectAll', allTeams, this.updateTeamFilterButtonText.bind(this));
                     populate('reportProductDropdown', 'reportProductSelectAll', allProducts, this.updateProductFilterButtonText.bind(this));
                     populate('reportMarketDropdown', 'reportMarketSelectAll', allMarkets, this.updateMarketFilterButtonText.bind(this));
+                    populate('reportTrackingDropdown', 'reportTrackingSelectAll', [], this.updateTrackingFilterButtonText.bind(this));
                     this.updateStaffFilterButtonText();
                     this.updateTeamFilterButtonText();
                     this.updateProductFilterButtonText();
                     this.updateMarketFilterButtonText();
+                    this.updateTrackingFilterButtonText();
                 },
                 updateFilterButtonText: function (btnId, dropdownId, selectAllId, defaultText, selectedText) {
                     const btn = document.getElementById(btnId), dropdown = document.getElementById(dropdownId);
@@ -1139,6 +1169,7 @@
                 updateMarketFilterButtonText: function () { this.updateFilterButtonText('reportMarketFilterBtn', 'reportMarketDropdown', 'reportMarketSelectAll', 'Tất cả khu vực', 'khu vực'); },
                 updateStaffFilterButtonText: function () { this.updateFilterButtonText('reportStaffFilterBtn', 'reportStaffDropdown', 'reportStaffSelectAll', 'Tất cả NV Vận đơn', 'NV'); },
                 updateTeamFilterButtonText: function () { this.updateFilterButtonText('reportTeamFilterBtn', 'reportTeamDropdown', 'reportTeamSelectAll', 'Tất cả Team', 'Team'); },
+                updateTrackingFilterButtonText: function () { this.updateFilterButtonText('reportTrackingFilterBtn', 'reportTrackingDropdown', 'reportTrackingSelectAll', 'Tất cả mã tracking', 'trạng thái'); },
                 applyAllFilters: function () {
                     let data = [...globalData];
                     const startValue = document.getElementById('reportStartDateFilter')?.value;
@@ -1168,10 +1199,33 @@
                     const markets = getSelected('#reportMarketDropdown input:checked:not(#reportMarketSelectAll)');
                     const staff = getSelected('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)');
                     const teams = getSelected('#reportTeamDropdown input:checked:not(#reportTeamSelectAll)');
+                    const trackingFilters = getSelected('#reportTrackingDropdown input:checked:not(#reportTrackingSelectAll)');
+                    
                     if (products.size) data = data.filter(r => products.has(r["Mặt hàng"]));
                     if (markets.size) data = data.filter(r => markets.has(r["Khu vực"] || r["khu vực"]));
                     if (staff.size) data = data.filter(r => staff.has(r["NV Vận đơn"]));
                     if (teams.size) data = data.filter(r => teams.has(r["Team"]));
+                    
+                    // Thêm logic lọc tracking
+                    if (trackingFilters.size > 0) {
+                        data = data.filter(r => {
+                            const trackingValue = (r["Mã Tracking"] || "").trim();
+                            const isEmpty = !trackingValue;
+                            
+                            return Array.from(trackingFilters).some(filter => {
+                                switch (filter) {
+                                    case 'empty':
+                                        return isEmpty;
+                                    case 'not-empty':
+                                        return !isEmpty;
+                                    case 'numeric-start':
+                                        return !isEmpty && /^\d/.test(trackingValue);
+                                    default:
+                                        return false;
+                                }
+                            });
+                        });
+                    }
                     this.updateDetailedSummaryTable(data);
                     this.updateCharts(data);
                 }
