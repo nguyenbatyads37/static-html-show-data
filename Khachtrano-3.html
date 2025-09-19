@@ -1,3 +1,6 @@
+
+<!-- hết code khách hàng nợ -->
+
 <!DOCTYPE html>
 <html lang="vi">
 
@@ -497,7 +500,9 @@ tbody td input,tbody td select,tbody td textarea{
     'Người chịu trách nhiệm': 'NV Kinh doanh(Chịu Trách Nhiệm)',
     'id nợ': 'ID Nợ Gốc',
     'Số tiền trả nợ': 'Số tiền khách trả',
-    'Số tiền nợ': 'Số tiền còn nợ'
+    'Số tiền nợ': 'Số tiền còn nợ',
+    'NV cho nợ': 'NV Giao hàng',
+
   };
 
   const HIDDEN_COLUMNS = ['id', 'id nợ'];
@@ -866,7 +871,12 @@ function createExternalControls(tableKey, displayedHeaders) {
   rowData['SĐT'] = debts[0]['SĐT'] || '';
   rowData['Số tiền nợ'] = tongConLai;
   rowData['Ngày nợ'] = '';
-  rowData[ghCol] = debts[0][ghCol] || '';     // ✅ copy đúng NV Giao hàng
+ rowData[ghCol] = debts[0][ghCol]
+  ?? debts[0]['Giao hàng cho nợ']
+  ?? debts[0]['Giao hàng nhận tiền']
+  ?? debts[0]['NV cho nợ']
+  ?? '';
+
   rowData['Người chịu trách nhiệm'] = nvkd;
   rowData['Ghi chú'] = debts[0]['Ghi chú'] || ''; // ✅ copy đúng Ghi chú
   rowData['Ngày trả'] = formatDateForServer(new Date());
@@ -1412,10 +1422,36 @@ if (rowData['Ngày trả'] && debt['Ngày nợ']) {
   function capitalizeFirstLetter(input) { if (input.value.length > 0) input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1); }
   function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
   function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
-
+  
   // ==== Currency helpers (KHTN) ====
   const formatThousands = (s) =>
     String(s ?? '').replace(/[^\d]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+   // Hiển thị dấu chấm NGAY KHI GÕ, không ghi vào changeSet, chỉ format hiển thị
+function liveFormatCurrency(input){
+  if (!input || input.getAttribute('inputmode') !== 'decimal') return;
+
+  // nhớ vị trí con trỏ hiện tại
+  const start = input.selectionStart ?? input.value.length;
+
+  // số chữ số bên trái con trỏ trước khi format
+  const leftDigits = input.value.slice(0, start).replace(/[^\d]/g, '');
+
+  // format toàn chuỗi
+  const digitsOnly = input.value.replace(/[^\d]/g, '');
+  const formatted  = formatThousands(digitsOnly);
+  input.value = formatted;
+
+  // đưa con trỏ về đúng vị trí tương ứng sau khi đã có dấu chấm
+  let pos = 0, seen = 0;
+  for (let i = 0; i < formatted.length; i++) {
+    if (/\d/.test(formatted[i])) seen++;
+    if (seen >= leftDigits.length) { pos = i + 1; break; }
+  }
+  // nếu xóa hết, pos = 0
+  if (leftDigits.length === 0) pos = 0;
+
+  try { input.setSelectionRange(pos, pos); } catch (_) {}
+}
 
   function finalizeCurrencyKHTN(input, tableKey = 'khtn') {
     if (!input || input.getAttribute('inputmode') !== 'decimal') return;
@@ -1466,23 +1502,31 @@ if (rowData['Ngày trả'] && debt['Ngày nợ']) {
   }
 
   function setupCurrencyInput(input, tableKey) {
-    if (!input || input.__currencyBound) return;
-    input.__currencyBound = true;
+  if (!input || input.__currencyBound) return;
+  input.__currencyBound = true;
 
-    let composing = false;
-    input.addEventListener('compositionstart', () => composing = true);
-    input.addEventListener('compositionend', () => { composing = false; });
+  let composing = false;
+  input.addEventListener('compositionstart', () => composing = true);
+  input.addEventListener('compositionend', () => { composing = false; });
 
-    const finalize = () => { if (!composing) finalizeCurrencyKHTN(input, tableKey); };
+  // ⬇️⬇️ THÊM ĐOẠN NÀY: format ngay khi gõ (nhưng không commit dữ liệu)
+  input.addEventListener('input', () => {
+    if (!composing) liveFormatCurrency(input);
+  });
+  // ⬆️⬆️ HẾT ĐOẠN THÊM
 
-    input.addEventListener('blur', finalize);
-    input.addEventListener('change', finalize);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === 'Tab') finalize();
-    });
+  const finalize = () => { if (!composing) finalizeCurrencyKHTN(input, tableKey); };
 
-    finalize();
-  }
+  input.addEventListener('blur', finalize);
+  input.addEventListener('change', finalize);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === 'Tab') finalize();
+  });
+
+  // Gọi 1 lần để hiển thị đúng ngay khi bind
+  liveFormatCurrency(input); // ⬅️ THÊM DÒNG NÀY
+}
+
 
   function exportToExcel(e) {
       const tableKey = e.currentTarget.dataset.tableKey;
@@ -1602,4 +1646,5 @@ if (rowData['Ngày trả'] && debt['Ngày nợ']) {
 </script>
 
 </body>
-</html>
+</html> 
+<!--code khách trả nợ đã hết--> 
