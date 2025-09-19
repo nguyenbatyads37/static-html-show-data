@@ -187,7 +187,6 @@
 
         // Helper function to parse a value to a number, safely defaulting to 0
         function parseToNumber(value) {
-            // Remove any non-numeric characters except for the decimal point
             const cleanedValue = String(value).replace(/[^0-9.-]+/g, '');
             return parseFloat(cleanedValue) || 0;
         }
@@ -219,18 +218,23 @@
                     throw new Error("Không có dữ liệu hợp lệ hoặc API trả về lỗi.");
                 }
 
-                // --- Lọc đơn hàng dựa trên tham số URL 'madonhang' ---
+                // --- Lọc đơn hàng dựa trên tham số URL 'id' ---
                 const urlParams = new URLSearchParams(window.location.search);
-                const madonhangParam = urlParams.get('madonhang');
+                const idParam = urlParams.get('id'); // <<< THAY ĐỔI TẠI ĐÂY
 
-                if (madonhangParam) {
-                    const desiredOrderCodes = madonhangParam.split(',').map(code => code.trim().toUpperCase());
-                    orders = orders.filter(order => desiredOrderCodes.includes((order['MÃ ĐƠN HÀNG'] || '').toUpperCase()));
+                if (idParam) {
+                    // Tách chuỗi id thành một mảng, cắt bỏ khoảng trắng và chuyển thành chữ hoa
+                    const desiredOrderCodes = idParam.split(',').map(code => code.trim().toUpperCase());
+                    
+                    // Lọc mảng 'orders' để chỉ giữ lại những đơn hàng có 'MÃ ĐƠN HÀNG' trùng khớp
+                    orders = orders.filter(order => 
+                        desiredOrderCodes.includes((order['MÃ ĐƠN HÀNG'] || '').toUpperCase())
+                    );
 
                     if (orders.length === 0) {
-                        statusMsg.textContent = `Không tìm thấy hóa đơn nào với MÃ ĐƠN HÀNG: ${madonhangParam}`;
+                        statusMsg.textContent = `Không tìm thấy hóa đơn nào với các ID đã cung cấp: ${idParam}`; // <<< THAY ĐỔI TẠI ĐÂY
                         statusMsg.classList.add('error');
-                        return; // Stop execution if no orders match
+                        return; // Dừng thực thi nếu không có đơn hàng nào khớp
                     }
                 }
                 // --- Kết thúc phần lọc ---
@@ -238,15 +242,11 @@
                 // Tạo HTML cho tất cả các hóa đơn
                 let allInvoicesHTML = '';
                 orders.forEach(order => {
-                    // Parse amounts to numbers for calculation
                     const remainingAmount = parseToNumber(order['Còn lại']);
-                    const grandTotal = remainingAmount; // Total IS NOW EQUAL to Amount ('Còn lại')
+                    const grandTotal = remainingAmount;
                     const formattedGrandTotal = formatCurrency(grandTotal);
-
-                    // Lấy giá trị 'MÃ ĐƠN HÀNG' để tạo QR Code, đảm bảo nó là một chuỗi
                     const qrCodeData = String(order['MÃ ĐƠN HÀNG'] || ''); 
 
-                    // Dùng `` (template literals) để dễ dàng tạo khối HTML
                     allInvoicesHTML += `
                         <div class="invoice-container">
                             <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F8f0a065d.%E1%BA%A2nh.052637.jpg" alt="Background Logo" class="background-logo" onerror="this.style.display='none'">
