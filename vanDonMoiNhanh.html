@@ -1736,21 +1736,25 @@
     }
 
     // =========================================================================
-    // === HÀM ĐÃ ĐƯỢC CHỈNH SỬA - applyAllFilters ===
+    // === HÀM ĐƯỢC TỐI ƯU HÓA - applyAllFilters ===
     // =========================================================================
     function applyAllFilters(config) {
       const tableHead = document.getElementById(config.table.head);
       const tableBody = document.getElementById(config.table.body);
       if (!tableHead.querySelector('tr') || !tableBody) return;
+      
+      // Thu thập tất cả điều kiện lọc
       const startDateVal = document.getElementById(config.controls.startDate).value;
       const endDateVal = document.getElementById(config.controls.endDate).value;
       const start = startDateVal ? new Date(startDateVal) : null;
       const end = endDateVal ? new Date(endDateVal) : null;
       if (start) start.setHours(0, 0, 0, 0);
       if (end) end.setHours(23, 59, 59, 999);
+      
       const productValue = document.getElementById(config.controls.product).value;
       const marketValue = config.controls.market ? document.getElementById(config.controls.market).value : '';
       const staffValue = config.controls.staff ? document.getElementById(config.controls.staff).value : '';
+      
       const filterValues = {};
       tableHead.querySelectorAll('[data-column]').forEach(filter => {
         const colName = filter.dataset.column;
@@ -1766,31 +1770,36 @@
           filterValues[colName].text = filter.value.toLowerCase();
         }
       });
+      
+      // 🔥 THAY ĐỔI CHÍNH: Lọc trên dữ liệu gốc thay vì DOM
       const originalData = config.data();
-      const rows = tableBody.querySelectorAll('tr');
-      rows.forEach(tr => {
-        const rowIndex = parseInt(tr.dataset.rowIndex, 10);
-        if (isNaN(rowIndex)) return;
-        const rowData = originalData[rowIndex];
-        if (!rowData) return;
+      
+      // Lọc dữ liệu gốc
+      const filteredData = originalData.filter((rowData, rowIndex) => {
         let isVisible = true;
+        
+        // Lọc theo ngày
         if (start || end) {
           const orderDate = parseDateStringFilter(rowData["Ngày lên đơn"] || rowData["Thời gian lên đơn"]);
           if (!orderDate || (start && orderDate < start) || (end && orderDate > end)) {
             isVisible = false;
           }
         }
+        
+        // Lọc theo sản phẩm, khu vực, nhân viên
         if (isVisible && productValue && (rowData["Mặt hàng"] || '') !== productValue) isVisible = false;
         if (isVisible && marketValue && (rowData["Khu vực"] || rowData["khu vực"] || '') !== marketValue) isVisible = false;
         if (isVisible && staffValue && (rowData["NV Vận đơn"] || rowData["NV_Vận_đơn"] || '') !== staffValue) isVisible = false;
+        
+        // Lọc theo các cột khác
         if (isVisible) {
           for (const colName in filterValues) {
             const dataKey = columnDisplayMapping[colName] || colName;
             let cellValue = rowData[dataKey] ?? (rowData[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (rowData['Khu vực'] || '') : ''));
             const cellValueLower = String(cellValue).toLowerCase();
             const colFilters = filterValues[colName];
-
-            // THAY ĐỔI BẮT ĐẦU: Thêm logic lọc cho "Toàn số"
+            
+            // Lọc theo trạng thái (empty/not-empty/numeric-start)
             if (colFilters.state) {
               const valueString = String(cellValue).trim();
               const isBlank = !valueString;
@@ -1811,8 +1820,8 @@
                 }
               }
             }
-            // THAY ĐỔI KẾT THÚC
-
+            
+            // Các bộ lọc khác
             if (colFilters.text && !cellValueLower.includes(colFilters.text)) {
               isVisible = false;
               break;
@@ -1840,9 +1849,19 @@
             }
           }
         }
-        tr.style.display = isVisible ? '' : 'none';
+        
+        return isVisible;
       });
+      
+      // 🔥 RENDER LẠI BẢNG với dữ liệu đã lọc
+      renderTableBody(config, filteredData);
       updateSummaryInfo(config);
+      
+      // Cập nhật sticky columns và cell selection
+      setTimeout(() => {
+        updateStickyColumns(config);
+        setupCellSelection(config.table.body);
+      }, 10);
     }
 
     // =========================================================================
