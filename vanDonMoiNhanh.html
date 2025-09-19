@@ -1121,7 +1121,7 @@
       }
       changes[primaryKey][field] = value;
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(changes));
-      console.log('Change saved to local storage:', { primaryKey, field, value });
+      // console.log('Change saved to local storage:', { primaryKey, field, value });
       updateStatusButtonUI();
     }
 
@@ -1134,7 +1134,7 @@
 
     function clearPendingChanges() {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
-      console.log('Local storage cleared.');
+      // console.log('Local storage cleared.');
       updateStatusButtonUI();
     }
 
@@ -1233,6 +1233,26 @@
     function showError(message, containerId = "tableBody") { const container = document.getElementById(containerId), colCount = displayColumns.length; container.innerHTML = `<tr><td colspan="${colCount}" class="no-data" style="text-align: center;">${message}</td></tr>` }
     function updateSummaryInfo(config) { const tableBody = document.getElementById(config.table.body); const summaryElement = document.getElementById(config.controls.summary); const originalData = config.data(); let visibleCount = 0; let totalAmount = 0; tableBody.querySelectorAll('tr').forEach(tr => { if (tr.style.display !== 'none') { visibleCount++; const rowIndex = parseInt(tr.dataset.rowIndex, 10); if (!isNaN(rowIndex) && originalData[rowIndex]) { const row = originalData[rowIndex]; let amountValue = row["Tổng tiền VNĐ"] || row.Tổng_tiền_VNĐ || 0; const numericValue = parseFloat(String(amountValue).replace(/[^\d.-]/g, "")) || 0; totalAmount += numericValue; } } }); const formattedAmount = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalAmount); summaryElement.innerHTML = `Tổng đơn: <b>${visibleCount}</b> | Tổng tiền: <b style="color:var(--success-color)">${formattedAmount}</b>`; }
     function getDOMCellValue(e) { if (!e) return ""; const t = e.querySelector("select"); if (t) return t.value; const n = e.querySelector("input"); return n ? n.value : e.textContent.trim() }
+    
+    // 🔧 Helper function to get "Mã đơn hàng" from selected cell
+    function getOrderCodeFromCell(cell) {
+      try {
+        const tr = cell.closest('tr');
+        if (!tr) return 'N/A';
+        
+        // 🔥 FIX: Lấy "Mã đơn hàng" trực tiếp từ DOM thay vì dựa vào rowIndex
+        // Cột "Mã đơn hàng" luôn là cột đầu tiên (index 0)
+        const orderCodeCell = tr.cells[0]; // displayColumns[0] = "Mã đơn hàng"
+        if (!orderCodeCell) return 'N/A';
+        
+        // Lấy giá trị trực tiếp từ DOM cell
+        const orderCode = getDOMCellValue(orderCodeCell);
+        return orderCode || 'N/A';
+      } catch (error) {
+        console.warn('Error getting order code:', error);
+        return 'ERROR';
+      }
+    }
     function updateSelectionSummary() { const summaryEl = document.getElementById("selectionSummary"); if (!summaryEl || !document.getElementById("contentData").classList.contains("active")) { if (summaryEl) summaryEl.innerHTML = ""; return } if (selectedCells.size <= 1) { summaryEl.innerHTML = ""; return } let totalSum = 0, numericCount = 0, nonBlankCount = 0; selectedCells.forEach(cell => { const value = getDOMCellValue(cell); if (value !== "") nonBlankCount++; const numericValue = parseFloat(String(value).replace(/[^0-9.-]/g, "")); if (!isNaN(numericValue)) { totalSum += numericValue; numericCount++ } }); let summaryParts = [`Count: <b>${nonBlankCount}</b>`]; if (numericCount > 0) summaryParts.push(`Sum: <b>${totalSum.toLocaleString("vi-VN")}</b>`); summaryEl.innerHTML = summaryParts.join(" | ") }
     function setupCellSelection(tableBodyId) { const tableBody = document.getElementById(tableBodyId); if (!tableBody) return; let lastClickTime = 0, lastClickCell = null; tableBody.addEventListener("mousedown", e => { const td = e.target.closest("td"); if (!td) return; if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return; if (!e.ctrlKey && !e.metaKey && !e.shiftKey) { isMouseDown = !0; startCell = td; selectedCells.forEach(cell => cell.classList.remove("cell-selected")); selectedCells.clear(); td.classList.add("cell-selected"); selectedCells.add(td); e.preventDefault() } }); tableBody.addEventListener("click", e => { const td = e.target.closest("td"); if (!td) return; if (e.target.tagName === "SELECT" || e.target.tagName === "INPUT") return; const currentTime = (new Date).getTime(), isDoubleClick = currentTime - lastClickTime < 300 && lastClickCell === td; if (isDoubleClick) handleEditCell(td, tableBodyId); else { if (e.shiftKey && startCell) selectCellsBetween(startCell, td); else if (e.ctrlKey || e.metaKey) { td.classList.toggle("cell-selected"); if (td.classList.contains("cell-selected")) selectedCells.add(td); else selectedCells.delete(td) } else { selectedCells.forEach(cell => cell.classList.remove("cell-selected")); selectedCells.clear(); td.classList.add("cell-selected"); selectedCells.add(td) } startCell = td } lastClickTime = currentTime; lastClickCell = td; updateSelectionSummary() }); tableBody.addEventListener("mouseover", e => { if (isMouseDown) { const td = e.target.closest("td"); if (td) selectCellsBetween(startCell, td) } }); document.addEventListener("mouseup", () => { if (isMouseDown) { isMouseDown = !1; updateSelectionSummary() } }) }
     function selectCellsBetween(start, end) {
@@ -1265,6 +1285,19 @@
           }
         }
       }
+      
+      // 🔍 LOG: Khi chọn cells (có thể bật/tắt khi cần debug)
+      // console.log('=== CELL SELECTION ===');
+      // console.log('Tổng số ô được chọn:', selectedCells.size);
+      // console.log('Chi tiết selection:', Array.from(selectedCells).map(cell => ({
+      //   orderCode: getOrderCodeFromCell(cell),
+      //   text: cell.textContent.trim(),
+      //   rowDisplay: cell.parentNode.style.display,
+      //   isHidden: cell.parentNode.style.display === 'none',
+      //   rowIndex: cell.parentNode.rowIndex,
+      //   colIndex: cell.cellIndex,
+      //   colName: displayColumns[cell.cellIndex]
+      // })));
     }
     async function processCellUpdate(primaryKey, updates) {
       const payload = { "Mã đơn hàng": primaryKey, ...updates };
@@ -1409,8 +1442,42 @@
     async function pasteToSelectedCells(text) {
       if (selectedCells.size === 0) return;
 
+      // 🔍 LOG: Tất cả ô được chọn (kể cả bị ẩn)
+      // console.log('=== PASTE DEBUG ===');
+      // console.log('Tổng số ô đã chọn:', selectedCells.size);
+      // console.log('Chi tiết các ô đã chọn:', Array.from(selectedCells).map(cell => ({
+      //   orderCode: getOrderCodeFromCell(cell),
+      //   text: cell.textContent.trim(),
+      //   rowDisplay: cell.parentNode.style.display,
+      //   rowIndex: cell.parentNode.rowIndex,
+      //   colIndex: cell.cellIndex,
+      //   colName: displayColumns[cell.cellIndex],
+      //   isHidden: cell.parentNode.style.display === 'none'
+      // })));
+
       const dataGrid = text.split("\n").map(row => row.split("\t"));
-      const sortedCells = Array.from(selectedCells).sort((a, b) => a.parentNode.rowIndex - b.parentNode.rowIndex || a.cellIndex - b.cellIndex);
+      
+      // 🔥 FIX: Lọc chỉ những ô từ hàng hiển thị
+      const visibleSelectedCells = Array.from(selectedCells).filter(
+        cell => cell.parentNode.style.display !== 'none'
+      );
+      
+      // 🔍 LOG: Ô sau khi lọc
+      // console.log('Số ô hiển thị sau lọc:', visibleSelectedCells.length);
+      // console.log('Chi tiết các ô hiển thị:', visibleSelectedCells.map(cell => ({
+      //   orderCode: getOrderCodeFromCell(cell),
+      //   text: cell.textContent.trim(),
+      //   rowIndex: cell.parentNode.rowIndex,
+      //   colIndex: cell.cellIndex,
+      //   colName: displayColumns[cell.cellIndex]
+      // })));
+      
+      if (visibleSelectedCells.length === 0) {
+        showTempMessage('Không có ô nào hiển thị để paste.');
+        return;
+      }
+      
+      const sortedCells = visibleSelectedCells.sort((a, b) => a.parentNode.rowIndex - b.parentNode.rowIndex || a.cellIndex - b.cellIndex);
       const firstCell = sortedCells[0];
       const table = firstCell.closest("table");
 
@@ -1432,20 +1499,19 @@
 
             const rowIndex = parseInt(tr.dataset.rowIndex);
             const colName = displayColumns[cell.cellIndex];
-            const originalData = config.data()[rowIndex];
-            if (isNaN(rowIndex) || !originalData) return;
-
-            const primaryKey = originalData["Mã đơn hàng"];
-
-            if (primaryKey && getDOMCellValue(cell) !== value) {
+            
+            // 🔥 FIX: Lấy primaryKey trực tiếp từ DOM thay vì dựa vào rowIndex
+            const primaryKey = getOrderCodeFromCell(cell);
+            
+            if (primaryKey && primaryKey !== 'N/A' && getDOMCellValue(cell) !== value) {
               // 1. Cập nhật giao diện
               cell.textContent = value;
               cell.classList.add("highlight");
 
               // === START: CODE ĐÃ SỬA LỖI (Trường hợp 1) ===
-              // 2. Cập nhật mảng dữ liệu JavaScript
+              // 2. Cập nhật mảng dữ liệu JavaScript (nếu có rowIndex hợp lệ)
               const dataArray = config.data();
-              if (dataArray && dataArray[rowIndex]) {
+              if (dataArray && !isNaN(rowIndex) && dataArray[rowIndex]) {
                 dataArray[rowIndex][colName] = value;
                 if (colName === 'Đơn vị vận chuyển') {
                   const timestamp = getDateTimeVN();
@@ -1480,7 +1546,7 @@
         dataGrid.forEach((row, r) => {
           row.forEach((value, c) => {
             const targetRow = table.rows[startRowIndex + r];
-            if (targetRow) {
+            if (targetRow && targetRow.style.display !== 'none') {
               const targetCell = targetRow.cells[startColIndex + c];
               if (targetCell && targetCell.classList.contains("editable")) {
                 const tr = targetCell.closest("tr");
@@ -1489,20 +1555,19 @@
 
                 const rowIndex = parseInt(tr.dataset.rowIndex);
                 const colName = displayColumns[targetCell.cellIndex];
-                if (isNaN(rowIndex)) return;
+                
+                // 🔥 FIX: Lấy primaryKey trực tiếp từ DOM thay vì dựa vào rowIndex
+                const primaryKey = getOrderCodeFromCell(targetCell);
 
-                const originalData = config.data()[rowIndex];
-                const primaryKey = originalData ? originalData["Mã đơn hàng"] : null;
-
-                if (primaryKey && getDOMCellValue(targetCell) !== value) {
+                if (primaryKey && primaryKey !== 'N/A' && getDOMCellValue(targetCell) !== value) {
                   // 1. Cập nhật giao diện
                   targetCell.textContent = value;
                   targetCell.classList.add("highlight");
 
                   // === START: CODE ĐÃ SỬA LỖI (Trường hợp 2) ===
-                  // 2. Cập nhật mảng dữ liệu JavaScript
+                  // 2. Cập nhật mảng dữ liệu JavaScript (nếu có rowIndex hợp lệ)
                   const dataArray = config.data();
-                  if (dataArray && dataArray[rowIndex]) {
+                  if (dataArray && !isNaN(rowIndex) && dataArray[rowIndex]) {
                     dataArray[rowIndex][colName] = value;
                     if (colName === 'Đơn vị vận chuyển') {
                       const timestamp = getDateTimeVN();
@@ -1537,6 +1602,12 @@
       }
 
       if (batchUpdates.length > 0) {
+        // 🔍 LOG: Payload sẽ gửi đi
+        // console.log('=== PAYLOAD WILL BE SENT ===');
+        // console.log('Số bản ghi sẽ gửi:', batchUpdates.length);
+        // console.log('Chi tiết payload:', batchUpdates);
+        // console.log('==========================================');
+        
         try {
           const response = await fetch(UPDATE_BULK_URL, {
             method: "PATCH",
@@ -1856,6 +1927,11 @@
       // 🔥 RENDER LẠI BẢNG với dữ liệu đã lọc
       renderTableBody(config, filteredData);
       updateSummaryInfo(config);
+
+      // 🔧 FIX: Clear selectedCells sau khi filter để tránh confusion
+      // selectedCells.forEach(cell => cell.classList.remove("cell-selected"));
+      // selectedCells.clear();
+      // console.log('🔄 Cleared selectedCells after filter');
 
       // Cập nhật sticky columns và cell selection
       setTimeout(() => {
