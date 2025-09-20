@@ -10,6 +10,8 @@
     <title>Khách Hàng Trả Nợ | Tổng kho Hà Hòa</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
     <style>
         /* ===============================
    Hà Hòa – Clean Modern Theme
@@ -1564,37 +1566,119 @@ function liveFormatCurrency(input){
 }
 
 
-  function exportToExcel(e) {
-      const tableKey = e.currentTarget.dataset.tableKey;
-      if (!tableKey || !originalTableData[tableKey]?.data) return showToast('Không có dữ liệu để xuất.', 'warning');
-      const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
-      const visibleIds = new Set(Array.from(container.querySelectorAll('tbody tr'))
-          .filter(tr => tr.style.display !== 'none')
-          .map(tr => tr.dataset.id));
-      const dataToExport = originalTableData[tableKey].data.filter(row => visibleIds.has(row.id));
-      if(dataToExport.length === 0) return showToast('Không có dữ liệu nào được lọc để xuất.', 'warning');
-      
-      let localHiddenColumns = [...HIDDEN_COLUMNS, 'Ngày nợ', 'Số ngày'];
-      const headers = originalTableData[tableKey].headers.filter(h => !localHiddenColumns.includes(h));
-      const headerRow = headers.map(h => headerMapping[h] || h);
-      const dataRows = dataToExport.map(row => headers.map(h => {
-          if (h === 'Tên Khách Hàng') {
-              const debt = originalTableData['khn']?.data.find(d => d.id === row['id nợ']);
-              return debt ? debt['Tên Khách Hàng'] : 'Không rõ';
-          }
-          if (h === 'SĐT' && row[h]) {
-              return "'" + String(row[h]);
-          }
-          return row[h] ?? '';
-      }));
-      
-      const csvContent = [headerRow, ...dataRows].map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-      const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.download = `BaoCao_${TABLE_CONFIG[tableKey].name.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
-      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+ function exportToExcel(e) {
+  const tableKey = e.currentTarget.dataset.tableKey || 'khtn';
+  const cfg = TABLE_CONFIG[tableKey];
+  const container = document.getElementById(cfg.containerId);
+  const table = container?.querySelector('table');
+  if (!table) return showToast('Không tìm thấy bảng để xuất.', 'warning');
+
+  // Lấy danh sách cột hiển thị (bỏ cột "Xóa")
+  const ths = Array.from(table.querySelectorAll('thead tr:first-child th[data-field]'));
+  const headersInfo = ths.map(th => ({
+    display: (th.textContent || '').trim(), // tên hiển thị
+    original: th.dataset.field              // tên cột gốc để tìm [data-field="..."]
+  }));
+  const headers = headersInfo.map(h => h.display);
+  if (headers.length === 0) return showToast('Không có cột dữ liệu để xuất.', 'warning');
+
+  // Cột số / cột ngày (dựa tên cột gốc)
+  const isNumericCol = (orig) => NUMERIC_COLUMNS_FOR_TOTAL.includes(orig);
+  const isDateCol    = (orig) => orig.includes('Ngày');
+
+  // Lấy các dòng đang hiển thị
+  const rows = Array.from(table.querySelectorAll('tbody tr'))
+    .filter(tr => tr.style.display !== 'none');
+
+  const dataAoA = [headers];
+
+  // Đọc giá trị theo data-field (input/select/textarea)
+  rows.forEach(tr => {
+    const rowArr = headersInfo.map(h => {
+      const ctrl = tr.querySelector(`[data-field="${CSS.escape(h.original)}"]`);
+      let raw = ctrl ? (ctrl.value ?? ctrl.textContent ?? '') : '';
+      raw = String(raw).trim();
+
+      if (isNumericCol(h.original)) {
+        const num = Number(raw.replace(/[^\d]/g, ''));
+        return Number.isFinite(num) ? num : null;
+      } else if (isDateCol(h.original)) {
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? raw : d;
+      }
+      return raw; // giữ nguyên string (ví dụ SĐT để không mất số 0 đầu)
+    });
+    dataAoA.push(rowArr);
+  });
+
+  // Hàng Tổng cộng (tfoot) nếu có
+  const tfootRow = table.querySelector('tfoot tr');
+  if (tfootRow) {
+    const totalArr = headersInfo.map((h, idx) => {
+      // +1 vì cột 0 là "Xóa"
+      const td = tfootRow.children[idx + 1];
+      const txt = (td?.textContent || '').trim();
+      if (idx === 0) return txt || 'TỔNG CỘNG';
+      if (isNumericCol(h.original)) {
+        const num = Number(txt.replace(/[^\d]/g, ''));
+        return Number.isFinite(num) ? num : null;
+      }
+      return txt;
+    });
+    dataAoA.push(totalArr);
   }
+
+  // Tạo workbook/sheet
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(dataAoA);
+
+  // Autofilter + freeze header
+  ws['!autofilter'] = {
+    ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } })
+  };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Định dạng kiểu số/ngày
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    const orig = headersInfo[C].original;
+    for (let R = 1; R <= range.e.r; ++R) {
+      const addr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = ws[addr];
+      if (!cell) continue;
+      if (isNumericCol(orig) && typeof cell.v === 'number') {
+        cell.t = 'n'; cell.z = '#,##0';
+      } else if (isDateCol(orig) && cell.v instanceof Date) {
+        cell.t = 'd'; cell.z = 'yyyy-mm-dd';
+      }
+    }
+  }
+
+  // Auto-fit độ rộng cột
+  const colWidths = headersInfo.map((h, idx) => {
+    let maxLen = h.display.length;
+    for (let r = 1; r < dataAoA.length; r++) {
+      const v = dataAoA[r][idx];
+      let len = 0;
+      if (v == null) len = 0;
+      else if (v instanceof Date) len = 10;
+      else if (typeof v === 'number') len = String(v).length + 2;
+      else len = String(v).length;
+      if (len > maxLen) maxLen = len;
+    }
+    if (isNumericCol(h.original)) maxLen = Math.max(maxLen, 12);
+    if (isDateCol(h.original))    maxLen = Math.max(maxLen, 10);
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
+  });
+  ws['!cols'] = colWidths;
+
+  // Ghi file
+  const sheetName = (cfg.name || 'Sheet').slice(0, 30);
+  const filename = `BaoCao_${cfg.name?.replace(/\s/g, '_') || 'KhachHangTraNo'}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
 
   document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('login-form').addEventListener('submit', handleLogin);
