@@ -221,7 +221,11 @@ tbody td input, tbody td select, tbody td textarea{
   width:100%;border:1px solid var(--border);border-radius:12px;background:#fff;padding:10px 12px;font-size:14px;
   transition:border-color .15s,box-shadow .15s;background-clip:padding-box
 }
-.add-grid .field textarea, tbody td textarea{min-height:88px;resize:vertical}
+.add-grid .field textarea, tbody td textarea{ 
+  min-height:40px;            /* ✅ hạ xuống cho nhỏ lại */
+  resize:vertical;
+}
+
 .add-grid .field input:focus,.add-grid .field select:focus,.add-grid .field textarea:focus,
 tbody td input:focus,tbody td select:focus,tbody td textarea:focus{
   outline:none;border-color:#22c55e;box-shadow:0 0 0 4px rgba(34,197,94,.18)
@@ -580,6 +584,54 @@ tfoot td{ vertical-align:middle }
   margin-bottom: 20px;
 }
 
+/* Style nút +Thêm cạnh Ghi chú */
+.add-panel .add-btn-bottom {
+  margin-top: 6px;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+}
+.add-panel .add-btn-bottom:hover {
+  opacity: 0.9;
+}
+
+/* Đặt nút +Thêm bên phải ô Ghi chú */
+.note-field .note-input-wrap{
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;    /* nút căn theo đỉnh textarea */
+}
+.note-field textarea{
+  flex: 1;
+  resize: vertical;           /* cho phép kéo nhỏ/lớn */
+  min-height: 40px;           /* ✅ để tối thiểu 40px (hoặc bỏ hẳn nếu muốn thu nhỏ tự do) */
+}
+
+
+/* Nút +Thêm bên phải */
+.add-btn-right{
+  white-space: nowrap;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(90deg,#22c55e,#16a34a);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+}
+.add-btn-right:hover{ opacity: .95; }
+
+/* Vô hiệu style nút cũ dạng "dưới" nếu còn */
+.add-btn-bottom{ display: none !important; }
+
 
 </style>
 
@@ -628,7 +680,8 @@ tfoot td{ vertical-align:middle }
                     </div>
                     <div class="debt-control-group">
                         <label for="custom-debt-term-input">Số Ngày Nợ Tối Đa Của Từng Khách Hàng</label>
-                        <input type="number" id="custom-debt-term-input" placeholder="Nhập số ngày...">
+                        <input type="number" id="custom-debt-term-input" placeholder="Nhập số ngày..." value="30">
+
                     </div>
 
                     <!-- NVKD limit in dashboard -->
@@ -1121,10 +1174,6 @@ filters.innerHTML = `
   <details open>
     <summary>
       <b>➕ Thêm khoản nợ mới</b>
-      <button type="button" id="btn-add-${tableKey}" class="action-btn update-btn add-btn-inline">
-        <i class="fa fa-plus"></i> + Thêm
-      </button>
-
     </summary>
 
     <div class="add-grid" id="add-form-${tableKey}">
@@ -1132,20 +1181,33 @@ filters.innerHTML = `
         if (HIDDEN_COLUMNS.includes(h)) return `<input type="hidden" data-field="${h}">`;
         const disp = headerMapping[h] || h;
 
-        // chỉ còn 2 field dùng textarea
-        if (['Sản phẩm/Mặt hàng', 'Ghi chú'].includes(h)) {
-          return `<div class="field"><label>${disp}</label>
-                    <textarea data-field="${h}" placeholder="${disp}..."></textarea>
-                  </div>`;
-        }
+        // Ghi chú: có nút +Thêm đặt bên phải
+if (h === 'Ghi chú') {
+  return `<div class="field note-field">
+            <label>${disp}</label>
+            <div class="note-input-wrap">
+              <textarea data-field="${h}" placeholder="${disp}..."></textarea>
+              <button type="button" id="btn-add-${tableKey}"
+                      class="action-btn update-btn add-btn-right">
+                + Thêm
+              </button>
+            </div>
+          </div>`;
+}
 
-        // Địa chỉ = input 1 dòng
+// Sản phẩm/Mặt hàng: chỉ textarea (không có nút)
+if (h === 'Sản phẩm/Mặt hàng') {
+  return `<div class="field"><label>${disp}</label>
+            <textarea data-field="${h}" placeholder="${disp}..."></textarea>
+          </div>`;
+}
+
+
         if (h === 'Địa chỉ') {
           return `<div class="field"><label>${disp}</label>
                     <input type="text" data-field="${h}" placeholder="${disp}..." autocomplete="street-address">
                   </div>`;
         }
-
         if (h === 'Tên Khách Hàng') {
           return `<div class="field"><label>${disp}</label>
                     <input type="text" list="customer-list-options" data-field="${h}" placeholder="Nhập tên Khách Hàng...">
@@ -1200,6 +1262,7 @@ filters.innerHTML = `
     </div>
   </details>
 `;
+
 
 
       controls.appendChild(filters);
@@ -2201,10 +2264,16 @@ function syncGlobalDebtTermToForm() {
     '#add-form-khn input[data-field="Hạn trả nợ"]'                       // ô "Hạn trả nợ" trong form thêm
   );
   if (!g || !debtTermInput) return;
-  debtTermInput.value = g.value || '';
-  // bắn event để logic tính 'Ngày phải trả' trong form chạy lại
+
+  // Ưu tiên: lấy giá trị từ dashboard nếu có, nếu rỗng thì giữ nguyên giá trị hiện tại của form
+  // và fallback về 30 nếu cả hai cùng rỗng.
+  const v = g.value || debtTermInput.value || '30';
+  debtTermInput.value = v;
+
+  // bắn event để tính lại "Ngày phải trả"
   debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
 }
+
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-form').addEventListener('submit', handleLogin);
@@ -2310,24 +2379,28 @@ if (customDebtTermInput) {
   const active = document.activeElement;
   if (!active) return;
 
-  // Enter / Shift+Enter
+  // Nếu đang trong textarea thì để Enter hoạt động bình thường (xuống dòng)
+  if (active.tagName === 'TEXTAREA') return;
+
+  // Enter / Shift+Enter cho input, select
   if (e.key === 'Enter') {
     e.preventDefault();
-    finalizeCurrency(active); // ✅ thêm dòng này
+    finalizeCurrency(active);
     focusNextPrev(active, !e.shiftKey);
     return;
   }
 
-  // Arrow keys (bỏ Ctrl)
+  // Arrow keys
   if (['ArrowRight','ArrowLeft','ArrowUp','ArrowDown'].includes(e.key)) {
     e.preventDefault();
-    finalizeCurrency(active); // ✅ thêm dòng này
+    finalizeCurrency(active);
     if (e.key === 'ArrowRight') focusByDirection(active,'right');
     if (e.key === 'ArrowLeft')  focusByDirection(active,'left');
     if (e.key === 'ArrowUp')    focusByDirection(active,'up');
     if (e.key === 'ArrowDown')  focusByDirection(active,'down');
   }
 }, true);
+
 
 })();
 // đảm bảo bất kỳ input decimal nào khi rời focus đều được format lại
