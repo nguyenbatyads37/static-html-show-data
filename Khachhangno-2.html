@@ -674,6 +674,9 @@ tfoot td{ vertical-align:middle }
     <datalist id="customer-list-options"></datalist>
     <datalist id="sales-person-list-options"></datalist>
     <datalist id="delivery-staff-list-options"></datalist>
+    <datalist id="region-list-options"></datalist>
+<datalist id="phone-list-options"></datalist>
+
 
    <script>
     const API_BASE_URL = 'https://script.google.com/macros/s/AKfycbwZ73GdTFsSitoVqJKiZKIbU3wHM_qpjxQEbhlKTwi1V9GijNC8SPoRH9vVDD65xb9x/exec';
@@ -1022,6 +1025,8 @@ filters.innerHTML = `
         .filter(h => FILTERABLE_HEADERS.includes(h))
         .map(h => {
           const ph = headerMapping[h] || h;
+
+          // 1) 2 ô ngày
           if (h === 'Ngày nợ') {
             return `
               <div class="field">
@@ -1036,6 +1041,45 @@ filters.innerHTML = `
                 <input class="filter-input" type="date" data-header="Ngày phải trả" data-role="date-end">
               </div>`;
           }
+
+          // 2) Các ô cần autocomplete
+          if (h === 'Tên Khách Hàng') {
+            return `
+              <div class="field">
+                <label>${ph}</label>
+                <input class="filter-input" data-header="${h}" list="customer-list-options" placeholder="${ph}...">
+              </div>`;
+          }
+          if (h === 'Khu vực') {
+            return `
+              <div class="field">
+                <label>${ph}</label>
+                <input class="filter-input" data-header="${h}" list="region-list-options" placeholder="${ph}...">
+              </div>`;
+          }
+          if (h === 'SĐT') {
+            return `
+              <div class="field">
+                <label>${ph}</label>
+                <input class="filter-input" type="tel" data-header="${h}" list="phone-list-options" placeholder="Số điện thoại...">
+              </div>`;
+          }
+          if (h === 'Giao hàng cho nợ' || h === 'NV cho nợ') {
+            return `
+              <div class="field">
+                <label>${ph}</label>
+                <input class="filter-input" data-header="${h}" list="delivery-staff-list-options" placeholder="${ph}...">
+              </div>`;
+          }
+          if (h === 'Người chịu trách nhiệm') {
+            return `
+              <div class="field">
+                <label>${ph}</label>
+                <input class="filter-input" data-header="${h}" list="sales-person-list-options" placeholder="${ph}...">
+              </div>`;
+          }
+
+          // 3) Mặc định
           return `
             <div class="field">
               <label>${ph}</label>
@@ -1046,6 +1090,7 @@ filters.innerHTML = `
     }
   </div>
 `;
+
 
 
 
@@ -1358,6 +1403,29 @@ if (clearBtn) {
             customerList = Object.keys(uniqueCustomers);
             document.getElementById('customer-list-options').innerHTML = customerList.map(c => `<option value="${c}"></option>`).join('');
         }
+        // === Region & Phone datalist ===
+const uniqueRegions = new Set();
+const uniquePhones  = new Set();
+
+data.data.forEach(row => {
+  if (row['Khu vực']) uniqueRegions.add(String(row['Khu vực']).trim());
+  if (row['SĐT'])     uniquePhones.add(String(row['SĐT']).trim());
+});
+
+const regionDL = document.getElementById('region-list-options');
+if (regionDL) {
+  regionDL.innerHTML = Array.from(uniqueRegions)
+    .sort((a,b) => a.localeCompare(b, 'vi'))
+    .map(v => `<option value="${v}"></option>`).join('');
+}
+
+const phoneDL = document.getElementById('phone-list-options');
+if (phoneDL) {
+  phoneDL.innerHTML = Array.from(uniquePhones)
+    .sort()
+    .map(v => `<option value="${v}"></option>`).join('');
+}
+
 
         if (!data.data || !data.headers) {
             container.innerHTML = '<p class="status-indicator">Không có dữ liệu.</p>';
