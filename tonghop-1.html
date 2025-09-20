@@ -462,8 +462,15 @@ tbody td input,tbody td select,tbody td textarea{
             <div id="TongHopTab" class="tab-content active">
                 <details class="filters-panel" open>
   <summary class="search-label">
-    <i class="fa fa-search"></i> Bộ lọc dữ liệu
-  </summary>
+  <i class="fa fa-search"></i> Bộ lọc dữ liệu
+  <label style="margin-left:12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;">
+    <input type="checkbox" id="chk-overdue"> NVKD cho nợ quá hạn
+  </label>
+  <label style="margin-left:12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;">
+    <input type="checkbox" id="chk-all" checked> Tất cả
+  </label>
+</summary>
+
 
   <div class="filters-grid">
     <!-- Từ ngày -->
@@ -1709,6 +1716,10 @@ updateNvDataLists();
         // START: FIXED FILTERING LOGIC
         // =========================================================================
        function applySummaryFilters() {
+          calculateRemainingDebts(); // đảm bảo row._conLai đã được tính
+  const isOverdue = document.getElementById('chk-overdue')?.checked;
+  const isAll     = document.getElementById('chk-all')?.checked;
+
   const startDate = document.getElementById('filter-start-date').value;
   const endDate   = document.getElementById('filter-end-date').value;
 
@@ -1751,7 +1762,22 @@ updateNvDataLists();
     const checkCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(row['Tên Khách Hàng']);
     const checkRegion = !region || (row['Khu vực'] && String(row['Khu vực']).toLowerCase().includes(region));
 
-    return checkDate && checkNvGiao && checkNvKd && checkCustomer && checkRegion;
+    const passBase = checkDate && checkNvGiao && checkNvKd && checkCustomer && checkRegion;
+if (!passBase) return false;
+
+// Nếu bật “NVKD cho nợ quá hạn” (và KHÔNG chọn “Tất cả”)
+if (isOverdue && !isAll) {
+  const due = row['Ngày phải trả'] ? new Date(formatDateForInput(row['Ngày phải trả'])) : null;
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  const conLai = Number(row._conLai || 0); // đã tính bởi calculateRemainingDebts()
+  const hasNvkd = !!String(row['Người chịu trách nhiệm']||'').trim();
+
+  // Giữ lại những dòng: còn nợ > 0, có NVKD, và đã quá hạn
+  if (!(conLai > 0 && hasNvkd && due && due < today)) return false;
+}
+return true;
+
   });
 
   // --- 2) Tập KHN nền để ghép sang KHTN (KHÔNG áp NV giao)
@@ -1886,7 +1912,27 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('.export-btn').forEach(button => button.addEventListener('click', exportToExcel));
 
   document.getElementById('apply-filters-btn').addEventListener('click', applySummaryFilters);
+  // Tick "quá hạn" & "tất cả" (loại trừ nhau)
+const chkOverdue = document.getElementById('chk-overdue');
+const chkAll = document.getElementById('chk-all');
+
+function handleMutual() {
+  if (this === chkOverdue && chkOverdue.checked) chkAll.checked = false;
+  if (this === chkAll && chkAll.checked) chkOverdue.checked = false;
+  applySummaryFilters();
+}
+chkOverdue?.addEventListener('change', handleMutual);
+chkAll?.addEventListener('change', handleMutual);
+
   document.getElementById('reset-filters-btn').addEventListener('click', resetSummaryFilters);
+  // Reset về mặc định: Tất cả = bật, Quá hạn = tắt
+document.getElementById('reset-filters-btn')?.addEventListener('click', () => {
+  const chkOverdue = document.getElementById('chk-overdue');
+  const chkAll = document.getElementById('chk-all');
+  if (chkAll) chkAll.checked = true;
+  if (chkOverdue) chkOverdue.checked = false;
+});
+
 
   document.querySelectorAll('.date-presets button').forEach(button => {
     button.addEventListener('click', (e) => {
