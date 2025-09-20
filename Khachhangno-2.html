@@ -7,6 +7,7 @@
     <title>Khách Hàng Nợ | Tổng kho Hà Hòa</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <style>
       /* ================================
    HÀ HÒA – CLEAN DASHBOARD THEME
@@ -2063,26 +2064,136 @@ function makeColumnsResizable(table){
 
 
 
+function exportToExcel(e) {
+  const tableKey = e.currentTarget.dataset.tableKey;
+  if (!tableKey) return;
 
-    function exportToExcel(e) {
-        const tableKey = e.currentTarget.dataset.tableKey;
-        if (!tableKey || !originalTableData[tableKey]?.data) return showToast('Không có dữ liệu để xuất.', 'warning');
-        const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
-        const visibleIds = new Set(Array.from(container.querySelectorAll('tbody tr'))
-            .filter(tr => tr.style.display !== 'none' && !tr.classList.contains('debt-paid-off'))
-            .map(tr => tr.dataset.id));
-        const dataToExport = originalTableData[tableKey].data.filter(row => visibleIds.has(row.id));
-        if(dataToExport.length === 0) return showToast('Không có dữ liệu nào được lọc để xuất.', 'warning');
-        const headers = originalTableData[tableKey].headers.filter(h => !HIDDEN_COLUMNS.includes(h));
-        const headerRow = headers.map(h => headerMapping[h] || h);
-        const dataRows = dataToExport.map(row => headers.map(h => row[h] ?? ''));
-        const csvContent = [headerRow, ...dataRows].map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-        const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `BaoCao_CongNo_${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  const cfg = TABLE_CONFIG[tableKey];
+  const container = document.getElementById(cfg.containerId);
+  const table = container?.querySelector('table');
+  if (!table) return showToast('Không tìm thấy bảng để xuất.', 'warning');
+
+  // Lấy danh sách cột hiển thị (bỏ cột "Xóa")
+  const ths = Array.from(table.querySelectorAll('thead tr:first-child th[data-field]'));
+  const headersInfo = ths.map(th => ({
+    display: (th.textContent || '').trim(),  // tên hiển thị trên file
+    original: th.dataset.field               // tên cột gốc để tìm [data-field="..."]
+  }));
+  const headers = headersInfo.map(h => h.display);
+  if (headers.length === 0) return showToast('Không có cột dữ liệu để xuất.', 'warning');
+
+  // Xác định cột số / cột ngày dựa trên tên cột gốc
+  const isNumericCol = (orig) => NUMERIC_COLUMNS_FOR_TOTAL.includes(orig);
+  const isDateCol    = (orig) => orig.includes('Ngày');
+
+  // Thu thập dữ liệu các hàng đang hiển thị
+  const rows = Array.from(table.querySelectorAll('tbody tr'))
+    .filter(tr => tr.style.display !== 'none' && !tr.classList.contains('debt-paid-off'));
+
+  const dataAoA = [headers];
+
+  rows.forEach(tr => {
+    const rowArr = headersInfo.map(h => {
+      const ctrl = tr.querySelector(`[data-field="${CSS.escape(h.original)}"]`);
+      let raw = '';
+      if (ctrl) {
+        // input/select/textarea
+        raw = (ctrl.value ?? ctrl.textContent ?? '').trim();
+      } else {
+        // fallback: lấy text của TD chứa control (rất hiếm khi cần)
+        const td = Array.from(tr.children).find(td =>
+          td.querySelector && td.querySelector(`[data-field="${CSS.escape(h.original)}"]`)
+        );
+        raw = (td?.textContent || '').trim();
+      }
+
+      if (isNumericCol(h.original)) {
+        const num = Number(String(raw).replace(/\./g, '').replace(/,/g, ''));
+        return Number.isFinite(num) ? num : null;
+      }
+      if (isDateCol(h.original)) {
+        const d = new Date(raw);
+        return isNaN(d.getTime()) ? raw : d;
+      }
+      return raw;
+    });
+
+    dataAoA.push(rowArr);
+  });
+
+  // Hàng tổng (nếu có)
+  const tfootRow = table.querySelector('tfoot tr');
+  if (tfootRow) {
+    const totalArr = headersInfo.map((h, idx) => {
+      if (idx === 0) {
+        // ô đầu tiên ghi "TỔNG CỘNG" (hoặc giữ text hiện có nếu có)
+        const td = tfootRow.children[1]; // vì cột 0 là "Xóa"
+        const txt = (td?.textContent || '').trim();
+        return txt || 'TỔNG CỘNG';
+      }
+      // tìm đúng TD của cột hiện tại trong tfoot (dịch +1 vì có cột "Xóa")
+      const td = tfootRow.children[idx + 1];
+      const txt = (td?.textContent || '').trim();
+      if (isNumericCol(h.original)) {
+        const num = Number(txt.replace(/\./g, '').replace(/,/g, ''));
+        return Number.isFinite(num) ? num : null;
+      }
+      return txt;
+    });
+    dataAoA.push(totalArr);
+  }
+
+  // Tạo workbook/sheet
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(dataAoA);
+
+  // Autofilter + freeze header
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r:0, c:0 }, e: { r: 0, c: headers.length - 1 } }) };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  // Định dạng số / ngày
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    const orig = headersInfo[C].original;
+    for (let R = 1; R <= range.e.r; ++R) {
+      const cellAddr = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = ws[cellAddr];
+      if (!cell) continue;
+      if (isNumericCol(orig) && typeof cell.v === 'number') {
+        cell.t = 'n';
+        cell.z = '#,##0';
+      } else if (isDateCol(orig) && cell.v instanceof Date) {
+        cell.t = 'd';
+        cell.z = 'yyyy-mm-dd';
+      }
     }
+  }
+
+  // Auto-fit cột
+  const colWidths = headersInfo.map((h, idx) => {
+    let maxLen = h.display.length;
+    for (let r = 1; r < dataAoA.length; r++) {
+      const v = dataAoA[r][idx];
+      let len = 0;
+      if (v == null) len = 0;
+      else if (v instanceof Date) len = 10;
+      else if (typeof v === 'number') len = String(v).length + 2;
+      else len = String(v).length;
+      if (len > maxLen) maxLen = len;
+    }
+    if (isNumericCol(h.original)) maxLen = Math.max(maxLen, 12);
+    if (isDateCol(h.original))    maxLen = Math.max(maxLen, 10);
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
+  });
+  ws['!cols'] = colWidths;
+
+  // Ghi file
+  const sheetName = (cfg.name || 'Sheet').slice(0, 30);
+  const filename = `BaoCao_${cfg.name?.replace(/\s/g, '_') || 'CongNo'}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  XLSX.writeFile(wb, filename);
+}
+
      // --- Đồng bộ "Số Ngày Nợ Tối Đa" (dashboard) -> "Hạn trả nợ" (form thêm) ---
 function syncGlobalDebtTermToForm() {
   const g = document.getElementById('custom-debt-term-input');           // ô số ngày ở dashboard
@@ -2097,7 +2208,10 @@ function syncGlobalDebtTermToForm() {
 
     document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('login-form').addEventListener('submit', handleLogin);
-        document.querySelector('.export-btn').addEventListener('click', exportToExcel);
+       document.querySelectorAll('.export-btn').forEach(btn => {
+  btn.addEventListener('click', exportToExcel);
+});
+
         document.getElementById('update-btn-khn').addEventListener('click', () => handleSaveChanges('khn'));
          // ⬇⬇⬇ THÊM ĐÚNG VÀO ĐÂY ⬇⬇⬇
   const clearTopBtn = document.getElementById('btn-clear-khn');
