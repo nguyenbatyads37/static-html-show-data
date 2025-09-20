@@ -591,10 +591,17 @@ tbody td input,tbody td select,tbody td textarea{
       Object.values(changeSet.create['khtn'] || {}).forEach(p => { paidAmounts[p['id nợ']] = (paidAmounts[p['id nợ']] || 0) + (parseFloat(String(p['Số tiền trả nợ'] || '0').replace(/\./g, '')) || 0); });
       
       khnData.forEach(debt => {
-          const totalDebt = parseFloat(String(debt['Số tiền nợ'] || '0').replace(/\./g, '')) || 0;
-          const totalPaid = paidAmounts[debt.id] || 0;
-          debt._conLai = totalDebt - totalPaid;
-      });
+  const totalDebt = parseFloat(String(debt['Số tiền nợ'] || '0').replace(/\./g, '')) || 0;
+  const totalPaid = paidAmounts[debt.id] || 0;
+
+  // luôn có số dương/0 để dùng cho lọc & datalist
+  let remain = totalDebt - totalPaid;
+  if (!isFinite(remain)) remain = totalDebt;   // fallback khi chưa có paid
+  if (remain < 0) remain = 0;                  // chặn số âm
+
+  debt._conLai = remain;
+});
+
       updateDebtDatalist();
   }
 
@@ -602,11 +609,25 @@ tbody td input,tbody td select,tbody td textarea{
       const debtDatalist = document.getElementById('debt-list-options');
       const khnData = originalTableData['khn']?.data;
       if (!khnData || !debtDatalist) return;
-      const customerNamesWithDebt = new Set(
-          khnData.filter(debt => debt._conLai > 0).map(debt => debt['Tên Khách Hàng'])
-      );
-      debtDatalist.innerHTML = Array.from(customerNamesWithDebt).sort((a, b) => a.localeCompare(b, 'vi'))
-          .map(name => `<option value="${name}"></option>`).join('');
+      const toNum = (v) => Number(String(v ?? '').replace(/[^\d]/g, '')) || 0;
+
+// gom theo tên chuẩn hóa, tránh trùng, và chỉ lấy KH có "remain" > 0
+const byNorm = new Map();
+khnData.forEach(debt => {
+  const remain = Number.isFinite(debt._conLai) ? Number(debt._conLai) : toNum(debt['Số tiền nợ']);
+  if (remain > 0) {
+    const name = String(debt['Tên Khách Hàng'] || '').trim();
+    if (!name) return;
+    const key = normalizeVi(name);
+    if (!byNorm.has(key)) byNorm.set(key, name);
+  }
+});
+
+debtDatalist.innerHTML = Array.from(byNorm.values())
+  .sort((a, b) => a.localeCompare(b, 'vi'))
+  .map(name => `<option value="${name}"></option>`)
+  .join('');
+
   }
 
   function showToast(message, type = 'success') {
@@ -808,12 +829,27 @@ function createExternalControls(tableKey, displayedHeaders) {
   const customerName = (e.target?.value || '').trim();
   if (!customerName) return;
 
-  const khnData = originalTableData['khn']?.data || [];
-  const outstandingDebts = khnData.filter(d =>
-    d['Tên Khách Hàng'] === customerName &&
-    (d._conLai ?? 0) > 0 &&
-    !tempSelectedDebtIds.includes(d.id)
-  );
+  // chuẩn hóa so khớp tên KH
+const norm = (s) => normalizeVi(String(s || ''));
+const inputNameNorm = norm(customerName);
+
+const khnData = originalTableData['khn']?.data || [];
+const toNum = (v) => Number(String(v ?? '').replace(/[^\d]/g, '')) || 0;
+
+const outstandingDebts = khnData.filter(d => {
+
+  const sameCustomer = norm(d['Tên Khách Hàng']) === inputNameNorm;
+
+  // remain có fallback: ưu tiên _conLai; nếu thiếu thì dùng 'Số tiền nợ'
+  const remain = Number.isFinite(d._conLai)
+    ? Number(d._conLai)
+    : toNum(d['Số tiền nợ']);
+
+  const notPicked = !tempSelectedDebtIds.map(String).includes(String(d.id));
+  return sameCustomer && remain > 0 && notPicked;
+});
+
+
   if (outstandingDebts.length === 0) {
     showToast(`Không tìm thấy khoản nợ nào còn lại cho "${customerName}".`, 'warning');
     if (e.target && 'value' in e.target) e.target.value = '';
