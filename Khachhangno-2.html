@@ -322,7 +322,7 @@ footer{text-align:center;margin-top:30px;color:var(--muted);font-size:13px}
   thead tr:first-child th:not(:first-child){min-width:200px}
 }
 .align-left  { text-align: left; }
-.align-right { text-align: right; }
+.align-right { text-align: left; }
 .align-center{ text-align: center; }
 /* Compact filters */
 .table-controls{ padding:10px }
@@ -542,7 +542,7 @@ tfoot td{ vertical-align:middle }
 }
 .add-panel .add-btn-inline i{ display:none !important; }
 /* Ẩn nút Xóa lọc cũ ở dưới (nếu có render) */
-.add-panel #btn-clear-khn { display: none !important; }
+
 
 /* màu nền đơn giản cho nút xóa lọc trên tiêu đề */
 .clear-btn { background: linear-gradient(90deg, var(--info), #6366f1); }
@@ -570,6 +570,15 @@ tfoot td{ vertical-align:middle }
   .add-panel .add-actions{ justify-content:stretch; }
   .add-panel .add-actions .add-btn-bottom{ width:100%; }
 }
+
+/* Luôn hiển thị 4 cột cho dashboard */
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); /* 4 cột bằng nhau */
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
 
 </style>
 
@@ -1107,9 +1116,7 @@ filters.innerHTML = `
       <button type="button" id="btn-add-${tableKey}" class="action-btn update-btn add-btn-inline">
         <i class="fa fa-plus"></i> + Thêm
       </button>
-      <button type="button" id="btn-clear-${tableKey}" class="action-btn export-btn add-btn-inline">
-+       <i class="fa fa-filter-circle-xmark"></i> Xóa lọc
-+     </button>
+
     </summary>
 
     <div class="add-grid" id="add-form-${tableKey}">
@@ -1273,26 +1280,7 @@ if (addBtn) {
     submitNewRowFromExternalForm(tableKey, addForm, container);
   });
 }
-// Nút Xóa lọc
-const clearBtn = controls.querySelector(`#btn-clear-${tableKey}`);
-if (clearBtn) {
-  clearBtn.addEventListener('click', (ev) => {
-    ev.stopPropagation(); // không gập/mở <details>
 
-    // 1) Xóa các ô lọc hiển thị trong panel
-    controls.querySelectorAll('.filters-panel .filter-input')
-      .forEach(inp => { inp.value = ''; });
-
-    // 2) Xóa luôn bộ lọc tạm khi gõ trong form thêm
-    if (TEMP_FILTERS[tableKey]) TEMP_FILTERS[tableKey] = {};
-
-    // 3) Áp lại lọc + cập nhật đếm
-    filterTable(tableKey);
-    updateVisibleRowCount(tableKey);
-
-    showToast('Đã xóa bộ lọc', 'success');
-  });
-}
 
 
     }
@@ -1469,6 +1457,7 @@ if (phoneDL) {
         // Tạo phần tử table rồi append (giữ toolbox đã tạo)
         const tableEl = document.createElement('table');
         tableEl.innerHTML = `${headerHtml}${bodyHtml}<tfoot></tfoot>`;
+        container.innerHTML = ''; // xóa sạch trước khi append
         container.appendChild(tableEl);
         makeColumnsResizable(tableEl);
 
@@ -1501,7 +1490,8 @@ if (phoneDL) {
   // Duyệt từng header: cột 1 (đầu tiên) đã dùng cho nhãn → để trống,
   // các cột số thì tính tổng và căn phải.
   headers.forEach((header, idx) => {
-    if (idx === 0) { cells.push('<td></td>'); return; }
+    // idx === 0 đã dùng cho ô nhãn “Tổng cộng” rồi, bỏ qua
+  if (idx === 0) { return; }
     if (NUMERIC_COLUMNS_FOR_TOTAL.includes(header) && header !== 'Hạn trả nợ') {
       const total = visibleRows.reduce((sum, row) => {
         const input = row.querySelector(`[data-field="${header}"]`);
