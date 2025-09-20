@@ -547,9 +547,9 @@
             <div class="table-wrapper">
                 <table class="summary-table product-area-summary-table">
                     <thead style="
-    position: sticky !important;
-    top: 0;
-    z-index: 50;
+position: sticky !important;
+top: 0;
+z-index: 50;
 ">
                         <tr>
                             <th rowspan="2">Sản phẩm</th>
@@ -557,6 +557,9 @@
                             <th rowspan="2">Tổng đơn</th>
                             <th rowspan="2">Tổng tiền</th>
                             <th colspan="5">Trạng thái giao hàng</th>
+                            <th rowspan="2">Tỷ lệ đơn lên vận hành</th>
+                            <th rowspan="2">Tỷ lệ thu tiền/giao thành công</th>
+                            <th rowspan="2">Tỷ lệ TT thành công/Đơn tính phí</th>
                             <th rowspan="2">Tỷ lệ Thành công</th>
                         </tr>
                         <tr>
@@ -781,7 +784,12 @@
                         returned: 0,
                         delivering: 0,
                         waitingForCheck: 0,
-                        other: 0
+                        other: 0,
+                        // Thêm các trường mới cho tính tỷ lệ
+                        tongDonOK: 0,
+                        tongDonCoDVVC: 0,
+                        tongDonLenVanHanh: 0,
+                        daThuTien: 0
                     };
                 },
                 populateFilters: function () {
@@ -1059,6 +1067,9 @@
                         const product = row["Mặt hàng"] || "Sản phẩm khác";
                         const area = row["Khu vực"] || row["khu vực"] || "Khu vực khác";
                         const deliveryStatus = row["Trạng thái giao hàng NB"] || "";
+                        const paymentStatus = row["Trạng thái thu tiền"] || "";
+                        const ketQuaCheck = row["Kết quả Check"] || "";
+                        const dvvc = row["Đơn vị vận chuyển"] || "";
                         const numericAmount = parseFloat(String(row["Tổng tiền VNĐ"] || '0').replace(/[^\d.-]/g, '')) || 0;
 
                         if (!productAreaStats[product]) productAreaStats[product] = {
@@ -1070,11 +1081,34 @@
                         statsToUpdate.forEach(stats => {
                             stats.totalOrders++;
                             stats.totalAmount += numericAmount;
+                            
+                            // Tính toán cho trạng thái giao hàng
                             if (deliveryStatus.includes("Giao Thành Công")) stats.successful++;
                             else if (deliveryStatus.includes("Hoàn")) stats.returned++;
                             else if (deliveryStatus.includes("Đang Giao")) stats.delivering++;
                             else if (deliveryStatus.includes("chờ check")) stats.waitingForCheck++;
                             else stats.other++;
+            
+                            // *** THÊM MỚI: Tính toán cho các tỷ lệ ***
+                            // 1. Tổng đơn OK (Kết quả Check = "OK")
+                            if (ketQuaCheck === "OK") {
+                                stats.tongDonOK++;
+                            }
+            
+                            // 2. Tổng đơn có ĐVVC (Đơn vị vận chuyển không trống)
+                            if (dvvc !== "") {
+                                stats.tongDonCoDVVC++;
+                            }
+            
+                            // 3. Tổng đơn lên vận hành (Trạng thái giao hàng KHÔNG thuộc ['chờ check', 'Hủy'])
+                            if (!['chờ check', 'Hủy'].includes(deliveryStatus)) {
+                                stats.tongDonLenVanHanh++;
+                            }
+            
+                            // 4. Đã thanh toán (có bill) - KHÔNG bao gồm "Có bill 1 phần"
+                            if (paymentStatus.includes("Có bill") && !paymentStatus.includes("Có bill 1 phần")) {
+                                stats.daThuTien++;
+                            }
                         });
                     });
 
@@ -1108,6 +1142,27 @@
                     tr.insertCell().textContent = stats.delivering.toLocaleString('vi-VN');
                     tr.insertCell().textContent = stats.waitingForCheck.toLocaleString('vi-VN');
                     tr.insertCell().textContent = stats.other.toLocaleString('vi-VN');
+                    
+                    // *** THÊM MỚI: 3 cột tỷ lệ ***
+                    // 1. Tỷ lệ đơn lên vận hành = (Tổng đơn có ĐVVC / Tổng đơn OK) × 100
+                    const shipRate = stats.tongDonOK > 0 ? (stats.tongDonCoDVVC / stats.tongDonOK * 100) : 0;
+                    const shipRateCell = tr.insertCell();
+                    shipRateCell.textContent = shipRate.toFixed(1) + '%';
+                    shipRateCell.className = shipRate > 80 ? 'positive' : 'negative';
+                    
+                    // 2. Tỷ lệ thu tiền/giao thành công = (Đã Thanh Toán (có bill) / Giao Thành Công) × 100
+                    const paymentRate = stats.successful > 0 ? (stats.daThuTien / stats.successful * 100) : 0;
+                    const paymentRateCell = tr.insertCell();
+                    paymentRateCell.textContent = paymentRate.toFixed(1) + '%';
+                    paymentRateCell.className = paymentRate > 70 ? 'positive' : 'negative';
+                    
+                    // 3. Tỷ lệ TT thành công/Đơn tính phí = (Đã Thanh Toán (có bill) / Tổng đơn lên vận hành) × 100
+                    const ttThanhCongTrenDonTinhPhi = stats.tongDonLenVanHanh > 0 ? (stats.daThuTien / stats.tongDonLenVanHanh * 100) : 0;
+                    const ttRateCell = tr.insertCell();
+                    ttRateCell.textContent = ttThanhCongTrenDonTinhPhi.toFixed(1) + '%';
+                    ttRateCell.className = ttThanhCongTrenDonTinhPhi > 60 ? 'positive' : 'negative';
+
+                    // Tỷ lệ thành công (cột gốc)
                     const successRate = stats.totalOrders > 0 ? (stats.successful / stats.totalOrders * 100) : 0;
                     const rateCell = tr.insertCell();
                     rateCell.className = 'rate-cell';
