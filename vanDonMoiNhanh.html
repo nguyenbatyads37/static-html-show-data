@@ -1442,6 +1442,19 @@
     async function pasteToSelectedCells(text) {
       if (selectedCells.size === 0) return;
 
+      // console.log(`🚀 === BẮT ĐẦU PASTE ===`);
+      // console.log(`📋 Dữ liệu paste:`, text);
+      
+      // // 🔍 LOG: Chi tiết tất cả ô đã được SELECTED
+      // console.log(`📍 SELECTED CELLS (${selectedCells.size} ô):`);
+      // Array.from(selectedCells).forEach((cell, index) => {
+      //   const orderCode = getOrderCodeFromCell(cell);
+      //   const colName = displayColumns[cell.cellIndex];
+      //   const currentValue = getDOMCellValue(cell);
+      //   const isVisible = cell.parentNode.style.display !== 'none';
+      //   console.log(`  [${index}] ${orderCode} | Cột: ${colName} | Giá trị: "${currentValue}" | Hiển thị: ${isVisible}`);
+      // });
+
       // 🔍 LOG: Tất cả ô được chọn (kể cả bị ẩn)
       // console.log('=== PASTE DEBUG ===');
       // console.log('Tổng số ô đã chọn:', selectedCells.size);
@@ -1504,6 +1517,8 @@
             const primaryKey = getOrderCodeFromCell(cell);
             
             if (primaryKey && primaryKey !== 'N/A' && getDOMCellValue(cell) !== value) {
+              // console.log(`✅ PASTE THỰC TẾ: ${primaryKey} | Cột: ${colName} | "${getDOMCellValue(cell)}" → "${value}" | DOM rowIndex: ${rowIndex}`);
+              
               // 1. Cập nhật giao diện
               cell.textContent = value;
               cell.classList.add("highlight");
@@ -1511,7 +1526,10 @@
               // === START: CODE ĐÃ SỬA LỖI (Trường hợp 1) ===
               // 2. Cập nhật mảng dữ liệu JavaScript (nếu có rowIndex hợp lệ)
               const dataArray = config.data();
-              if (dataArray && !isNaN(rowIndex) && dataArray[rowIndex]) {
+              // console.log('dataArray:', dataArray);
+              
+              if (dataArray && !isNaN(rowIndex) && dataArray[rowIndex] && primaryKey === dataArray[rowIndex]["Mã đơn hàng"]) {
+                // console.log(`🔄 Cập nhật dataArray[${rowIndex}]: "${dataArray[rowIndex]["Mã đơn hàng"]}" - trước: "${dataArray[rowIndex][colName]}" → sau: "${value}"`);
                 dataArray[rowIndex][colName] = value;
                 if (colName === 'Đơn vị vận chuyển') {
                   const timestamp = getDateTimeVN();
@@ -1560,6 +1578,8 @@
                 const primaryKey = getOrderCodeFromCell(targetCell);
 
                 if (primaryKey && primaryKey !== 'N/A' && getDOMCellValue(targetCell) !== value) {
+                  // console.log(`✅ PASTE GRID: ${primaryKey} | Cột: ${colName} | "${getDOMCellValue(targetCell)}" → "${value}" | DOM rowIndex: ${rowIndex} | Grid[${r}][${c}]`);
+                  
                   // 1. Cập nhật giao diện
                   targetCell.textContent = value;
                   targetCell.classList.add("highlight");
@@ -1624,8 +1644,24 @@
 
           showTempMessage(`Đã dán và cập nhật ${batchUpdates.length} giá trị thành công`);
 
+          // 🔄 Đồng bộ hóa với allData sau khi API thành công
           batchUpdates.forEach(update => {
-            removePendingChange(update["Mã đơn hàng"]);
+            const orderCode = update["Mã đơn hàng"];
+            // console.log(`💾 Đồng bộ với allData: tìm order code "${orderCode}"`);
+            if (allData && allData.length > 0) {
+              const allDataIndex = allData.findIndex(item => item["Mã đơn hàng"] === orderCode);
+              if (allDataIndex !== -1) {
+                Object.entries(update).forEach(([colName, value]) => {
+                  if (colName !== "Mã đơn hàng") {
+                    // console.log(`✅ allData[${allDataIndex}] cập nhật ${colName}: "${allData[allDataIndex][colName]}" → "${value}"`);
+                    allData[allDataIndex][colName] = value;
+                  }
+                });
+              } else {
+                console.log(`❌ Không tìm thấy order code "${orderCode}" trong allData`);
+              }
+            }
+            removePendingChange(orderCode);
           });
 
         } catch (error) {
