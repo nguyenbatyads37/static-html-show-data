@@ -1337,6 +1337,7 @@
       td.appendChild(input);
       td.classList.add("editing");
       input.focus();
+      
       const finishEdit = save => {
         const newValue = save ? input.value.trim() : originalValue;
         td.textContent = newValue;
@@ -1344,49 +1345,61 @@
         if (save && newValue !== originalValue) {
           td.classList.add("highlight");
           const tr = td.closest("tr");
-          const config = allTabConfigs.find(c => c.table.body === tableBodyId);
-          const rowIndex = parseInt(tr.dataset.rowIndex);
           const colName = displayColumns[td.cellIndex];
-
-          // === START: CODE ĐÃ SỬA LỖI ===
-          // Cập nhật giá trị mới vào mảng dữ liệu JavaScript tương ứng
-          if (config && !isNaN(rowIndex)) {
-            const dataArray = config.data(); // Lấy mảng dữ liệu của tab hiện tại
-            if (dataArray && dataArray[rowIndex]) {
-              // Cập nhật giá trị trong mảng
-              dataArray[rowIndex][colName] = newValue;
-
-              // Xử lý trường hợp đặc biệt cho cột "Đơn vị vận chuyển"
-              if (colName === 'Đơn vị vận chuyển') {
-                const timestamp = getDateTimeVN();
-                // Cập nhật cả ngày tháng trong mảng dữ liệu
-                dataArray[rowIndex]["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
+          
+          // 🔥 FIX: Lấy primaryKey trực tiếp từ DOM thay vì dựa vào rowIndex
+          const primaryKey = getOrderCodeFromCell(td);
+          
+          if (primaryKey && primaryKey !== 'N/A') {
+            const config = allTabConfigs.find(c => c.table.body === tableBodyId);
+            if (config) {
+              const filteredIdx = parseInt(tr.dataset.filteredIndex);
+              const originalIdx = parseInt(tr.dataset.originalRowIndex);
+              
+              // Cập nhật mảng đã lọc (data hiện tại đang hiển thị)
+              const filteredData = config.data(); // Mảng hiện tại được render
+              if (filteredData && filteredIdx >= 0 && filteredData[filteredIdx]) {
+                filteredData[filteredIdx][colName] = newValue;
+              }
+              
+              // Cập nhật allData
+              if (allData && allData.length > 0) {
+                const allDataIndex = allData.findIndex(item => item["Mã đơn hàng"] === primaryKey);
+                if (allDataIndex !== -1) {
+                  allData[allDataIndex][colName] = newValue;
+                  
+                  if (colName === 'Đơn vị vận chuyển') {
+                    const timestamp = getDateTimeVN();
+                    allData[allDataIndex]["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
+                    
+                    // Cập nhật giao diện
+                    const dateColIndex = displayColumns.indexOf("Ngày Kế toán đối soát với FFM lần 2");
+                    if (dateColIndex > -1 && tr.cells[dateColIndex]) {
+                      tr.cells[dateColIndex].textContent = timestamp;
+                      tr.cells[dateColIndex].classList.add('highlight');
+                    }
+                  }
+                } else {
+                  console.error('❌ Không tìm thấy order code trong allData:', primaryKey);
+                }
               }
             }
-          }
-          // === END: CODE ĐÃ SỬA LỖI ===
-
-          const originalData = config.data()[rowIndex];
-          const primaryKey = originalData["Mã đơn hàng"];
-          if (primaryKey) {
-            const updates = {
-              [colName]: newValue
-            };
+            
+            const updates = { [colName]: newValue };
             if (colName === 'Đơn vị vận chuyển') {
               const timestamp = getDateTimeVN();
               updates["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
-              const dateColIndex = displayColumns.indexOf("Ngày Kế toán đối soát với FFM lần 2");
-              if (dateColIndex > -1 && tr.cells[dateColIndex]) {
-                tr.cells[dateColIndex].textContent = timestamp;
-                tr.cells[dateColIndex].classList.add('highlight');
-              }
             }
+            
             processCellUpdate(primaryKey, updates);
+          } else {
+            console.error('❌ Không lấy được primary key từ DOM!');
           }
         }
         input.removeEventListener("blur", onBlur);
         input.removeEventListener("keydown", onKeyDown);
       };
+      
       const onBlur = () => finishEdit(true);
       const onKeyDown = e => {
         if (e.key === "Enter") {
@@ -2128,18 +2141,28 @@
         showError(`Không có đơn hàng nào.`, config.table.body);
         return;
       }
+
       const fixedCount = getFixedColumnCount();
-      data.forEach((row, originalRowIndex) => {
+      const originalData = config.data(); // Mảng dữ liệu gốc
+
+      data.forEach((row, filteredIndex) => {
         const tr = document.createElement('tr');
-        tr.dataset.rowIndex = originalRowIndex;
-        displayColumns.forEach((col, index) => {
+        
+        // 🔥 FIX: Tìm originalRowIndex trong mảng gốc
+        const originalRowIndex = originalData.findIndex(originalRow => 
+          originalRow["Mã đơn hàng"] === row["Mã đơn hàng"]
+        );
+        
+        tr.dataset.filteredIndex = filteredIndex; // Index trong mảng đã lọc
+        tr.dataset.originalRowIndex = originalRowIndex; // Index trong mảng gốc
+        
+        displayColumns.forEach((col, colIndex) => {
           const td = document.createElement('td');
-          if (index < fixedCount) td.classList.add('fixed-column');
-          // === THÊM ĐOẠN IF NÀY VÀO ===
+          if (colIndex < fixedCount) td.classList.add('fixed-column');
           if (longTextColumns.includes(col)) {
             td.classList.add('long-text-cell');
           }
-          // === KẾT THÚC ===
+          
           const dataKey = columnDisplayMapping[col] || col;
           let value;
           if (allDateColumns.includes(dataKey)) {
@@ -2157,13 +2180,13 @@
               } else {
                 value = '';
               }
-
             } else {
               value = '';
             }
           } else {
             value = row[dataKey] ?? (row[dataKey.replace(/ /g, '_')] || (dataKey === 'khu vực' ? (row['Khu vực'] || '') : ''));
           }
+          
           if (editableCols.includes(col)) {
             td.classList.add('editable');
             if (dropdownCols[col]) {
@@ -2179,39 +2202,54 @@
               select.addEventListener('change', (e) => {
                 td.classList.add('highlight');
                 const newValue = select.value;
-
-                // === START: CODE ĐÃ SỬA LỖI ===
-                // Cập nhật giá trị mới vào mảng dữ liệu JavaScript
-                const currentConfig = allTabConfigs.find(c => c.table.body === container.id);
-                if (currentConfig) {
-                  const dataArray = currentConfig.data();
-                  if (dataArray && dataArray[originalRowIndex]) {
-                    dataArray[originalRowIndex][col] = newValue;
-
-                    if (col === 'Đơn vị vận chuyển') {
-                      const timestamp = getDateTimeVN();
-                      dataArray[originalRowIndex]["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
+                
+                
+                // 🔥 FIX: Lấy primaryKey trực tiếp từ DOM (cột đầu tiên)
+                const primaryKey = getOrderCodeFromCell(td);
+                
+                if (primaryKey && primaryKey !== 'N/A') {
+                  // Cập nhật dữ liệu JavaScript
+                  const filteredIdx = parseInt(tr.dataset.filteredIndex);
+                  const originalIdx = parseInt(tr.dataset.originalRowIndex);
+                  
+                  // Cập nhật mảng đã lọc
+                  if (data[filteredIdx]) {
+                    data[filteredIdx][col] = newValue;
+                  }
+                  
+                  // Cập nhật mảng gốc
+                  if (originalIdx >= 0 && originalData[originalIdx]) {
+                    originalData[originalIdx][col] = newValue;
+                  }
+                  
+                  // Cập nhật allData nếu cần
+                  if (allData && allData.length > 0) {
+                    const allDataIndex = allData.findIndex(item => item["Mã đơn hàng"] === primaryKey);
+                    if (allDataIndex !== -1) {
+                      allData[allDataIndex][col] = newValue;
                     }
                   }
-                }
-                // === END: CODE ĐÃ SỬA LỖI ===
-
-                const primaryKey = data[originalRowIndex]["Mã đơn hàng"];
-                if (primaryKey) {
-                  const updates = {
-                    [col]: newValue
-                  };
+                  
+                  const updates = { [col]: newValue };
                   if (col === 'Đơn vị vận chuyển') {
                     const timestamp = getDateTimeVN();
                     updates["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
-                    const tr = td.closest('tr');
+                    
+                    // Cập nhật tất cả mảng dữ liệu
+                    if (data[filteredIdx]) data[filteredIdx]["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
+                    if (originalIdx >= 0 && originalData[originalIdx]) originalData[originalIdx]["Ngày Kế toán đối soát với FFM lần 2"] = timestamp;
+                    
+                    // Cập nhật giao diện
                     const dateColIndex = displayColumns.indexOf("Ngày Kế toán đối soát với FFM lần 2");
                     if (dateColIndex > -1 && tr.cells[dateColIndex]) {
                       tr.cells[dateColIndex].textContent = timestamp;
                       tr.cells[dateColIndex].classList.add('highlight');
                     }
                   }
+                  
                   processCellUpdate(primaryKey, updates);
+                } else {
+                  console.error('❌ Không lấy được primary key từ DOM!');
                 }
               });
               td.appendChild(select);
@@ -2221,6 +2259,7 @@
           } else {
             td.textContent = value;
           }
+          
           if (col === "Kết quả Check") {
             if (value === 'OK') td.classList.add('cell-ok');
             else if (value === 'Vận đơn XL') td.classList.add('cell-xl');
@@ -2230,6 +2269,7 @@
         });
         container.appendChild(tr);
       });
+      
       updateStickyColumns(config);
     }
     function setupControls() {
