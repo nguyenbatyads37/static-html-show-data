@@ -388,6 +388,8 @@ tbody td input,tbody td select,tbody td textarea{
   text-align : center;
 }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
 </head>
 
 <body>
@@ -1873,36 +1875,145 @@ clearNvGiaoTokens();
         
         // --- EXPORT FUNCTION ---
         function exportToExcel(e) {
-            const tableKey = e.currentTarget.dataset.tableKey;
-            if (!tableKey) return;
+  const tableKey = e.currentTarget.dataset.tableKey;
+  if (!tableKey) return;
 
-            const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
-            const table = container.querySelector('table');
-            if (!table) { return showToast('Không tìm thấy bảng để xuất.', 'warning'); }
-            
-            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent);
-            
-            // Get data from visible rows in the table body
-            const dataRows = Array.from(table.querySelectorAll('tbody tr')).map(row => {
-                return Array.from(row.querySelectorAll('td')).map(td => td.textContent);
-            });
-            
-            // Get data from the table foot
-            const footerRows = Array.from(table.querySelectorAll('tfoot tr')).map(row => {
-                 return Array.from(row.querySelectorAll('td')).map(td => td.textContent);
-            });
-            
-            if (dataRows.length === 0) { return showToast('Không có dữ liệu để xuất.', 'warning'); }
+  const cfg = TABLE_CONFIG[tableKey];
+  const container = document.getElementById(cfg.containerId);
+  const table = container?.querySelector('table');
+  if (!table) {
+    return showToast('Không tìm thấy bảng để xuất.', 'warning');
+  }
 
-            const allRows = [headers, ...dataRows, ...footerRows];
-            
-            const csvContent = allRows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-            const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `BaoCao_${TABLE_CONFIG[tableKey].name.replace(/\s/g, '_')}_${new Date().toISOString().slice(0, 10)}.csv`;
-            document.body.appendChild(link); link.click(); document.body.removeChild(link);
-        }
+  // 1) Lấy header (chỉ các cột đang hiển thị)
+  const headerCells = Array.from(table.querySelectorAll('thead tr:first-child th'));
+  const headers = headerCells
+    .map(th => (th.textContent || '').trim())
+    .filter(h => h !== '' && h !== 'Xóa');
+
+  // >>> Kiểm tra bảng có cột "Xóa" hay không
+  const hasDeleteCol = headerCells.length > 0 && (headerCells[0].textContent || '').trim() === 'Xóa';
+
+  if (headers.length === 0) {
+    return showToast('Không có cột dữ liệu để xuất.', 'warning');
+  }
+
+  // 2) Lấy data của các hàng đang hiển thị (tbody)
+  const rows = Array.from(table.querySelectorAll('tbody tr'))
+    .filter(tr => !tr.classList.contains('input-row') && tr.style.display !== 'none');
+
+  const dataAoA = [];
+  dataAoA.push(headers); // Header dòng 1
+
+  // Map tên hiển thị -> tên gốc (để biết cột số)
+  const reverseHeaderMap = {};
+  Object.entries(headerMapping).forEach(([k, v]) => reverseHeaderMap[v] = k);
+
+  // Hàm kiểm tra cột số
+  const isNumericCol = (displayName) => {
+    const original = reverseHeaderMap[displayName] || displayName;
+    return NUMERIC_COLUMNS_FOR_TOTAL.includes(original);
+  };
+
+  // Hàm kiểm tra cột ngày
+  const isDateCol = (displayName) => {
+    const original = reverseHeaderMap[displayName] || displayName;
+    return (original.includes('Ngày'));
+  };
+
+  // Lấy dữ liệu cell theo cột hiển thị
+  rows.forEach(tr => {
+    const rowArr = [];
+    const tds = Array.from(tr.querySelectorAll('td'));
+    // >>> Chỉ bỏ cột đầu nếu có cột "Xóa"
+    const dataTds = hasDeleteCol ? tds.slice(1) : tds;
+
+    dataTds.forEach((td, idx) => {
+      if (idx >= headers.length) return;
+      const displayName = headers[idx];
+      const input = td.querySelector('input, textarea, select');
+      let raw = input ? (input.value ?? '') : (td.textContent ?? '');
+      raw = String(raw).trim();
+
+      if (isNumericCol(displayName)) {
+        const num = Number(raw.replace(/\./g, '').replace(/,/g, ''));
+        rowArr.push(Number.isFinite(num) ? num : null);
+      } else if (isDateCol(displayName)) {
+        const d = new Date(raw);
+        rowArr.push(!isNaN(d.getTime()) ? d : raw);
+      } else {
+        rowArr.push(raw);
+      }
+    });
+
+    if (rowArr.length === headers.length) dataAoA.push(rowArr);
+  });
+
+  // 3) Lấy totals (tfoot) – nếu có
+  const tfootRow = table.querySelector('tfoot tr');
+  if (tfootRow) {
+    const totalTds = Array.from(tfootRow.querySelectorAll('td'));
+    const totalArr = totalTds.slice(hasDeleteCol ? 1 : 0, headers.length + (hasDeleteCol ? 1 : 0)).map((td, idx) => {
+      const txt = (td.textContent || '').trim();
+      if (idx === 0) return txt || 'TỔNG CỘNG';
+      if (isNumericCol(headers[idx])) {
+        const num = Number(txt.replace(/\./g, '').replace(/,/g, ''));
+        return Number.isFinite(num) ? num : null;
+      }
+      return txt;
+    });
+    dataAoA.push(totalArr);
+  }
+
+  // 4) Tạo workbook & worksheet
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(dataAoA);
+
+  // 5) Định dạng
+  ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r:0, c:0 }, e: { r: 0, c: headers.length - 1 } }) };
+  ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+  const range = XLSX.utils.decode_range(ws['!ref']);
+  for (let C = range.s.c; C <= range.e.c; ++C) {
+    const headerName = headers[C];
+    for (let R = 1; R <= range.e.r; ++R) {
+      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
+      const cell = ws[cellAddress];
+      if (!cell) continue;
+      if (isNumericCol(headerName) && typeof cell.v === 'number') {
+        cell.t = 'n';
+        cell.z = '#,##0';
+      } else if (isDateCol(headerName) && cell.v instanceof Date) {
+        cell.t = 'd';
+        cell.z = 'yyyy-mm-dd';
+      }
+    }
+  }
+
+  // 5.4 Auto-fit độ rộng cột
+  const colWidths = headers.map((h, idx) => {
+    let maxLen = h.length;
+    for (let r = 1; r < dataAoA.length; r++) {
+      const val = dataAoA[r][idx];
+      let len = 0;
+      if (val == null) len = 0;
+      else if (val instanceof Date) len = 10;
+      else if (typeof val === 'number') len = String(val).length + 2;
+      else len = String(val).length;
+      if (len > maxLen) maxLen = len;
+    }
+    if (isNumericCol(headers[idx])) maxLen = Math.max(maxLen, 12);
+    if (isDateCol(headers[idx])) maxLen = Math.max(maxLen, 10);
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 40) };
+  });
+  ws['!cols'] = colWidths;
+
+  // 6) Ghi file
+  const filename = `BaoCao_${cfg.name.replace(/\s/g, '_')}_${new Date().toISOString().slice(0,10)}.xlsx`;
+  XLSX.utils.book_append_sheet(wb, ws, cfg.name.slice(0, 30));
+  XLSX.writeFile(wb, filename);
+}
+
 
        // --- DOMContentLoaded EVENT LISTENER ---
 // --- DOMContentLoaded EVENT LISTENER ---
@@ -2048,4 +2159,4 @@ document.getElementById('reset-filters-btn')?.addEventListener('click', () => {
 
     </script>
 </body>
-</html>
+</html> 
