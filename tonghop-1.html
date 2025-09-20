@@ -904,6 +904,33 @@ function clearNvGiaoTokens() {
                 }
             });
         }
+       
+        // Tô đỏ quá hạn cho bảng Tổng Hợp "Lịch sử Nợ của Khách hàng"
+function highlightOverdueRowsSummary() {
+  const container = document.getElementById('container-tonghop-khn');
+  if (!container) return;
+  const table = container.querySelector('table');
+  if (!table) return;
+
+  // Tìm index cột "Ngày phải trả"
+  const headerCells = Array.from(table.querySelectorAll('thead th'));
+  const dueHeaderText = (headerMapping['Ngày phải trả'] || 'Ngày phải trả').trim();
+  const dueIdx = headerCells.findIndex(th => (th.textContent || '').trim() === dueHeaderText);
+  if (dueIdx < 0) return;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    const tds = tr.querySelectorAll('td');
+    const dueText = (tds[dueIdx] ? tds[dueIdx].textContent : '').trim(); // yyyy-mm-dd
+    if (!dueText) { tr.classList.remove('row-overdue'); return; }
+
+    const dueDate = new Date(dueText);
+    if (!isNaN(dueDate) && dueDate < today) tr.classList.add('row-overdue');
+    else tr.classList.remove('row-overdue');
+  });
+}
 
         // --- DASHBOARD AND TOTALS ---
         function calculateGrandTotal(tableKey, filteredData = null) {
@@ -1544,6 +1571,9 @@ if (originalTableData[originalKey] && originalTableData[originalKey].data) {
 updateNvDataLists();
                 renderSummaryTable('tonghop-khn', originalTableData['khn']);
                 renderSummaryTable('tonghop-khtn', originalTableData['khtn']);
+                highlightOverdueRowsSummary();  // <<< thêm dòng này
+
+
                 
                 populateSummaryFilters();
                 calculateRemainingDebts();
@@ -1788,6 +1818,8 @@ updateNvDataLists();
   // --- 5) Render + dashboard
   renderSummaryTable('tonghop-khn',  originalTableData['khn'],  filteredKhn);
   renderSummaryTable('tonghop-khtn', originalTableData['khtn'], filteredKhtn);
+  highlightOverdueRowsSummary();  // <<< thêm dòng này
+
   updateDashboard({ khn: filteredKhn, khtn: filteredKhtn, hth: filteredHth });
 }
 
@@ -1808,6 +1840,8 @@ clearNvGiaoTokens();
             document.getElementById('filter-region').value = '';
             renderSummaryTable('tonghop-khn', originalTableData['khn']);
             renderSummaryTable('tonghop-khtn', originalTableData['khtn']);
+            highlightOverdueRowsSummary();  // <<< thêm dòng này
+
             updateDashboard();
         }
         
