@@ -1026,8 +1026,15 @@ filters.className = 'filters-panel';
 filters.open = true;
 filters.innerHTML = `
   <summary class="search-label">
-    <i class="fa fa-search"></i> Tìm kiếm
-  </summary>
+  <i class="fa fa-search"></i> Tìm kiếm
+  <label style="margin-left:12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;">
+    <input type="checkbox" class="filter-checkbox" data-role="overdue-sales"> NVKD cho nợ quá hạn
+  </label>
+  <label style="margin-left:12px;display:inline-flex;align-items:center;gap:6px;font-size:13px;">
+    <input type="checkbox" class="filter-checkbox" data-role="all" checked> Tất cả
+  </label>
+</summary>
+
   <div class="filters-grid">
     ${
       displayedHeaders
@@ -1206,6 +1213,22 @@ filters.innerHTML = `
       controls.querySelectorAll('.filter-input').forEach(inp => {
         inp.addEventListener('input', () => filterTable(tableKey));
       });
+      // Checkbox lọc quá hạn / tất cả
+controls.querySelectorAll('.filter-checkbox').forEach(chk => {
+  chk.addEventListener('change', () => {
+    // Nếu tick “Tất cả” thì bỏ tick “NVKD cho nợ quá hạn”
+    const host = document.getElementById(`controls-${tableKey}`);
+    const allChk = host?.querySelector('.filter-checkbox[data-role="all"]');
+    const overdueChk = host?.querySelector('.filter-checkbox[data-role="overdue-sales"]');
+    if (chk.dataset.role === 'all' && allChk?.checked && overdueChk) overdueChk.checked = false;
+
+    // Nếu tick “NVKD cho nợ quá hạn” thì bỏ tick “Tất cả”
+    if (chk.dataset.role === 'overdue-sales' && overdueChk?.checked && allChk) allChk.checked = false;
+
+    filterTable(tableKey);
+  });
+});
+
 
       // Tự động tính Ngày phải trả trong form khi đổi Ngày nợ/Hạn trả nợ
       const addForm = controls.querySelector(`#add-form-${tableKey}`);
@@ -1812,6 +1835,20 @@ if (phoneDL) {
   const allFilterInputs = controlsHost
     ? Array.from(controlsHost.querySelectorAll('.filter-input'))
     : [];
+    // Lấy trạng thái 2 checkbox
+const overdueChk = controlsHost?.querySelector('.filter-checkbox[data-role="overdue-sales"]');
+const allChk     = controlsHost?.querySelector('.filter-checkbox[data-role="all"]');
+const filterOverdue = !!overdueChk?.checked;
+const filterAll     = !!allChk?.checked;
+// Nếu bỏ tick cả 2 checkbox thì ẩn tất cả dòng và return
+if (!filterOverdue && !filterAll) {
+  rows.forEach(row => row.style.display = 'none');
+  updateTotals(tableKey);
+  updateDashboard({ khn: [], khtn: [], hth: [] });
+  updateVisibleRowCount(tableKey);
+  return;
+}
+
 
   // --- tách lọc ngày & text ---
   const startInput = allFilterInputs.find(i => i.dataset.role === 'date-start');
@@ -1879,6 +1916,20 @@ Object.entries(tmp).forEach(([header, val]) => {
         }
       }
     }
+    // 3) Lọc “NVKD cho nợ quá hạn” (chỉ áp dụng khi không tick "Tất cả")
+if (ok && filterOverdue && !filterAll) {
+  const dueDateInput = row.querySelector('[data-field="Ngày phải trả"]');
+  const nvkdInput = row.querySelector('[data-field="Người chịu trách nhiệm"]');
+  const nvkd = nvkdInput ? (nvkdInput.value || nvkdInput.textContent || '').trim() : '';
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  if (!nvkd || !dueDateInput?.value) {
+    ok = false; // thiếu NVKD hoặc ngày đến hạn -> không tính quá hạn
+  } else {
+    const dueDate = new Date(dueDateInput.value);
+    ok = (dueDate < today); // chỉ giữ dòng đã quá hạn
+  }
+}
 
     row.style.display = ok ? '' : 'none';
   });
@@ -1888,8 +1939,8 @@ Object.entries(tmp).forEach(([header, val]) => {
   highlightOverdueRows();
 
   // Cập nhật dashboard dựa trên dữ liệu đã lọc (khi có bất kỳ filter)
-  const anyFilterActive =
-    hasAnyText || hasStart || hasEnd;
+  const anyFilterActive = hasAnyText || hasStart || hasEnd || (filterOverdue && !filterAll);
+
 
   if (anyFilterActive) {
     const visibleIds = new Set(
@@ -1907,6 +1958,9 @@ Object.entries(tmp).forEach(([header, val]) => {
   } else {
     updateDashboard();
   }
+    // cập nhật số bản ghi hiển thị
+  updateVisibleRowCount(tableKey);
+
 }
 
 
@@ -2046,20 +2100,32 @@ function syncGlobalDebtTermToForm() {
         document.querySelector('.export-btn').addEventListener('click', exportToExcel);
         document.getElementById('update-btn-khn').addEventListener('click', () => handleSaveChanges('khn'));
          // ⬇⬇⬇ THÊM ĐÚNG VÀO ĐÂY ⬇⬇⬇
-  const clearTopBtn = document.getElementById('btn-clear-khn'); // nút nằm trên dòng "Bảng Khách Hàng Nợ"
-  if (clearTopBtn){
-    clearTopBtn.addEventListener('click', () => {
-      const controlsHost = document.getElementById('controls-khn'); // nơi chứa panel lọc
-      if (controlsHost){
-        controlsHost.querySelectorAll('.filters-panel .filter-input')
-          .forEach(inp => inp.value = '');
-      }
-      if (TEMP_FILTERS.khn) TEMP_FILTERS.khn = {};
-      filterTable('khn');
-      updateVisibleRowCount('khn');
-      showToast('Đã xóa bộ lọc', 'success');
-    });
-  }
+  const clearTopBtn = document.getElementById('btn-clear-khn');
+if (clearTopBtn){
+  clearTopBtn.addEventListener('click', () => {
+    const controlsHost = document.getElementById('controls-khn');
+    if (controlsHost){
+      // Xóa nội dung các ô filter
+      controlsHost.querySelectorAll('.filters-panel .filter-input')
+        .forEach(inp => inp.value = '');
+
+      // ✅ Reset lại checkbox: Tất cả = tick, NVKD quá hạn = bỏ tick
+      const allChk = controlsHost.querySelector('.filter-checkbox[data-role="all"]');
+      const odChk  = controlsHost.querySelector('.filter-checkbox[data-role="overdue-sales"]');
+      if (allChk) allChk.checked = true;
+      if (odChk)  odChk.checked = false;
+    }
+
+    // Xóa bộ lọc tạm từ form thêm (nếu có)
+    if (TEMP_FILTERS.khn) TEMP_FILTERS.khn = {};
+
+    // Áp lại lọc và cập nhật
+    filterTable('khn');
+    updateVisibleRowCount('khn');
+    showToast('Đã xóa bộ lọc', 'success');
+  });
+}
+
   // ⬆⬆⬆ HẾT PHẦN THÊM ⬆⬆⬆
         setupCurrencyInput(document.getElementById('max-debt-input'));
         setupCurrencyInput(document.getElementById('max-sales-debt-input'));
