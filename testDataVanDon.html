@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
   <meta charset="UTF-8" />
   <title>QUẢN LÝ VẬN ĐƠN LumiGlobal</title>
@@ -932,7 +931,7 @@
     }
     const dropdownCols = {
       "Kết quả Check": ["", "OK", "Huỷ", "Treo", "Vận đơn XL", "Đợi hàng", "Khách hẹn"],
-      "Trạng thái giao hàng NB": ["", "Giao Thành Công", "Đang Giao", "Chưa Giao", "Hủy", "Hoàn", "chờ check", "Giao không thành công", "Bom_Thất Lạc"],
+      "Trạng thái giao hàng NB": ["", "Giao Thành Công", "Đang Giao", "Chưa Giao", "Hủy", "Hoàn", "chờ check", "Giao không thành công", "Bom_Thất Lạc", "Chưa giao", "chưa giao"],
       "Trạng thái thu tiền": ["", "Có bill", "Có bill 1 phần", "Bom_bùng_chặn", "Hẹn Thanh Toán", "Hoàn Hàng", "Khó Đòi", "Không nhận được hàng", "Không PH dưới 3N", "Thanh toán phí hoàn", "KPH nhiều ngày"]
     };
     const displayColumns = ["Mã đơn hàng", "Kết quả Check", "Trạng thái giao hàng NB", "Mã Tracking", "Lý do", "Trạng thái thu tiền", "Ghi chú của VĐ", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ", "Nhân viên Sale", "NV Vận đơn", "Đơn vị vận chuyển", "Số tiền của đơn hàng đã về TK Cty", "Kế toán xác nhận thu tiền về", "Ngày Kế toán đối soát với FFM lần 2"];
@@ -1231,7 +1230,47 @@
     }
 
     function showError(message, containerId = "tableBody") { const container = document.getElementById(containerId), colCount = displayColumns.length; container.innerHTML = `<tr><td colspan="${colCount}" class="no-data" style="text-align: center;">${message}</td></tr>` }
-    function updateSummaryInfo(config) { const tableBody = document.getElementById(config.table.body); const summaryElement = document.getElementById(config.controls.summary); const originalData = config.data(); let visibleCount = 0; let totalAmount = 0; tableBody.querySelectorAll('tr').forEach(tr => { if (tr.style.display !== 'none') { visibleCount++; const rowIndex = parseInt(tr.dataset.rowIndex, 10); if (!isNaN(rowIndex) && originalData[rowIndex]) { const row = originalData[rowIndex]; let amountValue = row["Tổng tiền VNĐ"] || row.Tổng_tiền_VNĐ || 0; const numericValue = parseFloat(String(amountValue).replace(/[^\d.-]/g, "")) || 0; totalAmount += numericValue; } } }); const formattedAmount = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalAmount); summaryElement.innerHTML = `Tổng đơn: <b>${visibleCount}</b> | Tổng tiền: <b style="color:var(--success-color)">${formattedAmount}</b>`; }
+    function updateSummaryInfo(config) { 
+        const tableBody = document.getElementById(config.table.body); 
+        const summaryElement = document.getElementById(config.controls.summary); 
+        const originalData = config.data(); 
+        
+        let visibleCount = 0; 
+        let totalAmount = 0; 
+        
+        tableBody.querySelectorAll('tr').forEach(tr => { 
+            if (tr.style.display !== 'none') { 
+                visibleCount++; 
+                
+                // Lấy "Mã đơn hàng" trực tiếp từ DOM thay vì dựa vào rowIndex
+                const orderCodeCell = tr.cells[0]; // Cột "Mã đơn hàng" luôn là cột đầu tiên
+                const orderCode = orderCodeCell ? getDOMCellValue(orderCodeCell) : null;
+                
+                if (orderCode) {
+                    // Tìm dữ liệu trong originalData dựa trên "Mã đơn hàng"
+                    const rowData = originalData.find(item => item["Mã đơn hàng"] === orderCode);
+                    
+                    if (rowData) {
+                        // Thử nhiều tên cột có thể có
+                        let amountValue = rowData["Tổng tiền VNĐ"] || 
+                                        rowData["Tổng_tiền_VNĐ"] || 
+                                        rowData["Tổng tiền VND"] ||
+                                        rowData["Tổng_tiền_VND"] ||
+                                        rowData["Giá bán"] ||
+                                        rowData["Giá_bán"] ||
+                                        0;
+                        
+                        // Chuyển đổi thành số
+                        const numericValue = parseFloat(String(amountValue).replace(/[^\d.-]/g, "")) || 0; 
+                        totalAmount += numericValue;
+                    }
+                }
+            } 
+        }); 
+        
+        const formattedAmount = new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(totalAmount); 
+        summaryElement.innerHTML = `Tổng đơn: <b>${visibleCount}</b> | Tổng tiền: <b style="color:var(--success-color)">${formattedAmount}</b>`; 
+    }
     function getDOMCellValue(e) { if (!e) return ""; const t = e.querySelector("select"); if (t) return t.value; const n = e.querySelector("input"); return n ? n.value : e.textContent.trim() }
     
     // 🔧 Helper function to get "Mã đơn hàng" from selected cell
