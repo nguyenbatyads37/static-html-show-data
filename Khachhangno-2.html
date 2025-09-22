@@ -2052,7 +2052,12 @@ if (ok && filterOverdue && !filterAll) {
 }
 
 
-    function capitalizeFirstLetter(input) { if (input.value.length > 0) input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1); }
+   function capitalizeFirstLetter(input) {
+  if (!input || !input.value) return;
+  // viết hoa chữ cái đầu tiên, giữ nguyên phần còn lại
+  input.value = input.value.charAt(0).toUpperCase() + input.value.slice(1);
+}
+
     function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
     function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
     // === helpers ===
@@ -2081,9 +2086,44 @@ function getGlobalDebtTerm(){
   let composing = false;
 
   input.addEventListener('compositionstart', () => composing = true);
-  input.addEventListener('compositionend',   () => { composing = false; });
+  input.addEventListener('compositionend',   () => { 
+    composing = false; 
+    formatRealtime(); 
+  });
 
-  // Chỉ format khi kết thúc nhập
+  // Format ngay khi gõ (real-time)
+  const formatRealtime = () => {
+    if (composing) return; // không format khi đang gõ tiếng Việt
+    
+    const cursorPos = input.selectionStart;
+    const oldValue = input.value;
+    const rawValue = oldValue.replace(/[^\d]/g, ''); // chỉ giữ số
+    
+    if (rawValue === '') {
+      input.value = '';
+      return;
+    }
+    
+    // Format với dấu chấm
+    const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+    if (formattedValue !== oldValue) {
+      input.value = formattedValue;
+      
+      // Tính toán lại vị trí con trỏ
+      const oldDots = (oldValue.slice(0, cursorPos).match(/\./g) || []).length;
+      const newDots = (formattedValue.slice(0, cursorPos).match(/\./g) || []).length;
+      const newCursorPos = cursorPos + (newDots - oldDots);
+      
+      // Đặt lại con trỏ
+      input.setSelectionRange(newCursorPos, newCursorPos);
+    }
+  };
+
+  // Format ngay khi gõ
+  input.addEventListener('input', formatRealtime);
+
+  // Chỉ format khi kết thúc nhập (giữ lại cho chắc chắn)
   const finalize = () => { if (!composing) finalizeCurrency(input); };
 
   input.addEventListener('blur', finalize);
@@ -2096,7 +2136,7 @@ function getGlobalDebtTerm(){
     }
   });
 
-  // ✨ Space: chặn chèn khoảng trắng + format ngay
+  // Space: chặn chèn khoảng trắng + format ngay
   input.addEventListener('keydown', (e) => {
     if (e.key === ' ' || e.code === 'Space') {
       e.preventDefault();      // không cho thêm dấu cách vào ô
@@ -2104,9 +2144,9 @@ function getGlobalDebtTerm(){
     }
   });
 
-  // (tuỳ chọn) Nếu người dùng paste có khoảng trắng -> vẫn format lại sau 1 nhịp
+  // Paste: format sau khi paste
   input.addEventListener('paste', () => {
-    setTimeout(finalize, 0);
+    setTimeout(formatRealtime, 0);
   });
 
   // Format giá trị ban đầu (nếu có)
@@ -2376,6 +2416,19 @@ if (customDebtTermInput) {
         }
         
         initApp();
+          // Tự viết hoa chữ cái đầu tiên khi đang nhập
+  // Chỉ viết hoa khi blur (thoát ô)
+document.addEventListener('blur', (e) => {
+  const el = e.target;
+  if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+    const type = el.getAttribute('type');
+    if (!type || type === 'text') {
+      capitalizeFirstLetter(el);
+    }
+  }
+}, true); // dùng capture để bắt cả blur bubbling
+
+
     });
     (function () {
   function getFocusable(container=document) {
@@ -2463,4 +2516,4 @@ document.addEventListener('focusout', (e) => {
 
 </script>
 </body>
-</html> 
+</html>  
