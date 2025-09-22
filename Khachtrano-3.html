@@ -1572,25 +1572,73 @@ function liveFormatCurrency(input){
   input.__currencyBound = true;
 
   let composing = false;
+
   input.addEventListener('compositionstart', () => composing = true);
-  input.addEventListener('compositionend', () => { composing = false; });
-
-  // ⬇️⬇️ THÊM ĐOẠN NÀY: format ngay khi gõ (nhưng không commit dữ liệu)
-  input.addEventListener('input', () => {
-    if (!composing) liveFormatCurrency(input);
+  input.addEventListener('compositionend', () => { 
+    composing = false; 
+    formatRealtime(); 
   });
-  // ⬆️⬆️ HẾT ĐOẠN THÊM
 
+  // Format ngay khi gõ (real-time)
+  const formatRealtime = () => {
+    if (composing) return; // không format khi đang gõ tiếng Việt
+    
+    const cursorPos = input.selectionStart;
+    const oldValue = input.value;
+    const rawValue = oldValue.replace(/[^\d]/g, ''); // chỉ giữ số
+    
+    if (rawValue === '') {
+      input.value = '';
+      return;
+    }
+    
+    // Format với dấu chấm
+    const formattedValue = rawValue.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    
+    if (formattedValue !== oldValue) {
+      input.value = formattedValue;
+      
+      // Tính toán lại vị trí con trỏ
+      const oldDots = (oldValue.slice(0, cursorPos).match(/\./g) || []).length;
+      const newDots = (formattedValue.slice(0, cursorPos).match(/\./g) || []).length;
+      const newCursorPos = cursorPos + (newDots - oldDots);
+      
+      // Đặt lại con trỏ
+      input.setSelectionRange(newCursorPos, newCursorPos);
+    }
+  };
+
+  // Format ngay khi gõ
+  input.addEventListener('input', formatRealtime);
+
+  // Chỉ format khi kết thúc nhập (giữ lại cho chắc chắn)
   const finalize = () => { if (!composing) finalizeCurrencyKHTN(input, tableKey); };
 
   input.addEventListener('blur', finalize);
   input.addEventListener('change', finalize);
+
+  // Enter/Tab: format ngay
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === 'Tab') finalize();
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      finalize();
+    }
   });
 
-  // Gọi 1 lần để hiển thị đúng ngay khi bind
-  liveFormatCurrency(input); // ⬅️ THÊM DÒNG NÀY
+  // Space: chặn chèn khoảng trắng + format ngay
+  input.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();      // không cho thêm dấu cách vào ô
+      finalize();              // format số (chèn dấu .)
+    }
+  });
+
+  // Paste: format sau khi paste
+  input.addEventListener('paste', () => {
+    setTimeout(formatRealtime, 0);
+  });
+
+  // Format giá trị ban đầu (nếu có)
+  liveFormatCurrency(input);
 }
 
 
