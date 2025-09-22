@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bill Viewer</title>
+  <title>BILL TỒN ECO</title>
   <style>
-    /* ====== Office Light Theme UI - Spreadsheet Style ====== */
+    /* ====== Office Light Theme UI - Full Screen App Layout ====== */
     :root{
       --bg-light: #FFFFFF;
       --bg-secondary: #F8F9FA;
@@ -23,49 +23,67 @@
       --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
+    html { height: 100%; }
+    
+    /* --- NEW: Full Screen App Layout --- */
     body{
       margin:0;
+      padding: 16px;
       font: 16px/1.6 var(--font-sans);
       color: var(--text-primary);
-      background-color: var(--bg-secondary);
+      background-color: var(--bg-light);
+      height: 100vh; /* Use viewport height */
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
     }
-    .container{ max-width: 1600px; margin: 32px auto; padding: 0 24px; }
-
+    .container{
+      padding: 0;
+      margin: 0;
+      width: 100%;
+      flex: 1; /* Grow to fill space */
+      display: flex;
+      flex-direction: column;
+      min-height: 0; /* Important for flex children */
+    }
     .header{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:16px;
-      margin-bottom: 24px;
+      margin-bottom: 0;
+      flex-shrink: 0; /* Don't shrink header */
     }
+    .card{
+      flex: 1; /* Grow to fill space */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+    }
+    .table-wrap{ 
+      flex: 1 1 auto; /* Allow table area to grow and shrink */
+      overflow: auto; /* This is where scrolling happens */
+    }
+    .toolbar, .statusbar {
+      flex-shrink: 0; /* Don't shrink toolbars */
+    }
+    /* --- End Full Screen Layout --- */
+
     .title{
-      font-size: 28px;
+      font-size: 32px;
       font-weight: 700;
       letter-spacing:-.5px;
       display:flex;
       align-items:center;
-      gap:12px;
+      gap:15px;
     }
-    .badge{
-      font-size:12px;
-      font-weight: 500;
-      color: var(--text-secondary);
-      padding: 4px 12px;
-      border: 1px solid var(--border-color);
-      border-radius: 20px;
-      background-color: var(--bg-light);
-    }
-
-    .card{
-      background: var(--bg-light);
-      border: 1px solid var(--border-color);
-      border-radius: 8px;
-      overflow:hidden;
+    #logo {
+      height: 60px;
+      width: auto;
+      vertical-align: middle;
     }
 
     .toolbar{
-      position: sticky; top:0; z-index:10;
+      position: sticky; top:0; z-index:20;
       display:flex; flex-wrap:wrap; gap:12px; align-items:center;
       padding: 16px 20px;
       border-bottom:1px solid var(--border-color);
@@ -113,15 +131,6 @@
       background: #E2E6EA;
     }
 
-    .notice{
-      background: #FFF3CD;
-      color: #664D03;
-      border: 1px solid #FFECB5;
-      padding: 12px 16px;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
     .statusbar{
       display:flex; flex-wrap:wrap; gap:16px; align-items:center;
       color:var(--text-secondary);
@@ -131,12 +140,6 @@
       background-color: var(--bg-secondary);
     }
 
-    /* --- NEW: Table container with max-height for sticky header to work --- */
-    .table-wrap{ 
-      width:100%; 
-      overflow:auto; 
-      max-height: calc(100vh - 300px); /* Adjust this value as needed */
-    }
     table{
       width:100%;
       border-collapse: collapse;
@@ -145,14 +148,13 @@
 
     thead th{
       position: sticky; 
-      top: 0; /* Stick to the top of .table-wrap */
+      top: 0;
       z-index: 10;
       color: var(--header-yellow-text);
       font-weight: bold;
       text-align: left;
       vertical-align: middle;
       padding: 10px 12px;
-      /* --- NEW: Yellow background --- */
       background: var(--header-yellow-bg);
     }
 
@@ -167,20 +169,18 @@
       font-size: 14px;
     }
 
-    /* --- NEW: Sticky first column --- */
     thead th:first-child, tbody td:first-child {
       position: sticky;
       left: 0;
       z-index: 5;
-      background: var(--bg-light); /* Match body cell background */
+      background: var(--bg-light);
     }
     thead th:first-child {
-      z-index: 11; /* Higher than the rest of the header */
-      background: var(--header-yellow-bg); /* Match header background */
+      z-index: 11;
+      background: var(--header-yellow-bg);
     }
 
     tbody tr:hover td { background: #F1F3F5; }
-    /* Keep sticky column consistent on hover */
     tbody tr:hover td:first-child { background: #E9ECEF; }
     
     td[contenteditable="true"] {
@@ -193,7 +193,6 @@
       background-color: var(--bg-light);
     }
 
-    /* --- NEW: Visible Scrollbar Styling --- */
     .table-wrap {
       scrollbar-width: thin;
       scrollbar-color: var(--text-secondary) var(--bg-secondary);
@@ -231,42 +230,101 @@
     .srch{ flex: 1 1 320px; }
     .empty{ padding: 48px 24px; text-align:center; color: var(--text-secondary); }
 
-    /* --- NEW: Print Styles --- */
+    .print-header { display: none; }
+
+    @page {
+      size: A4 landscape;
+      margin: 1cm;
+    }
+
     @media print {
-      body, .container, .card {
-        margin: 0;
+      body {
+        height: auto;
         padding: 0;
+        background: #fff;
+        font-size: 8pt;
+      }
+      .container {
+        display: block;
+        flex: none;
+        height: auto;
+      }
+      .card {
+        display: block;
+        flex: none;
+        height: auto;
         border: none;
         box-shadow: none;
-        background: none;
       }
-      .header, .toolbar, .statusbar, .notice, .pagination, #saveBtn, #reloadBtn, #printBtn, #sortBtn {
+      .header, .toolbar, .statusbar, .pagination, #saveBtn, #reloadBtn, #printBtn {
         display: none !important;
+      }
+      .print-header {
+        display: block;
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .print-header img {
+        max-height: 80px;
+        width: auto;
+      }
+      .print-header h1 {
+        font-size: 20pt;
+        margin: 10px 0 0 0;
+        font-family: "Times New Roman", Times, serif;
       }
       .table-wrap {
         max-height: none;
         overflow: visible;
       }
-      table, th, td {
-        border: 1px solid #000;
-        font-size: 10pt;
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        page-break-inside: auto;
+        table-layout: fixed;
       }
       thead {
-        background-color: #eee;
+        display: table-header-group;
+        background-color: var(--header-yellow-bg) !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
+      tbody tr {
+        page-break-inside: avoid;
+        page-break-after: auto;
+      }
+      th, td {
+        border: 1px solid #000 !important;
+        padding: 4px 6px;
+        white-space: normal;
+        word-wrap: break-word;
+      }
+      th {
+        font-weight: bold;
+      }
+      
+      thead th,
+      tbody td,
+      thead th:first-child,
+      tbody td:first-child {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        z-index: auto !important;
+      }
+      table { table-layout: auto !important; }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="title">
-        📦 Bảng vận đơn (Bills)
-        <span class="badge" id="datasetMeta">đang tải…</span>
-      </div>
-      <div class="badge">Apps Script JSONP</div>
+  <div class="header">
+    <div class="title">
+      <img id="logo" src="https://raw.githubusercontent.com/tuducdat2001-cyber/bill/main/z6887164537636_0c445e9b4d6e1687482f51f307b359e5.jpg" alt="Logo">
+      <span>BILL TỒN ECO</span>
     </div>
+  </div>
 
+  <div class="container">
     <div class="card">
       <div class="toolbar">
         <div class="group srch" style="flex:1 1 420px">
@@ -282,17 +340,14 @@
           </select>
         </div>
         <div class="group pagination">
-          <button id="sortBtn" class="btn secondary">⇅ Sắp xếp lại STT</button>
           <button id="prev" class="btn secondary">◀ Trước</button>
           <span class="pill" id="pageinfo">Trang 1/1</span>
           <button id="next" class="btn secondary">Tiếp ▶</button>
           <button id="reload" class="btn">↻ Nạp lại</button>
-          <!-- NEW: Print Button -->
           <button id="printBtn" class="btn secondary">🖨️ In</button>
         </div>
       </div>
 
-      <!-- Quick inline editor (This toolbar is now hidden by default in the CSS for printing) -->
       <div class="toolbar" style="border-top:1px solid var(--border-color);">
         <div class="group">
           <span class="badge">Chỉnh sửa nhanh</span>
@@ -326,19 +381,19 @@
         <span class="mono" id="updated"></span>
       </div>
     </div>
-
-    <!-- Inline notice for network permission in canvas -->
-    <p class="notice" id="permNote" style="display:none;margin-top:16px">
-      ⚠ Trình xem có thể đang chặn mạng. Hãy bấm <b>Allow</b> khi popup hỏi quyền xuất hiện, rồi nhấn <b>↻ Nạp lại</b>. Bạn cũng có thể mở file HTML này trực tiếp ngoài canvas để không bị chặn.
-    </p>
+  </div>
+  
+  <div class="print-header">
+    <img src="https://raw.githubusercontent.com/tuducdat2001-cyber/bill/main/z6887164537636_0c445e9b4d6e1687482f51f307b359e5.jpg" alt="Logo">
+    <h1>BILL TỒN ECO</h1>
   </div>
 
 <script>
-  // ====== Config (editable via Diagnostics) ======
+  // ====== Config ======
   let GAS_URL = 'https://script.google.com/macros/s/AKfycbyMrOG8nhmPXi_PkvfjAS_FqUViaQxUESsTlvWKKe815JAikAEUV4ZKBKpXjQubsRGySw/exec';
   const WRITE_KEY = '';
 
-  // ====== JSONP helper (with timeout & placeholder support) ======
+  // ====== JSONP helper ======
   function jsonp(url, opts={}){
     const param = opts.param || 'callback';
     const timeout = opts.timeout || 12000;
@@ -384,6 +439,83 @@
   let limit = 50;
   let currentRows = [];
 
+  const PAGE_SIZE_FOR_PRINT = 500;
+
+  async function fetchAllRowsForPrint(){
+    const pageSize = PAGE_SIZE_FOR_PRINT;
+    let offset = 0;
+    let all = [];
+    let cols = null;
+    let lastTotal = 0;
+
+    while(true){
+      const res = await jsonp(`${GAS_URL}?offset=${offset}&limit=${pageSize}`);
+      lastTotal = res && res.total ? res.total : lastTotal;
+
+      if(!cols){
+        let fetchedColumns = res.columns || Object.keys((res.rows && res.rows[0]) || {});
+        const sttIndex = fetchedColumns.indexOf('STT');
+        if (sttIndex > -1) {
+          const sttCol = fetchedColumns.splice(sttIndex, 1)[0];
+          fetchedColumns.unshift(sttCol);
+        }
+        cols = fetchedColumns;
+      }
+
+      const rows = res.rows || [];
+      all = all.concat(rows);
+      if(rows.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    all.sort((a, b) => {
+      const A = parseInt(a['STT'], 10) || Infinity;
+      const B = parseInt(b['STT'], 10) || Infinity;
+      return A - B;
+    });
+
+    return { columns: cols, rows: all, total: lastTotal || all.length };
+  }
+
+  async function handlePrintAll(){
+    try{
+      printBtn.disabled = true;
+      setStatus('Đang gom toàn bộ dữ liệu để in…');
+
+      const prevState = {
+        page, limit, columns: [...columns], currentRows: [...currentRows],
+      };
+
+      const allData = await fetchAllRowsForPrint();
+      columns = allData.columns;
+      currentRows = allData.rows;
+
+      renderHeader();
+      renderRows(currentRows);
+      pageinfo.textContent = `In: ${currentRows.length}/${allData.total} dòng`;
+      setStatus(`Đã gom ${currentRows.length} dòng. Đang mở hộp thoại in…`);
+
+      const restore = async () => {
+        window.removeEventListener('afterprint', restore);
+        columns = prevState.columns;
+        currentRows = prevState.currentRows;
+        renderHeader();
+        applySearch();
+        updatePageInfo();
+        setStatus('Đã khôi phục dữ liệu sau khi in.');
+        printBtn.disabled = false;
+      };
+      window.addEventListener('afterprint', restore);
+
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      window.print();
+    }catch(e){
+      console.error(e);
+      setStatus('❌ Lỗi khi in: ' + e.message);
+      printBtn.disabled = false;
+    }
+  }
+
   // ====== UI refs ======
   const thead = document.getElementById('thead');
   const tbody = document.getElementById('tbody');
@@ -392,17 +524,14 @@
   const prevBtn = document.getElementById('prev');
   const nextBtn = document.getElementById('next');
   const reloadBtn = document.getElementById('reload');
-  const sortBtn = document.getElementById('sortBtn');
-  const printBtn = document.getElementById('printBtn'); // New button ref
+  const printBtn = document.getElementById('printBtn');
   const pageinfo = document.getElementById('pageinfo');
   const statusEl = document.getElementById('status');
   const updatedEl = document.getElementById('updated');
-  const datasetMeta = document.getElementById('datasetMeta');
   const billNo = document.getElementById('billNo');
   const colSel = document.getElementById('colSel');
   const newVal = document.getElementById('newVal');
   const saveBtn = document.getElementById('saveBtn');
-  const permNote = document.getElementById('permNote');
 
   // ====== Column presentation rules ======
   const centerCols = new Set([
@@ -462,7 +591,6 @@
       cell.style.backgroundColor = 'rgba(25, 135, 84, 0.15)';
       cell.dataset.originalValue = newValue;
       
-      // Update the value in the client-side data model as well
       const rowIndex = currentRows.findIndex(row => row['Số Bill'] === billNo);
       if (rowIndex > -1) {
         currentRows[rowIndex][column] = newValue;
@@ -522,16 +650,6 @@
 
   function setStatus(text){ statusEl.textContent = text; }
 
-  function sortAndRender() {
-    currentRows.sort((a, b) => {
-      const sttA = parseInt(a['STT'], 10) || Infinity;
-      const sttB = parseInt(b['STT'], 10) || Infinity;
-      return sttA - sttB;
-    });
-    applySearch();
-    setStatus('Đã sắp xếp lại theo STT.');
-  }
-
   async function loadPage(){
     try{
       setStatus('Đang tải dữ liệu…');
@@ -564,11 +682,9 @@
       updatePageInfo();
       setStatus(`Đã nạp ${currentRows.length} dòng / tổng ${total}`);
       updatedEl.textContent = resp.updatedAt ? `Cập nhật: ${new Date(resp.updatedAt).toLocaleString()}` : '';
-      datasetMeta.textContent = `${resp.sheetName || 'Bill'} • ${resp.spreadsheetId || ''}`;
     }catch(err){
       console.error(err);
       setStatus('❌ Lỗi: ' + err.message);
-      permNote.style.display = 'block';
     }
   }
 
@@ -629,8 +745,7 @@
   prevBtn.addEventListener('click', () => { page--; loadPage(); });
   nextBtn.addEventListener('click', () => { page++; loadPage(); });
   reloadBtn.addEventListener('click', () => loadPage());
-  sortBtn.addEventListener('click', sortAndRender);
-  printBtn.addEventListener('click', () => window.print()); // New print event
+  printBtn.addEventListener('click', handlePrintAll);
   q.addEventListener('input', () => applySearch());
   saveBtn.addEventListener('click', async () => {
     const bill = billNo.value.trim();
@@ -646,7 +761,6 @@
   });
 
   // ====== Init ======
-  setTimeout(() => { if (!currentRows.length) permNote.style.display = 'block'; }, 1500);
   loadPage();
 </script>
 </body>
