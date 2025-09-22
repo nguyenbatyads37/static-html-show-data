@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bill Viewer</title>
+  <style>
+    :root{
+      --bg:#0b0c10;
+      --card:#11131a;
+      --muted:#99a1b3;
+      --text:#eef1f6;
+      --accent:#4f8cff;
+      --accent-2:#7a5cff;
+      --border:#232636;
+      --success:#00c853;
+      --danger:#ff5a5f;
+      --header-odd:#161a2a;
+      --header-even:#141827;
+      --warn:#f59e0b;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0; font: 14px/1.55 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 0% -10%, rgba(79,140,255,.12), transparent 40%),
+        radial-gradient(1000px 600px at 100% 0%, rgba(122,92,255,.12), transparent 40%),
+        var(--bg);
+    }
+    .container{ max-width: 1400px; margin: 32px auto; padding: 0 20px; }
+
+    .header{ display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom: 16px; }
+    .title{ font-size: 24px; font-weight: 800; letter-spacing:.2px; display:flex; align-items:center; gap:10px; }
+    .badge{ font-size:12px; color: var(--muted); padding:2px 8px; border:1px solid var(--border); border-radius: 999px; }
+
+    .card{ background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)) , var(--card);
+           border:1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 34px rgba(0,0,0,.28); overflow:hidden; }
+
+    .toolbar{ position: sticky; top:0; z-index:3; display:flex; flex-wrap:wrap; gap:12px; align-items:center; padding: 14px 16px; border-bottom:1px solid var(--border);
+              background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)), var(--card); backdrop-filter: blur(6px); }
+    .toolbar .group{ display:flex; gap:8px; align-items:center; }
+
+    .input, .select{ background:#0f1117; border:1px solid var(--border); color: var(--text); padding:10px 12px; border-radius:10px; outline:none; min-width: 120px; }
+    .input::placeholder{ color:#6b7280; }
+
+    .btn{ cursor:pointer; user-select:none; border:1px solid transparent; border-radius:10px; padding:10px 14px; font-weight:700;
+          background: linear-gradient(90deg, var(--accent), var(--accent-2)); color:white; box-shadow: 0 8px 22px rgba(79,140,255,.35);
+          transition: transform .06s ease, box-shadow .2s ease, filter .2s ease; }
+    .btn:disabled{ opacity:.6; cursor:not-allowed; filter: grayscale(.2); }
+    .btn:hover:not(:disabled){ transform: translateY(-1px); box-shadow: 0 12px 26px rgba(79,140,255,.45); }
+    .btn.secondary{ background: transparent; border-color: var(--border); color: var(--text); box-shadow:none; }
+    .btn.warn{ background: linear-gradient(90deg, var(--warn), #eab308); color:#111; box-shadow:none; }
+
+    .notice{ background: rgba(245, 158, 11, .12); color:#f9d47a; border:1px dashed #a37000; padding:10px 12px; border-radius:10px; }
+
+    .statusbar{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; color:var(--muted); padding: 10px 16px; border-top:1px solid var(--border); font-size: 12px; }
+
+    .table-wrap{ width:100%; overflow:auto; }
+    table{ width:100%; border-collapse: separate; border-spacing:0; min-width: 1280px; }
+
+    thead th{
+      position: sticky; top:96px; /* dưới 2 thanh toolbar */ z-index:2;
+      color:#eaf2ff; text-transform:uppercase; letter-spacing:.04em; font-size:12px; font-weight:800;
+      text-align:center; vertical-align:middle;
+      padding:12px 14px; border-bottom:1px solid var(--border);
+      box-shadow: inset 0 -2px 0 rgba(79,140,255,.45);
+    }
+    thead th:nth-child(odd){ background: linear-gradient(180deg, rgba(79,140,255,.22), rgba(122,92,255,.08)), var(--header-odd); }
+    thead th:nth-child(even){ background: linear-gradient(180deg, rgba(79,140,255,.10), rgba(122,92,255,.22)), var(--header-even); }
+
+    th, td{ text-align:left; padding:12px 14px; border-bottom:1px solid var(--border); vertical-align: top; }
+    tbody tr:hover{ background: rgba(255,255,255,.03); }
+    tbody tr:nth-child(even){ background: rgba(255,255,255,.015); }
+
+    .center{ text-align:center; }
+    .right{ text-align:right; }
+    .nowrap{ white-space: nowrap; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; }
+
+    .w-xs{ width: 84px; }
+    .w-s{ width: 120px; }
+    .w-m{ width: 160px; }
+    .w-l{ width: 240px; }
+    .w-xl{ width: 320px; }
+
+    .pagination{ display:flex; align-items:center; gap:8px; margin-left:auto; }
+    .pill{ border:1px solid var(--border); padding:6px 10px; border-radius:999px; color: var(--muted); }
+
+    .srch{ flex: 1 1 320px; }
+    .empty{ padding: 24px; text-align:center; color: var(--muted); }
+
+    /* Modal */
+    .modal{ position: fixed; inset:0; display:none; align-items:center; justify-content:center; background: rgba(0,0,0,.6); z-index:50; }
+    .modal.show{ display:flex; }
+    .modal .box{ max-width: 860px; width: calc(100% - 32px); background: var(--card); border:1px solid var(--border); border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+    .modal .box .head{ padding: 14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .modal .box .body{ padding: 16px; }
+    .kvs{ display:grid; grid-template-columns: 160px 1fr; gap:8px 12px; align-items:center; }
+    .kvs .k{ color: var(--muted); }
+    .log{ font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono"; background:#0f1117; color:#d1d5db; padding:10px; border-radius:8px; border:1px solid var(--border); height:180px; overflow:auto; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="title">
+        📦 Bảng vận đơn (Bills)
+        <span class="badge" id="datasetMeta">đang tải…</span>
+      </div>
+      <div class="badge">Apps Script JSONP</div>
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <div class="group srch" style="flex:1 1 420px">
+          <input id="q" class="input" type="search" placeholder="Tìm nhanh trên trang hiện tại (mọi cột)…" />
+        </div>
+        <div class="group">
+          <label for="limit">Mỗi trang</label>
+          <select id="limit" class="select">
+            <option>25</option>
+            <option selected>50</option>
+            <option>100</option>
+            <option>200</option>
+          </select>
+        </div>
+        <div class="group pagination">
+          <button id="prev" class="btn secondary">◀ Trước</button>
+          <span class="pill nowrap" id="pageinfo">Trang 1/1</span>
+          <button id="next" class="btn secondary">Tiếp ▶</button>
+          <button id="reload" class="btn">↻ Nạp lại</button>
+          <button id="diagBtn" class="btn warn">⚙ Chẩn đoán</button>
+        </div>
+      </div>
+
+      <!-- Quick inline editor -->
+      <div class="toolbar" style="border-top:1px solid var(--border)">
+        <div class="group">
+          <span class="badge">Chỉnh sửa nhanh</span>
+        </div>
+        <div class="group">
+          <label for="billNo">Số Bill</label>
+          <input id="billNo" class="input w-m" placeholder="VD: B1234" />
+        </div>
+        <div class="group">
+          <label for="colSel">Cột</label>
+          <select id="colSel" class="select w-l"></select>
+        </div>
+        <div class="group" style="flex:1 1 280px">
+          <label for="newVal">Giá trị mới</label>
+          <input id="newVal" class="input" placeholder="Nhập giá trị…" />
+        </div>
+        <div class="group">
+          <button id="saveBtn" class="btn">💾 Lưu (doPost)</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table id="table">
+          <thead id="thead"></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="statusbar">
+        <span id="status">Đang tải dữ liệu…</span>
+        <span class="pill mono" id="updated"></span>
+      </div>
+    </div>
+
+    <!-- Inline notice for network permission in canvas -->
+    <p class="notice" id="permNote" style="display:none;margin-top:12px">
+      ⚠ Trình xem có thể đang chặn mạng. Hãy bấm <b>Allow</b> khi popup hỏi quyền xuất hiện, rồi nhấn <b>↻ Nạp lại</b>. Bạn cũng có thể mở file HTML này trực tiếp ngoài canvas để không bị chặn.
+    </p>
+  </div>
+
+  <!-- Diagnostics Modal -->
+  <div class="modal" id="diagModal">
+    <div class="box">
+      <div class="head">
+        <div class="title" style="font-size:18px">Chẩn đoán kết nối</div>
+        <button id="closeDiag" class="btn secondary">Đóng</button>
+      </div>
+      <div class="body">
+        <div class="kvs" style="margin-bottom:12px">
+          <div class="k">Endpoint</div>
+          <div>
+            <input id="endpoint" class="input" style="width:100%" />
+            <div style="margin-top:6px">
+              <button id="saveEndpoint" class="btn secondary">Lưu endpoint</button>
+              <a id="openJsonp" class="btn secondary" style="text-decoration:none; display:inline-block" target="_blank">Mở trong tab mới</a>
+            </div>
+          </div>
+          <div class="k">Gợi ý</div>
+          <div class="notice">
+            Đảm bảo Apps Script Web App đang <b>Deploy</b> với <b>Execute as: Me</b> và <b>Who has access: Anyone</b>.
+            Endpoint phải trả về <code>callback(...)</code> (JSONP), không phải JSON thuần.
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin:12px 0">
+          <button id="runTests" class="btn">▶ Chạy test</button>
+          <button id="loadSample" class="btn secondary">Nạp dữ liệu mẫu</button>
+        </div>
+        <div class="log" id="log"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ====== Config (editable via Diagnostics) ======
+  let GAS_URL = 'https://script.google.com/macros/s/AKfycbyMrOG8nhmPXi_PkvfjAS_FqUViaQxUESsTlvWKKe815JAikAEUV4ZKBKpXjQubsRGySw/exec';
+  const WRITE_KEY = '';
+
+  // ====== JSONP helper (with timeout & placeholder support) ======
+  function jsonp(url, opts={}){
+    const param = opts.param || 'callback';
+    const timeout = opts.timeout || 12000;
+    const placeholder = opts.placeholder || '$CALLBACK$';
+    const raw = !!opts.raw; // nếu true, url có chứa placeholder và ta sẽ thay bằng tên callback
+
+    return new Promise((resolve, reject) => {
+      const cb = 'cb_' + Math.random().toString(36).slice(2);
+      let done = false;
+      let timer;
+      let s;
+      function cleanup(){
+        done = true;
+        clearTimeout(timer);
+        window[cb] && delete window[cb];
+        if (s && s.parentNode) s.parentNode.removeChild(s);
+      }
+      window[cb] = (data) => { cleanup(); resolve(data); };
+
+      // Build src
+      let src;
+      if (raw) {
+        src = url.replace(placeholder, cb);
+      } else {
+        const hasParam = url.includes(param+'=');
+        src = url + (url.includes('?') ? '&' : '?') + (hasParam ? '' : param + '=' + cb);
+      }
+      // cache buster
+      src += (src.includes('?') ? '&' : '?') + '_ts=' + Date.now();
+
+      s = document.createElement('script');
+      s.async = true;
+      s.src = src;
+      s.onerror = () => { if (done) return; cleanup(); reject(new Error('JSONP failed (network/blocked)')); };
+
+      timer = setTimeout(() => { if (done) return; cleanup(); reject(new Error('JSONP timeout (no callback executed)')); }, timeout);
+      document.head.appendChild(s);
+    });
+  }
+
+  // ====== State ======
+  let columns = [];
+  let total = 0;
+  let page = 1;
+  let limit = 50;
+  let currentRows = [];
+
+  // ====== UI refs ======
+  const thead = document.getElementById('thead');
+  const tbody = document.getElementById('tbody');
+  const q = document.getElementById('q');
+  const limitSel = document.getElementById('limit');
+  const prevBtn = document.getElementById('prev');
+  const nextBtn = document.getElementById('next');
+  const reloadBtn = document.getElementById('reload');
+  const diagBtn = document.getElementById('diagBtn');
+  const pageinfo = document.getElementById('pageinfo');
+  const statusEl = document.getElementById('status');
+  const updatedEl = document.getElementById('updated');
+  const datasetMeta = document.getElementById('datasetMeta');
+  const billNo = document.getElementById('billNo');
+  const colSel = document.getElementById('colSel');
+  const newVal = document.getElementById('newVal');
+  const saveBtn = document.getElementById('saveBtn');
+  const permNote = document.getElementById('permNote');
+  const diagModal = document.getElementById('diagModal');
+  const closeDiag = document.getElementById('closeDiag');
+  const endpoint = document.getElementById('endpoint');
+  const saveEndpoint = document.getElementById('saveEndpoint');
+  const openJsonp = document.getElementById('openJsonp');
+  const runTestsBtn = document.getElementById('runTests');
+  const loadSampleBtn = document.getElementById('loadSample');
+  const logEl = document.getElementById('log');
+
+  // ====== Column presentation rules ======
+  const centerCols = new Set([
+    'Số Bill','Ngày bốc','Mã khách gửi','Tỉnh','Xã','Tỉnh nhận','Xã nhận','SĐT khách nhận',
+    'Số kiện','Trọng lượng thực','Thể tích','Đơn vị tính cước','Đơn giá','Phụ phí','VAT','Thành tiền','COD','Trạng thái thanh toán','Người thanh toán','STT'
+  ]);
+  const widthMap = {
+    'Số Bill':'w-xs', 'Ngày bốc':'w-s', 'Mã khách gửi':'w-s', 'Tỉnh':'w-s', 'Xã':'w-s',
+    'Tên khách gửi':'w-m', 'Địa chỉ':'w-xl', 'Địa chỉ đã lưu':'w-xl',
+    'Tên khách nhận':'w-m', 'Địa chỉ nhận':'w-xl', 'Tỉnh nhận':'w-s', 'Xã nhận':'w-s', 'SĐT khách nhận':'w-m',
+    'Dịch vụ GTGT':'w-m', 'Nội dung hàng hóa':'w-xl', 'Số kiện':'w-xs', 'Trọng lượng thực':'w-s', 'Thể tích':'w-s',
+    'Đơn vị tính cước':'w-m', 'Đơn giá':'w-m', 'Phụ phí':'w-m', 'VAT':'w-xs', 'Thành tiền':'w-m',
+    'Người thanh toán':'w-m', 'COD':'w-m', 'Trạng thái thanh toán':'w-m', 'Ghi chú':'w-xl', 'STT':'w-xs'
+  };
+
+  // ====== Renderers ======
+  function renderHeader(){
+    const tr = document.createElement('tr');
+    colSel.innerHTML = '';
+    for(const name of columns){
+      const th = document.createElement('th');
+      th.textContent = name;
+      if(centerCols.has(name)) th.classList.add('center');
+      const w = widthMap[name]; if(w) th.classList.add(w);
+      tr.appendChild(th);
+
+      const opt = document.createElement('option');
+      opt.value = name; opt.textContent = name;
+      colSel.appendChild(opt);
+    }
+    thead.innerHTML = '';
+    thead.appendChild(tr);
+  }
+
+  function htmlesc(s){ return String(s==null? '': s).replace(/[&<>]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[ch])); }
+
+  function renderRows(rows){
+    if(!rows || !rows.length){
+      tbody.innerHTML = `<tr><td colspan="${columns.length}"><div class="empty">Không có dữ liệu.</div></td></tr>`;
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    for(const r of rows){
+      const tr = document.createElement('tr');
+      for(const col of columns){
+        const td = document.createElement('td');
+        const val = r[col] ?? '';
+        td.innerHTML = htmlesc(val);
+        if(centerCols.has(col)) td.classList.add('center');
+        const w = widthMap[col]; if(w) td.classList.add(w);
+        tr.appendChild(td);
+      }
+      frag.appendChild(tr);
+    }
+    tbody.innerHTML = '';
+    tbody.appendChild(frag);
+  }
+
+  function updatePageInfo(){
+    const pages = Math.max(1, Math.ceil(total / limit));
+    page = Math.min(Math.max(1, page), pages);
+    prevBtn.disabled = (page <= 1);
+    nextBtn.disabled = (page >= pages);
+    pageinfo.textContent = `Trang ${page}/${pages}`;
+  }
+
+  function setStatus(text){ statusEl.textContent = text; }
+
+  // ====== Data loading ======
+  async function loadPage(){
+    try{
+      setStatus('Đang tải dữ liệu…');
+      limit = parseInt(limitSel.value,10) || 50;
+      const offset = (page - 1) * limit;
+      const url = `${GAS_URL}?offset=${offset}&limit=${limit}`;
+      const resp = await jsonp(url);
+      if(!resp || resp.ok === false){ throw new Error(resp && resp.error || 'Tải thất bại'); }
+
+      columns = resp.columns || Object.keys((resp.rows && resp.rows[0]) || {});
+      total = resp.total || (resp.rows ? resp.rows.length : 0);
+      currentRows = resp.rows || [];
+
+      renderHeader();
+      applySearch();
+      updatePageInfo();
+      setStatus(`Đã nạp ${currentRows.length} dòng / tổng ${total}`);
+      updatedEl.textContent = resp.updatedAt ? `Cập nhật: ${new Date(resp.updatedAt).toLocaleString()}` : '';
+      datasetMeta.textContent = `${resp.sheetName || 'Bill'} • ${resp.spreadsheetId || ''}`;
+    }catch(err){
+      console.error(err);
+      setStatus('❌ Lỗi: ' + err.message);
+      permNote.style.display = 'block';
+    }
+  }
+
+  // ====== Submit update via hidden iframe (avoid CORS) ======
+  function doPostUpdate({ bill, column, value }){
+    return new Promise((resolve) => {
+      const iframeName = 'post_ifr_' + Math.random().toString(36).slice(2);
+      const ifr = document.createElement('iframe');
+      ifr.name = iframeName; ifr.style.display = 'none';
+      document.body.appendChild(ifr);
+
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = `${GAS_URL}?target=iframe`;
+      form.target = iframeName;
+
+      const params = {
+        key: WRITE_KEY || '',
+        mode: 'update',
+        keyField: 'Số Bill',
+        keyValue: bill,
+        set: JSON.stringify({ [column]: value })
+      };
+      for(const [k,v] of Object.entries(params)){
+        const inp = document.createElement('input');
+        inp.type = 'hidden'; inp.name = k; inp.value = v; form.appendChild(inp);
+      }
+      document.body.appendChild(form);
+
+      const onMsg = (ev) => {
+        if(!ev || !ev.data || ev.data.source !== 'apps-script') return;
+        window.removeEventListener('message', onMsg);
+        setTimeout(() => { ifr.remove(); form.remove(); }, 100);
+        resolve(ev.data.payload);
+      };
+      window.addEventListener('message', onMsg);
+      form.submit();
+    });
+  }
+
+  // ====== Search (client-side) ======
+  function applySearch(){
+    if(!currentRows) return;
+    const keyword = q.value.trim().toLowerCase();
+    let rows = currentRows;
+    if(keyword){
+      rows = currentRows.filter(obj => {
+        for(const col of columns){
+          const v = (obj[col]||'').toString().toLowerCase();
+          if(v.includes(keyword)) return true;
+        }
+        return false;
+      });
+    }
+    renderRows(rows);
+  }
+
+  // ====== Diagnostics ======
+  function log(msg){ logEl.textContent += (logEl.textContent ? '\n' : '') + msg; logEl.scrollTop = logEl.scrollHeight; }
+  function openDiag(){ diagModal.classList.add('show'); endpoint.value = GAS_URL; refreshOpenJsonpLink(); logEl.textContent=''; }
+  function closeDiagModal(){ diagModal.classList.remove('show'); }
+  function refreshOpenJsonpLink(){ const test = endpoint.value + (endpoint.value.includes('?')?'&':'?') + 'offset=0&limit=1&callback=jsonpTest'; openJsonp.href = test; }
+
+  async function runTests(){
+    logEl.textContent = '';
+    log('Test 1: JSONP nội bộ (data: URL)...');
+    try{
+      const dataUrl = 'data:text/javascript,' + encodeURIComponent('$CALLBACK$({ok:true, hello:"world"});');
+      const r1 = await jsonp(dataUrl, { raw:true });
+      log('  ✔ Thành công: ' + JSON.stringify(r1));
+    }catch(e){ log('  ✖ Thất bại: ' + e.message); }
+
+    log('Test 2: Kiểm tra endpoint trả JSONP...');
+    try{
+      const url = endpoint.value + (endpoint.value.includes('?')?'&':'?') + 'offset=0&limit=1&callback=$CALLBACK$';
+      const r2 = await jsonp(url, { raw:true });
+      log('  ✔ Trả JSONP hợp lệ: ' + JSON.stringify(r2));
+    }catch(e){
+      log('  ✖ Không nhận được JSONP: ' + e.message);
+      log('    Hướng dẫn:');
+      log('    • Mở link ở nút "Mở trong tab mới" và xem nội dung bắt đầu bằng jsonpTest( ... ) hay không.');
+      log('    • Nếu thấy trang đăng nhập Google, hãy redeploy Web App với Who has access = Anyone.');
+      log('    • Nếu nội dung là JSON thuần (bắt đầu bằng { ), cần dùng JSONP (trả callback) hoặc đi qua proxy.');
+    }
+  }
+
+  function loadSample(){
+    const sample = {
+      ok:true,
+      spreadsheetId: 'sample',
+      sheetName: 'Bill',
+      total: 2,
+      columns: ['STT','Số Bill','Tên khách gửi','Tên khách nhận','Địa chỉ','Đơn giá','Thành tiền','Trạng thái thanh toán','Ghi chú'],
+      rows: [
+        { 'STT':'1','Số Bill':'B0001','Tên khách gửi':'Nguyễn A','Tên khách nhận':'Trần B','Địa chỉ':'Hà Nội','Đơn giá':'50,000','Thành tiền':'75,000','Trạng thái thanh toán':'Chưa thu','Ghi chú':'demo' },
+        { 'STT':'2','Số Bill':'B0002','Tên khách gửi':'Lê C','Tên khách nhận':'Phạm D','Địa chỉ':'HCM','Đơn giá':'60,000','Thành tiền':'60,000','Trạng thái thanh toán':'Đã thu','Ghi chú':'' }
+      ],
+      updatedAt: new Date().toISOString()
+    };
+    columns = sample.columns; total = sample.total; currentRows = sample.rows;
+    renderHeader(); applySearch(); updatePageInfo(); datasetMeta.textContent = `${sample.sheetName} • ${sample.spreadsheetId}`; updatedEl.textContent = `Cập nhật: ${new Date(sample.updatedAt).toLocaleString()}`; setStatus('Đã nạp dữ liệu mẫu.');
+  }
+
+  // ====== Events ======
+  limitSel.addEventListener('change', () => { page = 1; loadPage(); });
+  prevBtn.addEventListener('click', () => { page--; loadPage(); });
+  nextBtn.addEventListener('click', () => { page++; loadPage(); });
+  reloadBtn.addEventListener('click', () => loadPage());
+  q.addEventListener('input', () => applySearch());
+  saveBtn.addEventListener('click', async () => {
+    const bill = billNo.value.trim();
+    const column = colSel.value;
+    const value = newVal.value;
+    if(!bill || !column){ alert('Điền Số Bill và chọn cột cần sửa.'); return; }
+    setStatus('Đang gửi cập nhật…');
+    try{
+      const resp = await doPostUpdate({ bill, column, value });
+      setStatus('Đã cập nhật. Đang tải lại…');
+      await loadPage();
+    }catch(e){ console.error(e); setStatus('❌ Gửi cập nhật thất bại'); }
+  });
+
+  diagBtn.addEventListener('click', openDiag);
+  closeDiag.addEventListener('click', closeDiagModal);
+  saveEndpoint.addEventListener('click', () => { GAS_URL = endpoint.value.trim(); setStatus('Đã lưu endpoint. Nhấn ↻ Nạp lại để thử.'); refreshOpenJsonpLink(); });
+  endpoint.addEventListener('input', refreshOpenJsonpLink);
+  runTestsBtn.addEventListener('click', runTests);
+  loadSampleBtn.addEventListener('click', loadSample);
+
+  // ====== Init ======
+  // Gợi ý bật note quyền mạng nếu đang chạy trong canvas trước khi có dữ liệu
+  setTimeout(() => { if (!currentRows.length) permNote.style.display = 'block'; }, 1500);
+  loadPage();
+</script>
+</body>
+</html>
