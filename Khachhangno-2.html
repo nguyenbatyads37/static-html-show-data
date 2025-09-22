@@ -791,22 +791,30 @@ const FILTERABLE_HEADERS = [
               .toLowerCase().trim();
     }
     const ALLOWED_CREATORS_RAW = ['Hoa', 'Hanh', 'Xuyen']; // whitelist gốc
-    const ALLOWED_CREATORS = ALLOWED_CREATORS_RAW.map(normalizeVi); // so sánh không dấu, lowercase
+const ALLOWED_CREATORS = ALLOWED_CREATORS_RAW.map(normalizeVi); // so sánh không dấu, lowercase
 
-    let currentPerms = { canCreate: false, canEditExisting: false, canDelete: false, isViewer: true };
+// Danh sách tài khoản được full quyền chỉnh sửa
+const FULL_EDIT_ACCOUNTS = ['hoa1975', 'xuyen', 'hanh'];
 
-    function computePerms(displayName, username) {
+let currentPerms = { canCreate: false, canEditExisting: false, canDelete: false, isViewer: true, canEditDebtTerm: false };
+
+function computePerms(displayName, username) {
   const nameNorm = normalizeVi(displayName || '');
   const userNorm = normalizeVi(username || '');
 
   // Admin: full quyền
   if (userNorm === 'admin') {
-    return { canCreate: true, canEditExisting: true, canDelete: true, isViewer: false };
+    return { canCreate: true, canEditExisting: true, canDelete: true, isViewer: false, canEditDebtTerm: true };
   }
 
-  // Người thường theo whitelist
+  // 3 tài khoản đặc biệt: full quyền nhưng không được sửa "Số ngày nợ tối đa"
+  if (FULL_EDIT_ACCOUNTS.includes(userNorm)) {
+    return { canCreate: true, canEditExisting: true, canDelete: true, isViewer: false, canEditDebtTerm: false };
+  }
+
+  // Người thường theo whitelist cũ (chỉ tạo mới)
   const canCreate = ALLOWED_CREATORS.includes(nameNorm);
-  return { canCreate, canEditExisting: false, canDelete: false, isViewer: !canCreate };
+  return { canCreate, canEditExisting: false, canDelete: false, isViewer: !canCreate, canEditDebtTerm: false };
 }
 
 
@@ -823,6 +831,17 @@ const FILTERABLE_HEADERS = [
         saveBtn.style.display = perms.isViewer ? 'none' : 'inline-flex';
         saveBtn.disabled = perms.isViewer;
       }
+      // Kiểm soát ô "Số ngày nợ tối đa" 
+const debtTermInput = document.getElementById('custom-debt-term-input');
+if (debtTermInput) {
+  if (perms.canEditDebtTerm) {
+    debtTermInput.removeAttribute('readonly');
+    debtTermInput.removeAttribute('disabled');
+  } else {
+    debtTermInput.setAttribute('readonly', 'readonly');
+    debtTermInput.style.backgroundColor = '#f3f4f6'; // màu xám nhạt để biết không sửa được
+  }
+}
 
       const container = document.getElementById(cfg.containerId);
       if (!container) return;
@@ -838,18 +857,25 @@ if (addBtn) addBtn.style.display = perms.canCreate ? '' : 'none';
 
       // Khóa edit các dòng dữ liệu cũ (không cho sửa)
        // Khóa/mở khóa theo quyền
- container.querySelectorAll('tbody tr[data-id]').forEach(tr => {
-   tr.classList.remove('row-dirty');
-   tr.querySelectorAll('input, select, textarea').forEach(el => {
-     if (perms.canEditExisting) {
-       el.removeAttribute('readonly');
-       el.removeAttribute('disabled');
-     } else {
-       if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
-       else el.setAttribute('readonly', 'readonly');
-     }
-   });
- });
+ // Khóa/mở khóa theo quyền
+container.querySelectorAll('tbody tr[data-id]').forEach(tr => {
+  tr.classList.remove('row-dirty');
+  tr.querySelectorAll('input, select, textarea').forEach(el => {
+    if (perms.canEditExisting) {
+      el.removeAttribute('readonly');
+      el.removeAttribute('disabled');
+      // Với 3 tài khoản đặc biệt: không cho sửa "Hạn trả nợ"
+      if (!perms.canEditDebtTerm && el.dataset.field === 'Hạn trả nợ') {
+        if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
+        else el.setAttribute('readonly', 'readonly');
+        el.style.backgroundColor = '#f3f4f6';
+      }
+    } else {
+      if (el.tagName === 'SELECT') el.setAttribute('disabled', 'disabled');
+      else el.setAttribute('readonly', 'readonly');
+    }
+  });
+});
 
  // Hiện/ẩn nút xóa theo quyền
  container.querySelectorAll('.delete-btn').forEach(btn => {
@@ -1371,6 +1397,14 @@ filterTable('khn');
 
       // Định dạng tiền trong form
       addForm?.querySelectorAll('input[inputmode="decimal"]').forEach(setupCurrencyInput);
+      // Khóa ô "Hạn trả nợ" cho 3 tài khoản đặc biệt
+if (!currentPerms.canEditDebtTerm) {
+  const hanNoInput = addForm?.querySelector('[data-field="Hạn trả nợ"]');
+  if (hanNoInput) {
+    hanNoInput.setAttribute('readonly', 'readonly');
+    hanNoInput.style.backgroundColor = '#f3f4f6';
+  }
+}
 
       // Nút Thêm (form ngoài bảng)
       const addBtn = controls.querySelector(`#btn-add-${tableKey}`);
@@ -1862,6 +1896,12 @@ if (phoneDL) {
             updateVisibleRowCount('khn');
             highlightOverdueRows();
             applyPermissions('khn');
+            // Áp dụng quyền cho toàn bộ dashboard sau khi load xong
+const debtTermInput = document.getElementById('custom-debt-term-input');
+if (debtTermInput && !currentPerms.canEditDebtTerm) {
+    debtTermInput.setAttribute('readonly', 'readonly');
+    debtTermInput.style.backgroundColor = '#f3f4f6';
+}
 
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
