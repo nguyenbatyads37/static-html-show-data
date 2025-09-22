@@ -1447,10 +1447,21 @@ if (addBtn) {
       formEl.querySelectorAll('input, select, textarea').forEach(i => {
         const field = i.dataset.field;
         if (field === 'Ngày nợ') i.value = new Date().toISOString().slice(0, 10);
-        else if (field === 'Hạn trả nợ') i.value = '30';
+         else if (field === 'Hạn trả nợ') i.value = getGlobalDebtTerm();
         else if (i.tagName === 'SELECT') i.selectedIndex = 0;
         else if (!i.readOnly) i.value = '';
       });
+      // Tính lại "Ngày phải trả" sau khi reset form
+{
+  const ngayNo = formEl.querySelector('[data-field="Ngày nợ"]');
+  const hanNo  = formEl.querySelector('[data-field="Hạn trả nợ"]');
+  const ngayPT = formEl.querySelector('[data-field="Ngày phải trả"]');
+  if (ngayNo && hanNo && ngayPT) {
+    const due = calculateDueDate(ngayNo.value, hanNo.value);
+    ngayPT.value = formatDateForInput(due);
+  }
+}
+
       const csdExt = document.getElementById('current-sales-debt-display-ext');
       const ccdExt = document.getElementById('current-customer-debt-display-ext');
       if (csdExt) csdExt.style.display = 'none';
@@ -2041,6 +2052,12 @@ function finalizeCurrency(el){
   const raw = String(el.value || '').replace(/[^\d]/g, '');
   el.value = raw ? raw.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '';
 }
+function getGlobalDebtTerm(){
+  const g = document.getElementById('custom-debt-term-input');
+  const n = g && g.value ? parseInt(g.value, 10) : 30;
+  return Number.isFinite(n) ? String(n) : '30';
+}
+
 
 
 
@@ -2259,20 +2276,16 @@ function exportToExcel(e) {
 
      // --- Đồng bộ "Số Ngày Nợ Tối Đa" (dashboard) -> "Hạn trả nợ" (form thêm) ---
 function syncGlobalDebtTermToForm() {
-  const g = document.getElementById('custom-debt-term-input');           // ô số ngày ở dashboard
-  const debtTermInput = document.querySelector(
-    '#add-form-khn input[data-field="Hạn trả nợ"]'                       // ô "Hạn trả nợ" trong form thêm
-  );
-  if (!g || !debtTermInput) return;
+  const debtTermInput = document.querySelector('#add-form-khn input[data-field="Hạn trả nợ"]');
+  if (!debtTermInput) return;
 
-  // Ưu tiên: lấy giá trị từ dashboard nếu có, nếu rỗng thì giữ nguyên giá trị hiện tại của form
-  // và fallback về 30 nếu cả hai cùng rỗng.
-  const v = g.value || debtTermInput.value || '30';
+  const v = getGlobalDebtTerm();     // luôn lấy theo dashboard, fallback 30
   debtTermInput.value = v;
 
   // bắn event để tính lại "Ngày phải trả"
   debtTermInput.dispatchEvent(new Event('input', { bubbles: true }));
 }
+
 
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -2315,9 +2328,12 @@ if (clearTopBtn){
 
         const customDebtTermInput = document.getElementById('custom-debt-term-input');
 if (customDebtTermInput) {
+  if (!customDebtTermInput.value) customDebtTermInput.value = '30'; // mặc định 30 lần đầu
+  syncGlobalDebtTermToForm();                                      // đồng bộ xuống form ngay khi load
   // gõ số ngày ở dashboard -> đẩy sang "Hạn trả nợ" của form thêm
   customDebtTermInput.addEventListener('input', syncGlobalDebtTermToForm);
 }
+
 
 
         const deliveryDatalist = document.getElementById('delivery-staff-list-options');
