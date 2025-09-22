@@ -1322,12 +1322,14 @@
 
     function generateSummaryTableData(data) {
       const summary = {};
+      // console.log('Generating summary table data from', data);
+      
       data.forEach(r => {
         const key = r.ten || 'N/A';
         if (!summary[key]) {
           summary[key] = {
             team: r.team, name: r.ten, mess: 0, don: 0, chot: 0, cpqc: 0,
-            donThucTe: 0, chotThucTe: 0
+            donThucTe: 0, chotThucTe: 0, soDonHuy: 0, doanhSoHuy: 0
           };
         }
         const S = summary[key];
@@ -1337,7 +1339,11 @@
         S.cpqc += r.cpqc;
         S.donThucTe += r.soDonThucTe;
         S.chotThucTe += r.dsChotThucTe;
+        S.soDonHuy += r.soDonHuyThucTe;
+        S.doanhSoHuy += r.dsHoanHuyThucTe;
       });
+      // console.log(summary);
+      
       return Object.values(summary);
     }
 
@@ -1529,15 +1535,17 @@
     }
 
     function generateSummaryTableHTML(dataList, selectedMarkets) {
-      let total = { mess: 0, don: 0, chot: 0, cpqc: 0, donThucTe: 0, chotThucTe: 0 };
+      let total = { mess: 0, don: 0, chot: 0, cpqc: 0, donThucTe: 0, chotThucTe: 0, soDonHuy: 0, doanhSoHuy: 0 };
+      // console.log('dataList', dataList);
+      
       const bodyRowsHtml = dataList.map((s, index) => {
         Object.keys(total).forEach(key => total[key] += s[key] || 0);
         const rate = s.mess ? s.don / s.mess : 0;
-        const rateThucTe = s.mess ? s.donThucTe / s.mess : 0;
-        const pm = s.mess ? s.cpqc / s.mess : 0;
-        const pd = s.don ? s.cpqc / s.don : 0;
-        const pc = s.chot ? s.cpqc / s.chot : 0;
-        const pdt = s.don ? s.chot / s.don : 0;
+        const rateThucTe = s.mess ? (s.donThucTe - s.soDonHuy) / s.mess : 0;
+        const pm = s.mess ? s.cpqc / s.mess : 0; //Giá Mess
+        const pd = (s.donThucTe - s.soDonHuy) ? s.cpqc / (s.donThucTe - s.soDonHuy) : 0; //CPS
+        const pc = (s.chotThucTe - s.doanhSoHuy) ? s.cpqc / (s.chotThucTe - s.doanhSoHuy) : 0; //%CP/DS
+        const pdt = (s.donThucTe - s.soDonHuy) ? (s.chotThucTe - s.doanhSoHuy) / (s.donThucTe - s.soDonHuy) : 0; //Giá TB Đơn
         const rateClass = rate > 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
         const rateThucTeClass = rateThucTe > 0.1 ? 'bg-green' : (rateThucTe > 0.05 ? 'bg-yellow' : '');
         const cpsClass = getCpsCellStyle(pd, selectedMarkets);
@@ -1549,31 +1557,31 @@
                 <td>${formatNumber(s.mess)}</td>
                 <td>${formatCurrency(s.cpqc)}</td>
                 <td>${formatNumber(s.don)}</td>
-                <td>${formatNumber(s.donThucTe)}</td>
+                <td>${formatNumber(s.donThucTe - s.soDonHuy)}</td>
                 <td>${formatCurrency(s.chot)}</td>
-                <td>${formatCurrency(s.chotThucTe)}</td>
+                <td>${formatCurrency(s.chotThucTe - s.doanhSoHuy)}</td>
                 <td class="${rateClass}">${formatPercent(rate)}</td>
                 <td class="${rateThucTeClass}">${formatPercent(rateThucTe)}</td>
                 <td>${formatCurrency(pm)}</td>
                 <td class="${cpsClass}">${formatCurrency(pd)}</td>
                 <td class="${cpdsClass}">${formatPercent(pc)}</td>
-                <td>${formatCurrency(pdt)}</td>
+                <td>${formatCurrency(pdt)}</td> 
             </tr>`;
       }).join('');
       const tRate = total.mess ? total.don / total.mess : 0;
-      const tRateThucTe = total.mess ? total.donThucTe / total.mess : 0;
+      const tRateThucTe = total.mess ? (total.donThucTe - total.soDonHuy) / total.mess : 0;
       const tPm = total.mess ? total.cpqc / total.mess : 0;
-      const tPd = total.don ? total.cpqc / total.don : 0;
-      const tPc = total.chot ? total.cpqc / total.chot : 0;
-      const tPdt = total.don ? total.chot / total.don : 0;
+      const tPd = total.donThucTe ? total.cpqc / total.donThucTe : 0;
+      const tPc = total.chotThucTe ? total.cpqc / total.chotThucTe : 0;
+      const tPdt = total.donThucTe ? (total.chotThucTe - total.doanhSoHuy) / total.donThucTe : 0;
       const totalRowHtml = `<tr class="total-row">
             <td class="total-label" colspan="3">TỔNG CỘNG</td>
             <td class="total-value">${formatNumber(total.mess)}</td>
             <td class="total-value">${formatCurrency(total.cpqc)}</td>
             <td class="total-value">${formatNumber(total.don)}</td>
-            <td class="total-value">${formatNumber(total.donThucTe)}</td>
+            <td class="total-value">${formatNumber(total.donThucTe - total.soDonHuy)}</td>
             <td class="total-value">${formatCurrency(total.chot)}</td>
-            <td class="total-value">${formatCurrency(total.chotThucTe)}</td>
+            <td class="total-value">${formatCurrency(total.chotThucTe - total.doanhSoHuy)}</td>
             <td class="total-value">${formatPercent(tRate)}</td>
             <td class="total-value">${formatPercent(tRateThucTe)}</td>
             <td class="total-value">${formatCurrency(tPm)}</td>
