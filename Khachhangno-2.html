@@ -1343,7 +1343,8 @@ controls.querySelectorAll('.filter-checkbox').forEach(chk => {
       function updateDueDateFromForm() {
         if (ngayNo && hanNo && ngayPhaiTra) {
           const due = calculateDueDate(ngayNo.value, hanNo.value);
-          ngayPhaiTra.value = formatDateForInput(due);
+          ngayPhaiTra.value = due;
+
         }
       }
       if (ngayNo)  ngayNo.addEventListener('input', updateDueDateFromForm);
@@ -1507,7 +1508,8 @@ if (addBtn) {
   const ngayPT = formEl.querySelector('[data-field="Ngày phải trả"]');
   if (ngayNo && hanNo && ngayPT) {
     const due = calculateDueDate(ngayNo.value, hanNo.value);
-    ngayPT.value = formatDateForInput(due);
+    ngayPT.value = due;
+
   }
 }
 
@@ -1588,7 +1590,7 @@ if (phoneDL) {
           <tbody>
             ${data.data.map(row => {
               const rId = row['id'];
-              row['Ngày phải trả'] = calculateDueDate(row['Ngày nợ'], row['Hạn trả nợ']);
+              //row['Ngày phải trả'] = calculateDueDate(row['Ngày nợ'], row['Hạn trả nợ']);
               const cH = headers.map(h =>
                 HIDDEN_COLUMNS.includes(h)
                   ? `<td style="display: none;">${row[h] || ''}</td>`
@@ -1689,7 +1691,8 @@ if (phoneDL) {
                     const ngayPhaiTraInput = row.querySelector('[data-field="Ngày phải trả"]');
                     
                     if (ngayNoInput && hanTraNoInput && ngayPhaiTraInput) {
-                        ngayPhaiTraInput.value = formatDateForInput(calculateDueDate(ngayNoInput.value, hanTraNoInput.value));
+                        ngayPhaiTraInput.value = calculateDueDate(ngayNoInput.value, hanTraNoInput.value);
+
                     }
                 }
             }
@@ -1726,6 +1729,17 @@ if (phoneDL) {
         const element = e.target; const tr = element.closest('tr'); const rowId = tr.dataset.id; const field = element.dataset.field;
         let newValue = (element.getAttribute('inputmode') === 'decimal') ? element.value.replace(/\./g, '') : element.value;
         if (!rowId) return;
+            // ✅ Nếu sửa Ngày nợ hoặc Hạn trả nợ → cập nhật lại Ngày phải trả
+    if (field === 'Ngày nợ' || field === 'Hạn trả nợ') {
+      const ngayNoInput = tr.querySelector('[data-field="Ngày nợ"]');
+      const hanTraNoInput = tr.querySelector('[data-field="Hạn trả nợ"]');
+      const ngayPhaiTraInput = tr.querySelector('[data-field="Ngày phải trả"]');
+      if (ngayNoInput && hanTraNoInput && ngayPhaiTraInput) {
+        ngayPhaiTraInput.value = calculateDueDate(ngayNoInput.value, hanTraNoInput.value);
+
+      }
+    }
+
         if (!changeSet.update[tableKey]) changeSet.update[tableKey] = {};
         if (!changeSet.update[tableKey][rowId]) {
             const rowDataFromDOM = {};
@@ -1775,17 +1789,38 @@ if (phoneDL) {
         updateBtn.disabled = true; updateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Đang lưu...';
         const config = TABLE_CONFIG[tableKey];
 
-        const cleanData = (data) => {
-          return JSON.parse(JSON.stringify(data)).map(row => {
-            Object.keys(row).forEach(key => {
-              if (key === 'SĐT' && row[key]) {
-                const phoneStr = String(row[key]).trim();
-                row[key] = "'" + phoneStr; // để giữ số 0 đầu khi vào Sheet
-              }
-            });
-            return row;
-          });
-        };
+        const DATE_FIELDS = ['Ngày nợ', 'Ngày phải trả', 'Ngày trả', 'Ngày thu hồi'];
+
+const cleanData = (data) => {
+  return JSON.parse(JSON.stringify(data)).map(row => {
+    Object.keys(row).forEach(key => {
+      // Giữ số 0 đầu của SĐT
+      if (key === 'SĐT' && row[key]) {
+        const phoneStr = String(row[key]).trim();
+        row[key] = "'" + phoneStr;
+      }
+
+      // Chuẩn hoá NGÀY sang MM/DD/YYYY
+      if (DATE_FIELDS.includes(key) && row[key]) {
+        row[key] = formatDateForServer(row[key]);
+      }
+
+      // Chuẩn hoá số ngày nợ
+      if (key === 'Hạn trả nợ' && row[key] != null) {
+        const n = parseInt(String(row[key]).replace(/\./g, ''), 10);
+        row[key] = Number.isFinite(n) ? n : '';
+      }
+
+      // Chuẩn hoá số tiền/số lượng
+      if (['Số tiền nợ','Số tiền trả nợ','Thành tiền','Đơn giá','Số lượng'].includes(key) && row[key] != null) {
+        const num = parseFloat(String(row[key]).replace(/\./g, '').replace(/,/g, ''));
+        row[key] = Number.isFinite(num) ? num : '';
+      }
+    });
+    return row;
+  });
+};
+
 
         const createDataAll = Object.values(changeSet.create[tableKey] || {});
         const updateDataAll = Object.values(changeSet.update[tableKey] || {});
@@ -1948,7 +1983,32 @@ if (debtTermInput && !currentPerms.canEditDebtTerm) {
         document.getElementById('dashboard-total-conlai').textContent = (tN - tT - tTH).toLocaleString('vi-VN') + ' VNĐ';
     }
 
-    function calculateDueDate(s, d) { if (!s || d == null) return null; try { const sD = new Date(s); const dA = parseInt(d, 10); if (isNaN(sD.getTime()) || isNaN(dA)) return null; sD.setUTCDate(sD.getUTCDate() + dA); return sD; } catch (e) { return null; } }
+    function calculateDueDate(startStr, daysStr) {
+  if (!startStr || daysStr == null) return '';
+  const days = parseInt(daysStr, 10);
+  if (!Number.isFinite(days)) return '';
+
+  // Parse local-date an toàn
+  let y, m, d;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(startStr)) {
+    [y, m, d] = startStr.split('-').map(n => parseInt(n, 10));
+  } else if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(startStr)) {
+    const [mm, dd, yyyy] = startStr.split('/').map(n => parseInt(n, 10));
+    y = yyyy; m = mm; d = dd;
+  } else {
+    const t = new Date(startStr);
+    if (isNaN(t.getTime())) return '';
+    y = t.getFullYear(); m = t.getMonth() + 1; d = t.getDate();
+  }
+
+  const dt = new Date(y, m - 1, d); // LOCAL 00:00
+  dt.setDate(dt.getDate() + days);
+
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;           // luôn YYYY-MM-DD cho input date
+}
     
     function filterTable(tableKey) {
   const container = document.getElementById(TABLE_CONFIG[tableKey].containerId);
@@ -2111,10 +2171,25 @@ if (ok && filterOverdue && !filterAll) {
     .join(' ');
 }
 
+function formatDateForInput(s) {
+  if (!s) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return '';
+  const yy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
 
-    function formatDateForInput(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`; } catch (e) { return ''; } }
-    function formatDateForServer(d) { if (!d) return ''; try { const dt = new Date(d); if (isNaN(dt.getTime())) return ''; return `${String(dt.getUTCMonth() + 1).padStart(2, '0')}/${String(dt.getUTCDate()).padStart(2, '0')}/${dt.getUTCFullYear()}`; } catch (e) { return ''; } }
-    // === helpers ===
+// === helpers ===
+function formatDateForServer(s) {
+  if (!s) return '';
+  const ymd = formatDateForInput(s);
+  if (!ymd) return '';
+  const [y, m, d] = ymd.split('-');
+  return `${m}/${d}/${y}`;              // gửi lên Sheet dạng MM/DD/YYYY
+}
 const formatThousands = (s) =>
   String(s ?? '')
     .replace(/[^\d]/g, '')                // chỉ giữ số
