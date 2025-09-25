@@ -573,9 +573,10 @@
         }
 
         .popover-table {
-            width: 100%;
+            width: 100% !important;
             border-collapse: collapse;
             font-size: 13px;
+            min-width: 0px;
         }
 
         .popover-table th,
@@ -971,6 +972,7 @@
             });
             localStorage.setItem('speegoPendingChanges', JSON.stringify(serializableChanges));
             updateSyncButtonBadge(); // MỚI: Cập nhật badge mỗi khi lưu
+            refreshMultiselectOptions(); // MỚI: Refresh filter options khi có thay đổi
         }
 
         function loadPendingChangesFromLocalStorage() {
@@ -1120,8 +1122,32 @@
 
         function getFilteredData() {
             const dataToFilter = [...state.allData];
-            const mgtData = filterByCarrier(dataToFilter);
-
+            
+            // MỚI: Áp dụng các thay đổi từ pendingChanges và legacyChanges vào dữ liệu trước khi filter
+            const dataWithChanges = dataToFilter.map(row => {
+                const orderId = row[PRIMARY_KEY_COLUMN];
+                const rowCopy = { ...row };
+                
+                // Áp dụng legacy changes
+                const legacyOrderChanges = state.legacyChanges.get(orderId);
+                if (legacyOrderChanges) {
+                    legacyOrderChanges.forEach((changeInfo, colName) => {
+                        rowCopy[colName] = changeInfo.newValue;
+                    });
+                }
+                
+                // Áp dụng pending changes (ghi đè legacy changes nếu có)
+                const pendingOrderChanges = state.pendingChanges.get(orderId);
+                if (pendingOrderChanges) {
+                    pendingOrderChanges.forEach((changeInfo, colName) => {
+                        rowCopy[colName] = changeInfo.newValue;
+                    });
+                }
+                
+                return rowCopy;
+            });
+            
+            const mgtData = filterByCarrier(dataWithChanges);
             let dataToRender = mgtData;
 
             // --- CẬP NHẬT: Áp dụng bộ lọc multi-select và các bộ lọc khác ---
@@ -1149,13 +1175,17 @@
             const otherColumnFilters = Object.entries(state.filterValues)
                 .filter(([key, val]) => !['market', 'product'].includes(key) && !key.startsWith('tracking_') && ((Array.isArray(val) && val.length > 0) || (typeof val === 'string' && val.trim() !== '')));
 
+            // DEBUG: Log các bộ lọc cột
             if (otherColumnFilters.length > 0) {
                 dataToRender = dataToRender.filter(row => {
                     return otherColumnFilters.every(([col, filterValue]) => {
                         const dataKey = columnMapping[col] || col;
+                        
+                        // MỚI: Lấy giá trị đã được áp dụng các thay đổi (row đã chứa dữ liệu mới từ dataWithChanges)
                         const cellValue = (row[dataKey] ?? row[col] ?? row[dataKey.replace(/ /g, '_')] ?? '').toString().trim();
 
-                        if (dataKey === "Trạng thái giao hàng") { // Logic lọc đặc biệt cho cột này
+                        // DEBUG: Log chi tiết lọc từng cột
+                        if (dataKey === "Trạng thái giao hàng" || dataKey === "Kết quả Check") { // Logic lọc đặc biệt cho multiselect
                             const EMPTY_OPTION_VALUE = '__EMPTY__';
                             const selectedStatuses = filterValue; // Đây là một mảng
 
@@ -1458,7 +1488,7 @@
                     container.appendChild(includeInput);
                     container.appendChild(excludeInput);
                     th.appendChild(container);
-                } else if (col === "Trạng thái giao hàng") {
+                } else if (col === "Trạng thái giao hàng" || col === "Kết quả check") {
                     // --- BẮT ĐẦU PHẦN THÊM MỚI ---
                     const dataKey = columnMapping[col] || col;
                     const ALL_OPTION_TEXT = 'Tất cả';
@@ -1474,9 +1504,36 @@
                     const dropdown = document.createElement('div');
                     dropdown.className = 'multiselect-dropdown';
 
-                    // Lấy các giá trị duy nhất từ dữ liệu
-                    const uniqueStatuses = [...new Set(state.allData.map(row => (row[dataKey] || '').trim()).filter(Boolean))].sort();
+                    // Lấy các giá trị duy nhất từ dữ liệu gốc và các thay đổi
+                    const allValues = new Set();
+                    
+                    // Thêm giá trị từ dữ liệu gốc
+                    state.allData.forEach(row => {
+                        const value = (row[dataKey] || '').trim();
+                        if (value) allValues.add(value);
+                    });
+                    
+                    // Thêm giá trị từ pending changes
+                    state.pendingChanges.forEach((colChanges, orderId) => {
+                        const change = colChanges.get(dataKey);
+                        if (change && change.newValue) {
+                            const value = change.newValue.trim();
+                            if (value) allValues.add(value);
+                        }
+                    });
+                    
+                    // Thêm giá trị từ legacy changes
+                    state.legacyChanges.forEach((colChanges, orderId) => {
+                        const change = colChanges.get(dataKey);
+                        if (change && change.newValue) {
+                            const value = change.newValue.trim();
+                            if (value) allValues.add(value);
+                        }
+                    });
+                    
+                    const uniqueStatuses = [...allValues].sort();
                     const options = [ALL_OPTION_TEXT, EMPTY_OPTION_TEXT, ...uniqueStatuses];
+                    
 
                     let selectedValues = state.filterValues[dataKey] || [];
 
@@ -1619,12 +1676,113 @@
             });
         }
 
+        // MỚI: Hàm refresh filter options cho multiselect
+        function refreshMultiselectOptions() {
+            
+            // Tìm tất cả multiselect filters cần refresh
+            const multiselectFilters = document.querySelectorAll('.multiselect-filter');
+            
+            multiselectFilters.forEach(container => {
+                const display = container.querySelector('.multiselect-display');
+                const dropdown = container.querySelector('.multiselect-dropdown');
+                
+                if (!display || !dropdown) return;
+                
+                // Tìm column tương ứng
+                let col = null;
+                if (display.textContent.includes('Kết quả check')) {
+                    col = 'Kết quả check';
+                } else if (display.textContent.includes('Trạng thái giao hàng')) {
+                    col = 'Trạng thái giao hàng';
+                }
+                
+                if (!col) return;
+                
+                const dataKey = columnMapping[col] || col;
+                
+                // Lấy giá trị đã chọn hiện tại
+                const currentSelected = state.filterValues[dataKey] || [];
+                
+                // Tạo lại options
+                const allValues = new Set();
+                
+                // Thêm giá trị từ dữ liệu gốc
+                state.allData.forEach(row => {
+                    const value = (row[dataKey] || '').trim();
+                    if (value) allValues.add(value);
+                });
+                
+                // Thêm giá trị từ pending changes
+                state.pendingChanges.forEach((colChanges, orderId) => {
+                    const change = colChanges.get(dataKey);
+                    if (change && change.newValue) {
+                        const value = change.newValue.trim();
+                        if (value) allValues.add(value);
+                    }
+                });
+                
+                // Thêm giá trị từ legacy changes
+                state.legacyChanges.forEach((colChanges, orderId) => {
+                    const change = colChanges.get(dataKey);
+                    if (change && change.newValue) {
+                        const value = change.newValue.trim();
+                        if (value) allValues.add(value);
+                    }
+                });
+                
+                const uniqueStatuses = [...allValues].sort();
+                const ALL_OPTION_TEXT = 'Tất cả';
+                const EMPTY_OPTION_TEXT = '(Trống)';
+                const EMPTY_OPTION_VALUE = '__EMPTY__';
+                const options = [ALL_OPTION_TEXT, EMPTY_OPTION_TEXT, ...uniqueStatuses];
+                
+                // console.log(`New options for ${col}:`, options);
+                
+                // Xóa và tạo lại dropdown content
+                dropdown.innerHTML = '';
+                
+                options.forEach(optionText => {
+                    const item = document.createElement('div');
+                    item.className = 'multiselect-item';
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    const label = document.createElement('label');
+
+                    checkbox.id = `filter-${dataKey}-${optionText}`;
+                    label.htmlFor = `filter-${dataKey}-${optionText}`;
+                    label.textContent = optionText;
+
+                    let optionValue = optionText;
+                    if (optionText === EMPTY_OPTION_TEXT) optionValue = EMPTY_OPTION_VALUE;
+
+                    if (optionText === ALL_OPTION_TEXT) {
+                        checkbox.checked = currentSelected.length === (uniqueStatuses.length + 1);
+                    } else {
+                        checkbox.checked = currentSelected.includes(optionValue);
+                    }
+
+                    item.appendChild(checkbox);
+                    item.appendChild(label);
+                    dropdown.appendChild(item);
+                });
+            });
+        }
+
         // MỚI: Cập nhật số lượng trên badge của nút đồng bộ
         function updateSyncButtonBadge() {
             const badge = document.getElementById('changesBadge');
-            const totalChanges = state.legacyChanges.size + state.pendingChanges.size;
-            if (totalChanges > 0) {
-                badge.textContent = totalChanges;
+            
+            // SỬA ĐỔI: Đếm theo số thay đổi cột thay vì số đơn hàng
+            let totalColumnChanges = 0;
+            state.legacyChanges.forEach((colChanges) => {
+                totalColumnChanges += colChanges.size;
+            });
+            state.pendingChanges.forEach((colChanges) => {
+                totalColumnChanges += colChanges.size;
+            });
+            
+            if (totalColumnChanges > 0) {
+                badge.textContent = totalColumnChanges;
                 badge.style.display = 'block';
             } else {
                 badge.style.display = 'none';
@@ -1746,8 +1904,12 @@
         async function updateAllChangedRows() {
             if (isUpdatingSingleCell) { showCustomAlert('Đang có thao tác cập nhật đơn lẻ, vui lòng đợi.', 'info'); return; }
 
+            // DEBUG: Log trạng thái ban đầu
+
             // SỬA ĐỔI: Gộp 2 loại thay đổi lại để gửi đi
             const allChanges = new Map([...state.legacyChanges, ...state.pendingChanges]);
+            
+            // DEBUG: Log sau khi gộp
 
             if (allChanges.size === 0) {
                 showCustomAlert('Không có thay đổi cần cập nhật.', 'info');
@@ -1767,6 +1929,8 @@
                 });
                 rowsToSend.push(changeObject);
             });
+
+            // DEBUG: Log dữ liệu sẽ gửi đi
 
             try {
                 const response = await fetch(BATCH_UPDATE_API_URL, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(rowsToSend) });
@@ -1792,7 +1956,15 @@
                     savePendingChangesToLocalStorage();
                     render();
                 } else { removeToast(loadingToast); showCustomAlert(`Lỗi: ${json.message || 'Lỗi không xác định.'}`, 'error'); }
-            } catch (error) { console.error('Lỗi khi cập nhật hàng loạt:', error); removeToast(loadingToast); showCustomAlert(`Lỗi kết nối: ${error.message}`, 'error'); } finally { updateBtn.disabled = false; updateBtn.textContent = 'Cập nhật tất cả thay đổi'; }
+            } catch (error) { 
+                console.error('Lỗi khi cập nhật hàng loạt:', error); 
+                removeToast(loadingToast); 
+                // Không xóa pendingChanges và legacyChanges khi API fail để có thể thử lại
+                showCustomAlert(`Lỗi kết nối: ${error.message}. Dữ liệu vẫn được giữ để thử lại sau.`, 'error'); 
+            } finally { 
+                updateBtn.disabled = false; 
+                updateBtn.textContent = 'Cập nhật tất cả thay đổi'; 
+            }
         }
 
         // THÊM MỚI: Function kiểm tra có thay đổi Mã Tracking không
@@ -1806,6 +1978,7 @@
 
         async function batchUpdatePastedData(rowsToSend) {
             if (rowsToSend.length === 0) { return; }
+
 
             // THÊM MỚI: Kiểm tra nếu có thay đổi Mã Tracking
             const hasTracking = hasTrackingChanges(rowsToSend);
@@ -1833,6 +2006,7 @@
                         }
                     });
                 });
+                
 
                 savePendingChangesToLocalStorage();
                 showCustomAlert(`Đã lưu ${rowsToSend.length} thay đổi có chứa Mã Tracking. Vui lòng bấm "Cập nhật tất cả" để gửi dữ liệu.`, 'info', 5000);
@@ -1896,7 +2070,34 @@
             } catch (error) {
                 console.error('Lỗi khi cập nhật hàng loạt từ paste:', error);
                 removeToast(loadingToast);
-                showCustomAlert(`Lỗi kết nối: ${error.message}`, 'error');
+                
+                // SỬA ĐỔI: Khi API fail, lưu vào pendingChanges để không mất dữ liệu
+                rowsToSend.forEach(rowData => {
+                    const orderId = rowData[PRIMARY_KEY_COLUMN];
+                    if (!orderId) return;
+
+                    if (!state.pendingChanges.has(orderId)) {
+                        state.pendingChanges.set(orderId, new Map());
+                    }
+
+                    Object.keys(rowData).forEach(colName => {
+                        if (colName !== PRIMARY_KEY_COLUMN) {
+                            const originalRowData = state.allData.find(r => r[PRIMARY_KEY_COLUMN] === orderId);
+                            const originalValue = originalRowData ? String(originalRowData[colName] ?? '') : '';
+
+                            state.pendingChanges.get(orderId).set(colName, {
+                                newValue: rowData[colName],
+                                originalValue: originalValue,
+                                cellElement: null
+                            });
+                        }
+                    });
+                });
+                
+                savePendingChangesToLocalStorage();
+                render(); // Refresh để hiển thị highlight
+                
+                showCustomAlert(`Lỗi kết nối: ${error.message}. Dữ liệu đã được lưu để gửi sau.`, 'error');
             } finally {
                 updateBtn.disabled = false;
             }
@@ -2213,8 +2414,11 @@
                             changesForBatchUpdate.get(orderId)[dataKey] = '';
                         });
 
+                        // DEBUG: Log thông tin Delete
+
                         // Gửi batch update cho việc xóa
                         const rowsToSend = Array.from(changesForBatchUpdate.values());
+                        
                         if (rowsToSend.length > 0) {
                             const hasTracking = hasTrackingChanges(rowsToSend);
                             batchUpdatePastedData(rowsToSend);
@@ -2231,12 +2435,15 @@
 
         // MỚI: Hàm hiển thị popover
         function showSyncPopover() {
+            // DEBUG: Log trạng thái khi hiển thị popover
+            
             const popover = document.getElementById('syncPopover');
             const body = document.getElementById('popoverBody');
             body.innerHTML = ''; // Xóa nội dung cũ
 
             const createTableHTML = (changesMap) => {
                 let html = '<table class="popover-table"><thead><tr><th>Mã Đơn Hàng</th><th>Cột Thay Đổi</th><th>Giá Trị</th></tr></thead><tbody>';
+                let rowCount = 0;
                 changesMap.forEach((colChanges, orderId) => {
                     colChanges.forEach((changeInfo, colName) => {
                         html += `<tr>
@@ -2247,6 +2454,7 @@
                                 <span class="new-value">${changeInfo.newValue || '(trống)'}</span>
                             </td>
                         </tr>`;
+                        rowCount++;
                     });
                 });
                 html += '</tbody></table>';
@@ -2268,6 +2476,15 @@
             } else {
                 body.innerHTML += '<p class="no-changes">Không có.</p>';
             }
+
+            // DEBUG: Tính tổng số dòng sẽ hiển thị
+            let totalRowsInPopover = 0;
+            state.legacyChanges.forEach((colChanges) => {
+                totalRowsInPopover += colChanges.size;
+            });
+            state.pendingChanges.forEach((colChanges) => {
+                totalRowsInPopover += colChanges.size;
+            });
 
             popover.style.display = 'flex';
         }
