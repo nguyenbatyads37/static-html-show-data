@@ -161,10 +161,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script>
     // ====== Cấu hình ======
-    // ===== THAY ĐỔI LINK API Ở ĐÂY =====
     const API = 'https://script.google.com/macros/s/AKfycbwVY_D5_6IObsUMP06ipkIwCdl7bhoCHOYbAJn57ydqAHB6SZn18KBihEprE2uAycvRdw/exec';
     
-    // Cập nhật link API để có thể click xem
     document.getElementById('apiUrlLink').href = API;
 
     // ====== Helpers ======
@@ -209,19 +207,15 @@
       });
     }
 
-    // ====== Render bảng báo giá từ CHI_TIET_DON_HANG ======
+    // ====== Render bảng báo giá ======
     function renderQuote(items){
       const tbody = document.getElementById('quote-body');
       tbody.innerHTML = '';
       let sum = 0;
       
-      // Dòng console.log để in toàn bộ dữ liệu của các sản phẩm trong đơn hàng ra Console
-      console.log("Dữ liệu chi tiết đơn hàng nhận được từ API:", items);
+      console.log("Dữ liệu chi tiết đơn hàng đã được lọc:", items);
 
       items.forEach((r, idx)=>{
-        // In dữ liệu của từng sản phẩm để kiểm tra
-        console.log(`Dữ liệu sản phẩm STT ${idx + 1}:`, r);
-
         const ten = r['Tên sản phẩm'] ?? r['Mã sản phẩm'] ?? '';
         const info = r['Thông tin sản phẩm'] ?? '';
         const imageUrl = r['imageUrl'] ?? '';
@@ -249,7 +243,7 @@
     }
 
     // ====== Load tất cả ======
-    // ===== HÀM NÀY ĐÃ ĐƯỢC CẬP NHẬT ĐỂ SỬA LỖI =====
+    // ===== HÀM ĐÃ ĐƯỢC CẬP NHẬT ĐỂ ĐỌC ĐÚNG CẤU TRÚC JSON MỚI =====
     async function loadAll(){
       const orderId = getOrderId();
       const orderSpan = document.getElementById('orderIdText');
@@ -262,10 +256,12 @@
         const res = await fetch(API,{cache:'no-store'});
         if(!res.ok){ throw new Error(`HTTP error! status: ${res.status}`) }
         const json = await res.json();
+        console.log("Dữ liệu gốc nhận từ API:", json);
 
-        // ----- Biểu đồ (Code đã sửa để an toàn hơn) -----
-        const bieuDoData = Array.isArray(json?.BIEU_DO) ? json.BIEU_DO : [];
-        const rowsRaw = bieuDoData.filter(Boolean);
+        // ----- Biểu đồ -----
+        // Giả định BIEU_DO cũng có thể có cấu trúc { rows: [...] } hoặc là một mảng trực tiếp
+        const bieuDoRows = json?.BIEU_DO?.rows ?? json?.BIEU_DO;
+        const rowsRaw = Array.isArray(bieuDoRows) ? bieuDoRows.filter(Boolean) : [];
         
         if(rowsRaw.length){
           const mKey = pickKey(rowsRaw[0],['tháng']) || 'Tháng';
@@ -281,9 +277,10 @@
           document.getElementById('status').textContent='Không có dữ liệu biểu đồ.';
         }
 
-        // ----- Báo giá từ CHI_TIET_DON_HANG (Code đã sửa để an toàn hơn) -----
-        const quoteData = Array.isArray(json?.CHI_TIET_DON_HANG) ? json.CHI_TIET_DON_HANG : [];
-        const quoteAll = quoteData.filter(Boolean);
+        // ----- Báo giá từ CHI_TIET_DON_HANG -----
+        // Lấy mảng dữ liệu từ thuộc tính "rows"
+        const quoteRows = json?.CHI_TIET_DON_HANG?.rows;
+        const quoteAll = Array.isArray(quoteRows) ? quoteRows.filter(Boolean) : [];
         
         const filtered = orderId ? quoteAll.filter(r=>String(r['Đơn hàng']||'')===orderId) : [];
         if (filtered.length > 0) {
