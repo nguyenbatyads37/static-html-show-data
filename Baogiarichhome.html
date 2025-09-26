@@ -27,11 +27,18 @@
 
     /* ===== Bảng báo giá ===== */
     table{border-collapse:collapse; width:100%; font-size:14px; margin-bottom:32px}
-    th,td{border:1px solid #cbd5e1; padding:8px; text-align:center}
+    th,td{border:1px solid #cbd5e1; padding:8px; text-align:center; vertical-align:middle}
     th{background:#1e40af; color:#fff}
-    td img{height:60px}
+    td img{height:60px; object-fit:cover}
 
-    h2{text-align:center; margin:20px 0; color:#111827}
+    /* ===== Tiêu đề chính ===== */
+    h2{
+      text-align:center; margin:20px 0;
+      color:#1e40af;             /* xanh nước biển */
+      font-size:28px;            /* to hơn */
+      font-weight:800;           /* in đậm */
+      letter-spacing:.3px;
+    }
 
     /* ===== Biểu đồ ===== */
     .card{
@@ -71,7 +78,7 @@
     <table class="cust-info">
       <tr>
         <td><b>Tên khách hàng:</b> Em Đạt</td>
-        <td><b>Đơn hàng:</b> PO20259001</td>
+        <td><b>Đơn hàng:</b> <span id="orderIdText" data-order-id="PO20259001">PO20259001</span></td>
       </tr>
       <tr>
         <td><b>Số điện thoại:</b> NA</td>
@@ -98,28 +105,16 @@
           <th>Bảo hành</th>
         </tr>
       </thead>
-      <tbody>
-        <tr>
-          <td>1</td>
-          <td>Tấm pin nlmt AE 700W</td>
-          <td>Tấm pin 700W hiệu suất cao, lắp đặt dễ, bền bỉ</td>
-          <td><img src="https://dummyimage.com/60x60/ff8a00/fff&text=Pin" alt="pin"/></td>
-          <td>12</td>
-          <td>2,850,000</td>
-          <td>34,200,000</td>
-          <td>12 Năm</td>
-        </tr>
-        <tr>
-          <td>2</td>
-          <td>Dây điện kết nối tấm pin</td>
-          <td>Dây điện chịu UV, 2 lớp cách điện</td>
-          <td><img src="https://dummyimage.com/60x60/f87171/fff&text=Dây" alt="dây"/></td>
-          <td>100</td>
-          <td>15,000</td>
-          <td>1,500,000</td>
-          <td>3 Năm</td>
-        </tr>
+      <tbody id="quote-body">
+        <!-- Hàng dữ liệu sẽ được render từ API theo id=Đơn hàng -->
       </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6" style="text-align:right;font-weight:700">Tổng cộng</td>
+          <td id="grandTotal" style="font-weight:700">0</td>
+          <td></td>
+        </tr>
+      </tfoot>
     </table>
 
     <!-- Biểu đồ -->
@@ -130,7 +125,7 @@
         <canvas id="chart"></canvas>
       </div>
       <div class="foot">
-        <div class="src">Nguồn API: 
+        <div class="src">Nguồn API:
           <a href="https://script.google.com/macros/s/AKfycbx8P6QVtjZKxXzCzIEFIOy0sTrmW2s8mLyQs98p1u-3PxNt-1NWtrMKsqyB8NqngNR5Dw/exec" target="_blank">Google Apps Script JSON</a>
         </div>
         <div id="status">Đang tải dữ liệu…</div>
@@ -142,10 +137,11 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script>
+    // ====== Cấu hình ======
     const API = 'https://script.google.com/macros/s/AKfycbx8P6QVtjZKxXzCzIEFIOy0sTrmW2s8mLyQs98p1u-3PxNt-1NWtrMKsqyB8NqngNR5Dw/exec';
-    const ctx = document.getElementById('chart');
-    let chart;
+    const IMG_BASE = ''; // nếu ảnh "Hình ảnh 2" là relative, có thể set base ở đây (ví dụ: 'https://example.com/')
 
+    // ====== Helpers ======
     function fmtNumber(x){return Number(x||0).toLocaleString('vi-VN');}
     function toNumberSafe(x){
       if(x==null) return null;
@@ -157,28 +153,19 @@
       const t = includes.map(s=>s.toLowerCase());
       return keys.find(k=>t.every(x=>k.toLowerCase().includes(x)));
     }
-
-    async function load(){
-      document.getElementById('skeleton').style.display='block';
-      document.getElementById('status').textContent='Đang tải dữ liệu…';
-      try{
-        const res=await fetch(API,{cache:'no-store'});
-        const json=await res.json();
-        const rowsRaw=(json?.BIEU_DO||[]).filter(Boolean);
-        const mKey=pickKey(rowsRaw[0],['tháng'])||'Tháng';
-        const vKey=pickKey(rowsRaw[0],['sản lượng','kwh'])||'Sản lượng kWh';
-        const rows=rowsRaw.sort((a,b)=>Number(toNumberSafe(a[mKey]))-Number(toNumberSafe(b[mKey])));
-        const labels=rows.map(r=>'T'+Number(toNumberSafe(r[mKey])));
-        const data=rows.map(r=>toNumberSafe(r[vKey]));
-        render(labels,data);
-        document.getElementById('status').textContent='Đã tải '+data.filter(v=>v!=null).length+' điểm dữ liệu.';
-      }catch(e){console.error(e);document.getElementById('status').textContent='Lỗi tải dữ liệu';}
-      finally{document.getElementById('skeleton').style.display='none';}
+    function getOrderId(){
+      const usp = new URLSearchParams(location.search);
+      const idFromUrl = usp.get('id');
+      const fallback = document.getElementById('orderIdText')?.dataset?.orderId || '';
+      return idFromUrl || fallback || '';
     }
 
-    function render(labels,data){
+    // ====== Biểu đồ ======
+    let chart;
+    function renderChart(labels,data){
       if(chart) chart.destroy();
-      chart=new Chart(ctx,{
+      const ctx = document.getElementById('chart');
+      chart = new Chart(ctx,{
         type:'bar',
         data:{labels,datasets:[{data,label:'Sản lượng (kWh)',backgroundColor:'#ff8a00',borderRadius:8}]},
         options:{
@@ -195,7 +182,85 @@
         plugins:[ChartDataLabels]
       });
     }
-    load();
+
+    // ====== Render bảng báo giá từ CHI_TIET_DON_HANG ======
+    function renderQuote(items){
+      const tbody = document.getElementById('quote-body');
+      tbody.innerHTML = '';
+      let sum = 0;
+      items.forEach((r,idx)=>{
+        const ten = r['Tên sản phẩm'] ?? r['Mã sản phẩm'] ?? '';
+        const info = r['Thông tin sản phẩm'] ?? '';
+        const img = r['Hình ảnh 2'] ? (IMG_BASE + r['Hình ảnh 2']) : '';
+        const sl = toNumberSafe(r['Số lượng']) ?? 0;
+        const gia = toNumberSafe(r['Giá bán']) ?? 0;
+        const tt = toNumberSafe(r['Thành tiền']);
+        const thanhTien = (tt!=null ? tt : (sl*gia)) || 0;
+        sum += thanhTien;
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${idx+1}</td>
+          <td style="text-align:left">${ten}</td>
+          <td style="text-align:left">${info}</td>
+          <td>${img?`<img src="${img}" alt="img">`:''}</td>
+          <td>${fmtNumber(sl)}</td>
+          <td>${fmtNumber(gia)}</td>
+          <td>${fmtNumber(thanhTien)}</td>
+          <td>${r['Bảo hành'] ?? ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('grandTotal').textContent = fmtNumber(sum);
+    }
+
+    // ====== Load tất cả ======
+    async function loadAll(){
+      // cập nhật Đơn hàng theo id=
+      const orderId = getOrderId();
+      const orderSpan = document.getElementById('orderIdText');
+      if(orderSpan) orderSpan.textContent = orderId || orderSpan.textContent;
+
+      // loader chart
+      document.getElementById('skeleton').style.display='block';
+      document.getElementById('status').textContent='Đang tải dữ liệu…';
+
+      try{
+        const res = await fetch(API,{cache:'no-store'});
+        const json = await res.json();
+
+        // ----- Biểu đồ -----
+        const rowsRaw = (json?.BIEU_DO||[]).filter(Boolean);
+        if(rowsRaw.length){
+          const mKey = pickKey(rowsRaw[0],['tháng']) || 'Tháng';
+          const vKey = pickKey(rowsRaw[0],['sản lượng','kwh']) || 'Sản lượng Kwh';
+          const rows = rowsRaw
+            .map(x=>({ ...x }))
+            .sort((a,b)=>Number(toNumberSafe(a[mKey])) - Number(toNumberSafe(b[mKey])));
+          const labels = rows.map(r=>'T'+Number(toNumberSafe(r[mKey])));
+          const data = rows.map(r=>toNumberSafe(r[vKey]));
+          renderChart(labels,data);
+          document.getElementById('status').textContent='Đã tải '+data.filter(v=>v!=null).length+' điểm dữ liệu.';
+        } else {
+          document.getElementById('status').textContent='Không có dữ liệu biểu đồ.';
+        }
+
+        // ----- Báo giá từ CHI_TIET_DON_HANG theo id=Đơn hàng -----
+        const quoteAll = (json?.CHI_TIET_DON_HANG||[]).filter(Boolean);
+        const filtered = orderId ? quoteAll.filter(r=>String(r['Đơn hàng']||'')===orderId) : [];
+        renderQuote(filtered);
+
+      }catch(e){
+        console.error(e);
+        document.getElementById('status').textContent='Lỗi tải dữ liệu';
+      }finally{
+        document.getElementById('skeleton').style.display='none';
+      }
+    }
+
+    // Khởi động
+    loadAll();
   </script>
 </body>
 </html>
+
