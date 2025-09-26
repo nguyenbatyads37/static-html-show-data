@@ -45,7 +45,7 @@
     table{border-collapse:collapse; width:100%; font-size:14px; margin-bottom:32px}
     th,td{border:1px solid #cbd5e1; padding:8px; text-align:center; vertical-align:middle}
     th{background:#1e40af; color:#fff}
-    td img{height:60px; object-fit:cover}
+    td img{height:60px; object-fit:cover; max-width: 100%;}
 
     /* ===== Tiêu đề chính ===== */
     h2{
@@ -77,7 +77,6 @@
     /* Responsive: khi màn nhỏ, xếp header theo cột cho dễ đọc */
     @media (max-width: 720px){
       .header-top{flex-direction:column; gap:12px}
-      .logo{flex-direction:column}
     }
   </style>
 </head>
@@ -150,7 +149,7 @@
       </div>
       <div class="foot">
         <div class="src">Nguồn API:
-          <a href="https://script.google.com/macros/s/AKfycbx8P6QVtjZKxXzCzIEFIOy0sTrmW2s8mLyQs98p1u-3PxNt-1NWtrMKsqyB8NqngNR5Dw/exec" target="_blank">Google Apps Script JSON</a>
+          <a id="apiUrlLink" href="#" target="_blank">Google Apps Script JSON</a>
         </div>
         <div id="status">Đang tải dữ liệu…</div>
       </div>
@@ -162,8 +161,12 @@
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
   <script>
     // ====== Cấu hình ======
-    const API = 'https://script.google.com/macros/s/AKfycbx8P6QVtjZKxXzCzIEFIOy0sTrmW2s8mLyQs98p1u-3PxNt-1NWtrMKsqyB8NqngNR5Dw/exec';
+    // ===== THAY ĐỔI LINK API Ở ĐÂY =====
+    const API = 'https://script.google.com/macros/s/AKfycbwVY_D5_6IObsUMP06ipkIwCdl7bhoCHOYbAJn57ydqAHB6SZn18KBihEprE2uAycvRdw/exec';
     
+    // Cập nhật link API để có thể click xem
+    document.getElementById('apiUrlLink').href = API;
+
     // ====== Helpers ======
     function fmtNumber(x){return Number(x||0).toLocaleString('vi-VN');}
     function toNumberSafe(x){
@@ -211,33 +214,34 @@
       const tbody = document.getElementById('quote-body');
       tbody.innerHTML = '';
       let sum = 0;
-      items.forEach((r,idx)=>{
+      
+      // Dòng console.log để in toàn bộ dữ liệu của các sản phẩm trong đơn hàng ra Console
+      console.log("Dữ liệu chi tiết đơn hàng nhận được từ API:", items);
+
+      items.forEach((r, idx)=>{
+        // In dữ liệu của từng sản phẩm để kiểm tra
+        console.log(`Dữ liệu sản phẩm STT ${idx + 1}:`, r);
+
         const ten = r['Tên sản phẩm'] ?? r['Mã sản phẩm'] ?? '';
         const info = r['Thông tin sản phẩm'] ?? '';
-        
-        // ===== THAY ĐỔI Ở ĐÂY =====
-        // Lấy đường dẫn ảnh từ cột 'imageUrl' trong dữ liệu của bạn
         const imageUrl = r['imageUrl'] ?? '';
-        
         const sl = toNumberSafe(r['Số lượng']) ?? 0;
         const gia = toNumberSafe(r['Giá bán']) ?? 0;
         const tt = toNumberSafe(r['Thành tiền']);
-        const thanhTien = (tt!=null ? tt : (sl*gia)) || 0;
+        const thanhTien = (tt != null ? tt : (sl * gia)) || 0;
         sum += thanhTien;
+        const baoHanh = r['COL_12'] ?? '';
 
         const tr = document.createElement('tr');
         tr.innerHTML = `
-          <td>${idx+1}</td>
+          <td>${idx + 1}</td>
           <td style="text-align:left">${ten}</td>
           <td style="text-align:left">${info}</td>
-          
-          <!-- Sử dụng biến imageUrl để hiển thị ảnh -->
           <td>${imageUrl ? `<img src="${imageUrl}" alt="ảnh sản phẩm">` : ''}</td>
-          
           <td>${fmtNumber(sl)}</td>
           <td>${fmtNumber(gia)}</td>
           <td>${fmtNumber(thanhTien)}</td>
-          <td>${r['Bảo hành'] ?? ''}</td>
+          <td>${baoHanh}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -246,17 +250,16 @@
 
     // ====== Load tất cả ======
     async function loadAll(){
-      // cập nhật Đơn hàng theo id=
       const orderId = getOrderId();
       const orderSpan = document.getElementById('orderIdText');
       if(orderSpan) orderSpan.textContent = orderId || orderSpan.textContent;
 
-      // loader chart
       document.getElementById('skeleton').style.display='block';
       document.getElementById('status').textContent='Đang tải dữ liệu…';
 
       try{
         const res = await fetch(API,{cache:'no-store'});
+        if(!res.ok){ throw new Error(`HTTP error! status: ${res.status}`) }
         const json = await res.json();
 
         // ----- Biểu đồ -----
@@ -278,11 +281,15 @@
         // ----- Báo giá từ CHI_TIET_DON_HANG theo id=Đơn hàng -----
         const quoteAll = (json?.CHI_TIET_DON_HANG||[]).filter(Boolean);
         const filtered = orderId ? quoteAll.filter(r=>String(r['Đơn hàng']||'')===orderId) : [];
-        renderQuote(filtered);
+        if (filtered.length > 0) {
+            renderQuote(filtered);
+        } else {
+            document.getElementById('quote-body').innerHTML = `<tr><td colspan="8">Không tìm thấy chi tiết cho đơn hàng "${orderId}".</td></tr>`;
+        }
 
       }catch(e){
         console.error(e);
-        document.getElementById('status').textContent='Lỗi tải dữ liệu';
+        document.getElementById('status').textContent = 'Lỗi tải dữ liệu: ' + e.message;
       }finally{
         document.getElementById('skeleton').style.display='none';
       }
