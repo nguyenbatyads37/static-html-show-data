@@ -648,7 +648,42 @@ tfoot td{ vertical-align:middle }
 #current-customer-debt-display {
   display: none !important;
 }
+/* Custom autocomplete dropdown */
+.autocomplete-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
 
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 80px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  z-index: 1000;
+  display: none;
+}
+
+.autocomplete-option {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.autocomplete-option:hover {
+  background-color: #f8f9fa;
+}
+
+.autocomplete-option:last-child {
+  border-bottom: none;
+}
 </style>
 
 </head>
@@ -1043,6 +1078,43 @@ const TEMP_FILTERS = { khn: {} };
             }
         });
     }
+    function bringOverdueToTop(tableKey='khn'){
+  const cfg = TABLE_CONFIG[tableKey];
+  const container = document.getElementById(cfg.containerId);
+  if (!container) return;
+  const table = container.querySelector('table');
+  if (!table) return;
+  const tbody = table.querySelector('tbody');
+  if (!tbody) return;
+
+  const rows = Array.from(tbody.querySelectorAll('tr[data-id]'));
+
+  const getDue = (tr) => {
+    const inp = tr.querySelector('[data-field="Ngày phải trả"]');
+    if (!inp || !inp.value) return Number.POSITIVE_INFINITY;
+    const d = new Date(inp.value);
+    return isNaN(d) ? Number.POSITIVE_INFINITY : d.getTime();
+  };
+
+  // Chia nhóm theo trạng thái hiển thị & quá hạn
+  const visible = rows.filter(r => r.style.display !== 'none');
+  const hidden  = rows.filter(r => r.style.display === 'none');
+
+  const overdueVisible = visible.filter(r =>
+    r.classList.contains('row-overdue') && !r.classList.contains('debt-paid-off')
+  );
+  const normalVisible = visible.filter(r => !overdueVisible.includes(r));
+
+  // Sắp xếp quá hạn theo ngày đến hạn (sớm -> muộn)
+  overdueVisible.sort((a,b) => getDue(a) - getDue(b));
+
+  // Tuỳ thích: sắp xếp phần còn lại theo ngày đến hạn luôn cho dễ theo dõi
+  normalVisible.sort((a,b) => getDue(a) - getDue(b));
+
+  // Re-append để đổi thứ tự DOM
+  tbody.append(...overdueVisible, ...normalVisible, ...hidden);
+}
+
 
     function showToast(message, type = 'success') {
         const container = document.getElementById('toast-container');
@@ -1523,10 +1595,76 @@ if (addBtn) {
       updateDashboard();
       updateVisibleRowCount(tableKey);
       highlightOverdueRows();
+      bringOverdueToTop(tableKey);
+
       updateVisibleRowCount(tableKey);  
     }
     /* ==== Hết phần mới ==== */
+function setupCustomAutocomplete(inputElement, optionsList) {
+  // Tránh setup lại nếu đã có wrapper
+  if (inputElement.parentNode?.classList?.contains('autocomplete-wrapper')) return;
+  
+  const wrapper = document.createElement('div');
+  wrapper.className = 'autocomplete-wrapper';
+  inputElement.parentNode.insertBefore(wrapper, inputElement);
+  wrapper.appendChild(inputElement);
+  
+  const dropdown = document.createElement('div');
+  dropdown.className = 'autocomplete-dropdown';
+  wrapper.appendChild(dropdown);
+  
+  inputElement.removeAttribute('list');
+  
+  inputElement.addEventListener('input', function() {
+    const value = this.value.toLowerCase();
+    if (value.length === 0) {
+      dropdown.style.display = 'none';
+      return;
+    }
+    
+    const filtered = optionsList.filter(option => 
+      option.toLowerCase().includes(value)
+    ).slice(0, 6); // Chỉ hiển thị tối đa 6 options
+    
+    if (filtered.length === 0) {
+      dropdown.style.display = 'none';
+      return;
+    }
+    
+    dropdown.innerHTML = filtered.map(option => 
+      `<div class="autocomplete-option" data-value="${option}">${option}</div>`
+    ).join('');
+    
+    dropdown.style.display = 'block';
+  });
+  
+  dropdown.addEventListener('click', function(e) {
+    if (e.target.classList.contains('autocomplete-option')) {
+      inputElement.value = e.target.dataset.value;
+      dropdown.style.display = 'none';
+      inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  });
+  
+  inputElement.addEventListener('blur', function() {
+    setTimeout(() => dropdown.style.display = 'none', 150);
+  });
+}
 
+// Hàm setup autocomplete cho tất cả input cần thiết
+function setupAllCustomAutocomplete() {
+  // Tên khách hàng
+  const customerInputs = document.querySelectorAll('input[list="customer-list-options"]');
+  customerInputs.forEach(input => setupCustomAutocomplete(input, customerList));
+  
+  // NV giao hàng
+  const deliveryInputs = document.querySelectorAll('input[list="delivery-staff-list-options"]');
+  deliveryInputs.forEach(input => setupCustomAutocomplete(input, GIAO_HANG_NV_LIST));
+  
+  // NV kinh doanh
+  const salesInputs = document.querySelectorAll('input[list="sales-person-list-options"]');
+  salesInputs.forEach(input => setupCustomAutocomplete(input, nhanSuList));
+}
     function renderTable(tableKey, data) {
         const config = TABLE_CONFIG[tableKey];
         const container = document.getElementById(config.containerId);
@@ -1613,6 +1751,8 @@ if (phoneDL) {
         setupEventListeners(tableKey, container);
         updateTotals(tableKey);
         highlightOverdueRows();
+        bringOverdueToTop('khn');
+
         applyPermissions(tableKey);
     }
 
@@ -1756,6 +1896,8 @@ if (phoneDL) {
         updateTotals(tableKey);
         updateDashboard();
         highlightOverdueRows();
+        bringOverdueToTop(tableKey);
+
     }
 
     function handleDeleteClick(e, tableKey) {
@@ -2127,6 +2269,8 @@ if (ok && filterOverdue && !filterAll) {
   // --- cập nhật tổng & dashboard theo dữ liệu đã lọc ---
   updateTotals(tableKey);
   highlightOverdueRows();
+  bringOverdueToTop(tableKey);
+
 
   // Cập nhật dashboard dựa trên dữ liệu đã lọc (khi có bất kỳ filter)
   const anyFilterActive = hasAnyText || hasStart || hasEnd || (filterOverdue && !filterAll);
@@ -2644,5 +2788,254 @@ document.addEventListener('focusout', (e) => {
 
 
 </script>
+<style>
+  /* ===== Compact dropdown panel for all input[list] ===== */
+  #dl-panel{
+    position: fixed;
+    top: 0; left: 0;
+    display: none;
+    background: #0f172a;        /* nền tối */
+    color: #fff;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 4px 0;
+    box-shadow: 0 16px 36px rgba(0,0,0,.35);
+    z-index: 4000;
+    font-size: 14px;
+
+    /* ✅ Chỉ hiển thị tối đa ~3–4 dòng (80px) và có cuộn */
+    --opt-h: 20px;              /* chiều cao mỗi item (20px x 4 = 80px) */
+    max-height: 80px;           /* yêu cầu: 80px */
+    overflow-y: auto;
+  }
+  #dl-panel .opt{
+    height: var(--opt-h);
+    line-height: var(--opt-h);
+    padding: 0 10px;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  #dl-panel .opt:hover,
+  #dl-panel .opt.active{ background:#1f2937; }
+</style>
+
+<script>
+(function(){
+  // ===== Mini datalist overlay (không đụng login / logic khác) =====
+  const PANEL_ID = 'dl-panel';
+  let panel, anchorInput = null, activeIndex = -1;
+
+  function ensurePanel(){
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = PANEL_ID;
+    document.body.appendChild(panel);
+    return panel;
+  }
+
+  function getOptionsFromDatalist(input){
+    const listId = input.getAttribute('list');
+    if (!listId) return [];
+    const dl = document.getElementById(listId);
+    if (!dl) return [];
+    return Array.from(dl.querySelectorAll('option'))
+      .map(o => (o.getAttribute('value') ?? o.textContent ?? '').trim())
+      .filter(Boolean);
+  }
+
+  function placePanelBelow(input){
+    const r = input.getBoundingClientRect();
+    const x = r.left + window.scrollX;
+    const y = r.bottom + window.scrollY;
+    const w = r.width;
+    panel.style.minWidth = w + 'px';
+    panel.style.left = x + 'px';
+    panel.style.top  = y + 'px';
+  }
+
+  function renderPanel(items){
+    const maxShow = 6; // ✅ chỉ hiển thị tối đa 6 lựa chọn
+    const slice = items.slice(0, maxShow);
+    panel.innerHTML = slice.map((t,i)=>`<div class="opt" data-idx="${i}">${escapeHtml(t)}</div>`).join('');
+    activeIndex = slice.length ? 0 : -1;
+    setActive(activeIndex);
+  }
+
+  function openPanelFor(input){
+    const all = getOptionsFromDatalist(input);
+    const q = (input.value || '').toLowerCase().trim();
+    const filtered = q ? all.filter(v => v.toLowerCase().includes(q)) : all;
+
+    // Nếu không có gì → ẩn
+    if (!filtered.length){ hidePanel(); return; }
+
+    ensurePanel();
+    renderPanel(filtered);
+    placePanelBelow(input);
+    anchorInput = input;
+    panel.style.display = 'block';
+  }
+
+  function hidePanel(){
+    if (panel) panel.style.display = 'none';
+    anchorInput = null;
+    activeIndex = -1;
+  }
+
+  function setActive(idx){
+    if (!panel) return;
+    panel.querySelectorAll('.opt').forEach(el => el.classList.remove('active'));
+    const el = panel.querySelector(`.opt[data-idx="${idx}"]`);
+    if (el){
+      el.classList.add('active');
+      // đảm bảo item active luôn trong vùng nhìn thấy khi scroll
+      el.scrollIntoView({ block:'nearest' });
+    }
+  }
+
+  function commitActive(){
+    if (!anchorInput || !panel) return;
+    const el = panel.querySelector(`.opt[data-idx="${activeIndex}"]`);
+    if (!el) return;
+    anchorInput.value = el.textContent;
+    anchorInput.dispatchEvent(new Event('input',{bubbles:true}));
+    anchorInput.dispatchEvent(new Event('change',{bubbles:true}));
+    hidePanel();
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  // ===== Gán sự kiện cho tất cả input[list] =====
+  function bindDatalistInputs(){
+    const inputs = Array.from(document.querySelectorAll('input[list]'));
+
+    inputs.forEach(inp=>{
+      // mở panel khi focus hoặc gõ
+      inp.addEventListener('focus', ()=> openPanelFor(inp));
+      inp.addEventListener('input', ()=> openPanelFor(inp));
+
+      // đóng panel khi blur (trễ 120ms cho phép click chọn)
+      inp.addEventListener('blur', ()=>{
+        setTimeout(()=>{ if (document.activeElement !== panel) hidePanel(); }, 120);
+      });
+
+      // điều hướng bàn phím
+      inp.addEventListener('keydown', (e)=>{
+        if (!panel || panel.style.display==='none') return;
+        const opts = panel.querySelectorAll('.opt');
+        if (!opts.length) return;
+
+        if (e.key === 'ArrowDown'){
+          e.preventDefault();
+          activeIndex = (activeIndex + 1) % opts.length;
+          setActive(activeIndex);
+        } else if (e.key === 'ArrowUp'){
+          e.preventDefault();
+          activeIndex = (activeIndex - 1 + opts.length) % opts.length;
+          setActive(activeIndex);
+        } else if (e.key === 'Enter'){
+          e.preventDefault();
+          commitActive();
+        } else if (e.key === 'Escape'){
+          hidePanel();
+        }
+      });
+    });
+  }
+
+  // click chọn item
+  document.addEventListener('mousedown', (e)=>{
+    if (!panel || panel.style.display==='none') return;
+    const item = e.target.closest('#'+PANEL_ID+' .opt');
+    if (item && anchorInput){
+      activeIndex = parseInt(item.dataset.idx,10);
+      commitActive();
+    } else if (!e.target.closest('#'+PANEL_ID) && e.target !== anchorInput){
+      hidePanel();
+    }
+  });
+
+  // cuộn / resize thì reposition panel
+  window.addEventListener('scroll', ()=>{ if (panel && panel.style.display==='block' && anchorInput) placePanelBelow(anchorInput); }, true);
+  window.addEventListener('resize', ()=>{ if (panel && panel.style.display==='block' && anchorInput) placePanelBelow(anchorInput); });
+
+  // Khởi tạo sau khi trang đã gắn sự kiện sẵn có
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bindDatalistInputs);
+  } else {
+    bindDatalistInputs();
+  }
+})();
+</script>
+<script>
+/* Giới hạn datalist gốc: chỉ 6 kết quả hiển thị.
+   Hoạt động cả với input[list] sinh động sau này. */
+(function(){
+  const TMP_SUFFIX = "__tmp6";
+  function ensureTmpList(id){
+    let tmp = document.getElementById(id + TMP_SUFFIX);
+    if (!tmp){
+      tmp = document.createElement('datalist');
+      tmp.id = id + TMP_SUFFIX;
+      document.body.appendChild(tmp);
+    }
+    return tmp;
+  }
+  function buildOptionsHTML(values){
+    // chỉ lấy tối đa 6 lựa chọn
+    return values.slice(0, 6).map(v => `<option value="${v}"></option>`).join('');
+  }
+  function getAllOptions(listId){
+    const dl = document.getElementById(listId);
+    if (!dl) return [];
+    return Array.from(dl.querySelectorAll('option'))
+      .map(o => (o.getAttribute('value') ?? o.textContent ?? '').trim())
+      .filter(Boolean);
+  }
+  function filterVals(vals, q){
+    if (!q) return vals;
+    const s = q.toLowerCase();
+    return vals.filter(v => v.toLowerCase().includes(s));
+  }
+
+  // Lưu datalist gốc để khôi phục sau khi blur
+  document.addEventListener('focusin', (e)=>{
+    const inp = e.target;
+    if (!(inp instanceof HTMLInputElement)) return;
+    const listId = inp.getAttribute('list');
+    if (!listId) return;
+    if (!inp.dataset._dl_original_list) inp.dataset._dl_original_list = listId;
+  });
+
+  // Mỗi lần gõ -> lọc và chuyển input sang datalist tạm chỉ có tối đa 6 option
+  document.addEventListener('input', (e)=>{
+    const inp = e.target;
+    if (!(inp instanceof HTMLInputElement)) return;
+    const listId = inp.dataset._dl_original_list || inp.getAttribute('list');
+    if (!listId) return;
+
+    const all = getAllOptions(listId);
+    if (!all.length) return;
+
+    const filtered = filterVals(all, inp.value || '');
+    const tmp = ensureTmpList(listId);
+    tmp.innerHTML = buildOptionsHTML(filtered);
+
+    // Trỏ input vào datalist tạm (chỉ 6 mục)
+    inp.setAttribute('list', listId + TMP_SUFFIX);
+  });
+
+  // Khi blur -> trả lại datalist gốc
+  document.addEventListener('focusout', (e)=>{
+    const inp = e.target;
+    if (!(inp instanceof HTMLInputElement)) return;
+    const orig = inp.dataset._dl_original_list;
+    if (orig) inp.setAttribute('list', orig);
+  }, true);
+})();
+</script>
+
 </body>
 </html>  
