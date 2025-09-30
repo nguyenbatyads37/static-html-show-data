@@ -83,19 +83,18 @@
         td select.editable-select {
             width: 100%;
             border: none;
-            background: transparent;
             font-family: inherit;
             font-size: inherit;
             padding: 0;
             margin: 0;
-            -webkit-appearance: none;
+            /* -webkit-appearance: none;
             -moz-appearance: none;
-            appearance: none;
+            appearance: none; */
             cursor: pointer;
         }
 
         td.editable-dropdown-cell {
-            padding: 0;
+            padding: 10px 20px;
             /* Xóa padding của td để select chiếm toàn bộ */
         }
 
@@ -2573,7 +2572,7 @@
         function getCellValue(cell) { /* ... Giữ nguyên ... */ if (!cell) return ''; const select = cell.querySelector('select'); if (select) return select.value; const input = cell.querySelector('input'); return input ? input.value : cell.textContent; }
         function setCellValue(cell, value) { /* ... Giữ nguyên ... */ if (!cell) return; const select = cell.querySelector('select'); if (select) { select.value = value; select.dispatchEvent(new Event('change', { bubbles: true })); return; } const input = cell.querySelector('input'); if (input) { input.value = value; input.dispatchEvent(new Event('blur', { bubbles: true })); return; } if (cell.isContentEditable) { cell.textContent = value; cell.dispatchEvent(new Event('blur', { bubbles: true })); } }
         function clearAllSelections() { /* ... Giữ nguyên ... */ document.querySelectorAll('td.cell-selected').forEach(c => c.classList.remove('cell-selected')); if (pasteAnchorCell) { pasteAnchorCell.classList.remove('paste-anchor'); pasteAnchorCell = null; } updateSelectionSummary(); }
-        function updateSelectionSummary() { /* ... Giữ nguyên ... */ const summaryEl = document.getElementById('selectionSummary'); const transferBtn = document.getElementById('transferWarehouseBtn'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; const selectedOrderIds = new Set(); const orderIdColIndex = displayColumns.indexOf(PRIMARY_KEY_COLUMN); if (selectedCells.length === 0) { transferBtn.style.display = 'none'; transferBtn.disabled = true; return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (colIndex === orderIdColIndex) { const orderId = getCellValue(cell).trim(); if (orderId) { selectedOrderIds.add(orderId); } } if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); if (selectedOrderIds.size > 0) { transferBtn.style.display = 'block'; transferBtn.disabled = false; } else { transferBtn.style.display = 'none'; transferBtn.disabled = true; } }
+        function updateSelectionSummary() { /* ... Giữ nguyên ... */ const summaryEl = document.getElementById('selectionSummary'); const transferBtn = document.getElementById('transferWarehouseBtn'); const selectedCells = document.querySelectorAll('td.cell-selected'); summaryEl.innerHTML = ''; const selectedOrderIds = new Set(); const orderIdColIndex = displayColumns.indexOf(PRIMARY_KEY_COLUMN); if (selectedCells.length === 0) { transferBtn.style.display = 'none'; transferBtn.disabled = true; return; } const numericKeywords = ["số lượng", "giá", "tiền", "phí", "zipcode"]; const columns = new Map(); selectedCells.forEach(cell => { const colIndex = cell.cellIndex; if (colIndex === orderIdColIndex) { const orderId = getCellValue(cell).trim(); if (orderId) { selectedOrderIds.add(orderId); } } if (!columns.has(colIndex)) { columns.set(colIndex, []); } columns.get(colIndex).push(cell); }); const summaryParts = []; columns.forEach((cells, colIndex) => { const headerText = displayColumns[colIndex].toLowerCase(); const isNumeric = numericKeywords.some(kw => headerText.includes(kw)); if (isNumeric) { let sum = 0; let count = 0; cells.forEach(cell => { const value = getCellValue(cell); const num = parseFloat(String(value).replace(/[^\d]/g, '')); if (!isNaN(num)) { sum += num; count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Sum: <b>${sum.toLocaleString('vi-VN')}</b></span>`); } } else { let count = 0; cells.forEach(cell => { if (getCellValue(cell).trim() !== '') { count++; } }); if (count > 0) { summaryParts.push(`<span class="summary-item">${displayColumns[colIndex]} | Count: <b>${count}</b></span>`); } } }); summaryEl.innerHTML = summaryParts.join(''); }
         async function transferSelectedOrders() { /* ... Giữ nguyên ... */ const transferBtn = document.getElementById('transferWarehouseBtn'); const originalText = transferBtn.textContent; transferBtn.disabled = true; transferBtn.textContent = 'Đang chuyển...'; const loadingToast = showCustomAlert('Đang chuyển kho...', 'info', 0); const selectedOrderIds = new Set(); const orderIdColIndex = displayColumns.indexOf(PRIMARY_KEY_COLUMN); document.querySelectorAll('td.cell-selected').forEach(cell => { if (cell.cellIndex === orderIdColIndex) { const orderId = getCellValue(cell).trim(); if (orderId) { selectedOrderIds.add({ "Mã đơn hàng": orderId }); } } }); if (selectedOrderIds.size === 0) { removeToast(loadingToast); showCustomAlert('Vui lòng chọn ít nhất một "Mã đơn hàng" để chuyển kho.', 'info'); transferBtn.disabled = false; transferBtn.textContent = originalText; return; } const maDonList = Array.from(selectedOrderIds); try { const response = await fetch(TRANSFER_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rows: maDonList }) }); if (!response.ok) { const errorResponse = await response.json(); throw new Error(errorResponse.message || `Lỗi HTTP! status: ${response.status}`); } const result = await response.json(); if (result && result.success) { clearAllSelections(); removeToast(loadingToast); showCustomAlert('Chuyển kho thành công!', 'success', 2000); await fetchMGTNoiBoOrder(); render(); } else { removeToast(loadingToast); showCustomAlert(`Chuyển kho không thành công: ${result.message || 'Lỗi không xác định.'}`, 'error'); } } catch (e) { console.error('Lỗi khi chuyển kho:', e); removeToast(loadingToast); showCustomAlert(`Lỗi kết nối hoặc xử lý: ${e.message}`, 'error'); } finally { transferBtn.disabled = false; transferBtn.textContent = originalText; } }
         function setupInteractionHandlers() {
             const tableBody = document.getElementById('tableBody');
@@ -2607,6 +2606,11 @@
                 if (e.button !== 0) return;
                 const cell = e.target.closest('td');
                 if (!cell) return;
+                // FIX: Allow default behavior for form elements within a cell
+                                const targetTagName = e.target.tagName.toUpperCase();
+                if (targetTagName === 'SELECT') {
+                    return; 
+                }
                 e.preventDefault();
 
                 if (e.shiftKey && pasteAnchorCell) {
