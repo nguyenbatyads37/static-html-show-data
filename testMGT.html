@@ -905,6 +905,14 @@
             transform: translateY(0);
         }
     </style>
+<script type="importmap">
+{
+  "imports": {
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.21.0",
+    "marked": "https://aistudiocdn.com/marked@^16.3.0"
+  }
+}
+</script>
 </head>
 
 <body>
@@ -1109,6 +1117,7 @@
         let updateQueue = new Map(); // orderId -> {timeout, changes: Map<dataKey, {newValue, element}>}
         const UPDATE_DELAY = 500; // ms - delay trước khi gọi API
         const BULK_THRESHOLD = 3; // Nếu có >= 3 thay đổi trong queue thì chuyển sang bulk update
+        const deliveryStatusOptions = ["", "NHÃN", "ĐANG GIAO", "ĐÃ GIAO", "HOÀN"];
 
         // --- HỆ THỐNG UPDATE AN TOÀN ---
         function scheduleUpdate(orderId, dataKey, newValue, element, isDelete = false) {
@@ -1796,7 +1805,26 @@
                             });
                             td.innerHTML = '';
                             td.appendChild(select);
-                        } else if (col === "Ngày đóng hàng") {
+                        } else if (col === "Trạng thái giao hàng") {
+                            td.classList.add('editable-dropdown-cell');
+                            const select = document.createElement('select');
+                            select.className = 'editable-select';
+                            const currentVal = String(displayValue);
+                            const optionsToAdd = new Set(deliveryStatusOptions);
+                            if (currentVal && !optionsToAdd.has(currentVal)) {
+                                optionsToAdd.add(currentVal);
+                            }
+                            Array.from(optionsToAdd).sort().forEach(opt => {
+                                const option = document.createElement('option');
+                                option.value = opt; option.textContent = opt;
+                                if (opt.toLowerCase() === currentVal.toLowerCase()) { option.selected = true; }
+                                select.appendChild(option);
+                            });
+                            select.addEventListener('change', () => handleCellChange(select.value, select));
+                            td.innerHTML = '';
+                            td.appendChild(select);
+
+                        }else if (col === "Ngày đóng hàng") {
                             const input = document.createElement('input');
                             input.type = 'date';
                             input.className = 'date-input';
@@ -2587,6 +2615,13 @@
                 if (e.button !== 0) return;
                 const cell = e.target.closest('td');
                 if (!cell) return;
+                
+                // FIX: Allow default behavior for form elements within a cell
+                const targetTagName = e.target.tagName.toUpperCase();
+                if (targetTagName === 'SELECT' || targetTagName === 'INPUT' || targetTagName === 'BUTTON') {
+                    return; 
+                }
+
                 e.preventDefault();
 
                 if (e.shiftKey && pasteAnchorCell) {
