@@ -2627,6 +2627,10 @@ function makeColumnsResizable(table){
     handle.addEventListener('mousedown', onMouseDown);
   });
 }
+
+
+
+
 function printKhnToPdf(e){
   const tableKey = e?.currentTarget?.dataset?.tableKey || 'khn';
   const cfg = TABLE_CONFIG[tableKey];
@@ -2637,6 +2641,7 @@ function printKhnToPdf(e){
   try {
     const printDiv = document.createElement('div');
     printDiv.id = 'khn-print-only';
+    // Ẩn trên màn hình (không chiếm chỗ khi layout) để tránh trang trắng khi in
     printDiv.style.cssText = 'position:fixed;left:0;top:0;width:100%;background:#fff;font-family:inherit;font-size:10px;line-height:1.4;display:none;';
 
     // Header với logo và tiêu đề
@@ -2655,13 +2660,13 @@ function printKhnToPdf(e){
 
     const h1 = document.createElement('div');
     h1.textContent = 'Nhà Phân Phối Hà Hoà';
-    h1.style.cssText = 'font-size:24px;font-weight:900;color:#111827;letter-spacing:.2px;';
+    h1.style.cssText = 'font-size:22px;font-weight:900;color:#111827;letter-spacing:.2px;';
     const h2 = document.createElement('div');
     h2.textContent = 'BÁO CÁO KHÁCH HÀNG NỢ';
-    h2.style.cssText = 'font-size:20px;font-weight:900;color:#374151;margin-top:6px;text-align:center;';
+    h2.style.cssText = 'font-size:18px;font-weight:800;color:#374151;margin-top:4px;text-align:center;';
     const dline = document.createElement('div');
     dline.textContent = 'Ngày in: ' + new Date().toLocaleDateString('vi-VN');
-    dline.style.cssText = 'font-size:12px;color:#6b7280;margin-top:4px;font-weight:600;';
+    dline.style.cssText = 'font-size:11px;color:#6b7280;margin-top:2px;';
     titleWrap.appendChild(h1);
     titleWrap.appendChild(h2);
     titleWrap.appendChild(dline);
@@ -2671,62 +2676,38 @@ function printKhnToPdf(e){
     printDiv.appendChild(header);
 
     const t = document.createElement('table');
-    t.style.cssText = 'width:100%;border-collapse:collapse;font-size:12px;margin:0;table-layout:fixed;border:2px solid #000;';
+    t.style.cssText = 'width:100%;border-collapse:collapse;font-size:10px;margin:0;table-layout:fixed;';
 
     const thead = document.createElement('thead');
     const thRow = document.createElement('tr');
     thRow.style.cssText = 'background:#4CAF50;color:#fff;';
 
-    // YÊU CẦU 2 (Phần 1): Thêm tiêu đề cột "STT"
-    const sttTh = document.createElement('th');
-    sttTh.textContent = 'STT';
-    // YÊU CẦU 1: Đảm bảo tiêu đề in đậm (font-weight: 900 là rất đậm)
-    sttTh.style.cssText = 'border:2px solid #000;padding:8px 6px;text-align:center;background:#4CAF50;color:#fff;font-weight:900;font-size:13px;';
-    thRow.appendChild(sttTh);
-
+    // Lấy tiêu đề cột hiển thị (bỏ cột Xóa)
     const ths = Array.from(table.querySelectorAll('thead tr:first-child th'));
-    const displayThs = ths.slice(1);
+    const displayThs = ths.slice(1); // bỏ cột Xóa
     displayThs.forEach(th => {
       const c = document.createElement('th');
       c.textContent = (th.textContent || '').trim();
-      // YÊU CẦU 1: Đảm bảo tiêu đề in đậm (font-weight: 900 là rất đậm)
-      c.style.cssText = 'border:2px solid #000;padding:8px 6px;text-align:center;background:#4CAF50;color:#fff;font-weight:900;font-size:13px;';
+      c.style.cssText = 'border:1px solid #ddd;padding:6px 6px;text-align:center;background:#f3f4f6;font-weight:800;';
       thRow.appendChild(c);
     });
     thead.appendChild(thRow);
     t.appendChild(thead);
 
     const tbody = document.createElement('tbody');
-    let rows = Array.from(table.querySelectorAll('tbody tr'))
+    const rows = Array.from(table.querySelectorAll('tbody tr'))
       .filter(r => r.style.display !== 'none' && !r.classList.contains('debt-paid-off'));
 
-    // YÊU CẦU 3: Sắp xếp các dòng theo "Ngày nợ" tăng dần
-    rows.sort((trA, trB) => {
-        const dateInputA = trA.querySelector('[data-field="Ngày nợ"]');
-        const dateInputB = trB.querySelector('[data-field="Ngày nợ"]');
-        const dateA = dateInputA ? dateInputA.value : '';
-        const dateB = dateInputB ? dateInputB.value : '';
-        // So sánh chuỗi YYYY-MM-DD sẽ cho kết quả đúng thứ tự thời gian
-        return dateA.localeCompare(dateB);
-    });
-
-    // Sau khi sắp xếp, lặp qua để tạo bảng in
     rows.forEach((r, idx) => {
       const tr = document.createElement('tr');
       tr.style.cssText = idx % 2 === 0 ? 'background:#f8f9fa;' : 'background:#fff;';
       tbody.appendChild(tr);
-
-      // YÊU CẦU 2 (Phần 2): Thêm ô dữ liệu STT (lấy từ index + 1)
-      const sttTd = document.createElement('td');
-      sttTd.textContent = idx + 1; // Số thứ tự bắt đầu từ 1
-      sttTd.style.cssText = 'border:2px solid #000;padding:6px 8px;text-align:center;font-weight:600;';
-      tr.appendChild(sttTd);
-      
+      // Lấy đúng value theo thứ tự header hiển thị để không lệch cột
       displayThs.forEach(th => {
         const field = th.getAttribute('data-field') || th.dataset.field || (th.textContent || '').trim();
         const td = r.querySelector(`[data-field="${CSS.escape(field)}"]`)?.closest('td') || null;
         const out = document.createElement('td');
-        out.style.cssText = 'border:2px solid #000;padding:6px 8px;white-space:normal;word-break:break-word;overflow:hidden;line-height:1.4;font-size:12px;font-weight:600;';
+        out.style.cssText = 'border:1px solid #ddd;padding:4px 6px;white-space:normal;word-break:break-word;overflow:hidden;line-height:1.3;';
         const ctrl = td ? td.querySelector('input,select,textarea') : null;
         let v = '';
         if (ctrl) v = ctrl.value || ctrl.textContent || '';
@@ -2736,21 +2717,16 @@ function printKhnToPdf(e){
       });
     });
     t.appendChild(tbody);
-    
+
+    // Hàng tổng (nếu có) – sao chép giống bảng
     const srcTfoot = table.querySelector('tfoot tr');
     if (srcTfoot) {
       const tfoot = document.createElement('tfoot');
       const trf = document.createElement('tr');
-      
-      // YÊU CẦU 2 (Phần 3): Thêm một ô trống cho cột STT ở hàng tổng cộng
-      const sttEmptyTd = document.createElement('td');
-      sttEmptyTd.style.cssText = 'border:2px solid #000;padding:6px 8px;font-weight:900;background:#f0fdf4;font-size:13px;';
-      trf.appendChild(sttEmptyTd);
-
-      const tds = Array.from(srcTfoot.children).slice(1);
+      const tds = Array.from(srcTfoot.children).slice(1); // bỏ cột Xóa
       tds.forEach(td => {
         const o = document.createElement('td');
-        o.style.cssText = 'border:2px solid #000;padding:6px 8px;font-weight:900;background:#f0fdf4;font-size:13px;';
+        o.style.cssText = 'border:1px solid #ddd;padding:4px;font-weight:700;background:#f0fdf4;';
         o.textContent = (td.textContent || '').trim();
         trf.appendChild(o);
       });
@@ -2761,22 +2737,29 @@ function printKhnToPdf(e){
     printDiv.appendChild(t);
     document.body.appendChild(printDiv);
 
+    // Chỉ in phần bảng: ẩn mọi thứ trừ #khn-print-only trong chế độ print
     const style = document.createElement('style');
     style.id = 'khn-print-style';
     style.textContent = `@media print {
       html, body { margin: 0 !important; padding: 0 !important; }
       body * { display: none !important; }
       #khn-print-only { display: block !important; position: static !important; left: 0 !important; top: 0 !important; width: 100% !important; }
-      #khn-print-only div, #khn-print-only img, #khn-print-only span { display: block !important; }
-      #khn-print-only table, #khn-print-only thead, #khn-print-only tbody, #khn-print-only tfoot, #khn-print-only tr, #khn-print-only th, #khn-print-only td { display: table-cell !important; }
-      #khn-print-only table { display: table !important; width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; border: 2px solid #000 !important; }
-      #khn-print-only tr { page-break-inside: avoid !important; }
-      #khn-print-only th { background: #4CAF50 !important; color: #fff !important; font-weight: 900 !important; }
-      #khn-print-only td { font-weight: 600 !important; }
+      /* Hiện các phần tử header */
+      #khn-print-only div { display: block !important; }
+      #khn-print-only img { display: inline-block !important; }
+      #khn-print-only span { display: inline !important; }
+      /* Bảng */
+      #khn-print-only table { display: table !important; width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
+      #khn-print-only thead { display: table-header-group !important; }
+      #khn-print-only tbody { display: table-row-group !important; }
+      #khn-print-only tfoot { display: table-footer-group !important; }
+      #khn-print-only tr { display: table-row !important; page-break-inside: avoid !important; }
+      #khn-print-only th, #khn-print-only td { display: table-cell !important; }
       @page { size: A4 landscape; margin: 0.3in; }
     }`;
     document.head.appendChild(style);
 
+    // Đợi logo tải xong (hoặc timeout) rồi in để tránh trang trống khi hình ảnh đang tải
     const triggerPrint = () => requestAnimationFrame(() => { setTimeout(() => window.print(), 300); });
     if (logoImg.complete) {
       triggerPrint();
@@ -2795,6 +2778,7 @@ function printKhnToPdf(e){
     showToast('Lỗi khi in: ' + (err?.message || err), 'error');
   }
 }
+
      // --- Đồng bộ "Số Ngày Nợ Tối Đa" (dashboard) -> "Hạn trả nợ" (form thêm) ---
 function syncGlobalDebtTermToForm() {
   const debtTermInput = document.querySelector('#add-form-khn input[data-field="Hạn trả nợ"]');
