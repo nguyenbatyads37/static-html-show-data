@@ -2628,155 +2628,206 @@ function makeColumnsResizable(table){
   });
 }
 
+/**
+ * In một bảng HTML ra PDF với tiêu đề, logo và định dạng tùy chỉnh.
+ * @param {Event} e - Sự kiện click từ nút in.
+ */
+function printKhnToPdf(e) {
+    // --- 1. LẤY BẢNG NGUỒN ---
+    const tableKey = e?.currentTarget?.dataset?.tableKey || 'khn';
+    const cfg = TABLE_CONFIG[tableKey];
+    const container = cfg?.containerId ? document.getElementById(cfg.containerId) : null;
+    const table = container ? container.querySelector('table') : null;
 
-
-
-function printKhnToPdf(e){
-  const tableKey = e?.currentTarget?.dataset?.tableKey || 'khn';
-  const cfg = TABLE_CONFIG[tableKey];
-  const container = cfg?.containerId ? document.getElementById(cfg.containerId) : null;
-  const table = container ? container.querySelector('table') : null;
-  if (!table) return showToast('Không tìm thấy bảng để in.', 'warning');
-
-  try {
-    const printDiv = document.createElement('div');
-    printDiv.id = 'khn-print-only';
-    // Ẩn trên màn hình (không chiếm chỗ khi layout) để tránh trang trắng khi in
-    printDiv.style.cssText = 'position:fixed;left:0;top:0;width:100%;background:#fff;font-family:inherit;font-size:10px;line-height:1.4;display:none;';
-
-    // Header với logo và tiêu đề
-    const header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:12px;';
-    const logoWrap = document.createElement('div');
-    logoWrap.style.cssText = 'flex:0 0 auto;';
-    const titleWrap = document.createElement('div');
-    titleWrap.style.cssText = 'flex:0 1 auto;text-align:center;';
-
-    const logoImg = new Image();
-    logoImg.src = 'https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff6c823b5.%E1%BA%A2nh.094646.jpg';
-    logoImg.alt = 'Logo';
-    logoImg.style.cssText = 'width:100px;height:100px;object-fit:cover;border-radius:12px;border:1px solid #e5e7eb;';
-    logoWrap.appendChild(logoImg);
-
-    const h1 = document.createElement('div');
-    h1.textContent = 'Nhà Phân Phối Hà Hoà';
-    h1.style.cssText = 'font-size:22px;font-weight:900;color:#111827;letter-spacing:.2px;';
-    const h2 = document.createElement('div');
-    h2.textContent = 'BÁO CÁO KHÁCH HÀNG NỢ';
-    h2.style.cssText = 'font-size:18px;font-weight:800;color:#374151;margin-top:4px;text-align:center;';
-    const dline = document.createElement('div');
-    dline.textContent = 'Ngày in: ' + new Date().toLocaleDateString('vi-VN');
-    dline.style.cssText = 'font-size:11px;color:#6b7280;margin-top:2px;';
-    titleWrap.appendChild(h1);
-    titleWrap.appendChild(h2);
-    titleWrap.appendChild(dline);
-
-    header.appendChild(logoWrap);
-    header.appendChild(titleWrap);
-    printDiv.appendChild(header);
-
-    const t = document.createElement('table');
-    t.style.cssText = 'width:100%;border-collapse:collapse;font-size:10px;margin:0;table-layout:fixed;';
-
-    const thead = document.createElement('thead');
-    const thRow = document.createElement('tr');
-    thRow.style.cssText = 'background:#4CAF50;color:#fff;';
-
-    // Lấy tiêu đề cột hiển thị (bỏ cột Xóa)
-    const ths = Array.from(table.querySelectorAll('thead tr:first-child th'));
-    const displayThs = ths.slice(1); // bỏ cột Xóa
-    displayThs.forEach(th => {
-      const c = document.createElement('th');
-      c.textContent = (th.textContent || '').trim();
-      c.style.cssText = 'border:1px solid #ddd;padding:6px 6px;text-align:center;background:#f3f4f6;font-weight:800;';
-      thRow.appendChild(c);
-    });
-    thead.appendChild(thRow);
-    t.appendChild(thead);
-
-    const tbody = document.createElement('tbody');
-    const rows = Array.from(table.querySelectorAll('tbody tr'))
-      .filter(r => r.style.display !== 'none' && !r.classList.contains('debt-paid-off'));
-
-    rows.forEach((r, idx) => {
-      const tr = document.createElement('tr');
-      tr.style.cssText = idx % 2 === 0 ? 'background:#f8f9fa;' : 'background:#fff;';
-      tbody.appendChild(tr);
-      // Lấy đúng value theo thứ tự header hiển thị để không lệch cột
-      displayThs.forEach(th => {
-        const field = th.getAttribute('data-field') || th.dataset.field || (th.textContent || '').trim();
-        const td = r.querySelector(`[data-field="${CSS.escape(field)}"]`)?.closest('td') || null;
-        const out = document.createElement('td');
-        out.style.cssText = 'border:1px solid #ddd;padding:4px 6px;white-space:normal;word-break:break-word;overflow:hidden;line-height:1.3;';
-        const ctrl = td ? td.querySelector('input,select,textarea') : null;
-        let v = '';
-        if (ctrl) v = ctrl.value || ctrl.textContent || '';
-        else if (td) v = td.textContent || '';
-        out.textContent = v;
-        tr.appendChild(out);
-      });
-    });
-    t.appendChild(tbody);
-
-    // Hàng tổng (nếu có) – sao chép giống bảng
-    const srcTfoot = table.querySelector('tfoot tr');
-    if (srcTfoot) {
-      const tfoot = document.createElement('tfoot');
-      const trf = document.createElement('tr');
-      const tds = Array.from(srcTfoot.children).slice(1); // bỏ cột Xóa
-      tds.forEach(td => {
-        const o = document.createElement('td');
-        o.style.cssText = 'border:1px solid #ddd;padding:4px;font-weight:700;background:#f0fdf4;';
-        o.textContent = (td.textContent || '').trim();
-        trf.appendChild(o);
-      });
-      tfoot.appendChild(trf);
-      t.appendChild(tfoot);
+    if (!table) {
+        showToast('Không tìm thấy bảng để in.', 'warning');
+        return;
     }
 
-    printDiv.appendChild(t);
-    document.body.appendChild(printDiv);
+    try {
+        // --- 2. TẠO CONTAINER CHO NỘI DUNG IN ---
+        const printDiv = document.createElement('div');
+        printDiv.id = 'khn-print-only-container';
 
-    // Chỉ in phần bảng: ẩn mọi thứ trừ #khn-print-only trong chế độ print
-    const style = document.createElement('style');
-    style.id = 'khn-print-style';
-    style.textContent = `@media print {
-      html, body { margin: 0 !important; padding: 0 !important; }
-      body * { display: none !important; }
-      #khn-print-only { display: block !important; position: static !important; left: 0 !important; top: 0 !important; width: 100% !important; }
-      /* Hiện các phần tử header */
-      #khn-print-only div { display: block !important; }
-      #khn-print-only img { display: inline-block !important; }
-      #khn-print-only span { display: inline !important; }
-      /* Bảng */
-      #khn-print-only table { display: table !important; width: 100% !important; border-collapse: collapse !important; table-layout: fixed !important; }
-      #khn-print-only thead { display: table-header-group !important; }
-      #khn-print-only tbody { display: table-row-group !important; }
-      #khn-print-only tfoot { display: table-footer-group !important; }
-      #khn-print-only tr { display: table-row !important; page-break-inside: avoid !important; }
-      #khn-print-only th, #khn-print-only td { display: table-cell !important; }
-      @page { size: A4 landscape; margin: 0.3in; }
-    }`;
-    document.head.appendChild(style);
+        // --- 3. TẠO PHẦN HEADER (TIÊU ĐỀ & LOGO) ---
+        const header = document.createElement('div');
+        header.className = 'print-header';
+        const logoImg = new Image();
+        logoImg.src = 'https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff6c823b5.%E1%BA%A2nh.094646.jpg';
+        logoImg.alt = 'Logo';
+        logoImg.className = 'print-logo';
+        const titleWrap = document.createElement('div');
+        titleWrap.className = 'print-title';
+        titleWrap.innerHTML = `
+            <div class="main-title">Nhà Phân Phối Hà Hoà</div>
+            <div class="sub-title">BÁO CÁO KHÁCH HÀNG NỢ</div>
+            <div class="print-date">Ngày in: ${new Date().toLocaleDateString('vi-VN')}</div>
+        `;
+        header.appendChild(logoImg);
+        header.appendChild(titleWrap);
+        printDiv.appendChild(header);
 
-    // Đợi logo tải xong (hoặc timeout) rồi in để tránh trang trống khi hình ảnh đang tải
-    const triggerPrint = () => requestAnimationFrame(() => { setTimeout(() => window.print(), 300); });
-    if (logoImg.complete) {
-      triggerPrint();
-    } else {
-      const timer = setTimeout(triggerPrint, 800);
-      logoImg.addEventListener('load', () => { clearTimeout(timer); triggerPrint(); });
-      logoImg.addEventListener('error', () => { clearTimeout(timer); triggerPrint(); });
+        // Lấy dòng tfoot gốc để tạo khối tóm tắt
+        const sourceTfootRow = table.querySelector('tfoot tr');
+        if (sourceTfootRow) {
+            const summaryBox = document.createElement('div');
+            summaryBox.className = 'print-summary-box';
+            const sourceFooterTds = Array.from(sourceTfootRow.querySelectorAll('td'));
+            let summaryHtml = '';
+            sourceFooterTds.forEach(td => {
+                const text = (td.textContent || '').trim();
+                if (text) {
+                    summaryHtml += `<span>${text}</span>`;
+                }
+            });
+            summaryBox.innerHTML = summaryHtml;
+            printDiv.appendChild(summaryBox);
+        }
+
+        // --- 4. TẠO BẢN SAO BẢNG ĐỂ IN ---
+        const printTable = document.createElement('table');
+        printTable.className = 'print-table';
+
+        // 4.1. Tạo tiêu đề bảng (Thead)
+        const thead = document.createElement('thead');
+        const headerRow = document.createElement('tr');
+        const sttTh = document.createElement('th');
+        sttTh.textContent = 'STT';
+        sttTh.className = 'print-stt-col';
+        headerRow.appendChild(sttTh);
+        const sourceThs = Array.from(table.querySelectorAll('thead tr:first-child th'));
+        const displayThs = sourceThs.slice(1);
+        displayThs.forEach(th => {
+            const newTh = document.createElement('th');
+            newTh.textContent = (th.textContent || '').trim();
+            headerRow.appendChild(newTh);
+        });
+        thead.appendChild(headerRow);
+        printTable.appendChild(thead);
+
+        // 4.2. Tạo thân bảng (Tbody)
+        const tbody = document.createElement('tbody');
+        let sourceRows = Array.from(table.querySelectorAll('tbody tr'))
+            .filter(r => r.style.display !== 'none' && !r.classList.contains('debt-paid-off'));
+
+        sourceRows.sort((trA, trB) => {
+            const dateInputA = trA.querySelector('[data-field="Ngày nợ"]');
+            const dateInputB = trB.querySelector('[data-field="Ngày nợ"]');
+            const dateA = dateInputA ? dateInputA.value : '';
+            const dateB = dateInputB ? dateInputB.value : '';
+            return dateA.localeCompare(dateB);
+        });
+
+        sourceRows.forEach((row, index) => {
+            const printRow = document.createElement('tr');
+            const sttTd = document.createElement('td');
+            sttTd.textContent = index + 1;
+            sttTd.className = 'print-stt-col';
+            printRow.appendChild(sttTd);
+            displayThs.forEach(th => {
+                const fieldName = th.getAttribute('data-field') || (th.textContent || '').trim();
+                const sourceCell = row.querySelector(`[data-field="${CSS.escape(fieldName)}"]`)?.closest('td');
+                const printCell = document.createElement('td');
+                let cellValue = '';
+                if (sourceCell) {
+                    const input = sourceCell.querySelector('input, select, textarea');
+                    cellValue = input ? input.value : (sourceCell.textContent || '');
+                }
+                let displayValue = cellValue.trim();
+                const isDateField = fieldName === 'Ngày nợ' || fieldName === 'Ngày trả nợ' || fieldName === 'Ngày đến hạn';
+                if (isDateField && /^\d{4}-\d{2}-\d{2}$/.test(displayValue)) {
+                    const parts = displayValue.split('-');
+                    displayValue = `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+                printCell.textContent = displayValue;
+                printRow.appendChild(printCell);
+            });
+            tbody.appendChild(printRow);
+        });
+        printTable.appendChild(tbody);
+
+        // 4.3. ---- ĐÃ XÓA BỎ PHẦN TẠO TFOOT CHO BẢNG IN ----
+        // Không còn tạo tfoot cho printTable nữa.
+
+        printDiv.appendChild(printTable);
+
+        // --- 5. MỚI: TẠO PHẦN CHỮ KÝ CUỐI TRANG ---
+        const signatureDiv = document.createElement('div');
+        signatureDiv.className = 'print-signature-section';
+        signatureDiv.innerHTML = `
+            <div class="signature-box">
+                <div class="signature-title">Kế toán xác nhận</div>
+                <div class="signature-instruction">(Ký, ghi rõ họ và tên)</div>
+            </div>
+        `;
+        printDiv.appendChild(signatureDiv);
+
+
+        // --- 6. TẠO STYLE CHO VIỆC IN ---
+        const style = document.createElement('style');
+        style.id = 'khn-print-style';
+        // Đã thêm style cho phần chữ ký
+        style.textContent = `
+            /* ... (Giữ nguyên các style cũ) ... */
+            @media print { body > *:not(#khn-print-only-container) { display: none !important; } html, body { margin: 0 !important; padding: 0 !important; } #khn-print-only-container { display: block !important; position: absolute; top: 0; left: 0; width: 100%; } @page { size: A4 landscape; margin: 1cm; } }
+            #khn-print-only-container { display: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 9pt; line-height: 1.3; }
+            .print-header { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 16px; border-bottom: 2px solid #000; padding-bottom: 12px; } .print-logo { width: 90px; height: 90px; object-fit: cover; border-radius: 8px; } .print-title { text-align: center; } .main-title { font-size: 22px; font-weight: bold; } .sub-title { font-size: 18px; font-weight: bold; color: #374151; margin-top: 4px; } .print-date { font-size: 11pt; color: #6b7280; margin-top: 4px; }
+            .print-summary-box { border: 1.5px solid #333; background-color: #e8f5e9 !important; padding: 8px; margin-bottom: 12px; text-align: center; border-radius: 4px; }
+            .print-summary-box span { font-weight: bold; font-size: 11pt; margin: 0 15px; color: #111; }
+            .print-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .print-table th, .print-table td { border: 1px solid #333; padding: 4px 6px; word-break: break-word; }
+            .print-table thead th { background-color: #4CAF50 !important; color: #ffffff !important; font-weight: bold; font-size: 10pt; text-align: center; }
+            .print-table tbody tr:nth-child(even) { background-color: #f2f2f2 !important; }
+            /* Đã xóa style cho tfoot */
+            .print-table .print-stt-col { width: 40px; text-align: center; }
+
+            /* --- MỚI: Style cho khu vực chữ ký --- */
+            .print-signature-section {
+                margin-top: 40px; /* Khoảng cách với bảng */
+                display: flex;
+                justify-content: flex-end; /* Đẩy sang phải */
+                padding-right: 50px; /* Căn lề phải một chút */
+            }
+            .signature-box {
+                text-align: center;
+                font-size: 11pt;
+            }
+            .signature-title {
+                font-weight: bold;
+            }
+            .signature-instruction {
+                font-style: italic;
+                font-size: 10pt;
+            }
+        `;
+        document.head.appendChild(style);
+        document.body.appendChild(printDiv);
+
+        // --- 7. GỌI IN VÀ DỌN DẸP ---
+        const triggerPrint = () => {
+            const cleanup = () => {
+                document.getElementById('khn-print-style')?.remove();
+                document.getElementById('khn-print-only-container')?.remove();
+                window.removeEventListener('afterprint', cleanup);
+            };
+            window.addEventListener('afterprint', cleanup);
+            window.print();
+        };
+
+        if (logoImg.complete) { triggerPrint(); }
+        else {
+            logoImg.onload = triggerPrint;
+            logoImg.onerror = () => {
+                showToast('Không tải được logo, vẫn tiến hành in.', 'info');
+                triggerPrint();
+            };
+        }
+    } catch (err) {
+        console.error('Lỗi khi chuẩn bị in:', err);
+        showToast('Đã xảy ra lỗi không mong muốn khi in: ' + (err?.message || err), 'error');
+        document.getElementById('khn-print-style')?.remove();
+        document.getElementById('khn-print-only-container')?.remove();
     }
-
-    setTimeout(() => {
-      const st = document.getElementById('khn-print-style');
-      if (st) st.remove();
-      if (document.body.contains(printDiv)) document.body.removeChild(printDiv);
-    }, 1000);
-  } catch (err) {
-    showToast('Lỗi khi in: ' + (err?.message || err), 'error');
-  }
 }
 
      // --- Đồng bộ "Số Ngày Nợ Tối Đa" (dashboard) -> "Hạn trả nợ" (form thêm) ---
