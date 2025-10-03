@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="vi">
-    
 
 <head>
     <meta charset="UTF-8">
@@ -934,11 +933,20 @@
             </div>
         </div>
         <div class="filter-group">
-            <label for="filterDateFrom">Từ ngày lên đơn</label>
+            <label for="filterDateType">Loại giá trị ngày</label>
+            <select id="filterDateType">
+                <option value="Ngày lên đơn">Ngày lên đơn</option>
+                <option value="Ngày đóng hàng">Ngày đóng hàng</option>
+                <option value="Ngày đẩy đơn">Ngày đẩy đơn</option>
+                <option value="Ngày Kế toán đối soát với FFM lần 2">Ngày Kế toán đối soát với FFM lần 2</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label for="filterDateFrom" id="labelDateFrom">Từ ngày</label>
             <input type="date" id="filterDateFrom">
         </div>
         <div class="filter-group">
-            <label for="filterDateTo">Tới ngày lên đơn</label>
+            <label for="filterDateTo" id="labelDateTo">Tới ngày</label>
             <input type="date" id="filterDateTo">
         </div>
         <div class="filter-group">
@@ -1015,6 +1023,7 @@
                     <th>GHI CHÚ</th>
                     <th>Thời gian giao dự kiến</th>
                     <th>Ngày Kế toán đối soát với FFM lần 2</th>
+                    <th>Ngày đẩy đơn</th>
                     <th>Phí ship nội địa Mỹ (usd)</th>
                     <th>Phí xử lý đơn đóng hàng-Lưu kho(usd)</th>
                 </tr>
@@ -1073,7 +1082,7 @@
         const TEAM_COLUMN_NAME = "Team";
         const PRIMARY_KEY_COLUMN = "Mã đơn hàng";
 
-        const displayColumns = ["STT", "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ghi chú vận đơn", "Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "GHI CHÚ", "Thời gian giao dự kiến", "Ngày Kế toán đối soát với FFM lần 2", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)"];
+        const displayColumns = ["STT", "Mã đơn hàng", "Ngày lên đơn", "Name*", "Phone*", "Add", "City", "State", "Khu vực", "Zipcode", "Mặt hàng", "Tên mặt hàng 1", "Số lượng mặt hàng 1", "Tên mặt hàng 2", "Số lượng mặt hàng 2", "Quà tặng", "Số lượng quà kèm", "Giá bán", "Loại tiền thanh toán", "Tổng tiền VNĐ", "Hình thức thanh toán", "Ghi chú", "Ghi chú vận đơn", "Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "GHI CHÚ", "Thời gian giao dự kiến", "Ngày Kế toán đối soát với FFM lần 2", "Ngày đẩy đơn", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)"];
         const columnMapping = { "Ghi chú vận đơn": "ngày hẹn đẩy đơn", "Kết quả check": "Kết quả Check" };
 
         const editableCols = ["Kết quả check", "Mã Tracking", "Ngày đóng hàng", "Trạng thái giao hàng", "Thời gian giao dự kiến", "Phí ship nội địa Mỹ (usd)", "Phí xử lý đơn đóng hàng-Lưu kho(usd)", "GHI CHÚ"];
@@ -1305,6 +1314,7 @@
 
         // --- CÁC HÀM UTILITY ---
         function formatDate(dateString) { if (!dateString) return ''; try { const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z'); if (isNaN(date.getTime())) return dateString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); return `${day}/${month}/${year}`; } catch (e) { return dateString; } }
+        function extractDateFromDateTime(dateTimeString) { if (!dateTimeString) return ''; const str = String(dateTimeString).trim(); if (str.includes(' ')) { return str.split(' ')[0]; } return str; }
         function parseDateToISO(dateString) { if (!dateString || dateString.length === 0) return ''; const parts = dateString.split('/'); if (parts.length === 3) { const day = parseInt(parts[0], 10); const month = parseInt(parts[1], 10) - 1; const year = parseInt(parts[2], 10); const date = new Date(year, month, day); if (!isNaN(date.getTime())) { return date.toISOString().split('T')[0]; } } return dateString; }
         function updateOrderCounter(count) { const counterElement = document.getElementById('orderCounter'); if (counterElement) { counterElement.innerHTML = `Tổng số đơn: <b>${count}</b>`; } }
 
@@ -1484,6 +1494,9 @@
                 const orderId = row[PRIMARY_KEY_COLUMN];
                 const rowCopy = { ...row };
 
+                // Thêm cột "Ngày đẩy đơn" với giá trị từ "Ngày Kế toán đối soát với FFM lần 2" (chỉ lấy phần ngày)
+                rowCopy["Ngày đẩy đơn"] = extractDateFromDateTime(row["Ngày Kế toán đối soát với FFM lần 2"]);
+
                 // Áp dụng legacy changes
                 const legacyOrderChanges = state.legacyChanges.get(orderId);
                 if (legacyOrderChanges) {
@@ -1511,6 +1524,7 @@
             const products = state.filterValues.product || [];
             const dateFrom = document.getElementById('filterDateFrom').value;
             const dateTo = document.getElementById('filterDateTo').value;
+            const dateType = document.getElementById('filterDateType').value; // Lấy loại ngày được chọn
 
             if (markets.length > 0) {
                 const marketSet = new Set(markets);
@@ -1520,8 +1534,18 @@
                 const productSet = new Set(products);
                 dataToRender = dataToRender.filter(row => productSet.has(row["Mặt hàng"]));
             }
-            if (dateFrom) { const from = new Date(dateFrom); from.setHours(0, 0, 0, 0); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) >= from); }
-            if (dateTo) { const to = new Date(dateTo); to.setHours(23, 59, 59, 999); dataToRender = dataToRender.filter(row => row["Ngày lên đơn"] && new Date(row["Ngày lên đơn"]) <= to); }
+            // Lọc theo loại ngày được chọn
+            if (dateFrom) {
+                const from = new Date(dateFrom);
+                from.setHours(0, 0, 0, 0);
+                dataToRender = dataToRender.filter(row => row[dateType] && new Date(row[dateType]) >= from);
+            }
+            if (dateTo) {
+                const to = new Date(dateTo);
+                to.setHours(23, 59, 59, 999);
+                dataToRender = dataToRender.filter(row => row[dateType] && new Date(row[dateType]) <= to);
+            }
+            
             if (state.activeTeam === 'mgt_noi_bo') { if (state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) { state.totalFilteredOrders = 0; return []; } const orderedIds = new Set(state.mgtNoiBoOrder); dataToRender = dataToRender.filter(row => orderedIds.has(row["Mã đơn hàng"])); const orderIndexMap = new Map(state.mgtNoiBoOrder.map((id, index) => [id, index])); dataToRender.sort((a, b) => { const indexA = orderIndexMap.get(a[PRIMARY_KEY_COLUMN]); const indexB = orderIndexMap.get(b[PRIMARY_KEY_COLUMN]); return indexA - indexB; }); } else if (state.activeTeam !== 'all') { dataToRender = dataToRender.filter(row => row[TEAM_COLUMN_NAME] === state.activeTeam); }
 
             const trackingIncludeRaw = state.filterValues['tracking_include'] || '';
@@ -1560,7 +1584,7 @@
                             }
 
                             return false; // Không khớp điều kiện nào
-                        } else if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
+                        } else if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày đẩy đơn"].includes(col)) {
                             const dateValue = new Date(cellValue);
                             dateValue.setHours(0, 0, 0, 0);
                             const filterDate = new Date(filterValue);
@@ -1572,6 +1596,8 @@
                     });
                 });
             }
+            // console.log('dataToRender after column filters:', dataToRender);
+            
             // --- KẾT THÚC SỬA ĐỔI ---
 
             if (trackingIncludeRaw || trackingExcludeRaw) { const lowerInclude = trackingIncludeRaw.toLowerCase(); const lowerExclude = trackingExcludeRaw.toLowerCase(); dataToRender = dataToRender.filter(row => { const cellValue = String(row['Mã Tracking'] || ''); const lowerCellValue = cellValue.toLowerCase(); if (lowerExclude && lowerCellValue.includes(lowerExclude)) { return false; } if (lowerInclude) { if (lowerInclude.includes('\n')) { const codes = new Set(trackingIncludeRaw.split('\n').map(t => t.trim()).filter(Boolean)); if (!codes.has(cellValue.trim())) return false; } else { if (!lowerCellValue.includes(lowerInclude)) return false; } } return true; }); }
@@ -1674,7 +1700,7 @@
                     const pendingChange = state.pendingChanges.get(orderId)?.get(dataKey) || state.legacyChanges.get(orderId)?.get(dataKey);
                     let displayValue = pendingChange ? pendingChange.newValue : originalValue;
 
-                    if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
+                    if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày đẩy đơn"].includes(col)) {
                         displayValue = formatDate(displayValue);
                     }
 
@@ -2054,7 +2080,7 @@
                     th.appendChild(container);
                     updateDisplay();
                     // --- KẾT THÚC PHẦN THÊM MỚI ---
-                } else if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) {
+                } else if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày đẩy đơn"].includes(col)) {
                     const input = document.createElement('input');
                     input.type = 'date';
                     input.className = 'filter-input date-filter-input';
@@ -2219,6 +2245,13 @@
 
             // CẬP NHẬT: Xóa các event listener cũ cho filter market/product
             // Chúng được xử lý trong hàm `populateMainFilters`
+            document.getElementById('filterDateType').addEventListener('change', () => {
+                const dateType = document.getElementById('filterDateType').value;
+                document.getElementById('labelDateFrom').textContent = `Từ ${dateType}`;
+                document.getElementById('labelDateTo').textContent = `Tới ${dateType}`;
+                state.currentPage = 1;
+                render();
+            });
             document.getElementById('filterDateFrom').addEventListener('change', () => { state.currentPage = 1; render(); });
             document.getElementById('filterDateTo').addEventListener('change', () => { state.currentPage = 1; render(); });
 
@@ -2279,8 +2312,11 @@
             });
 
             // Reset các filter chính (main filters)
+            document.getElementById('filterDateType').value = 'Ngày đóng hàng';
             document.getElementById('filterDateFrom').value = '';
             document.getElementById('filterDateTo').value = '';
+            document.getElementById('labelDateFrom').textContent = 'Từ ngày';
+            document.getElementById('labelDateTo').textContent = 'Tới ngày';
 
             // Cập nhật lại UI của multi-select filter
             const initialDataForFilters = filterByCarrier(state.allData);
@@ -2913,7 +2949,7 @@
                 return displayColumns.map(col => {
                     const dataKey = columnMapping[col] || col;
                     let value = row[dataKey] ?? row[col] ?? row[col.replace(/ /g, '_')] ?? '';
-                    if (["Ngày lên đơn", "Ngày đóng hàng"].includes(col)) { value = formatDate(value); }
+                    if (["Ngày lên đơn", "Ngày đóng hàng", "Ngày đẩy đơn"].includes(col)) { value = formatDate(value); }
                     return sanitizeCsvCell(value, col);
                 }).join(',');
             }).join('\n');
