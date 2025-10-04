@@ -1314,7 +1314,15 @@
 
         // --- CÁC HÀM UTILITY ---
         function formatDate(dateString) { if (!dateString) return ''; try { const date = new Date(dateString.includes('Z') ? dateString : dateString + 'Z'); if (isNaN(date.getTime())) return dateString; const day = String(date.getDate()).padStart(2, '0'); const month = String(date.getMonth() + 1).padStart(2, '0'); const year = date.getFullYear(); return `${day}/${month}/${year}`; } catch (e) { return dateString; } }
-        function extractDateFromDateTime(dateTimeString) { if (!dateTimeString) return ''; const str = String(dateTimeString).trim(); if (str.includes(' ')) { return str.split(' ')[0]; } return str; }
+        function extractDateFromDateTime(dateTimeString) {
+            if (!dateTimeString) return '';
+            const str = String(dateTimeString).trim();
+            if (str.includes(' ')) {
+                const [d, m, y] = str.split(' ')[0].split('/').map(Number);
+                return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            }
+            return str;
+        }
         function parseDateToISO(dateString) { if (!dateString || dateString.length === 0) return ''; const parts = dateString.split('/'); if (parts.length === 3) { const day = parseInt(parts[0], 10); const month = parseInt(parts[1], 10) - 1; const year = parseInt(parts[2], 10); const date = new Date(year, month, day); if (!isNaN(date.getTime())) { return date.toISOString().split('T')[0]; } } return dateString; }
         function updateOrderCounter(count) { const counterElement = document.getElementById('orderCounter'); if (counterElement) { counterElement.innerHTML = `Tổng số đơn: <b>${count}</b>`; } }
 
@@ -1545,7 +1553,7 @@
                 to.setHours(23, 59, 59, 999);
                 dataToRender = dataToRender.filter(row => row[dateType] && new Date(row[dateType]) <= to);
             }
-            
+
             if (state.activeTeam === 'mgt_noi_bo') { if (state.mgtNoiBoOrder.length === 0 && !state.isMgtNoiBoOrderLoading) { state.totalFilteredOrders = 0; return []; } const orderedIds = new Set(state.mgtNoiBoOrder); dataToRender = dataToRender.filter(row => orderedIds.has(row["Mã đơn hàng"])); const orderIndexMap = new Map(state.mgtNoiBoOrder.map((id, index) => [id, index])); dataToRender.sort((a, b) => { const indexA = orderIndexMap.get(a[PRIMARY_KEY_COLUMN]); const indexB = orderIndexMap.get(b[PRIMARY_KEY_COLUMN]); return indexA - indexB; }); } else if (state.activeTeam !== 'all') { dataToRender = dataToRender.filter(row => row[TEAM_COLUMN_NAME] === state.activeTeam); }
 
             const trackingIncludeRaw = state.filterValues['tracking_include'] || '';
@@ -1597,7 +1605,7 @@
                 });
             }
             // console.log('dataToRender after column filters:', dataToRender);
-            
+
             // --- KẾT THÚC SỬA ĐỔI ---
 
             if (trackingIncludeRaw || trackingExcludeRaw) { const lowerInclude = trackingIncludeRaw.toLowerCase(); const lowerExclude = trackingExcludeRaw.toLowerCase(); dataToRender = dataToRender.filter(row => { const cellValue = String(row['Mã Tracking'] || ''); const lowerCellValue = cellValue.toLowerCase(); if (lowerExclude && lowerCellValue.includes(lowerExclude)) { return false; } if (lowerInclude) { if (lowerInclude.includes('\n')) { const codes = new Set(trackingIncludeRaw.split('\n').map(t => t.trim()).filter(Boolean)); if (!codes.has(cellValue.trim())) return false; } else { if (!lowerCellValue.includes(lowerInclude)) return false; } } return true; }); }
