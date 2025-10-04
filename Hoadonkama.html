@@ -12,18 +12,16 @@
             box-sizing: border-box;
             -webkit-print-color-adjust: exact; /* Ensures colors print correctly */
             color-adjust: exact;
-            font-weight: 600; /* <<< THAY ĐỔI: Làm đậm toàn bộ chữ để in rõ hơn */
+            font-weight: 600;
         }
-
         /* Wrapper for all invoices on the screen */
         #invoices-wrapper {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 20px; /* Space between invoices on screen */
+            gap: 20px;
             padding: 20px;
         }
-
         /* Invoice Container */
         .invoice-container {
             width: 72.1mm;
@@ -38,7 +36,6 @@
             flex-direction: column;
             box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
-
         /* Background Watermark Logo */
         .background-logo {
             position: absolute;
@@ -51,7 +48,6 @@
             z-index: 0;
             pointer-events: none;
         }
-
         /* Header Section */
         .invoice-header {
             border-bottom: 2px solid #4CAF50;
@@ -74,9 +70,8 @@
             color: #333;
             display: inline-block;
             padding-top: 5px;
-            padding-left: 15mm; 
+            padding-left: 15mm;
         }
-
         /* Main Content Area */
         .invoice-main {
             position: relative;
@@ -91,6 +86,7 @@
             border: 1px solid #e0e0e0;
             padding: 6px;
             vertical-align: top;
+            word-wrap: break-word;
         }
         th {
             background-color: #f9f9f9;
@@ -101,6 +97,7 @@
             font-size: 11pt;
             padding-top: 10px;
             padding-bottom: 5px;
+            border: none;
         }
         .label {
             width: 30%;
@@ -112,30 +109,28 @@
         }
         .total-label { text-align: right; border-right: none; }
         .total-amount { font-size: 11pt; border-left: none; }
-        .order-details-table { table-layout: fixed; word-wrap: break-word; }
-        .order-details-table th:first-child, 
+        .order-details-table th:first-child,
         .order-details-table td:first-child { font-size: 8.5pt; }
-
         /* Footer Section */
         .invoice-footer {
-            margin-top: 10px;
+            margin-top: auto; /* Pushes footer to the bottom */
             padding-top: 5px;
             display: flex;
-            align-items: flex-start;
+            align-items: flex-end;
             justify-content: space-between;
             position: relative;
             z-index: 3;
         }
+        .footer-left-content { flex-grow: 1; }
         .footer-text { text-align: left; padding-top: 10px; }
         .thank-you { font-weight: bold; font-size: 11pt; }
-        .contact-us { font-size: 8pt; color: #666; font-weight: 500; /* Giảm độ đậm một chút cho dòng này */ }
+        .contact-us { font-size: 8pt; color: #666; font-weight: 500; }
         .bottom-right-image {
             width: 22mm;
             height: 22mm;
             flex-shrink: 0;
             margin-left: 10px;
         }
-        
         /* Status Message Style */
         #status-message {
             text-align: center;
@@ -148,29 +143,19 @@
             color: #d9534f;
             font-weight: bold;
         }
-
         /* Print-specific Styles */
         @media print {
-            body {
-                background-color: #fff;
-                padding: 0;
-                margin: 0;
-            }
-            #invoices-wrapper {
-                padding: 0;
-                gap: 0;
-            }
+            body { background-color: #fff; padding: 0; margin: 0; }
+            #invoices-wrapper { padding: 0; gap: 0; }
             .invoice-container {
                 page-break-after: always;
                 box-shadow: none;
                 border: none;
                 margin: 0;
-                width: 100%;
-                height: 100%;
+                width: 100vw;
+                height: 100vh;
             }
-            #status-message {
-                display: none;
-            }
+            #status-message { display: none; }
         }
     </style>
 </head>
@@ -178,14 +163,42 @@
 
     <div id="status-message">Đang tải dữ liệu hóa đơn...</div>
     <div id="invoices-wrapper">
-        <!-- Các hóa đơn sẽ được tự động chèn vào đây bởi JavaScript -->
+        <!-- Invoices will be dynamically inserted here by JavaScript -->
     </div>
 
     <script>
-        const webAppUrl = "https://script.google.com/macros/s/AKfycbyEEaAibAHE4dOSrv8ZyKbhO7JuRpOrPOm0TYnIchJFSzN65xBRIvHoJ5DavxbWTbzT/exec";
+        // =================================================================
+        // KHU VỰC CẤU HÌNH
+        // Vui lòng thay thế các giá trị dưới đây cho đúng với dữ liệu của bạn
+        // =================================================================
+
+        // 1. Dán link Google Apps Script Web App của bạn vào đây
+        const webAppUrl = "https://script.google.com/macros/s/AKfycbzq298F76ScFgSvb-FIVpH6DL3vZLwHfbc75h1xyUM6Dt-Dl6PdGiJDbNnakt5c5xx4/exec"; // THAY LINK CỦA BẠN VÀO ĐÂY
+
+        // 2. Đảm bảo tên các cột này KHỚP CHÍNH XÁC với tên cột trong Google Sheet
+        const COLUMN_CONFIG = {
+            ORDER_CODE: 'MÃ ĐƠN HÀNG',
+            CUSTOMER_NAME: 'HỌ TÊN',
+            PHONE: 'SĐT',
+            ADDRESS: 'ĐỊA CHỈ',
+            SALES_REP: 'Sale',
+            MAIN_PRODUCT: 'SẢN PHẨM',
+            PREPAID: 'Đã thanh toán',
+            REMAINING: 'Còn lại',
+            SHIPPING_UNIT: 'ĐƠN VỊ VẬN CHUYỂN',
+            // --- Dữ liệu bán chéo ---
+            CROSS_SELL_ITEM: 'BÁN CHÉO', // Tên sản phẩm bán chéo
+            CROSS_SELL_QTY: 'Số lượng bán chéo', // Số lượng sản phẩm bán chéo
+            CROSS_SELL_DEPOSIT: 'Giá đơn bán chéo' // Cột này tương đương với cột "Prepaid Deposit" cho sản phẩm chính
+        };
+        // =================================================================
+        // KẾT THÚC KHU VỰC CẤU HÌNH
+        // =================================================================
+
 
         // Helper function to parse a value to a number, safely defaulting to 0
         function parseToNumber(value) {
+            if (value === null || typeof value === 'undefined') return 0;
             const cleanedValue = String(value).replace(/[^0-9.-]+/g, '');
             return parseFloat(cleanedValue) || 0;
         }
@@ -203,18 +216,20 @@
         async function generateInvoices() {
             const wrapper = document.getElementById('invoices-wrapper');
             const statusMsg = document.getElementById('status-message');
-            wrapper.innerHTML = ''; // Xóa nội dung cũ
+            wrapper.innerHTML = ''; // Clear previous content
 
             try {
                 const response = await fetch(webAppUrl);
                 if (!response.ok) {
-                    throw new Error(`Lỗi HTTP: ${response.status} ${response.statusText}`);
+                    throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
                 }
                 const apiResponse = await response.json();
-                let orders = apiResponse.data;
+                
+                console.log("API Response Received:", apiResponse);
 
-                if (!apiResponse.ok || !Array.isArray(orders) || orders.length === 0) {
-                    throw new Error("Không có dữ liệu hợp lệ hoặc API trả về lỗi.");
+                let orders = apiResponse.data;
+                if (!Array.isArray(orders)) {
+                    throw new Error("API response did not contain a valid 'data' array.");
                 }
 
                 const urlParams = new URLSearchParams(window.location.search);
@@ -222,8 +237,8 @@
 
                 if (idParam) {
                     const desiredOrderCodes = idParam.split(',').map(code => code.trim().toUpperCase());
-                    orders = orders.filter(order => 
-                        desiredOrderCodes.includes((order['MÃ ĐƠN HÀNG'] || '').toUpperCase())
+                    orders = orders.filter(order =>
+                        desiredOrderCodes.includes((order[COLUMN_CONFIG.ORDER_CODE] || '').toUpperCase())
                     );
 
                     if (orders.length === 0) {
@@ -232,13 +247,30 @@
                         return;
                     }
                 }
+                
+                console.log("Orders to be processed:", orders);
+
 
                 let allInvoicesHTML = '';
                 orders.forEach(order => {
-                    const remainingAmount = parseToNumber(order['Còn lại']);
+                    const remainingAmount = parseToNumber(order[COLUMN_CONFIG.REMAINING]);
                     const grandTotal = remainingAmount;
                     const formattedGrandTotal = formatCurrency(grandTotal);
-                    const qrCodeData = String(order['MÃ ĐƠN HÀNG'] || ''); 
+                    const qrCodeData = String(order[COLUMN_CONFIG.ORDER_CODE] || '');
+
+                    // *** BẮT ĐẦU LOGIC MỚI: Gộp sản phẩm chính và bán chéo ***
+                    let itemDescriptionHTML = 'Biokama';
+                    let quantityHTML = order[COLUMN_CONFIG.MAIN_PRODUCT] || '';
+                    let depositHTML = order[COLUMN_CONFIG.PREPAID] || '';
+
+                    const crossSellItem = order[COLUMN_CONFIG.CROSS_SELL_ITEM];
+                    if (crossSellItem && String(crossSellItem).trim() !== '') {
+                        // "xuống dòng 2" được hiểu là thêm thẻ <br> để ngắt dòng trong cùng một ô
+                        itemDescriptionHTML += `<br>${crossSellItem}`;
+                        quantityHTML += `<br>${order[COLUMN_CONFIG.CROSS_SELL_QTY] || ''}`;
+                        depositHTML += `<br>${order[COLUMN_CONFIG.CROSS_SELL_DEPOSIT] || ''}`;
+                    }
+                    // *** KẾT THÚC LOGIC MỚI ***
 
                     allInvoicesHTML += `
                         <div class="invoice-container">
@@ -252,28 +284,27 @@
                             <main class="invoice-main">
                                 <table>
                                     <tbody>
-                                        <tr><td colspan="4" class="section-title" style="border:none;">Customer Information:</td></tr>
+                                        <tr><td colspan="2" class="section-title">Customer Information:</td></tr>
                                         <tr>
                                             <td class="label">Name:</td>
-                                            <td colspan="3">${order['HỌ TÊN'] || ''}</td>
+                                            <td>${order[COLUMN_CONFIG.CUSTOMER_NAME] || ''}</td>
                                         </tr>
                                         <tr>
                                             <td class="label">Phone's number:</td>
-                                            <td colspan="3">${order['SĐT'] || ''}</td>
+                                            <td>${order[COLUMN_CONFIG.PHONE] || ''}</td>
                                         </tr>
                                         <tr>
                                             <td class="label">Address:</td>
-                                            <td colspan="3">${order['ĐỊA CHỈ'] || ''}</td>
+                                            <td>${order[COLUMN_CONFIG.ADDRESS] || ''}</td>
                                         </tr>
                                         <tr>
                                             <td class="label">Sales Representative:</td>
-                                            <td colspan="3">${order['Sale'] || ''}</td>
+                                            <td>${order[COLUMN_CONFIG.SALES_REP] || ''}</td>
                                         </tr>
                                     </tbody>
                                 </table>
 
                                 <div class="section-title">Order Details:</div>
-                                <!-- <<< THAY ĐỔI: Cập nhật độ rộng các cột tại đây -->
                                 <table class="order-details-table">
                                     <thead>
                                         <tr>
@@ -284,11 +315,10 @@
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td>Biokama</td>
-                                            <td>${order['SẢN PHẨM'] || ''}</td>
-                                            <td>${order['Đã thanh toán'] || ''}</td>
+                                            <td>${itemDescriptionHTML}</td>
+                                            <td>${quantityHTML}</td>
+                                            <td>${depositHTML}</td>
                                         </tr>
-                                        <tr style="height: 100%;"><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
                                     </tbody>
                                 </table>
                             </main>
@@ -303,7 +333,7 @@
                                             </tr>
                                             <tr>
                                                 <td class="label" style="border-right: none;">Shipping method:</td>
-                                                <td style="border-left: none;">${order['ĐƠN VỊ VẬN CHUYỂN'] || 'N/A'}</td>
+                                                <td style="border-left: none;">${order[COLUMN_CONFIG.SHIPPING_UNIT] || 'N/A'}</td>
                                             </tr>
                                         </tbody>
                                     </table>
