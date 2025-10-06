@@ -1434,23 +1434,24 @@
         const marketKey = showMarket ? (r.thiTruong || 'Không xác định') : '_';
         if (!productGroups[productKey]) productGroups[productKey] = {};
         if (!productGroups[productKey][marketKey]) {
-          productGroups[productKey][marketKey] = { cpqc: 0, soDon: 0, soDonThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsHoanHuyThucTe: 0 };
+          productGroups[productKey][marketKey] = { cpqc: 0, soDon: 0, soDonThucTe: 0, soDonHuyThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsHoanHuyThucTe: 0 };
         }
         const group = productGroups[productKey][marketKey];
         group.cpqc += r.cpqc;
         group.soDon += r.soDon;
         group.soDonThucTe += r.soDonThucTe;
+        group.soDonHuyThucTe += r.soDonHuyThucTe;
         group.soMessCmt += r.soMessCmt;
         group.dsChot += r.dsChot;
         group.dsChotThucTe += r.dsChotThucTe;
         group.dsHoanHuyThucTe += r.dsHoanHuyThucTe;
       });
 
-      const grandTotal = { cpqc: 0, soDon: 0, soDonThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsHoanHuyThucTe: 0 };
+      const grandTotal = { cpqc: 0, soDon: 0, soDonThucTe: 0, soDonHuyThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsHoanHuyThucTe: 0 };
       let tableHtml = '';
       Object.keys(productGroups).sort().forEach(product => {
         const markets = productGroups[product];
-        const productTotal = { cpqc: 0, soDon: 0, soDonThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsHoanHuyThucTe: 0 };
+        const productTotal = { cpqc: 0, soDon: 0, soDonThucTe: 0, soDonHuyThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsHoanHuyThucTe: 0 };
         Object.keys(markets).sort().forEach(market => {
           const marketData = markets[market];
           tableHtml += createMktRow(product, market, marketData, showMarket);
@@ -1470,7 +1471,9 @@
       const cps = data.soDon ? data.cpqc / data.soDon : 0;
       const avgOrderValue = data.soDon ? dsSauHoanHuyThucTe / data.soDon : 0;
       const closingRate = data.soMessCmt ? data.soDon / data.soMessCmt : 0;
-      const closingRateThucTe = data.soMessCmt ? data.soDonThucTe / data.soMessCmt : 0;
+      // SỬA ĐỔI: Tính số đơn thực tế sau khi trừ đơn hủy
+      const soDonThucTeAfterCancel = (data.soDonThucTe || 0) - (data.soDonHuyThucTe || 0);
+      const closingRateThucTe = data.soMessCmt ? soDonThucTeAfterCancel / data.soMessCmt : 0;
 
       const rateClass = closingRate > 0.1 ? 'bg-green' : (closingRate > 0.05 ? 'bg-yellow' : '');
       const rateThucTeClass = closingRateThucTe > 0.1 ? 'bg-green' : (closingRateThucTe > 0.05 ? 'bg-yellow' : '');
@@ -1482,7 +1485,7 @@
             ${productCell} ${marketCell}
             <td>${formatCurrency(data.cpqc)}</td>
             <td class="text-center">${formatNumber(data.soDon)}</td>
-            <td class="text-center">${formatNumber(data.soDonThucTe)}</td>
+            <td class="text-center">${formatNumber(soDonThucTeAfterCancel)}</td>
             <td class="text-center">${formatNumber(data.soMessCmt)}</td>
             <td>${formatCurrency(data.dsChot)}</td>
             <td>${formatCurrency(data.dsChotThucTe)}</td>
@@ -1724,6 +1727,8 @@
           productMetrics[p] = {
             cpqc: 0,
             soDon: 0,
+            soDonThucTe: 0,
+            soDonHuyThucTe: 0,
             soMessCmt: 0,
             dsChotThucTe: 0,
             dsHoanHuyThucTe: 0
@@ -1731,6 +1736,8 @@
         }
         productMetrics[p].cpqc += r.cpqc;
         productMetrics[p].soDon += r.soDon;
+        productMetrics[p].soDonThucTe += r.soDonThucTe;
+        productMetrics[p].soDonHuyThucTe += r.soDonHuyThucTe;
         productMetrics[p].soMessCmt += r.soMessCmt;
         productMetrics[p].dsChotThucTe += r.dsChotThucTe;
         productMetrics[p].dsHoanHuyThucTe += r.dsHoanHuyThucTe;
@@ -1739,7 +1746,8 @@
       const sortedProducts = Object.entries(productMetrics)
         .map(([name, metrics]) => {
           const dsSauHhTt = metrics.dsChotThucTe - metrics.dsHoanHuyThucTe;
-          return [name, { ...metrics, dsSauHhTt }];
+          const soDonThucTeAfterCancel = metrics.soDonThucTe - metrics.soDonHuyThucTe;
+          return [name, { ...metrics, dsSauHhTt, soDonThucTeAfterCancel }];
         })
         .sort(([, a], [, b]) => b.dsSauHhTt - a.dsSauHhTt);
 
@@ -1754,8 +1762,8 @@
       updateMktChartData(charts.mktProductSalesChart, sortedProducts.map(([, p]) => p.dsSauHhTt));
       updateMktChartData(charts.mktProductDsChotChart, sortedProducts.map(([, p]) => p.dsChotThucTe));
       updateMktChartData(charts.mktProductCpqcChart, sortedProducts.map(([, p]) => p.cpqc));
-      updateMktChartData(charts.mktProductCpsChart, sortedProducts.map(([, p]) => (p.soDon > 0 ? p.cpqc / p.soDon : 0)));
-      updateMktChartData(charts.mktProductClosingRateChart, sortedProducts.map(([, p]) => (p.soMessCmt > 0 ? p.soDon / p.soMessCmt : 0)));
+      updateMktChartData(charts.mktProductCpsChart, sortedProducts.map(([, p]) => (p.soDonThucTeAfterCancel > 0 ? p.cpqc / p.soDonThucTeAfterCancel : 0)));
+      updateMktChartData(charts.mktProductClosingRateChart, sortedProducts.map(([, p]) => (p.soMessCmt > 0 ? p.soDonThucTeAfterCancel / p.soMessCmt : 0)));
     }
 
     function createBarChart(canvasId, chartTitle) {
