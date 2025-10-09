@@ -108,8 +108,8 @@
       text-align: center !important;
     }
 
-    /* Style cho cột Marketing */
-    .marketing-name {
+    /* Style cho cột Marketing/Sale */
+    .marketing-name, .sale-name {
       font-weight: 700;
       /* In đậm hơn */
       color: #00008B;
@@ -193,7 +193,8 @@
       cursor: pointer;
     }
 
-    .sidebar input[type="date"] {
+    .sidebar input[type="date"],
+    .sidebar input[type="text"] {
       width: 100%;
       box-sizing: border-box;
       padding: 8px;
@@ -284,7 +285,8 @@
       content: " ▼";
     }
 
-    .daily-breakdown h3 {
+    .daily-breakdown h3,
+    .grouped-report-section h3 {
       margin-top: 30px;
       background: #f0f0f0;
       padding: 12px;
@@ -293,18 +295,23 @@
       font-size: 18px;
       font-weight: 700;
     }
+    .grouped-report-section {
+        margin-bottom: 40px;
+        padding: 20px;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
   </style>
 </head>
 
 <body>
   <div id="loading-overlay">Đang tải dữ liệu...</div>
   <div class="tab-container">
-    <button class="tablinks" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
-    <button class="tablinks" onclick="openTab(event, 'ManualReport')" id="manual-report-tab-btn"
-      style="display: none;">Báo cáo thủ công</button>
+    <button class="tablinks active" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
   </div>
   <!-- TAB 1: BÁO CÁO CHI TIẾT -->
-  <div id="DetailedReport" class="tab-content">
+  <div id="DetailedReport" class="tab-content" style="display: block;">
     <div class="report-container">
       <div class="sidebar">
         <h3>Bộ lọc</h3>
@@ -326,7 +333,9 @@
                 <th class="green-header">Marketing<span class="sort-icon"></span></th>
                 <th class="green-header">Số data<span class="sort-icon"></span></th>
                 <th class="green-header">Đơn chốt<span class="sort-icon"></span></th>
-                <th class="blue-header">Doanh thu<span class="sort-icon"></span></th>
+                <th class="green-header">Khách cũ<span class="sort-icon"></span></th>
+                <th class="blue-header">Doanh số<span class="sort-icon"></span></th> <!-- Đã đổi tên thành Doanh số -->
+                <th class="blue-header">Doanh số cũ<span class="sort-icon"></span></th>
                 <th class="yellow-header">Tỉ lệ chốt %<span class="sort-icon"></span></th>
                 <th class="yellow-header">Đơn trung bình<span class="sort-icon"></span></th>
               </tr>
@@ -337,11 +346,6 @@
         <div id="daily-breakdown"></div>
       </div>
     </div>
-  </div>
-
-  <!-- TAB MỚI: Nội dung báo cáo thủ công -->
-  <div id="ManualReport" class="tab-content">
-    <iframe id="manual-report-iframe" style="width: 100%; height: 85vh; border: none;" src=""></iframe>
   </div>
 
   <script>
@@ -357,14 +361,16 @@
       daily: {}
     };
 
-    // Updated sort keys after removing a column
+    // Updated sort keys after adding 'Doanh số cũ' and renaming 'Doanh thu' to 'Doanh số'
     const summaryColumnSortKeys = {
-      1: { prop: 'name', type: 'string' }, // Marketing
+      1: { prop: 'name', type: 'string' }, // Marketing / Sale (depending on context)
       2: { prop: 'soData', type: 'number' }, // Số data
       3: { prop: 'donChot', type: 'number' }, // Đơn chốt
-      4: { prop: 'doanhThu', type: 'number' }, // Doanh thu
-      5: { prop: (s) => s.soData ? s.donChot / s.soData : 0, type: 'number' }, // Tỉ lệ chốt %
-      6: { prop: (s) => s.donChot ? s.doanhThu / s.donChot : 0, type: 'number' } // Đơn trung bình
+      4: { prop: 'khachCu', type: 'number' }, // Khách cũ
+      5: { prop: 'doanhThu', type: 'number' }, // Doanh số (General revenue, previously 'Doanh thu')
+      6: { prop: 'doanhThuKhachCu', type: 'number' }, // Doanh số cũ
+      7: { prop: (s) => s.soData ? s.donChot / s.soData : 0, type: 'number' }, // Tỉ lệ chốt % (Shifted)
+      8: { prop: (s) => s.donChot ? s.doanhThu / s.donChot : 0, type: 'number' } // Đơn trung bình (Shifted)
     };
 
 
@@ -376,7 +382,6 @@
       setupEventListeners();
       setDefaultDates();
       fetchAndProcessData();
-      document.getElementById("defaultOpen").click();
     });
 
     function setDefaultDates() {
@@ -385,32 +390,21 @@
       const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0);
       const formatDateForInput = (date) => date.toISOString().split('T')[0];
 
-      document.getElementById('start-date-tab1').value = formatDateForInput(firstDay);
-      document.getElementById('end-date-tab1').value = formatDateForInput(lastDay);
+      const startDateFormatted = formatDateForInput(firstDay);
+      const endDateFormatted = formatDateForInput(lastDay);
+
+      document.getElementById('start-date-tab1').value = startDateFormatted;
+      document.getElementById('end-date-tab1').value = endDateFormatted;
     }
 
     function setupEventListeners() {
-      // Event listeners for tabs
-      document.querySelectorAll('.tablinks').forEach(tab => {
-          const onclickAttr = tab.getAttribute('onclick');
-          if (onclickAttr) {
-              const tabName = onclickAttr.match(/'([^']+)'/)?.[1];
-              if (tabName) {
-                  tab.addEventListener('click', (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      openTab(e, tabName);
-                  });
-              }
-          }
-      });
-      
-      // Event listener for filters
+      // Event listeners for filters on Tab 1
       document.getElementById('start-date-tab1').addEventListener('change', handleFilterChange);
       document.getElementById('end-date-tab1').addEventListener('change', handleFilterChange);
       
-      // Event listeners for sorting
+      // Event listeners for sorting on Tab 1 summary table
       document.getElementById('summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e, 'summary'));
+      // Event listeners for sorting on Tab 1 daily breakdown tables
       document.getElementById('daily-breakdown').addEventListener('click', (e) => {
         if (e.target.closest('th')) {
           sortTable(e, 'daily');
@@ -437,22 +431,27 @@
             // Process revenue data (from the first API)
             const revenueData = (revenueResult.data || []).map(r => {
                 const isSuccessfulOrder = (r["TRẠNG THÁI"] === "Success" && r["TRẠNG THÁI VẬN ĐƠN"] !== "Hủy");
+                const isOldCustomerOrder = (r["TRẠNG THÁI"] === "Success (old customer)" && r["TRẠNG THÁI VẬN ĐƠN"] !== "Hủy");
                 return {
-                    name: (r["MKT PT"] || 'N/A').trim(),
+                    name: (r["MKT PT"] || 'N/A').trim(), // 'name' serves as the identifier for both marketing and sales, filtered by keywords.
                     ngay: new Date(r["NGÀY GIỜ"]),
                     donChot: isSuccessfulOrder ? 1 : 0,
                     doanhThu: isSuccessfulOrder ? (Number(r["GIÁ"]) || 0) : 0,
-                    soData: 0 // This API doesn't count 'data', so it's 0
+                    soData: 0, 
+                    khachCu: isOldCustomerOrder ? 1 : 0,
+                    doanhThuKhachCu: isOldCustomerOrder ? (Number(r["GIÁ"]) || 0) : 0 
                 };
             });
 
             // Process data count data (from the second API)
             const dataCountData = (dataCountResult.data || []).map(r => ({
-                name: (r["MKT PT"] || 'N/A').trim(),
-                ngay: new Date(r["NGÀY"]), // The date column is "NGÀY"
-                donChot: 0, // This API doesn't count orders/revenue
+                name: (r["MKT PT"] || 'N/A').trim(), // 'name' serves as the identifier for both marketing and sales, filtered by keywords.
+                ngay: new Date(r["NGÀY"]), 
+                donChot: 0,
                 doanhThu: 0,
-                soData: 1 // Each row in this API counts as one 'data'
+                soData: 1, 
+                khachCu: 0,
+                doanhThuKhachCu: 0 
             }));
             
             // Combine data from both sources and filter out invalid entries
@@ -460,6 +459,7 @@
                 r.name !== 'N/A' && r.ngay instanceof Date && !isNaN(r.ngay)
             );
 
+            // Apply filters for default tab once data is loaded
             applyTab1Filters();
         } catch (err) {
             console.error("Lỗi tải dữ liệu:", err);
@@ -484,9 +484,9 @@
       }, 50);
     }
 
-    function getFilteredData() {
-      const startDateVal = document.getElementById('start-date-tab1').value;
-      const endDateVal = document.getElementById('end-date-tab1').value;
+    function getFilteredData(startDateId, endDateId) {
+      const startDateVal = document.getElementById(startDateId).value;
+      const endDateVal = document.getElementById(endDateId).value;
       
       // Create Date objects for the beginning of the start day and the end of the end day
       const startDate = startDateVal ? new Date(startDateVal) : null;
@@ -509,7 +509,7 @@
     // =================================================================================
 
     function applyTab1Filters() {
-      const filteredData = getFilteredData();
+      const filteredData = getFilteredData('start-date-tab1', 'end-date-tab1');
       const summaryList = generateSummaryTableData(filteredData);
 
       // Sort the summary list based on the current sort state or default to sorting by name
@@ -533,13 +533,17 @@
             name: r.name,
             soData: 0,
             donChot: 0,
-            doanhThu: 0
+            doanhThu: 0,
+            khachCu: 0, 
+            doanhThuKhachCu: 0 
           };
         }
         const S = summary[key];
         S.soData += r.soData;
         S.donChot += r.donChot;
         S.doanhThu += r.doanhThu;
+        S.khachCu += r.khachCu; 
+        S.doanhThuKhachCu += r.doanhThuKhachCu; 
       });
       return Object.values(summary);
     }
@@ -581,7 +585,9 @@
                 <th class="green-header">Marketing<span class="sort-icon"></span></th>
                 <th class="green-header">Số data<span class="sort-icon"></span></th>
                 <th class="green-header">Đơn chốt<span class="sort-icon"></span></th>
-                <th class="blue-header">Doanh thu<span class="sort-icon"></span></th>
+                <th class="green-header">Khách cũ<span class="sort-icon"></span></th>
+                <th class="blue-header">Doanh số<span class="sort-icon"></span></th> <!-- Đã đổi tên thành Doanh số -->
+                <th class="blue-header">Doanh số cũ<span class="sort-icon"></span></th>
                 <th class="yellow-header">Tỉ lệ chốt %<span class="sort-icon"></span></th>
                 <th class="yellow-header">Đơn trung bình<span class="sort-icon"></span></th>
             </tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
@@ -590,21 +596,25 @@
       sortStates.daily = {}; // Reset daily sort states when re-rendering
     }
 
-    function generateSummaryTableHTML(dataList) {
-      let total = { soData: 0, donChot: 0, doanhThu: 0 };
+    function generateSummaryTableHTML(dataList, reportType = 'default') {
+      let total = { soData: 0, donChot: 0, doanhThu: 0, khachCu: 0, doanhThuKhachCu: 0 }; 
       const bodyRowsHtml = dataList.map((s, index) => {
         Object.keys(total).forEach(key => total[key] += s[key] || 0);
         
         const tiLeChot = s.soData ? s.donChot / s.soData : 0;
         const donTrungBinh = s.donChot ? s.doanhThu / s.donChot : 0;
         
-        // Note the removed 'doanhThuDonCu' cell
+        // Determine the class for the name column based on reportType
+        const nameColumnClass = 'text-left marketing-name';
+
         return `<tr>
                     <td class="text-center">${index + 1}</td>
-                    <td class="text-left marketing-name">${s.name}</td>
+                    <td class="${nameColumnClass}">${s.name}</td> 
                     <td>${formatNumber(s.soData)}</td>
                     <td>${formatNumber(s.donChot)}</td>
-                    <td>${formatCurrency(s.doanhThu)}</td>
+                    <td>${formatNumber(s.khachCu)}</td> 
+                    <td>${formatCurrency(s.doanhThu)}</td> <!-- Vẫn sử dụng s.doanhThu cho cột Doanh số -->
+                    <td>${formatCurrency(s.doanhThuKhachCu)}</td> 
                     <td>${formatPercent(tiLeChot)}</td>
                     <td>${formatCurrency(donTrungBinh)}</td> 
                 </tr>`;
@@ -613,12 +623,15 @@
       const totalTiLeChot = total.soData ? total.donChot / total.soData : 0;
       const totalDonTrungBinh = total.donChot ? total.doanhThu / total.donChot : 0;
 
-      // Note the updated total row with removed cell and corrected calculations
+      // Updated total row with new 'Doanh số cũ' cell
+      // The colspan for "TỔNG CỘNG" is now 2 because there are 8 data columns after STT.
       const totalRowHtml = `<tr class="total-row">
                 <td class="total-label" colspan="2">TỔNG CỘNG</td>
                 <td class="total-value">${formatNumber(total.soData)}</td>
                 <td class="total-value">${formatNumber(total.donChot)}</td>
-                <td class="total-value">${formatCurrency(total.doanhThu)}</td>
+                <td class="total-value">${formatNumber(total.khachCu)}</td>
+                <td class="total-value">${formatCurrency(total.doanhThu)}</td> <!-- Vẫn sử dụng total.doanhThu cho tổng Doanh số -->
+                <td class="total-value">${formatCurrency(total.doanhThuKhachCu)}</td>
                 <td class="total-value">${formatPercent(totalTiLeChot)}</td>
                 <td class="total-value">${formatCurrency(totalDonTrungBinh)}</td>
             </tr>`;
@@ -643,8 +656,10 @@
             if (!sortStates.daily[date]) sortStates.daily[date] = { column: null, direction: 'asc' };
             sortState = sortStates.daily[date];
         } else {
-            sortState = sortStates.summary;
+            sortState = sortStates[tableType]; // Use the specific sortState for summary, marketing, or sales
         }
+        
+        if (!sortState) return; // Fallback if sortState is not defined for the type
 
         // Toggle direction or change column
         if (sortState.column === columnIndex) {
@@ -658,13 +673,13 @@
         if (tableType === 'daily') {
             sortAndRenderDailyTable(tableElement, sortState);
         } else if (tableType === 'summary') {
-            applyTab1Filters();
+            applyTab1Filters(); // Re-applies filters and sorting for tab 1 summary
         }
     }
 
     function sortAndRenderDailyTable(table, sortState) {
         const date = table.dataset.date;
-        const filteredData = getFilteredData();
+        const filteredData = getFilteredData('start-date-tab1', 'end-date-tab1'); // Daily breakdown uses tab1 dates
         const dailyData = filteredData.filter(r => formatDate(r.ngay) === date);
         let dailyList = generateSummaryTableData(dailyData);
         
@@ -723,18 +738,9 @@
     // =================================================================================
 
     function openTab(evt, tabName) {
-      document.querySelectorAll(".tab-content").forEach(tc => tc.style.display = "none");
-      document.querySelectorAll(".tablinks").forEach(tl => tl.classList.remove("active"));
+      // Since there's only one tab, this function is simplified.
+      // It ensures the tab content is visible.
       document.getElementById(tabName).style.display = "block";
-      
-      // Use the clicked event target to add the active class
-      if (evt && evt.currentTarget) {
-         evt.currentTarget.classList.add("active");
-      }
-      
-      if (tabName === 'DetailedReport' && masterData.length > 0) {
-        applyTab1Filters();
-      }
     }
 
 
