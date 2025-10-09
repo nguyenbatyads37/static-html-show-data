@@ -153,14 +153,14 @@
         /* Print-specific Styles */
         @media print {
             body { background-color: #fff; padding: 0; margin: 0; }
-            #invoices-wrapper { padding: 0; gap: 0; }
+            #invoices-wrapper { padding: 0; gap: 0; border: none; width: 100%; margin: 0; box-shadow: none; }
             .invoice-container {
                 page-break-after: always;
                 box-shadow: none;
                 border: none;
                 margin: 0;
-                width: 100vw;
-                height: 100vh;
+                width: 100%;
+                height: 100%;
             }
             #status-message { display: none; }
         }
@@ -187,7 +187,7 @@
             REMAINING: 'Còn lại',
             SHIPPING_UNIT: 'ĐƠN VỊ VẬN CHUYỂN',
             CROSS_SELL_ITEM: 'BÁN CHÉO',
-            CROSS_SELL_QTY: 'SP bán chéo' // <-- ĐÃ THAY ĐỔI TỪ 'Số lượng bán chéo'
+            CROSS_SELL_QTY: 'SP bán chéo'
         };
 
         function parseToNumber(value) {
@@ -196,14 +196,30 @@
             return parseFloat(cleanedValue) || 0;
         }
 
+        /**
+         * FIX: Changed currency format from USD to VND.
+         */
         function formatCurrency(number) {
-            return new Intl.NumberFormat('en-US', {
+            return new Intl.NumberFormat('vi-VN', {
                 style: 'currency',
-                currency: 'USD',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
+                currency: 'VND',
             }).format(number);
         }
+        
+        /**
+         * Helper function to safely create and append a table row.
+         * This avoids XSS vulnerabilities by using textContent.
+         */
+        function createProductRow(tbody, cells) {
+            const row = document.createElement('tr');
+            cells.forEach(cellData => {
+                const cell = document.createElement('td');
+                cell.textContent = cellData; // Safely sets text content
+                row.appendChild(cell);
+            });
+            tbody.appendChild(row);
+        }
+
 
         async function generateInvoices() {
             const wrapper = document.getElementById('invoices-wrapper');
@@ -227,9 +243,14 @@
 
                 if (idParam) {
                     const desiredOrderCodes = idParam.split(',').map(code => code.trim().toUpperCase());
-                    orders = orders.filter(order =>
-                        desiredOrderCodes.includes((order[COLUMN_CONFIG.ORDER_CODE] || '').toUpperCase())
-                    );
+                    orders = orders.filter(order => {
+                        /**
+                         * FIX: Wrapped with String() to prevent ".toUpperCase is not a function" error
+                         * when the order code is a number.
+                         */
+                        const orderCode = String(order[COLUMN_CONFIG.ORDER_CODE] || '').toUpperCase();
+                        return desiredOrderCodes.includes(orderCode);
+                    });
 
                     if (orders.length === 0) {
                         statusMsg.textContent = `Không tìm thấy hóa đơn nào với các ID đã cung cấp: ${idParam}`;
@@ -238,113 +259,121 @@
                     }
                 }
                 
-                let allInvoicesHTML = '';
                 orders.forEach(order => {
+                    // --- Create the main container ---
+                    const invoiceContainer = document.createElement('div');
+                    invoiceContainer.className = 'invoice-container';
+
+                    // --- Prepare data ---
                     const remainingAmount = parseToNumber(order[COLUMN_CONFIG.REMAINING]);
-                    const grandTotal = remainingAmount;
-                    const formattedGrandTotal = formatCurrency(grandTotal);
+                    const formattedGrandTotal = formatCurrency(remainingAmount);
                     const qrCodeData = String(order[COLUMN_CONFIG.ORDER_CODE] || '');
 
                     let salesRepInfo = order[COLUMN_CONFIG.SALES_REP] || '';
                     const salesRepPhone = order[COLUMN_CONFIG.SALES_REP_PHONE] || '';
                     if (salesRepPhone) {
-                        salesRepInfo += `<br>${salesRepPhone}`;
+                        salesRepInfo += `\n${salesRepPhone}`; // Use newline for textContent with "white-space: pre-line"
                     }
 
-                    const mainProductRow = `
-                        <tr>
-                            <td>Biokama</td>
-                            <td>${order[COLUMN_CONFIG.MAIN_PRODUCT] || ''}</td>
-                            <td>${order[COLUMN_CONFIG.PREPAID] || ''}</td>
-                        </tr>
-                    `;
+                    // --- Define static HTML structure ---
+                    const staticHTML = `
+                        <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Fd3e93e8d.%E1%BA%A2nh.121830.png" alt="Background Logo" class="background-logo" onerror="this.style.display='none'">
+                        
+                        <header class="invoice-header">
+                            <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F070eaacc.%E1%BA%A2nh.045006.png" alt="Biokama Logo" class="top-left-logo" onerror="this.style.display='none'">
+                            <div class="company-name">BIOKAMA</div>
+                        </header>
 
-                    let crossSellProductRow = '';
-                    const crossSellItem = order[COLUMN_CONFIG.CROSS_SELL_ITEM];
-                    if (crossSellItem && String(crossSellItem).trim() !== '') {
-                        crossSellProductRow = `
-                            <tr>
-                                <td>${crossSellItem}</td>
-                                <td>${order[COLUMN_CONFIG.CROSS_SELL_QTY] || ''}</td>
-                                <td></td> 
-                            </tr>
-                        `;
-                    }
-                    
-                    allInvoicesHTML += `
-                        <div class="invoice-container">
-                            <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Fd3e93e8d.%E1%BA%A2nh.121830.png" alt="Background Logo" class="background-logo" onerror="this.style.display='none'">
-                            
-                            <header class="invoice-header">
-                                <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F070eaacc.%E1%BA%A2nh.045006.png" alt="Biokama Logo" class="top-left-logo" onerror="this.style.display='none'">
-                                <div class="company-name">BIOKAMA</div>
-                            </header>
+                        <main class="invoice-main">
+                            <table>
+                                <tbody>
+                                    <tr><td colspan="2" class="section-title">Customer Information:</td></tr>
+                                    <tr>
+                                        <td class="label">Name:</td>
+                                        <td data-field="customer-name"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="label">Phone's number:</td>
+                                        <td data-field="customer-phone" class="phone-number"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="label">Address:</td>
+                                        <td data-field="customer-address"></td>
+                                    </tr>
+                                    <tr>
+                                        <td class="label">Sales Representative:</td>
+                                        <td data-field="sales-rep" style="white-space: pre-line;"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
 
-                            <main class="invoice-main">
+                            <div class="section-title">Order Details:</div>
+                            <table class="order-details-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 45%;">Item Description</th>
+                                        <th style="width: 25%;">Quantity</th>
+                                        <th style="width: 30%;">Prepaid<br>Deposit</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    </tbody>
+                            </table>
+                        </main>
+
+                        <footer class="invoice-footer">
+                            <div class="footer-left-content">
                                 <table>
                                     <tbody>
-                                        <tr><td colspan="2" class="section-title">Customer Information:</td></tr>
-                                        <tr>
-                                            <td class="label">Name:</td>
-                                            <td>${order[COLUMN_CONFIG.CUSTOMER_NAME] || ''}</td>
+                                        <tr class="highlight-row">
+                                            <td class="total-label">COD</td>
+                                            <td class="total-amount" data-field="grand-total"></td>
                                         </tr>
                                         <tr>
-                                            <td class="label">Phone's number:</td>
-                                            <td class="phone-number">${order[COLUMN_CONFIG.PHONE] || ''}</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="label">Address:</td>
-                                            <td>${order[COLUMN_CONFIG.ADDRESS] || ''}</td>
-                                        </tr>
-                                        <tr>
-                                            <td class="label">Sales Representative:</td>
-                                            <td>${salesRepInfo}</td>
+                                            <td class="label" style="border-right: none;">Shipping method:</td>
+                                            <td style="border-left: none;" data-field="shipping-unit"></td>
                                         </tr>
                                     </tbody>
                                 </table>
-
-                                <div class="section-title">Order Details:</div>
-                                <table class="order-details-table">
-                                    <thead>
-                                        <tr>
-                                            <th style="width: 33%;">Item Description</th>
-                                            <th style="width: 42%;">Quantity</th>
-                                            <th style="width: 25%;">Prepaid<br>Deposit</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${mainProductRow}
-                                        ${crossSellProductRow}
-                                    </tbody>
-                                </table>
-                            </main>
-
-                            <footer class="invoice-footer">
-                                <div class="footer-left-content">
-                                    <table>
-                                        <tbody>
-                                            <tr class="highlight-row">
-                                                <td class="total-label">COD</td>
-                                                <td class="total-amount">${formattedGrandTotal}</td>
-                                            </tr>
-                                            <tr>
-                                                <td class="label" style="border-right: none;">Shipping method:</td>
-                                                <td style="border-left: none;">${order[COLUMN_CONFIG.SHIPPING_UNIT] || 'N/A'}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
-                                    <div class="footer-text">
-                                        <div class="thank-you">Thank you for your purchase!</div>
-                                        <div class="contact-us">If you need any assistant, please kindly contact us!</div>
-                                    </div>
+                                <div class="footer-text">
+                                    <div class="thank-you">Thank you for your purchase!</div>
+                                    <div class="contact-us">If you need any assistant, please kindly contact us!</div>
                                 </div>
-                                <img src="https://quickchart.io/qr?text=${encodeURIComponent(qrCodeData)}" alt="QR Code" class="bottom-right-image" onerror="this.style.display='none'">
-                            </footer>
-                        </div>
+                            </div>
+                            <img src="https://quickchart.io/qr?text=${encodeURIComponent(qrCodeData)}" alt="QR Code" class="bottom-right-image" onerror="this.style.display='none'">
+                        </footer>
                     `;
+
+                    // --- Set the static structure ---
+                    invoiceContainer.innerHTML = staticHTML;
+
+                    // --- Safely inject dynamic data using textContent to prevent XSS ---
+                    invoiceContainer.querySelector('[data-field="customer-name"]').textContent = order[COLUMN_CONFIG.CUSTOMER_NAME] || '';
+                    invoiceContainer.querySelector('[data-field="customer-phone"]').textContent = order[COLUMN_CONFIG.PHONE] || '';
+                    invoiceContainer.querySelector('[data-field="customer-address"]').textContent = order[COLUMN_CONFIG.ADDRESS] || '';
+                    invoiceContainer.querySelector('[data-field="sales-rep"]').textContent = salesRepInfo;
+                    invoiceContainer.querySelector('[data-field="grand-total"]').textContent = formattedGrandTotal;
+                    invoiceContainer.querySelector('[data-field="shipping-unit"]').textContent = order[COLUMN_CONFIG.SHIPPING_UNIT] || 'N/A';
+                    
+                    // --- Safely add product rows ---
+                    const orderTableBody = invoiceContainer.querySelector('.order-details-table tbody');
+                    
+                    // Main product row
+                    const mainProductItem = order[COLUMN_CONFIG.MAIN_PRODUCT] || '';
+                    const prepaidAmount = order[COLUMN_CONFIG.PREPAID] || '';
+                    createProductRow(orderTableBody, [mainProductItem, '1', prepaidAmount]); // FIX: Assumed quantity 1 and corrected column order
+
+                    // Cross-sell product row (if it exists)
+                    const crossSellItem = order[COLUMN_CONFIG.CROSS_SELL_ITEM];
+                    if (crossSellItem && String(crossSellItem).trim() !== '') {
+                        const crossSellQty = order[COLUMN_CONFIG.CROSS_SELL_QTY] || '1';
+                        createProductRow(orderTableBody, [crossSellItem, crossSellQty, '']);
+                    }
+                    
+                    // --- Append the completed invoice to the wrapper ---
+                    wrapper.appendChild(invoiceContainer);
                 });
 
-                wrapper.innerHTML = allInvoicesHTML;
                 statusMsg.textContent = `Đã tải thành công ${orders.length} hóa đơn.`;
 
             } catch (error) {
