@@ -241,7 +241,6 @@
 </head>
 <body>
   <div id="loading-overlay">Đang tải dữ liệu...</div>
-  <!-- ĐÃ XÓA .tab-container -->
   <!-- TAB 1: BÁO CÁO CHI TIẾT -->
   <div id="DetailedReport" class="tab-content">
     <div class="report-container">
@@ -271,7 +270,6 @@
               <tr>
                 <th class="green-header">STT<span class="sort-icon"></span></th>
                 <th class="green-header">Sale<span class="sort-icon"></span></th>
-                <!-- Cột Phòng ban MỚI -->
                 <th class="green-header">Phòng ban<span class="sort-icon"></span></th>
                 <th class="green-header">Số data<span class="sort-icon"></span></th>
                 <th class="green-header">Đơn chốt<span class="sort-icon"></span></th>
@@ -280,6 +278,8 @@
                 <th class="blue-header">Doanh số mới<span class="sort-icon"></span></th>
                 <th class="blue-header">Doanh số cũ<span class="sort-icon"></span></th>
                 <th class="blue-header">Tổng doanh số<span class="sort-icon"></span></th>
+                <!-- Cột MỚI: Đã thanh toán -->
+                <th class="blue-header">Đã thanh toán<span class="sort-icon"></span></th> 
                 <th class="yellow-header">Tỉ lệ chốt %<span class="sort-icon"></span></th>
                 <th class="yellow-header">Đơn trung bình<span class="sort-icon"></span></th>
               </tr>
@@ -303,12 +303,13 @@
     let staffDataMap = {}; 
     
     const sortStates = {
-      summary: { column: 2, direction: 'asc' }, // MẶC ĐỊNH: Sắp xếp theo cột Phòng ban (index 2)
+      summary: { column: 2, direction: 'asc' }, // Mặc định: Phòng ban (index 2)
       daily: {}
     };
+    // ĐÃ CẬP NHẬT index cột: Cột mới Đã thanh toán là index 10
     const summaryColumnSortKeys = {
       1: { prop: 'name', type: 'string' }, // Sale
-      2: { prop: 'department', type: 'string' }, // Phòng ban (NEW)
+      2: { prop: 'department', type: 'string' }, // Phòng ban
       3: { prop: 'soData', type: 'number' },
       4: { prop: 'donChot', type: 'number' },
       5: { prop: 'khachCu', type: 'number' },
@@ -316,8 +317,9 @@
       7: { prop: 'doanhThu', type: 'number' },
       8: { prop: 'doanhThuKhachCu', type: 'number' },
       9: { prop: (s) => s.doanhThu + s.doanhThuKhachCu, type: 'number' },
-      10: { prop: (s) => s.soData ? s.donChot / s.soData : 0, type: 'number' },
-      11: { prop: (s) => (s.donChot + s.khachCu) > 0 ? (s.doanhThu + s.doanhThuKhachCu) / (s.donChot + s.khachCu) : 0, type: 'number' }
+      10: { prop: 'paidAmount', type: 'number' }, // ĐÃ THANH TOÁN (NEW)
+      11: { prop: (s) => s.soData ? s.donChot / s.soData : 0, type: 'number' }, // Tỉ lệ chốt
+      12: { prop: (s) => (s.donChot + s.khachCu) > 0 ? (s.doanhThu + s.doanhThuKhachCu) / (s.donChot + s.khachCu) : 0, type: 'number' } // Đơn TB
     };
     // =================================================================================
     // --- II. KHỞI TẠO ỨNG DỤNG ---
@@ -378,6 +380,10 @@
             const revenueData = (revenueResult.data || []).map(r => {
                 const isSuccessfulOrder = (r["TRẠNG THÁI"] === "Success" && r["TRẠNG THÁI VẬN ĐƠN"] !== "Hủy");
                 const isOldCustomerOrder = (r["TRẠNG THÁI"] === "Success (old customer)" && r["TRẠNG THÁI VẬN ĐƠN"] !== "Hủy");
+                
+                // Lấy giá trị Đã thanh toán (SỬ DỤNG KEY CHÍNH XÁC: "Đã thanh toán")
+                const paidAmount = Number(r["Đã thanh toán"]) || 0; 
+
                 return {
                     name: (r["Sale"] || 'N/A').trim(), 
                     ngay: new Date(r["NGÀY GIỜ"]),
@@ -385,7 +391,8 @@
                     doanhThu: isSuccessfulOrder ? (Number(r["GIÁ"]) || 0) : 0,
                     soData: 0, 
                     khachCu: isOldCustomerOrder ? 1 : 0,
-                    doanhThuKhachCu: isOldCustomerOrder ? (Number(r["GIÁ"]) || 0) : 0 
+                    doanhThuKhachCu: isOldCustomerOrder ? (Number(r["GIÁ"]) || 0) : 0,
+                    paidAmount: paidAmount // NEW: Đã thanh toán
                 };
             });
             const dataCountData = (dataCountResult.data || []).map(r => ({
@@ -395,14 +402,15 @@
                 doanhThu: 0,
                 soData: 1, 
                 khachCu: 0,
-                doanhThuKhachCu: 0 
+                doanhThuKhachCu: 0,
+                paidAmount: 0 // Leads không có Đã thanh toán
             }));
             
             masterData = [...revenueData, ...dataCountData].filter(r =>
                 r.name !== 'N/A' && r.ngay instanceof Date && !isNaN(r.ngay)
             );
 
-            // Gán Phòng ban cho dữ liệu master (cần cho việc tổng hợp và sắp xếp)
+            // Gán Phòng ban cho dữ liệu master
             masterData.forEach(r => {
                 r.department = staffDataMap[r.name] || 'N/A';
             });
@@ -503,7 +511,6 @@
       data.forEach(r => {
         const key = r.name;
         if (!summary[key]) {
-          // Lấy department từ masterData (đã được gán ở bước fetch)
           summary[key] = { 
             name: r.name, 
             department: r.department, 
@@ -511,7 +518,8 @@
             donChot: 0, 
             doanhThu: 0, 
             khachCu: 0, 
-            doanhThuKhachCu: 0 
+            doanhThuKhachCu: 0,
+            paidAmount: 0 // NEW: Khởi tạo Đã thanh toán
           };
         }
         const S = summary[key];
@@ -520,6 +528,7 @@
         S.doanhThu += r.doanhThu;
         S.khachCu += r.khachCu; 
         S.doanhThuKhachCu += r.doanhThuKhachCu; 
+        S.paidAmount += r.paidAmount; // NEW: Cộng dồn Đã thanh toán
       });
       return Object.values(summary);
     }
@@ -565,6 +574,7 @@
                   <th class="blue-header">Doanh số mới<span class="sort-icon"></span></th>
                   <th class="blue-header">Doanh số cũ<span class="sort-icon"></span></th>
                   <th class="blue-header">Tổng doanh số<span class="sort-icon"></span></th>
+                  <th class="blue-header">Đã thanh toán<span class="sort-icon"></span></th>
                   <th class="yellow-header">Tỉ lệ chốt %<span class="sort-icon"></span></th>
                   <th class="yellow-header">Đơn trung bình<span class="sort-icon"></span></th>
                 </tr>
@@ -577,7 +587,8 @@
       sortStates.daily = {};
     }
     function generateSummaryTableHTML(dataList) {
-      let total = { soData: 0, donChot: 0, doanhThu: 0, khachCu: 0, doanhThuKhachCu: 0 }; 
+      // THÊM paidAmount vào tổng
+      let total = { soData: 0, donChot: 0, doanhThu: 0, khachCu: 0, doanhThuKhachCu: 0, paidAmount: 0 }; 
       const bodyRowsHtml = dataList.map((s, index) => {
         Object.keys(total).forEach(key => total[key] += s[key] || 0);
         
@@ -590,7 +601,7 @@
           <tr>
             <td class="text-center">${index + 1}</td>
             <td class="text-left sale-name">${s.name}</td> 
-            <td class="text-left department-name">${s.department || 'N/A'}</td> <!-- HIỂN THỊ PHÒNG BAN -->
+            <td class="text-left department-name">${s.department || 'N/A'}</td>
             <td>${formatNumber(s.soData)}</td>
             <td>${formatNumber(s.donChot)}</td>
             <td>${formatNumber(s.khachCu)}</td>
@@ -598,6 +609,7 @@
             <td>${formatCurrency(s.doanhThu)}</td>
             <td>${formatCurrency(s.doanhThuKhachCu)}</td>
             <td>${formatCurrency(tongDoanhSo)}</td>
+            <td>${formatCurrency(s.paidAmount)}</td> <!-- HIỂN THỊ ĐÃ THANH TOÁN -->
             <td>${formatPercent(tiLeChot)}</td>
             <td>${formatCurrency(donTrungBinh)}</td>
           </tr>`;
@@ -608,7 +620,7 @@
       const totalTiLeChot = total.soData ? total.donChot / total.soData : 0;
       const totalDonTrungBinh = totalTongKhach > 0 ? totalTongDoanhSo / totalTongKhach : 0;
 
-      // Cập nhật colspan từ 2 lên 3
+      // Cập nhật colspan từ 3 lên 3
       const totalRowHtml = `
         <tr class="total-row">
           <td class="total-label" colspan="3">TỔNG CỘNG</td>
@@ -619,6 +631,7 @@
           <td class="total-value">${formatCurrency(total.doanhThu)}</td>
           <td class="total-value">${formatCurrency(total.doanhThuKhachCu)}</td>
           <td class="total-value">${formatCurrency(totalTongDoanhSo)}</td>
+          <td class="total-value">${formatCurrency(total.paidAmount)}</td> <!-- TỔNG ĐÃ THANH TOÁN -->
           <td class="total-value">${formatPercent(totalTiLeChot)}</td>
           <td class="total-value">${formatCurrency(totalDonTrungBinh)}</td>
         </tr>`;
@@ -720,7 +733,6 @@
     // =================================================================================
     // --- IX. LOGIC TAB ---
     // =================================================================================
-    // Xóa hàm openTab vì không còn tab
 
     // =================================================================================
     // --- X. CÁC HÀM TIỆN ÍCH (UTILITIES) ---
