@@ -293,12 +293,10 @@
                 <th class="green-header">Marketing<span class="sort-icon"></span></th>
                 <th class="green-header">Số data<span class="sort-icon"></span></th>
                 <th class="green-header">Đơn chốt<span class="sort-icon"></span></th>
-                <!-- Removed Khách cũ column -->
                 <th class="green-header">Tổng khách<span class="sort-icon"></span></th>
                 <th class="blue-header">Doanh số mới<span class="sort-icon"></span></th>
-                <th class="blue-header">Doanh số cũ<span class="sort-icon"></span></th>
                 <th class="blue-header">Tổng doanh số<span class="sort-icon"></span></th>
-                <th class="blue-header">Đã thanh toán<span class="sort-icon"></span></th> <!-- NEW COLUMN -->
+                <th class="blue-header">Đã thanh toán<span class="sort-icon"></span></th>
                 <th class="yellow-header">Tỉ lệ chốt %<span class="sort-icon"></span></th>
                 <th class="yellow-header">Đơn trung bình<span class="sort-icon"></span></th>
               </tr>
@@ -326,19 +324,17 @@
       summary: { column: null, direction: 'asc' },
       daily: {}
     };
-    // Updated summaryColumnSortKeys after removing "Khách cũ" and adding "Đã thanh toán"
+    // Updated summaryColumnSortKeys after removing "Khách cũ" and "Doanh số cũ"
     const summaryColumnSortKeys = {
       1: { prop: 'name', type: 'string' },
       2: { prop: 'soData', type: 'number' },
       3: { prop: 'donChot', type: 'number' },
-      // Index 4 was 'khachCu', now it's 'Tổng khách'
-      4: { prop: (s) => s.donChot + s.khachCu, type: 'number' }, // Tổng khách
+      4: { prop: (s) => s.donChot, type: 'number' }, // Tổng khách (chỉ bao gồm đơn chốt mới)
       5: { prop: 'doanhThu', type: 'number' }, // Doanh số mới
-      6: { prop: 'doanhThuKhachCu', type: 'number' }, // Doanh số cũ
-      7: { prop: (s) => s.doanhThu + s.doanhThuKhachCu, type: 'number' }, // Tổng doanh số
-      8: { prop: 'paidAmount', type: 'number' }, // Đã thanh toán (NEW)
-      9: { prop: (s) => s.soData ? s.donChot / s.soData : 0, type: 'number' }, // Tỉ lệ chốt %
-      10: { prop: (s) => (s.donChot + s.khachCu) > 0 ? (s.doanhThu + s.doanhThuKhachCu) / (s.donChot + s.khachCu) : 0, type: 'number' } // Đơn trung bình
+      6: { prop: (s) => s.doanhThu, type: 'number' }, // Tổng doanh số (chỉ bao gồm doanh số mới)
+      7: { prop: 'paidAmount', type: 'number' }, // Đã thanh toán
+      8: { prop: (s) => s.soData ? s.donChot / s.soData : 0, type: 'number' }, // Tỉ lệ chốt %
+      9: { prop: (s) => s.donChot > 0 ? s.doanhThu / s.donChot : 0, type: 'number' } // Đơn trung bình (chỉ tính trên đơn chốt mới và doanh số mới)
     };
     // =================================================================================
     // --- II. KHỞI TẠO ỨNG DỤNG ---
@@ -387,8 +383,8 @@
             const revenueData = (revenueResult.data || []).map(r => {
                 const isSuccessfulOrder = (r["TRẠNG THÁI"] === "Success" && r["TRẠNG THÁI VẬN ĐƠN"] !== "Hủy");
                 const isOldCustomerOrder = (r["TRẠNG THÁI"] === "Success (old customer)" && r["TRẠNG THÁI VẬN ĐƠN"] !== "Hủy");
-                const isClosedOrder = isSuccessfulOrder || isOldCustomerOrder;
-                
+                const isClosedOrder = isSuccessfulOrder || isOldCustomerOrder; // Paid amount still considers old customer orders
+
                 // === START SỬA ĐỔI: Lấy giá trị Đã thanh toán thực tế ===
                 const paidAmountSource = r[PAID_AMOUNT_API_FIELD]; // Lấy giá trị từ trường API đã định nghĩa
                 const paidAmount = isClosedOrder ? (Number(paidAmountSource) || 0) : 0;
@@ -400,9 +396,10 @@
                     donChot: isSuccessfulOrder ? 1 : 0,
                     doanhThu: isSuccessfulOrder ? (Number(r["GIÁ"]) || 0) : 0,
                     soData: 0, 
-                    khachCu: isOldCustomerOrder ? 1 : 0,
-                    doanhThuKhachCu: isOldCustomerOrder ? (Number(r["GIÁ"]) || 0) : 0,
-                    paidAmount: paidAmount // SỬ DỤNG GIÁ TRỊ THỰC TẾ
+                    // Bỏ các thuộc tính liên quan đến khách hàng cũ
+                    // khachCu: isOldCustomerOrder ? 1 : 0,
+                    // doanhThuKhachCu: isOldCustomerOrder ? (Number(r["GIÁ"]) || 0) : 0,
+                    paidAmount: paidAmount 
                 };
             });
             
@@ -412,9 +409,10 @@
                 donChot: 0,
                 doanhThu: 0,
                 soData: 1, 
-                khachCu: 0,
-                doanhThuKhachCu: 0,
-                paidAmount: 0 // Vẫn giữ là 0 vì data count không liên quan đến paid amount
+                // Bỏ các thuộc tính liên quan đến khách hàng cũ
+                // khachCu: 0,
+                // doanhThuKhachCu: 0,
+                paidAmount: 0 
             }));
             
             masterData = [...revenueData, ...dataCountData].filter(r =>
@@ -512,15 +510,14 @@
       data.forEach(r => {
         const key = r.name;
         if (!summary[key]) {
-          summary[key] = { name: r.name, soData: 0, donChot: 0, doanhThu: 0, khachCu: 0, doanhThuKhachCu: 0, paidAmount: 0 }; // Added paidAmount
+          summary[key] = { name: r.name, soData: 0, donChot: 0, doanhThu: 0, paidAmount: 0 }; // Removed khachCu, doanhThuKhachCu
         }
         const S = summary[key];
         S.soData += r.soData;
         S.donChot += r.donChot;
         S.doanhThu += r.doanhThu;
-        S.khachCu += r.khachCu; 
-        S.doanhThuKhachCu += r.doanhThuKhachCu;
-        S.paidAmount += r.paidAmount; // Aggregate paidAmount
+        // Removed aggregation for khachCu, doanhThuKhachCu
+        S.paidAmount += r.paidAmount;
       });
       return Object.values(summary);
     }
@@ -559,12 +556,10 @@
                   <th class="green-header">Marketing<span class="sort-icon"></span></th>
                   <th class="green-header">Số data<span class="sort-icon"></span></th>
                   <th class="green-header">Đơn chốt<span class="sort-icon"></span></th>
-                  <!-- Removed Khách cũ column from daily breakdown -->
                   <th class="green-header">Tổng khách<span class="sort-icon"></span></th>
                   <th class="blue-header">Doanh số mới<span class="sort-icon"></span></th>
-                  <th class="blue-header">Doanh số cũ<span class="sort-icon"></span></th>
                   <th class="blue-header">Tổng doanh số<span class="sort-icon"></span></th>
-                  <th class="blue-header">Đã thanh toán<span class="sort-icon"></span></th> <!-- NEW COLUMN for daily tables -->
+                  <th class="blue-header">Đã thanh toán<span class="sort-icon"></span></th>
                   <th class="yellow-header">Tỉ lệ chốt %<span class="sort-icon"></span></th>
                   <th class="yellow-header">Đơn trung bình<span class="sort-icon"></span></th>
                 </tr>
@@ -577,12 +572,12 @@
       sortStates.daily = {};
     }
     function generateSummaryTableHTML(dataList) {
-      let total = { soData: 0, donChot: 0, doanhThu: 0, khachCu: 0, doanhThuKhachCu: 0, paidAmount: 0 }; // Added paidAmount to total
+      let total = { soData: 0, donChot: 0, doanhThu: 0, paidAmount: 0 }; // Removed khachCu, doanhThuKhachCu from total
       const bodyRowsHtml = dataList.map((s, index) => {
         Object.keys(total).forEach(key => total[key] += s[key] || 0);
         
-        const tongKhach = s.donChot + s.khachCu;
-        const tongDoanhSo = s.doanhThu + s.doanhThuKhachCu;
+        const tongKhach = s.donChot; // Chỉ còn đơn chốt mới
+        const tongDoanhSo = s.doanhThu; // Chỉ còn doanh số mới
         const tiLeChot = s.soData ? s.donChot / s.soData : 0;
         const donTrungBinh = tongKhach > 0 ? tongDoanhSo / tongKhach : 0;
         
@@ -592,19 +587,17 @@
             <td class="text-left marketing-name">${s.name}</td>
             <td>${formatNumber(s.soData)}</td>
             <td>${formatNumber(s.donChot)}</td>
-            <!-- Removed s.khachCu here -->
             <td>${formatNumber(tongKhach)}</td>
             <td>${formatCurrency(s.doanhThu)}</td>
-            <td>${formatCurrency(s.doanhThuKhachCu)}</td>
             <td>${formatCurrency(tongDoanhSo)}</td>
-            <td>${formatCurrency(s.paidAmount)}</td> <!-- Display paidAmount -->
+            <td>${formatCurrency(s.paidAmount)}</td>
             <td>${formatPercent(tiLeChot)}</td>
             <td>${formatCurrency(donTrungBinh)}</td>
           </tr>`;
       }).join('');
 
-      const totalTongKhach = total.donChot + total.khachCu;
-      const totalTongDoanhSo = total.doanhThu + total.doanhThuKhachCu;
+      const totalTongKhach = total.donChot;
+      const totalTongDoanhSo = total.doanhThu;
       const totalTiLeChot = total.soData ? total.donChot / total.soData : 0;
       const totalDonTrungBinh = totalTongKhach > 0 ? totalTongDoanhSo / totalTongKhach : 0;
 
@@ -613,12 +606,10 @@
           <td class="total-label" colspan="2">TỔNG CỘNG</td>
           <td class="total-value">${formatNumber(total.soData)}</td>
           <td class="total-value">${formatNumber(total.donChot)}</td>
-          <!-- Removed total.khachCu here -->
           <td class="total-value">${formatNumber(totalTongKhach)}</td>
           <td class="total-value">${formatCurrency(total.doanhThu)}</td>
-          <td class="total-value">${formatCurrency(total.doanhThuKhachCu)}</td>
           <td class="total-value">${formatCurrency(totalTongDoanhSo)}</td>
-          <td class="total-value">${formatCurrency(total.paidAmount)}</td> <!-- Display total paidAmount -->
+          <td class="total-value">${formatCurrency(total.paidAmount)}</td>
           <td class="total-value">${formatPercent(totalTiLeChot)}</td>
           <td class="total-value">${formatCurrency(totalDonTrungBinh)}</td>
         </tr>`;
