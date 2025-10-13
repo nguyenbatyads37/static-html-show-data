@@ -614,7 +614,8 @@
                     detailApp.showError('DonChiTiet', 'Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'));
                     return;
                 }
-                globalData = response.rows;
+                //xử lý chỉ lấy dữ liệu có Mã đơn hàng
+                globalData = response.rows.filter(r => r['Mã đơn hàng']);
                 detailApp.populateFilters();
                 detailApp.applyFilters();
             }
@@ -685,7 +686,8 @@
                                 trackingDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
                             } else {
                                 const allCb = document.getElementById('detailTrackingSelectAll');
-                                if (allCb) allCb.checked = trackingDropdown.querySelectorAll('input:checked:not(#detailTrackingSelectAll)').length === 3;
+                                const totalOptions = trackingDropdown.querySelectorAll('input[type="checkbox"]:not(#detailTrackingSelectAll)').length;
+                                if (allCb) allCb.checked = trackingDropdown.querySelectorAll('input:checked:not(#detailTrackingSelectAll)').length === totalOptions;
                             }
                             this.updateFilterButtonText('detailTrackingFilterBtn', 'detailTrackingDropdown', 'detailTrackingSelectAll', 'mã tracking');
                             changeCallback();
@@ -701,11 +703,35 @@
                     allLabel.innerHTML = `<input type="checkbox" id="${selectAllId}"> <b>Chọn tất cả</b>`;
                     dropdown.appendChild(allLabel);
 
+                    // Thêm tùy chọn "Trống" cho tất cả dropdown (trừ tracking vì đã có sẵn)
+                    if (dropdownId !== 'detailTrackingDropdown') {
+                        const emptyLabel = document.createElement('label');
+                        emptyLabel.innerHTML = `<input type="checkbox" value="__EMPTY__"> <em>Trống</em>`;
+                        emptyLabel.querySelector('input').addEventListener('change', () => {
+                            // Đồng bộ checkbox "Chọn tất cả"
+                            const totalOptions = dropdown.querySelectorAll(`input[type="checkbox"]:not(#${selectAllId})`).length;
+                            const selectedOptions = dropdown.querySelectorAll(`input:checked:not(#${selectAllId})`).length;
+                            const selectAllCb = document.getElementById(selectAllId);
+                            if (selectAllCb) selectAllCb.checked = selectedOptions === totalOptions;
+                            
+                            changeCallback();
+                        });
+                        dropdown.appendChild(emptyLabel);
+                    }
+
                     items.forEach(item => {
                         const label = document.createElement('label');
                         const encodedItem = item.replace(/"/g, '&quot;');
                         label.innerHTML = `<input type="checkbox" value="${encodedItem}"> ${item}`;
-                        label.querySelector('input').addEventListener('change', changeCallback);
+                        label.querySelector('input').addEventListener('change', () => {
+                            // Đồng bộ checkbox "Chọn tất cả"
+                            const totalOptions = dropdown.querySelectorAll(`input[type="checkbox"]:not(#${selectAllId})`).length;
+                            const selectedOptions = dropdown.querySelectorAll(`input:checked:not(#${selectAllId})`).length;
+                            const selectAllCb = document.getElementById(selectAllId);
+                            if (selectAllCb) selectAllCb.checked = selectedOptions === totalOptions;
+                            
+                            changeCallback();
+                        });
                         dropdown.appendChild(label);
                     });
 
@@ -721,9 +747,14 @@
                     const selectedCount = dropdown.querySelectorAll(`input:checked:not(#${selectAllId})`).length;
                     const totalCount = dropdown.querySelectorAll(`input[type="checkbox"]:not(#${selectAllId})`).length;
 
-                    if (selectedCount === 0 || selectedCount === totalCount) btn.textContent = `Tất cả ${defaultTextPrefix}`;
-                    else if (selectedCount === 1) btn.textContent = dropdown.querySelector(`input:checked:not(#${selectAllId})`).value;
-                    else btn.textContent = `${selectedCount} ${defaultTextPrefix} đã chọn`;
+                    if (selectedCount === 0 || selectedCount === totalCount) {
+                        btn.textContent = `Tất cả ${defaultTextPrefix}`;
+                    } else if (selectedCount === 1) {
+                        const selectedValue = dropdown.querySelector(`input:checked:not(#${selectAllId})`).value;
+                        btn.textContent = selectedValue === '__EMPTY__' ? 'Trống' : selectedValue;
+                    } else {
+                        btn.textContent = `${selectedCount} ${defaultTextPrefix} đã chọn`;
+                    }
                 },
                 setupControls: function () {
                     const apply = this.applyFilters.bind(this);
@@ -812,14 +843,109 @@
                     const selectedTracking = getSelected('detailTrackingDropdown', 'detailTrackingSelectAll');
                     const selectedShippingUnits = getSelected('detailShippingUnitDropdown', 'detailShippingUnitSelectAll');
 
-                    if (selectedStaff.length > 0) filteredData = filteredData.filter(row => selectedStaff.includes(row["NV Vận đơn"] || row["NV_Vận_đơn"] || ''));
-                    if (selectedProducts.length > 0) filteredData = filteredData.filter(row => selectedProducts.includes(row["Mặt hàng"] || ''));
-                    if (selectedMarkets.length > 0) filteredData = filteredData.filter(row => selectedMarkets.includes(row["Khu vực"] || row["khu vực"] || ''));
-                    if (selectedTeams.length > 0) filteredData = filteredData.filter(row => selectedTeams.includes(row["Team"] || ''));
-                    if (selectedCheckResults.length > 0) filteredData = filteredData.filter(r => selectedCheckResults.includes(r["Kết quả Check"] || ''));
-                    if (selectedDeliveryStatuses.length > 0) filteredData = filteredData.filter(r => selectedDeliveryStatuses.includes(r["Trạng thái giao hàng NB"] || ''));
-                    if (selectedPaymentStatuses.length > 0) filteredData = filteredData.filter(r => selectedPaymentStatuses.includes(r["Trạng thái thu tiền"] || ''));
-                    if (selectedShippingUnits.length > 0) filteredData = filteredData.filter(row => selectedShippingUnits.includes(row["Đơn vị vận chuyển"] || ''));
+                    // Lọc nhân viên vận đơn
+                    if (selectedStaff.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const staffValue = (row["NV Vận đơn"] || row["NV_Vận_đơn"] || '').trim();
+                            const isEmpty = !staffValue;
+                            
+                            return selectedStaff.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && staffValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc sản phẩm
+                    if (selectedProducts.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const productValue = (row["Mặt hàng"] || '').trim();
+                            const isEmpty = !productValue;
+                            
+                            return selectedProducts.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && productValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc khu vực
+                    if (selectedMarkets.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const marketValue = (row["Khu vực"] || row["khu vực"] || '').trim();
+                            const isEmpty = !marketValue;
+                            
+                            return selectedMarkets.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && marketValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc team
+                    if (selectedTeams.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const teamValue = (row["Team"] || '').trim();
+                            const isEmpty = !teamValue;
+                            
+                            return selectedTeams.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && teamValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc kết quả check
+                    if (selectedCheckResults.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const checkValue = (row["Kết quả Check"] || '').trim();
+                            const isEmpty = !checkValue;
+                            
+                            return selectedCheckResults.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && checkValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc trạng thái giao hàng
+                    if (selectedDeliveryStatuses.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const deliveryValue = (row["Trạng thái giao hàng NB"] || '').trim();
+                            const isEmpty = !deliveryValue;
+                            
+                            return selectedDeliveryStatuses.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && deliveryValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc trạng thái thu tiền
+                    if (selectedPaymentStatuses.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const paymentValue = (row["Trạng thái thu tiền"] || '').trim();
+                            const isEmpty = !paymentValue;
+                            
+                            return selectedPaymentStatuses.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && paymentValue === filter;
+                            });
+                        });
+                    }
+                    
+                    // Lọc đơn vị vận chuyển
+                    if (selectedShippingUnits.length > 0) {
+                        filteredData = filteredData.filter(row => {
+                            const shippingValue = (row["Đơn vị vận chuyển"] || '').trim();
+                            const isEmpty = !shippingValue;
+                            
+                            return selectedShippingUnits.some(filter => {
+                                if (filter === '__EMPTY__') return isEmpty;
+                                return !isEmpty && shippingValue === filter;
+                            });
+                        });
+                    }
                     
                     // Thêm logic lọc tracking
                     if (selectedTracking.length > 0) {
