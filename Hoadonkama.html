@@ -131,55 +131,104 @@
             z-index: 1;
         }
 
+        /* --- COMPLEX GRID SUMMARY STYLES --- */
         .summary-container {
-            display: flex;
+            display: grid;
+            /* Use CSS Grid */
+            grid-template-columns: 1fr 1fr 1fr;
+            /* 3-column layout */
             width: 100%;
             border: 1px solid #e0e0e0;
             border-radius: 4px;
+            overflow: hidden;
+            /* Keep borders inside radius */
         }
 
         .summary-item {
-            flex: 1;
-            /* Each item takes equal width */
             text-align: center;
             padding: 8px 4px;
         }
 
-        .summary-item:not(:last-child) {
-            border-right: 1px solid #e0e0e0;
-        }
-
         .summary-label {
-            font-size: 8pt;
+            font-size: 12pt;
             font-weight: bold;
             color: #333;
             margin-bottom: 4px;
         }
 
         .summary-value {
-            font-size: 11pt;
+            font-size: 12pt;
             font-weight: 900;
         }
 
+        /* Grid item placement and borders */
+        .shipping-item {
+            grid-column: 1 / 3;
+            /* Span 2 columns */
+            grid-row: 1 / 2;
+            border-right: 1px solid #e0e0e0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
         .cod-item {
+            grid-column: 3 / 4;
+            /* Span 2 rows */
+            grid-row: 1 / 3;
             background-color: #e8f5e9;
+            /* Vertically center content in the tall cell */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-evenly;
+        }
+
+        .total-item {
+            grid-column: 1 / 2;
+            grid-row: 2 / 3;
+            border-right: 1px solid #e0e0e0;
+        }
+
+        .prepaid-item {
+            grid-column: 2 / 3;
+            grid-row: 2 / 3;
+            border-right: 1px solid #e0e0e0;
+            /* Border from image */
+        }
+
+        /* Specific item styling from image */
+        .shipping-item .summary-label {
+            /* Yellow background */
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 2px;
+        }
+
+        .cod-item .summary-label {
+            font-size: 18pt;
+            align-items: start;
+            /* Larger COD label */
         }
 
         .cod-item .summary-value {
-            font-size: 14pt;
+            font-size: 18pt;
+            align-items: center;
+            justify-content: center;
+            /* Larger COD value */
         }
+
+        /* --- END SUMMARY STYLES --- */
+
 
         .footer-bottom-row {
             display: flex;
             flex-direction: row;
             align-items: center;
-            /* Vertically center QR with text */
             padding-top: 10px;
         }
 
         .footer-text {
             text-align: left;
-            flex-basis: 85%; /* CHANGED: 85% width */
+            flex-basis: 85%;
             padding-right: 5px;
             box-sizing: border-box;
         }
@@ -193,11 +242,9 @@
         }
 
         .bottom-right-image {
-            flex-basis: 15%; /* CHANGED: 15% width */
+            flex-basis: 15%;
             width: 100%;
-            /* Fill its 15% container */
             height: 100px;
-            /* Maintain aspect ratio */
         }
 
         /* Status Message Style */
@@ -263,7 +310,8 @@
             MAIN_PRODUCT: 'SẢN PHẨM',
             PREPAID: 'Đã thanh toán',
             REMAINING: 'Còn lại',
-            SHIPPING_UNIT: 'ĐƠN VỊ VẬN CHUYỂN'
+            SHIPPING_UNIT: 'ĐƠN VỊ VẬN CHUYỂN',
+            PRICE: 'GIÁ'
         };
 
         function parseToNumber(value) {
@@ -331,24 +379,45 @@
                         salesRepInfo += `<br>${salesRepPhone}`;
                     }
 
-                    let productRowsHTML = `
-                        <tr>
-                            <td>Biokama</td>
-                            <td>${order[COLUMN_CONFIG.MAIN_PRODUCT] || ''}</td>
-                            <td>${formatCurrency(prepaidAmount)}</td>
-                        </tr>
-                    `;
+                    // --- FIX START ---
+                    // 1. Initialize an empty string for the product rows.
+                    let productRowsHTML = '';
 
+                    // 2. Conditionally add the main "Biokama" product row.
+                    // It will only be added if there is data in the 'SẢN PHẨM' column.
+                    const mainProductQuantity = order[COLUMN_CONFIG.MAIN_PRODUCT] || '';
+                    const mainProductPrice = parseToNumber(order['GIÁ']);
+
+                    if (mainProductQuantity) {
+                        productRowsHTML += `
+                            <tr>
+                                <td>Biokama</td>
+                                <td>${mainProductQuantity}</td>
+                                <td>${formatCurrency(mainProductPrice)}</td>
+                            </tr>
+                        `;
+                    }
+
+                    // 3. Append rows for each upsale item.
                     if (order.upsaleItems && Array.isArray(order.upsaleItems)) {
                         order.upsaleItems.forEach(item => {
+                            // Assumption: upsale data has a 'Price' column. If not, this will be $0.00
+                            const itemPrice = parseToNumber(item['Price']);
                             productRowsHTML += `
                                 <tr>
                                     <td>${item['Combo'] || ''}</td>
                                     <td>${item['Sản phẩm'] || ''}</td>
-                                    <td></td>
+                                    <td>${formatCurrency(itemPrice)}</td>
                                 </tr>
                             `;
                         });
+                    }
+                    // --- FIX END ---
+
+
+                    let qrCodeHTML = '';
+                    if (qrCodeData) {
+                        qrCodeHTML = `<img src="https://quickchart.io/qr?text=${encodeURIComponent(qrCodeData)}" alt="QR Code" class="bottom-right-image" onerror="this.style.display='none'">`;
                     }
 
                     allInvoicesHTML += `
@@ -388,21 +457,22 @@
 
                             <footer class="invoice-footer">
                                 <div class="summary-container">
-                                    <div class="summary-item">
+                                    <div class="summary-item shipping-item">
                                         <div class="summary-label">Shipping</div>
                                         <div class="summary-value">${order[COLUMN_CONFIG.SHIPPING_UNIT] || 'N/A'}</div>
-                                    </div>
-                                    <div class="summary-item">
-                                        <div class="summary-label">Total Amount</div>
-                                        <div class="summary-value">${formattedTotalAmount}</div>
-                                    </div>
-                                    <div class="summary-item">
-                                        <div class="summary-label">Prepaid</div>
-                                        <div class="summary-value">${formattedPrepaidAmount}</div>
                                     </div>
                                     <div class="summary-item cod-item">
                                         <div class="summary-label">COD</div>
                                         <div class="summary-value">${formattedCodAmount}</div>
+                                    </div>
+                                    
+                                    <div class="summary-item total-item">
+                                        <div class="summary-label">Total Amount</div>
+                                        <div class="summary-value">${formattedTotalAmount}</div>
+                                    </div>
+                                    <div class="summary-item prepaid-item">
+                                        <div class="summary-label">Prepaid</div>
+                                        <div class="summary-value">${formattedPrepaidAmount}</div>
                                     </div>
                                 </div>
                                 
@@ -411,7 +481,9 @@
                                         <div class="thank-you">Thank you for your purchase!</div>
                                         <div class="contact-us">If you need any assistant, please kindly contact us!</div>
                                     </div>
-                                    <img src="https://quickchart.io/qr?text=${encodeURIComponent(qrCodeData)}" alt="QR Code" class="bottom-right-image" onerror="this.style.display='none'">
+                                    
+                                    ${qrCodeHTML}
+
                                 </div>
                             </footer>
                         </div>
