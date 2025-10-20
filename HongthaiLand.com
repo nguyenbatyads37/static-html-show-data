@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sứ Mệnh & Tầm Nhìn Của Chúng Tôi</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;700&family=Playfair+Display:ital,wght@0,700;1,600&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Variables */
+        :root {
+            --primary-color-dark: #6a0000;
+            --primary-color-light: #9a0000;
+            --text-dark: #2c2c2c;
+            --text-light: #fdfdfd;
+            --bg-light: #ffffff;
+            --accent-color: #d4af37; /* Màu vàng Gold sang trọng */
+        }
+
+        /* Base Setup */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Be Vietnam Pro', sans-serif;
+            margin: 0;
+            background-color: var(--primary-color-dark);
+            background-image: 
+                radial-gradient(circle at top right, rgba(255, 255, 255, 0.05), transparent 40%),
+                url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%239a0000' fill-opacity='0.1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%E3E%3C/g%E3E%3C/svg%3E");
+            color: var(--text-light);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        header {
+            padding: 15px 40px;
+            position: fixed;
+            width: 100%;
+            top: 0;
+            left: 0;
+            background: var(--primary-color-dark);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+        }
+
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: 25px;
+        }
+
+        .logo img {
+            max-height: 80px;
+            width: auto;
+            transition: transform 0.3s ease;
+            display: block;
+        }
+        .logo img:hover {
+            transform: scale(1.05);
+        }
+
+        .header-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-light);
+            text-transform: uppercase;
+            line-height: 1.2;
+        }
+
+        /* Main Wrapper */
+        .wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 180px 40px 100px 40px; /* Tăng padding top */
+        }
+
+        /* Main Content Card */
+        .content-card {
+            padding: 60px;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            border-radius: 16px;
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        /* Section Styling */
+        .mission-intro, .core-values, .ceo-message-section {
+            margin-bottom: 80px;
+        }
+        .core-values {
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+            padding: 60px 0;
+        }
+        .ceo-message-section {
+            margin-bottom: 0;
+        }
+
+        /* Typography */
+        h1, h2 {
+            font-family: 'Playfair Display', serif;
+            color: var(--primary-color-dark);
+        }
+        h1 {
+            font-size: 3.8rem;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        h2 {
+            font-size: 2.8rem;
+            text-align: center;
+            margin-bottom: 50px;
+            position: relative;
+        }
+        h2::after {
+            content: '';
+            display: block;
+            width: 70px;
+            height: 4px;
+            background-color: var(--accent-color);
+            margin: 15px auto 0;
+            border-radius: 2px;
+        }
+
+        .mission-statement {
+            text-align: center;
+            font-size: 1.5rem;
+            font-style: italic;
+            font-family: 'Playfair Display', serif;
+            color: #555;
+            padding: 0 30px;
+        }
+        .mission-statement strong {
+            color: var(--primary-color-dark);
+            font-weight: 600;
+        }
+
+        /* Core Values Section */
+        .values-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            text-align: center;
+        }
+        .value-item .icon {
+            color: var(--primary-color-light);
+            margin-bottom: 15px;
+            transition: transform 0.3s ease;
+        }
+        .value-item:hover .icon {
+            transform: translateY(-5px) scale(1.1);
+        }
+        .value-item h3 {
+            font-size: 1.3rem;
+            margin-bottom: 10px;
+            color: var(--primary-color-dark);
+        }
+        .value-item p {
+            font-size: 0.95rem;
+            color: #666;
+            line-height: 1.6;
+        }
+
+        /* Fixed CEO Info Box (Shrink Effect) */
+        .ceo-fixed-container {
+            position: fixed;
+            bottom: 40px;
+            right: 40px;
+            width: 280px;
+            height: 270px; /* Chiều cao gần đúng của card */
+            z-index: 999;
+            opacity: 0;
+            transform: translateY(20px);
+            animation: fadeInBottom 0.8s ease-out forwards 1.5s;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            background: transparent;
+            box-shadow: none;
+        }
+        
+        @keyframes fadeInBottom {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .ceo-info-card {
+            background: var(--bg-light);
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            padding: 20px;
+            padding-top: 100px;
+            position: relative;
+            height: 100%;
+            opacity: 1;
+            transform: scale(1);
+            transition: opacity 0.4s ease, transform 0.4s ease;
+        }
+
+        .ceo-fixed-container .ceo-image-container {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            top: -90px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .ceo-fixed-container .ceo-image-container img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            object-position: center top;
+            filter: drop-shadow(8px 8px 25px rgba(0,0,0,0.3));
+            transition: transform 0.4s ease, filter 0.4s ease;
+        }
+        .ceo-fixed-container:not(.is-shrunk):hover .ceo-image-container img {
+            transform: scale(1.05) translateY(-5px);
+            filter: drop-shadow(10px 15px 30px rgba(0,0,0,0.35));
+        }
+        
+        .ceo-info-card h4, .ceo-info-card .title, .ceo-info-card p {
+            text-align: center;
+        }
+
+        .ceo-info-card h4 {
+            margin: 0 0 5px 0;
+            color: var(--primary-color-dark);
+            font-family: 'Playfair Display', serif;
+            font-size: 1.4rem;
+        }
+        .ceo-info-card .title {
+            font-size: 0.8rem;
+            color: #777;
+            display: block;
+            margin-bottom: 10px;
+        }
+        .ceo-info-card p {
+            margin: 0;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            color: var(--text-dark);
+        }
+
+        /* Shrunk State on Scroll */
+        .ceo-fixed-container.is-shrunk {
+            width: 120px;
+            height: 120px;
+        }
+        .ceo-fixed-container.is-shrunk .ceo-info-card {
+            opacity: 0;
+            transform: scale(0.8);
+            pointer-events: none;
+        }
+        .ceo-fixed-container.is-shrunk .ceo-image-container {
+            width: 120px;
+            height: 120px;
+            top: 0;
+            left: 0;
+            transform: none;
+        }
+
+        .quote {
+            font-style: italic;
+            color: var(--primary-color-dark);
+            border-left: 4px solid var(--accent-color);
+            padding-left: 25px;
+            margin-top: 20px;
+            font-size: 1.4rem;
+            line-height: 1.8;
+            font-family: 'Playfair Display', serif;
+        }
+        .signature {
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-top: 25px;
+            display: block;
+            font-size: 1.1rem;
+            text-align: right;
+        }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 40px;
+            background-color: #1a1a1a;
+            color: #aaa;
+            font-size: 0.9rem;
+        }
+        
+        /* Animation on Scroll */
+        .animate-on-scroll {
+            opacity: 0;
+            transition: opacity 0.8s ease-out, transform 0.8s ease-out;
+        }
+        .animate-on-scroll.fade-in { transform: translateY(30px); }
+        .animate-on-scroll.fade-in-left { transform: translateX(-30px); }
+        .animate-on-scroll.fade-in-right { transform: translateX(30px); }
+        .animate-on-scroll.zoom-in { transform: scale(0.95); }
+        .animate-on-scroll.is-visible { opacity: 1; transform: none; }
+        
+        /* Responsive Design */
+        @media (max-width: 960px) {
+            .ceo-fixed-container { display: none; }
+            .content-card { padding: 40px; }
+        }
+
+        @media (max-width: 768px) {
+            .header-title { font-size: 1.2rem; }
+            .logo img { max-height: 60px; }
+            .wrapper { padding-top: 150px; }
+        }
+
+        @media (max-width: 600px) {
+            .wrapper { padding: 120px 20px 60px 20px; }
+            .content-card { padding: 30px 20px; }
+            h1 { font-size: 2.5rem; }
+            h2 { font-size: 2rem; }
+            .mission-statement { font-size: 1.2rem; padding: 0; }
+            .quote { font-size: 1.2rem; }
+            .signature { text-align: center; }
+            .values-grid { grid-template-columns: 1fr; }
+            .header-content { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .header-title { font-size: 1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <img src="https://www.appsheet.com/template/gettablefileurl?appName=Upcode-325045268&tableName=D%E1%BB%B1%20%C3%A1n&fileName=D%E1%BB%B1%20%C3%A1n_Images%2F948dde99.%E1%BA%A2nh%20Logo.143911.jpg" alt="Logo Công Ty">
+            </div>
+            <div class="header-title">Hệ Thống Giới Thiệu Phòng Cho Thuê Hồng Thái Land</div>
+        </div>
+    </header>
+
+    <div class="wrapper">
+        <main class="content-card">
+            <section class="mission-intro">
+                <h1 class="animate-on-scroll fade-in">Sứ Mệnh & Tầm Nhìn</h1>
+                <p class="mission-statement animate-on-scroll fade-in" style="transition-delay: 0.2s;">
+                    "Kiến tạo một <strong>hệ sinh thái nhà ở</strong> minh bạch và đáng tin cậy, nơi mỗi sinh viên và người đi làm đều có thể tìm thấy một <strong>không gian sống lý tưởng</strong> để an tâm học tập và kiến tạo tương lai."
+                </p>
+            </section>
+
+            <section class="core-values">
+                <h2 class="animate-on-scroll fade-in">Giá Trị Cốt Lõi</h2>
+                <div class="values-grid">
+                    <div class="value-item animate-on-scroll fade-in" style="transition-delay: 0.1s;">
+                        <div class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M7.5 1.765C7.358.81 8.642.81 8.5 1.765l.504 2.898a.5.5 0 0 0 .454.454l2.898.504c.955.142.955 1.442 0 1.584l-2.898.504a.5.5 0 0 0-.454.454l-.504 2.898c-.142.955-1.442.955-1.584 0l-.504-2.898a.5.5 0 0 0-.454-.454l-2.898-.504c-.955-.142-.955-1.442 0-1.584l2.898-.504a.5.5 0 0 0 .454-.454zM3.612 15.47c-.142.955-1.442.955-1.584 0l-.13-1.04a.5.5 0 0 0-.32-.32l-1.04-.13c-.955-.142-.955-1.442 0-1.584l1.04-.13a.5.5 0 0 0 .32-.32l.13-1.04c.142-.955 1.442-.955 1.584 0l.13 1.04a.5.5 0 0 0 .32.32l1.04.13c.955.142.955 1.442 0 1.584l-1.04.13a.5.5 0 0 0-.32.32zM12.5 8.5c-.142.955-1.442.955-1.584 0l-.5-2.5a.5.5 0 0 0-.454-.454l-2.5-.5c-.955-.142-.955-1.442 0-1.584l2.5-.5a.5.5 0 0 0 .454-.454l.5-2.5c.142-.955 1.442-.955 1.584 0l.5 2.5a.5.5 0 0 0 .454.454l2.5.5c.955.142.955 1.442 0 1.584l-2.5.5a.5.5 0 0 0-.454-.454z"/></svg>
+                        </div>
+                        <h3>Tận Tâm</h3>
+                        <p>Lấy khách hàng làm trung tâm, lắng nghe và giải quyết triệt để mọi nhu cầu về nơi ở.</p>
+                    </div>
+                    <div class="value-item animate-on-scroll fade-in" style="transition-delay: 0.3s;">
+                        <div class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M11.251.068a.5.5 0 0 1 .227.58L9.677 6.5H13a.5.5 0 0 1 .364.843l-8 8.5a.5.5 0 0 1-.842-.49L6.323 9.5H3a.5.5 0 0 1-.364-.843l8-8.5a.5.5 0 0 1 .615-.09zM4.157 8.5H7a.5.5 0 0 1 .478.647L6.11 13.59l5.732-6.09H9a.5.5 0 0 1-.478-.647L10.89 1.41z"/></svg>
+                        </div>
+                        <h3>Minh Bạch</h3>
+                        <p>Mọi thông tin về giá, diện tích, và tình trạng phòng đều được xác thực và công khai rõ ràng.</p>
+                    </div>
+                    <div class="value-item animate-on-scroll fade-in" style="transition-delay: 0.5s;">
+                        <div class="icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" fill="currentColor" viewBox="0 0 16 16"><path d="M8 1a2 2 0 0 1 2 2v4H6V3a2 2 0 0 1 2-2m3 6V3a3 3 0 0 0-6 0v4a2 2 0 0 0-2 2v5a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2"/></svg>
+                        </div>
+                        <h3>An Toàn</h3>
+                        <p>Xây dựng cộng đồng chủ nhà và người thuê đáng tin cậy, đảm bảo an toàn tuyệt đối cho người dùng.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="ceo-message-section">
+                <p class="animate-on-scroll fade-in-left" style="font-size: 1.1rem; color: #555;">
+                    "Sự nghiệp của một con người bắt đầu từ những bước chân đầu tiên, và một nơi ở ổn định chính là điểm tựa vững chắc cho những bước chân đó. Tôi đã từng là một sinh viên, cũng từng chật vật tìm kiếm một căn phòng nhỏ để bắt đầu hành trình của mình. Sự thấu cảm sâu sắc đó chính là ngọn lửa đã thôi thúc tôi và đội ngũ tạo nên nền tảng này."
+                </p>
+                <p class="quote animate-on-scroll fade-in-right" style="transition-delay: 0.2s;">
+                    Chúng tôi không chỉ cho thuê phòng, chúng tôi kiến tạo nên những tổ ấm, nơi bạn có thể tái tạo năng lượng sau mỗi ngày dài và nuôi dưỡng những ước mơ lớn lao.
+                </p>
+                <span class="signature animate-on-scroll fade-in" style="transition-delay: 0.4s;">- Tên CEO, Người Sáng Lập & CEO -</span>
+            </section>
+        </main>
+    </div>
+
+    <aside class="ceo-fixed-container">
+        <div class="ceo-image-container">
+            <img src="https://www.appsheet.com/template/gettablefileurl?appName=Upcode-325045268&tableName=D%E1%BB%B1%20%C3%A1n&fileName=D%E1%BB%B1%20%C3%A1n_Images%2F0ac9c8f1.%E1%BA%A2nh%20Logo.092520.png" alt="Chân dung Người Sáng Lập">
+        </div>
+        <div class="ceo-info-card">
+            <h4>Tên CEO</h4>
+            <span class="title">Người Sáng Lập & CEO</span>
+            <p>Với hơn 10 năm kinh nghiệm, ông/bà [Tên CEO] luôn khao khát mang đến giải pháp nhà ở tối ưu cho thế hệ trẻ Việt Nam.</p>
+        </div>
+    </aside>
+
+    <footer>
+        <p>&copy; 2025 [Tên Công Ty Của Bạn]. Kiến tạo không gian sống lý tưởng.</p>
+    </footer>
+
+    <script>
+        // JavaScript for Animation on Scroll
+        document.addEventListener("DOMContentLoaded", function() {
+            const observerOptions = {
+                root: null,
+                rootMargin: '0px',
+                threshold: 0.1
+            };
+
+            const observer = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-visible');
+                        observer.unobserve(entry.target);
+                    }
+                });
+            }, observerOptions);
+
+            const animatedElements = document.querySelectorAll('.animate-on-scroll');
+            animatedElements.forEach(el => observer.observe(el));
+
+            // JavaScript for shrinking CEO box on scroll
+            const ceoContainer = document.querySelector('.ceo-fixed-container');
+            document.addEventListener("scroll", function() {
+                if (window.scrollY > 50) { // A small threshold
+                    ceoContainer.classList.add('is-shrunk');
+                } else {
+                    ceoContainer.classList.remove('is-shrunk');
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
+
