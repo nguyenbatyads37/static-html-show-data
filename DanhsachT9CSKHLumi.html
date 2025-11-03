@@ -179,12 +179,10 @@
       border-right: none;
     }
     
-    /* === START: CSS ĐỂ ẨN CỘT THAO TÁC === */
     #orderTable th:last-child,
     #orderTable td:last-child {
         display: none;
     }
-    /* === END: CSS ĐỂ ẨN CỘT THAO TÁC === */
 
     td.editable {
       position: relative;
@@ -315,7 +313,6 @@
       width: 300px;
     }
 
-    /* Column filter styles */
     .column-filter {
       position: sticky;
       top: 50px;
@@ -353,7 +350,6 @@
       cursor: pointer;
     }
 
-    /* Pagination styles */
     .pagination {
       display: flex;
       justify-content: center;
@@ -395,7 +391,6 @@
       display: none !important;
     }
 
-    /* Filter row in table header */
     .filter-row {
       background: #e2e8f0;
     }
@@ -428,7 +423,6 @@
       background: #e53e3e;
     }
 
-    /* Filter dropdown */
     .filter-wrapper {
       position: relative;
     }
@@ -533,7 +527,6 @@
       display: none;
     }
 
-    /* Statistics section */
     .statistics-section {
       background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
       border-radius: 10px;
@@ -642,7 +635,6 @@
         </thead>
         <tbody id="tableBody">
           <tr>
-            <!-- === CẬP NHẬT COLSPAN TỪ 13 THÀNH 12 === -->
             <td colspan="12" style="text-align: center; padding: 30px;">
               Đang tải dữ liệu...
             </td>
@@ -685,9 +677,8 @@
     const itemsPerPage = 100;
     let filters = {};
     let sortColumn = null;
-    let sortDirection = null; // 'asc' or 'desc'
+    let sortDirection = null;
 
-    // Define all columns
     const allColumns = [
       'Ngày lên đơn', 'Name*', 'Phone*', 'Add',
       'Mặt hàng', 'Giá bán', 'Loại tiền thanh toán', 'Tổng tiền VNĐ',
@@ -695,15 +686,12 @@
       'CSKH', 'Trạng thái'
     ];
 
-    // Initialize filters for all columns - now using array of selected values
     allColumns.forEach(col => {
       filters[col] = [];
     });
     
-    // Define date columns
     const dateColumns = ['Ngày lên đơn', 'Ngày đối soát doanh thu'];
 
-    // Load data from Firebase
     async function loadData() {
       const statusIndicator = document.getElementById('statusIndicator');
       const tableBody = document.getElementById('tableBody');
@@ -719,7 +707,10 @@
         tableData = data || {};
 
         const urlParams = new URLSearchParams(window.location.search);
-        const nvFilter = urlParams.get('nv');
+        
+        // === THAY ĐỔI Ở ĐÂY: Chấp nhận cả "nv" và "NV" ===
+        const nvFilter = urlParams.get('nv') || urlParams.get('NV');
+        
         if (nvFilter) {
           const decodedNvFilter = decodeURIComponent(nvFilter);
           filters['CSKH'] = [decodedNvFilter];
@@ -750,7 +741,6 @@
       }
     }
 
-    // Render table with pagination and filters
     function renderTable() {
       const tableBody = document.getElementById('tableBody');
       const thead = document.querySelector('#orderTable thead');
@@ -768,7 +758,6 @@
       if (filteredData.length === 0) {
         tableBody.innerHTML = `
           <tr>
-            <!-- === CẬP NHẬT COLSPAN TỪ 13 THÀNH 12 === -->
             <td colspan="12" style="text-align: center; padding: 30px;">
               ${Object.keys(tableData).length === 0 ? 'Chưa có dữ liệu.' : 'Không tìm thấy dữ liệu phù hợp với bộ lọc.'}
             </td>
@@ -792,7 +781,6 @@
       attachSortHandlers();
     }
     
-    // Attach sort handlers to headers
     function attachSortHandlers() {
       const headers = document.querySelectorAll('#orderTable thead th');
       headers.forEach((header, index) => {
@@ -806,14 +794,25 @@
       });
     }
     
-    // Update filtered count display
     function updateFilteredCount(count) {
       const filteredCountEl = document.getElementById('filteredCount');
       const totalCount = Object.keys(tableData).length;
       
       if (totalCount > 0) {
-        if (count < totalCount) {
-          filteredCountEl.textContent = `📊 Đã lọc: ${count}/${totalCount} dòng`;
+        // We compare against the pre-filtered September data count for a more accurate message
+        const septemberTotal = Object.values(tableData).filter(row => {
+            const dateString = row['Ngày lên đơn'];
+            if (!dateString) return false;
+            try {
+                const orderDate = new Date(dateString);
+                return !isNaN(orderDate.getTime()) && orderDate.getMonth() === 8;
+            } catch {
+                return false;
+            }
+        }).length;
+
+        if (count < septemberTotal) {
+          filteredCountEl.textContent = `📊 Đã lọc: ${count}/${septemberTotal} dòng`;
           filteredCountEl.style.display = 'inline-block';
         } else {
           filteredCountEl.style.display = 'none';
@@ -823,11 +822,23 @@
       }
     }
     
-    // Apply filters to data
     function applyFilters() {
       const dataArray = Object.entries(tableData);
-      
-      return dataArray.filter(([key, row]) => {
+
+      const septemberData = dataArray.filter(([key, row]) => {
+        const dateString = row['Ngày lên đơn'];
+        if (!dateString) {
+          return false;
+        }
+        try {
+          const orderDate = new Date(dateString);
+          return !isNaN(orderDate.getTime()) && orderDate.getMonth() === 8;
+        } catch (e) {
+          return false;
+        }
+      });
+
+      return septemberData.filter(([key, row]) => {
         return allColumns.every(column => {
           const selectedValues = filters[column] || [];
           if (selectedValues.length === 0) return true;
@@ -838,11 +849,7 @@
             
             let cellDate;
             try {
-              if (cellValue.includes('T')) {
-                cellDate = new Date(cellValue);
-              } else {
-                cellDate = new Date(cellValue);
-              }
+              cellDate = cellValue.includes('T') ? new Date(cellValue) : new Date(cellValue);
             } catch (e) {
               return false;
             }
@@ -872,8 +879,7 @@
         });
       });
     }
-    
-    // Render filter row
+
     function renderFilterRow(thead) {
       if (thead.querySelector('.filter-row')) {
         return;
@@ -983,7 +989,6 @@
       thead.appendChild(filterRow);
     }
     
-    // Get unique values for a column
     function getUniqueValues(column) {
       const values = Object.values(tableData)
         .map(row => String(row[column] || ''));
@@ -991,7 +996,6 @@
       return [...new Set(values)].sort();
     }
     
-    // Toggle filter dropdown
     function toggleFilterDropdown(index) {
       const allDropdowns = document.querySelectorAll('.filter-dropdown');
       const targetDropdown = document.getElementById(`filter-dropdown-${index}`);
@@ -1005,7 +1009,6 @@
       });
     }
     
-    // Toggle filter value
     function toggleFilterValue(column, value, checked) {
       if (checked) {
         if (!filters[column].includes(value)) {
@@ -1028,7 +1031,6 @@
       }
     }
     
-    // Apply date filter
     function applyDateFilter(column, fromDate, toDate) {
       if (fromDate && toDate) {
         filters[column] = ['date_range', fromDate, toDate];
@@ -1044,7 +1046,6 @@
       renderTable();
     }
     
-    // Close dropdowns when clicking outside
     document.addEventListener('click', function(event) {
       if (!event.target.closest('.filter-wrapper')) {
         document.querySelectorAll('.filter-dropdown').forEach(dd => {
@@ -1053,7 +1054,6 @@
       }
     });
 
-    // Format date from ISO to DD/MM/YYYY
     function formatDate(dateString) {
       if (!dateString) return '';
       
@@ -1071,7 +1071,6 @@
       }
     }
 
-    // Create a table row
     function createTableRow(key, row) {
       const dateFields = ['Ngày lên đơn'];
       
@@ -1113,7 +1112,6 @@
         `;
       }).join('');
       
-      // The action buttons are still generated in the DOM, but hidden by CSS.
       return `
         <tr data-key="${key}">
           ${cells}
@@ -1125,7 +1123,6 @@
       `;
     }
 
-    // Update cell value
     function updateCell(key, field, value) {
       if (!tableData[key]) {
         tableData[key] = {};
@@ -1134,7 +1131,6 @@
       hasUnsavedChanges = true;
     }
     
-    // Update cell value and save immediately
     async function updateCellAndSave(key, field, value) {
       updateCell(key, field, value);
       await saveAllChanges(false);
@@ -1142,7 +1138,6 @@
       updateStatistics();
     }
 
-    // Update status via dropdown and save immediately
     async function updateStatusAndSave(key, value) {
       if (!tableData[key]) {
         tableData[key] = {};
@@ -1154,7 +1149,6 @@
       updateStatistics();
     }
 
-    // Save all changes to Firebase
     async function saveAllChanges(renderAfterSave = false) {
       const statusIndicator = document.getElementById('statusIndicator');
       
@@ -1184,7 +1178,6 @@
       }
     }
 
-    // Mark as processed
     async function markAsProcessed(key) {
       if (!tableData[key]) return;
       
@@ -1197,7 +1190,6 @@
       updateStatistics();
     }
 
-    // Delete a row
     async function deleteRow(key) {
       if (!confirm('Bạn có chắc chắn muốn xóa dòng này?')) {
         return;
@@ -1209,7 +1201,6 @@
       saveAllChanges();
     }
 
-    // Add new row
     function addNewRow() {
       const newKey = 'don_' + Date.now();
       tableData[newKey] = {
@@ -1223,7 +1214,6 @@
       showNotification('Đã thêm dòng mới. Nhớ lưu sau khi chỉnh sửa!', 'info');
     }
 
-    // Search functionality
     document.getElementById('searchInput').addEventListener('input', function(e) {
       const searchTerm = e.target.value.toLowerCase();
       const rows = document.querySelectorAll('#tableBody tr[data-key]');
@@ -1234,7 +1224,6 @@
       });
     });
 
-    // Show notification
     function showNotification(message, type = 'info') {
       const notification = document.createElement('div');
       notification.className = `notification ${type}`;
@@ -1246,7 +1235,6 @@
       }, 3000);
     }
 
-    // Warn before closing if there are unsaved changes
     window.addEventListener('beforeunload', function(e) {
       if (hasUnsavedChanges) {
         e.preventDefault();
@@ -1254,7 +1242,6 @@
       }
     });
 
-    // Pagination functions
     function changePage(direction) {
       const dataArray = Object.entries(tableData);
       const totalPages = Math.ceil(dataArray.length / itemsPerPage);
@@ -1281,7 +1268,6 @@
       btnNext.disabled = currentPage === totalPages || totalItems === 0;
     }
 
-    // Clear all filters
     function clearAllFilters() {
       allColumns.forEach(col => {
         filters[col] = [];
@@ -1299,7 +1285,6 @@
       showNotification('Đã xóa tất cả bộ lọc', 'success');
     }
 
-    // Sort data function
     function sortData(data) {
       if (!sortColumn || !sortDirection) return data;
       
@@ -1320,7 +1305,6 @@
       });
     }
 
-    // Update sort icons
     function updateSortIcons() {
       const headers = document.querySelectorAll('#orderTable thead th');
       headers.forEach((header, index) => {
@@ -1333,7 +1317,6 @@
       });
     }
 
-    // Handle column header click for sorting
     function handleSort(columnName) {
       if (sortColumn === columnName) {
         sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
@@ -1346,14 +1329,15 @@
       renderTable();
     }
 
-    // Calculate and display statistics
     function updateStatistics() {
       const statisticsSection = document.getElementById('statisticsSection');
       const statisticsGrid = document.getElementById('statisticsGrid');
       
       if (!statisticsSection || !statisticsGrid) return;
       
-      if (Object.keys(tableData).length === 0) {
+      const dataForStats = applyFilters().map(item => item[1]);
+
+      if (dataForStats.length === 0) {
         statisticsSection.style.display = 'none';
         return;
       }
@@ -1361,7 +1345,7 @@
       const cskhStats = {};
       const saleColumnName = 'Nhân viên Sale';
       
-      Object.values(tableData).forEach(row => {
+      dataForStats.forEach(row => {
         const cskhValue = String(row['CSKH'] || '').trim();
         if (!cskhValue) return;
         
@@ -1404,7 +1388,6 @@
       statisticsSection.style.display = 'block';
     }
 
-    // Make functions globally available
     window.loadData = loadData;
     window.saveAllChanges = saveAllChanges;
     window.addNewRow = addNewRow;
@@ -1417,7 +1400,6 @@
     window.markAsProcessed = markAsProcessed;
     window.handleSort = handleSort;
 
-    // Load data on page load
     loadData();
   </script>
 </body>
