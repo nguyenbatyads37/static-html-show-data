@@ -769,6 +769,20 @@
       background: #f0f0f0;
     }
 
+    .date-filter-input {
+      padding: 8px 12px;
+      border: 1px solid #cbd5e0;
+      border-radius: 5px;
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .date-filter-input:focus {
+      outline: none;
+      border-color: #48bb78;
+      box-shadow: 0 0 0 3px rgba(72, 187, 120, 0.1);
+    }
+
     .filter-option input[type="checkbox"] {
       cursor: pointer;
       width: 16px;
@@ -871,6 +885,16 @@
           </div>
         </div>
       </div>
+      <div class="filter-grid-advanced" style="margin-top: 15px;">
+        <div class="filter-group">
+          <label class="filter-label">📅 Tính tổng từ ngày:</label>
+          <input type="date" id="dateFrom" class="date-filter-input" placeholder="Từ ngày">
+        </div>
+        <div class="filter-group">
+          <label class="filter-label">📅 Tính tổng đến ngày:</label>
+          <input type="date" id="dateTo" class="date-filter-input" placeholder="Đến ngày">
+        </div>
+      </div>
       <div style="text-align: center;">
         <button class="apply-filters-btn" onclick="applyAdvancedFilters()">🔍 Áp Dụng & Tính Tổng</button>
         <button class="apply-filters-btn" onclick="clearAdvancedFilters()" style="background: #f56565; margin-left: 10px;">🗑️ Xóa Bộ Lọc</button>
@@ -906,6 +930,7 @@
             <th>Ngày đối soát doanh thu</th>
             <th>CSKH</th>
             <th>Nhân viên Sale</th>
+            <th>Địa chỉ</th>
             <th>Trạng thái</th>
           </tr>
         </thead>
@@ -970,7 +995,9 @@
       product: [],
       sale: [],
       cskh: [],
-      region: []
+      region: [],
+      dateFrom: '',
+      dateTo: ''
     };
     
     // Drag selection variables
@@ -989,7 +1016,7 @@
       'Ngày lên đơn', 'Name*', 'Phone*', 'Add',
       'Mặt hàng', 'Giá bán', 'Loại tiền thanh toán', 'Tổng tiền VNĐ',
       'Tiền VNĐ', 'Ngày đối soát doanh thu',
-      'CSKH', 'Nhân viên Sale', 'Trạng thái'
+      'CSKH', 'Nhân viên Sale', 'Địa chỉ', 'Trạng thái'
     ];
 
     allColumns.forEach(col => {
@@ -2419,12 +2446,38 @@
       const cskhOptions = document.querySelectorAll('#cskhFilterOptions input[type="checkbox"]:checked');
       const regionOptions = document.querySelectorAll('#regionFilterOptions input[type="checkbox"]:checked');
       
+      // Get date values
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo = document.getElementById('dateTo').value;
+      
       advancedFiltersActive = {
         product: Array.from(productOptions).map(opt => opt.value),
         sale: Array.from(saleOptions).map(opt => opt.value),
         cskh: Array.from(cskhOptions).map(opt => opt.value),
-        region: Array.from(regionOptions).map(opt => opt.value)
+        region: Array.from(regionOptions).map(opt => opt.value),
+        dateFrom: dateFrom,
+        dateTo: dateTo
       };
+      
+      function isDateInRange(dateStr, dateFrom, dateTo) {
+        if (!dateStr) return true;
+        if (!dateFrom && !dateTo) return true;
+        
+        const date = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+        if (isNaN(date.getTime())) return true;
+        
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom + 'T00:00:00');
+          if (date < fromDate) return false;
+        }
+        
+        if (dateTo) {
+          const toDate = new Date(dateTo + 'T23:59:59');
+          if (date > toDate) return false;
+        }
+        
+        return true;
+      }
       
       const filteredData = Object.entries(tableData).filter(([key, row]) => {
         const productMatch = advancedFiltersActive.product.length === 0 || advancedFiltersActive.product.includes(String(row['Mặt hàng'] || ''));
@@ -2438,18 +2491,41 @@
         return productMatch && saleMatch && cskhMatch && regionMatch;
       });
       
-      // Calculate statistics for filtered data
+      // Calculate statistics for filtered data WITHIN date range
       const totalAmount = filteredData.reduce((sum, [key, row]) => {
-        const amount = parseFloat(String(row['Tổng tiền VNĐ'] || row['Tiền VNĐ'] || '0').replace(/[^\d.-]/g, '')) || 0;
-        return sum + amount;
+        // Check if order date is in range for calculation (only check "Ngày lên đơn")
+        const orderDateMatch = isDateInRange(String(row['Ngày lên đơn'] || ''), dateFrom, dateTo);
+        
+        // Only include in calculation if date matches (or no date filter)
+        if (orderDateMatch) {
+          const amount = parseFloat(String(row['Tổng tiền VNĐ'] || row['Tiền VNĐ'] || '0').replace(/[^\d.-]/g, '')) || 0;
+          return sum + amount;
+        }
+        return sum;
       }, 0);
+      
+      // Count orders in date range
+      const ordersInDateRange = filteredData.filter(([key, row]) => {
+        const orderDateMatch = isDateInRange(String(row['Ngày lên đơn'] || ''), dateFrom, dateTo);
+        return orderDateMatch;
+      }).length;
       
       const resultDiv = document.getElementById('advancedFilterResults');
       const statsDiv = document.getElementById('advancedFilterStats');
       
       let filterInfo = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: center; margin-bottom: 12px;">';
-      filterInfo += '<div><div style="font-weight: 600; color: #666;">Số đơn hàng:</div><div style="font-size: 18px; font-weight: 600; color: #48bb78;">' + filteredData.length + '</div></div>';
-      filterInfo += '<div><div style="font-weight: 600; color: #666;">Tổng tiền:</div><div style="font-size: 18px; font-weight: 600; color: #48bb78;">' + formatNumber(totalAmount) + ' VNĐ</div></div>';
+      
+      // Show different info based on whether date filter is applied
+      if (dateFrom || dateTo) {
+        filterInfo += '<div><div style="font-weight: 600; color: #666;">Tổng đơn được lọc:</div><div style="font-size: 16px; font-weight: 600; color: #666;">' + filteredData.length + '</div></div>';
+        filterInfo += '<div><div style="font-weight: 600; color: #666;">Đơn trong khoảng ngày:</div><div style="font-size: 18px; font-weight: 600; color: #48bb78;">' + ordersInDateRange + '</div></div>';
+        filterInfo += '</div>';
+        filterInfo += '<div style="display: grid; grid-template-columns: 1fr; gap: 10px; text-align: center; margin-bottom: 12px;">';
+        filterInfo += '<div><div style="font-weight: 600; color: #666;">Tổng tiền trong khoảng ngày:</div><div style="font-size: 20px; font-weight: 600; color: #e53e3e;">' + formatNumber(totalAmount) + ' VNĐ</div></div>';
+      } else {
+        filterInfo += '<div><div style="font-weight: 600; color: #666;">Số đơn hàng:</div><div style="font-size: 18px; font-weight: 600; color: #48bb78;">' + filteredData.length + '</div></div>';
+        filterInfo += '<div><div style="font-weight: 600; color: #666;">Tổng tiền:</div><div style="font-size: 18px; font-weight: 600; color: #48bb78;">' + formatNumber(totalAmount) + ' VNĐ</div></div>';
+      }
       filterInfo += '</div>';
       
       if (advancedFiltersActive.product.length > 0) {
@@ -2477,12 +2553,16 @@
     }
     
     function clearAdvancedFilters() {
-      advancedFiltersActive = { product: [], sale: [], cskh: [], region: [] };
+      advancedFiltersActive = { product: [], sale: [], cskh: [], region: [], dateFrom: '', dateTo: '' };
       
       // Uncheck all checkboxes
       document.querySelectorAll('.filter-options input[type="checkbox"]').forEach(checkbox => {
         checkbox.checked = false;
       });
+      
+      // Clear date inputs
+      document.getElementById('dateFrom').value = '';
+      document.getElementById('dateTo').value = '';
       
       document.getElementById('advancedFilterResults').style.display = 'none';
       
@@ -2560,4 +2640,5 @@
   </script>
 </body>
 </html>
+
 
