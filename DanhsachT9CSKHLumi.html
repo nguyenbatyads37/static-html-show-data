@@ -1384,11 +1384,7 @@
           }).join('');
           
           return `
-            <td class="editable" data-key="${key}" data-field="${field}"
-                onmousedown="handleCellMouseDown(event, '${key}', '${field}')"
-                onmouseenter="handleCellMouseEnter(event, '${key}', '${field}')"
-                onmouseup="handleCellMouseUp(event, '${key}', '${field}')"
-                oncontextmenu="handleCellRightClick(event, '${key}', '${field}')">
+            <td class="editable" data-key="${key}" data-field="${field}">
               <select onchange="updateStatusAndSave('${key}', this.value)" style="width: 100%; border: none; background: transparent; font-size: 13px; font-family: inherit; padding: 5px;">
                 <option value="">-- Chọn trạng thái --</option>
                 ${options}
@@ -1743,58 +1739,15 @@
     }
     
     function updateRowSelectionUI() {
-      const rows = document.querySelectorAll('#tableBody tr[data-key]');
-      rows.forEach(row => {
-        const key = row.getAttribute('data-key');
-        if (selectedRows.has(key)) {
-          row.classList.add('selected');
-        } else {
-          row.classList.remove('selected');
-        }
-      });
+      // Row selection UI is now deprecated
+      // Using cell selection instead
     }
     
     function updateSelectionStats() {
-      const selectionStatsPanel = document.getElementById('selectionStats');
-      const selectionStatsContent = document.getElementById('selectionStatsContent');
-      
-      if (selectedRows.size === 0) {
-        selectionStatsPanel.classList.remove('show');
-        return;
-      }
-      
-      const selectedData = Array.from(selectedRows)
-        .map(key => tableData[key])
-        .filter(row => row);
-      
-      const stats = calculateSelectionStatistics(selectedData);
-      
-      selectionStatsContent.innerHTML = `
-        <div class="selection-stat-item">
-          <span class="selection-stat-label">Số dòng chọn:</span>
-          <span class="selection-stat-value">${selectedRows.size}</span>
-        </div>
-        <div class="selection-stat-item">
-          <span class="selection-stat-label">Tổng tiền VNĐ:</span>
-          <span class="selection-stat-value">${formatNumber(stats.total)}</span>
-        </div>
-        <div class="selection-stat-item">
-          <span class="selection-stat-label">Trung bình:</span>
-          <span class="selection-stat-value">${formatNumber(stats.average)}</span>
-        </div>
-        <div class="selection-stat-item">
-          <span class="selection-stat-label">Tối thiểu:</span>
-          <span class="selection-stat-value">${formatNumber(stats.min)}</span>
-        </div>
-        <div class="selection-stat-item">
-          <span class="selection-stat-label">Tối đa:</span>
-          <span class="selection-stat-value">${formatNumber(stats.max)}</span>
-        </div>
-      `;
-      
-      selectionStatsPanel.classList.add('show');
+      // This function is now replaced by cell selection logic in updateCellSelectionUI()
+      // Keeping it for backward compatibility
     }
-    
+
     function calculateSelectionStatistics(data) {
       const amounts = data
         .map(row => {
@@ -1822,7 +1775,8 @@
     
     function closeSelectionStats() {
       selectedRows.clear();
-      updateRowSelectionUI();
+      selectedCells.clear();
+      updateCellSelectionUI();
       document.getElementById('selectionStats').classList.remove('show');
     }
     
@@ -2092,6 +2046,47 @@
       }, 0);
     }
     
+    function updateSelectionStats() {
+      const selectionStatsPanel = document.getElementById('selectionStats');
+      const selectionStatsContent = document.getElementById('selectionStatsContent');
+      
+      if (selectedRows.size === 0) {
+        selectionStatsPanel.classList.remove('show');
+        return;
+      }
+      
+      const selectedData = Array.from(selectedRows)
+        .map(key => tableData[key])
+        .filter(row => row);
+      
+      const stats = calculateSelectionStatistics(selectedData);
+      
+      selectionStatsContent.innerHTML = `
+        <div class="selection-stat-item">
+          <span class="selection-stat-label">Số dòng chọn:</span>
+          <span class="selection-stat-value">${selectedRows.size}</span>
+        </div>
+        <div class="selection-stat-item">
+          <span class="selection-stat-label">Tổng tiền VNĐ:</span>
+          <span class="selection-stat-value">${formatNumber(stats.total)}</span>
+        </div>
+        <div class="selection-stat-item">
+          <span class="selection-stat-label">Trung bình:</span>
+          <span class="selection-stat-value">${formatNumber(stats.average)}</span>
+        </div>
+        <div class="selection-stat-item">
+          <span class="selection-stat-label">Tối thiểu:</span>
+          <span class="selection-stat-value">${formatNumber(stats.min)}</span>
+        </div>
+        <div class="selection-stat-item">
+          <span class="selection-stat-label">Tối đa:</span>
+          <span class="selection-stat-value">${formatNumber(stats.max)}</span>
+        </div>
+      `;
+      
+      selectionStatsPanel.classList.add('show');
+    }
+    
     function updateCellSelectionUI() {
       // Remove previous highlights
       document.querySelectorAll('td.cell-selected, td.cell-drag-selecting').forEach(cell => {
@@ -2106,6 +2101,55 @@
           cellElement.classList.add('cell-selected');
         }
       });
+      
+      // Check if selection contains "Tiền VNĐ" column
+      const hasMoneyColumn = Array.from(selectedCells).some(cell => {
+        const [, field] = cell.split('-');
+        return field === 'Tiền VNĐ';
+      });
+      
+      // Only show stats panel if selection contains "Tiền VNĐ" column
+      const selectionStatsPanel = document.getElementById('selectionStats');
+      if (hasMoneyColumn && selectedCells.size > 0) {
+        const selectedData = Array.from(selectedCells)
+          .map(cell => {
+            const [key] = cell.split('-');
+            return tableData[key];
+          })
+          .filter((row, idx, arr) => arr.indexOf(row) === idx); // Remove duplicates
+        
+        if (selectedData.length > 0) {
+          const stats = calculateSelectionStatistics(selectedData);
+          const selectionStatsContent = document.getElementById('selectionStatsContent');
+          
+          selectionStatsContent.innerHTML = `
+            <div class="selection-stat-item">
+              <span class="selection-stat-label">Số ô chọn:</span>
+              <span class="selection-stat-value">${selectedCells.size}</span>
+            </div>
+            <div class="selection-stat-item">
+              <span class="selection-stat-label">Tổng tiền VNĐ:</span>
+              <span class="selection-stat-value">${formatNumber(stats.total)}</span>
+            </div>
+            <div class="selection-stat-item">
+              <span class="selection-stat-label">Trung bình:</span>
+              <span class="selection-stat-value">${formatNumber(stats.average)}</span>
+            </div>
+            <div class="selection-stat-item">
+              <span class="selection-stat-label">Tối thiểu:</span>
+              <span class="selection-stat-value">${formatNumber(stats.min)}</span>
+            </div>
+            <div class="selection-stat-item">
+              <span class="selection-stat-label">Tối đa:</span>
+              <span class="selection-stat-value">${formatNumber(stats.max)}</span>
+            </div>
+          `;
+          
+          selectionStatsPanel.classList.add('show');
+        }
+      } else {
+        selectionStatsPanel.classList.remove('show');
+      }
     }
     
     function copyCellSelection() {
@@ -2516,3 +2560,4 @@
   </script>
 </body>
 </html>
+
