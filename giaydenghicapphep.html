@@ -301,6 +301,10 @@
             padding: 20mm 15mm;
             page-break-after: always;
         }
+        .dangky-page:last-child {
+             page-break-after: auto;
+        }
+
 
         .dangky-bks {
             text-align: center;
@@ -334,15 +338,26 @@
             padding: 10px;
             background: #f9f9f9;
             overflow: auto;
+            min-height: 150px; /* Thêm chiều cao tối thiểu để thông báo lỗi dễ thấy hơn */
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .dangky-image-wrapper img {
-            max-width: 300%;
-            width: 80%;
+            max-width: 100%; /* Sửa lại cho phù hợp với trang A4 */
             height: auto;
             object-fit: contain;
             display: block;
             margin: 0 auto;
+        }
+        
+        .error-message {
+            color: red;
+            font-size: 12pt;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
         }
 
         /* ===== PRINT STYLES ===== */
@@ -378,22 +393,17 @@
                 display: block !important;
             }
 
-            .page-container {
+            .page-container,
+            .dangky-page {
                 width: 210mm;
-                min-height: 297mm;
+                min-height: 297mm; /* Đảm bảo chiều cao trang in */
                 margin: 0;
-                padding: 15mm 15mm 15mm 25mm;
+                padding: 15mm 15mm 15mm 25mm; /* Đồng nhất padding */
                 box-shadow: none;
                 page-break-after: always;
             }
-
-            .dangky-page {
-                width: 210mm;
-                min-height: 297mm;
-                margin: 0;
-                padding: 20mm 15mm;
-                box-shadow: none;
-                page-break-after: always;
+             .dangky-page {
+                padding: 20mm 15mm; /* Padding riêng cho trang đăng ký */
             }
 
             .dangky-page:last-child {
@@ -402,6 +412,8 @@
 
             .dangky-image-wrapper {
                 overflow: visible !important;
+                background: #fff;
+                border: 1px solid #ccc;
             }
 
             .dangky-image-wrapper img {
@@ -459,13 +471,13 @@
                     GIẤY ĐỀ NGHỊ CẤP LẠI GIẤY PHÉP VẬN TẢI ĐƯỜNG BỘ QUỐC TẾ GIỮA VIỆT NAM VÀ TRUNG QUỐC
                 </div>
                 <div class="recipient">
-                    <strong>Kính gửi: Sở Xây dựng Lạng Sơn</strong>
+                    <strong>Kính gửi: Sở Giao thông vận tải Lạng Sơn</strong>
                 </div>
                 <div class="main-content">
                     <p>1. Tên đơn vị vận tải: <strong id="company-name-content">...</strong></p>
                     <p>2. Địa chỉ: <span id="address">...</span></p>
                     <p>3. Điện thoại: <span id="phone">...</span></p>
-                    <p>4. Giấy phép kinh doanh vận tải bằng xe ô tô số 243282/GPKDVT, ngày cấp: 18/10/2024; nơi cấp: Sở
+                    <p>4. Giấy phép kinh doanh vận tải bằng xe ô tô số <span id="dkkd">...</span>, ngày cấp: <span id="dkkd-date">...</span>; nơi cấp: Sở
                         Giao thông vận tải Lạng Sơn.</p>
                     <p>5. Đề nghị cấp lại Giấy phép vận tải loại <span id="request-type"
                             style="color: red; font-weight: bold;">...</span> cho các phương tiện sau:</p>
@@ -534,309 +546,176 @@
 
             const getParam = (key, defaultValue = '') => {
                 const rawValue = urlParams.get(key);
-                if (rawValue) {
-                    try {
-                        return decodeURIComponent(rawValue);
-                    } catch (e) {
-                        return rawValue;
-                    }
-                }
-                return defaultValue;
+                return rawValue ? decodeURIComponent(rawValue) : defaultValue;
             };
 
+            // --- ĐIỀN DỮ LIỆU CHUNG ---
             const companyName = getParam('tencongty', 'TÊN CÔNG TY');
-            document.getElementById('company-name-header').textContent = companyName;
+            document.getElementById('company-name-header').textContent = companyName.toUpperCase();
             document.getElementById('company-name-content').textContent = companyName;
 
             const fields = {
-                'so': { id: 'doc-number', default: '...' },
-                'diachi': { id: 'address', default: '...' },
-                'sdt': { id: 'phone', default: '...' },
-                'nguoilienhe': { id: 'contact-person', default: '...' },
-                'sdtlh': { id: 'contact-phone', default: '...' },
-                'loaidenghi': { id: 'request-type', default: '...' },
-                'giamdoc': { id: 'director-name', default: 'Lục Diệu Na' }
+                'so': 'doc-number', 'diachi': 'address', 'sdt': 'phone',
+                'dkkd': 'dkkd', 'ngaycapdkkd': 'dkkd-date',
+                'nguoilienhe': 'contact-person', 'sdtlh': 'contact-phone',
+                'loaidenghi': 'request-type', 'giamdoc': 'director-name',
+                'mahoso': 'ho-so-content', 'ngaycaplandau': 'ngay-cap-landau-content'
             };
-
-            for (const [param, config] of Object.entries(fields)) {
-                const value = getParam(param, config.default);
-                const element = document.getElementById(config.id);
+            
+            Object.entries(fields).forEach(([param, id]) => {
+                const element = document.getElementById(id);
                 if (element) {
-                    element.textContent = value;
+                    element.textContent = getParam(param, '...');
                 }
-                if (config.id === 'request-type') {
-                    const element2 = document.getElementById('request-type-2');
-                    if (element2) element2.textContent = value;
-                }
-            }
+            });
 
-            const loaiChuKy = getParam('loaichuky');
+            const requestType = getParam('loaidenghi', '...');
+            document.getElementById('request-type-2').textContent = requestType;
+
+            // --- XỬ LÝ CHỮ KÝ ---
             const directorNameElement = document.getElementById('director-name');
-
-            if (directorNameElement) {
-                if (loaiChuKy.toLowerCase() !== 'chữ ký') {
-                    directorNameElement.style.visibility = 'hidden';
-                } else {
-                    directorNameElement.style.visibility = 'visible';
-                }
+            if (getParam('loaichuky').toLowerCase() !== 'chữ ký') {
+                 if(directorNameElement) directorNameElement.style.visibility = 'hidden';
             }
 
-            const maHoSo = getParam('mahoso', '...');
-            const ngayCapLanDau = getParam('ngaycaplandau', '...');
-
-            const hoSoContentSpan = document.getElementById('ho-so-content');
-            const ngayCapContentSpan = document.getElementById('ngay-cap-landau-content');
-
-            if (hoSoContentSpan) {
-                hoSoContentSpan.textContent = maHoSo;
-            }
-            if (ngayCapContentSpan) {
-                ngayCapContentSpan.textContent = ngayCapLanDau;
-            }
-
-            if (!urlParams.has('ngaythang')) {
-                const today = new Date();
-                document.getElementById('date-place').textContent =
-                    `Lạng Sơn, ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
+            // --- XỬ LÝ NGÀY THÁNG ---
+            const datePlaceElement = document.getElementById('date-place');
+            if (urlParams.has('ngaythang')) {
+                datePlaceElement.textContent = getParam('ngaythang');
             } else {
-                document.getElementById('date-place').textContent = getParam('ngaythang');
+                const today = new Date();
+                datePlaceElement.textContent = `Lạng Sơn, ngày ${today.getDate()} tháng ${today.getMonth() + 1} năm ${today.getFullYear()}`;
             }
 
+            // --- ĐIỀN BẢNG DỮ LIỆU XE ---
             const dataString = getParam('data');
             if (dataString) {
                 const tableBody = document.getElementById('table-body');
                 const rows = dataString.split('_b_');
-
                 rows.forEach((rowData, index) => {
-                    if (rowData && rowData.trim()) {
-                        let cells = rowData.split('_a_');
-                        const row = document.createElement('tr');
-
-                        const sttCell = document.createElement('td');
-                        sttCell.textContent = index + 1;
-                        row.appendChild(sttCell);
-
-                        const dataToInsert = [];
-                        dataToInsert.push(cells[0] || '');
-                        dataToInsert.push(cells[1] || '');
-                        dataToInsert.push(cells[2] || '');
-                        dataToInsert.push(cells[3] || '');
-
-                        let thoiGianDN = cells[4] || '';
-                        if (thoiGianDN.startsWith('14T')) {
-                            thoiGianDN = thoiGianDN.substring(2).trim();
-                        }
-                        dataToInsert.push(thoiGianDN);
-                        dataToInsert.push(cells[5] || '');
-                        dataToInsert.push(cells[6] || '');
-                        dataToInsert.push(cells[7] || '');
-
-                        dataToInsert.forEach(cellData => {
-                            const cell = document.createElement('td');
-                            cell.textContent = cellData;
-                            row.appendChild(cell);
-                        });
-
-                        tableBody.appendChild(row);
-                    }
+                    if (!rowData.trim()) return;
+                    const cells = rowData.split('_a_').map(cell => cell.trim());
+                    const row = tableBody.insertRow();
+                    row.insertCell().textContent = index + 1;
+                    cells.forEach(cellData => {
+                        row.insertCell().textContent = cellData;
+                    });
                 });
             }
 
+            // --- HIỂN THỊ CON DẤU & CHỮ KÝ ---
             const signatureContainer = document.querySelector('.signature-container');
             const sealUrl = getParam('condau');
             const signatureUrl = getParam('chuki');
 
-            if (sealUrl && sealUrl.startsWith('http')) {
-                const sealImg = document.createElement('img');
-                sealImg.src = sealUrl;
-                sealImg.className = 'seal';
-                sealImg.alt = 'Con dấu';
-                sealImg.onerror = function () {
-                    console.error('Không thể tải ảnh con dấu:', sealUrl);
-                    this.style.display = 'none';
+            const createImage = (src, alt, className) => {
+                const img = document.createElement('img');
+                img.src = src;
+                img.alt = alt;
+                img.className = className;
+                img.onerror = () => {
+                    console.error(`Không thể tải ảnh: ${alt}`, src);
+                    img.style.display = 'none';
                 };
-                signatureContainer.appendChild(sealImg);
-            }
+                return img;
+            };
 
-            if (signatureUrl && signatureUrl.startsWith('http')) {
-                const signImg = document.createElement('img');
-                signImg.src = signatureUrl;
-                signImg.className = 'signature';
-                signImg.alt = 'Chữ ký';
-                signImg.onerror = function () {
-                    console.error('Không thể tải ảnh chữ ký:', signatureUrl);
-                    this.style.display = 'none';
-                };
-                signatureContainer.appendChild(signImg);
-            }
+            if (sealUrl) signatureContainer.appendChild(createImage(sealUrl, 'Con dấu', 'seal'));
+            if (signatureUrl) signatureContainer.appendChild(createImage(signatureUrl, 'Chữ ký', 'signature'));
 
-            let linkAnhRaw = urlParams.get('linkanh');
+             // --- TAB 2: TẠO CÁC TRANG ĐĂNG KÝ XE ---
             const dangkyContainer = document.getElementById('dangky-container');
+            const linkAnhData = getParam('linkanh');
 
-            let linkAnh = '';
-            if (linkAnhRaw) {
-                try {
-                    linkAnh = decodeURIComponent(linkAnhRaw);
-                } catch (e) {
-                    linkAnh = linkAnhRaw;
-                }
-            }
-
-            if (linkAnh && linkAnh.trim()) {
-                let pages = [];
-                if (linkAnh.includes('_b_')) {
-                    pages = linkAnh.split('_b_');
-                } else {
-                    pages = [linkAnh];
-                }
-
-                pages.forEach((pageData, pageIndex) => {
-                    if (pageData && pageData.trim()) {
-                        const cells = pageData.split('_a_');
-
-                        if (cells.length > 1) {
-                            let bks = '';
-                            let linkDangKyTruoc = '';
-                            let linkDangKySau = '';
-                            
-                            // Heuristic to determine structure based on whether the second element is a URL
-                            const firstCell = cells[1] ? cells[1].trim() : '';
-                            if (firstCell.toLowerCase().startsWith('http')) {
-                                bks = ''; // Or some default if BKS is not provided in this format
-                                linkDangKyTruoc = firstCell;
-                                linkDangKySau = cells[2] ? cells[2].trim() : '';
-                            } else {
-                                bks = firstCell;
-                                linkDangKyTruoc = cells[2] ? cells[2].trim() : '';
-                                linkDangKySau = cells[3] ? cells[3].trim() : '';
-                            }
-
-                            createDangKyPage(dangkyContainer, bks, linkDangKyTruoc, linkDangKySau);
-                        }
+            if (linkAnhData.trim()) {
+                const pages = linkAnhData.split('_b_');
+                pages.forEach(pageData => {
+                    if (!pageData.trim()) return;
+                    const parts = pageData.split('_a_').map(p => p.trim());
+                     // Cấu trúc dự kiến: [STT, BKS, Link mặt trước, Link mặt sau] hoặc [Link mặt trước, Link mặt sau]
+                    let bks = '', linkTruoc = '', linkSau = '';
+                    if (parts[0].toLowerCase().startsWith('http')) {
+                        // Không có BKS trong dữ liệu
+                        linkTruoc = parts[0];
+                        linkSau = parts[1] || '';
+                    } else {
+                        bks = parts[1] || 'Không rõ BKS';
+                        linkTruoc = parts[2] || '';
+                        linkSau = parts[3] || '';
                     }
+                    createDangKyPage(dangkyContainer, bks, linkTruoc, linkSau);
                 });
             } else {
-                const noDataDiv = document.createElement('div');
-                noDataDiv.style.textAlign = 'center';
-                noDataDiv.style.padding = '50px';
-                noDataDiv.style.fontSize = '14pt';
-                noDataDiv.style.color = '#666';
-                noDataDiv.textContent = 'Không có dữ liệu đăng ký xe. Vui lòng truyền tham số "linkanh" trong URL.';
-                dangkyContainer.appendChild(noDataDiv);
-            }
-
-            function createImageSection(label, imageUrl, bks) {
-                if (!imageUrl || imageUrl === 'null' || imageUrl.trim() === '') {
-                    return null;
-                }
-                
-                const container = document.createElement('div');
-                container.className = 'dangky-image-container';
-
-                const labelDiv = document.createElement('div');
-                labelDiv.className = 'dangky-image-label';
-                labelDiv.textContent = label;
-                container.appendChild(labelDiv);
-
-                const wrapper = document.createElement('div');
-                wrapper.className = 'dangky-image-wrapper';
-
-                const img = document.createElement('img');
-                let finalUrl = imageUrl.trim();
-
-                try {
-                    while (finalUrl.includes('%')) {
-                        const decoded = decodeURIComponent(finalUrl);
-                        if (decoded === finalUrl) break;
-                        finalUrl = decoded;
-                    }
-                } catch (e) {
-                    console.log('Giữ nguyên URL sau khi giải mã thất bại:', finalUrl);
-                }
-
-                if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-                    console.error('Định dạng URL không hợp lệ:', finalUrl);
-                    const errorDiv = document.createElement('div');
-                    errorDiv.textContent = 'URL không hợp lệ';
-                    errorDiv.style.color = 'red';
-                    errorDiv.style.fontSize = '12pt';
-                    errorDiv.style.padding = '20px';
-                    wrapper.appendChild(errorDiv);
-                } else {
-                    img.src = finalUrl;
-                    img.alt = `BKS ${bks} - ${label}`;
-                    img.loading = 'lazy';
-                    img.onerror = function () {
-                        console.error(`Lỗi tải ảnh (${label}):`, finalUrl);
-                        this.style.display = 'none';
-                        const errorDiv = document.createElement('div');
-                        errorDiv.textContent = 'Lỗi tải ảnh';
-                        errorDiv.style.color = 'red';
-                        errorDiv.style.fontSize = '12pt';
-                        errorDiv.style.padding = '20px';
-                        this.parentElement.appendChild(errorDiv);
-                    };
-                    wrapper.appendChild(img);
-                }
-                container.appendChild(wrapper);
-                return container;
-            }
-
-            function createDangKyPage(container, bks, linkDangKyTruoc, linkDangKySau) {
-                const pageDiv = document.createElement('div');
-                pageDiv.className = 'dangky-page';
-
-                const bksDiv = document.createElement('div');
-                bksDiv.className = 'dangky-bks';
-                bksDiv.textContent = `Ảnh giấy đăng ký xe: ${bks || 'Không có thông tin'}`;
-                pageDiv.appendChild(bksDiv);
-                
-                const truocSection = createImageSection('MẶT TRƯỚC', linkDangKyTruoc, bks);
-                if (truocSection) {
-                    pageDiv.appendChild(truocSection);
-                }
-
-                const sauSection = createImageSection('MẶT SAU', linkDangKySau, bks);
-                if (sauSection) {
-                    pageDiv.appendChild(sauSection);
-                }
-
-                container.appendChild(pageDiv);
+                dangkyContainer.innerHTML = '<div class="error-message">Không có dữ liệu ảnh đăng ký xe.</div>';
             }
         });
 
-        function printTab(tabId) {
-            const content = document.getElementById(tabId);
-            if (!content) return;
+        function createImageSection(label, imageUrl, bks) {
+            const container = document.createElement('div');
+            container.className = 'dangky-image-container';
 
-            content.classList.add('printing');
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'dangky-image-label';
+            labelDiv.textContent = label;
+            container.appendChild(labelDiv);
 
-            const allTabs = document.querySelectorAll('.tab-content');
-            allTabs.forEach(tab => {
-                if (tab.id !== tabId) {
-                    tab.style.display = 'none';
-                }
-            });
+            const wrapper = document.createElement('div');
+            wrapper.className = 'dangky-image-wrapper';
 
-            window.print();
-
-            content.classList.remove('printing');
-            allTabs.forEach(tab => {
-                // Restore default display by removing inline style
-                tab.style.display = ''; 
-            });
+            if (!imageUrl || imageUrl === 'null' || !imageUrl.trim().toLowerCase().startsWith('http')) {
+                wrapper.innerHTML = `<div class="error-message">Không có ảnh ${label.toLowerCase()}</div>`;
+            } else {
+                const img = document.createElement('img');
+                img.src = imageUrl.trim();
+                img.alt = `BKS ${bks} - ${label}`;
+                img.loading = 'lazy';
+                img.onerror = function () {
+                    this.style.display = 'none';
+                    wrapper.innerHTML = `<div class="error-message">Lỗi tải ảnh. <br>URL có thể không công khai hoặc đã hết hạn.</div>`;
+                };
+                wrapper.appendChild(img);
+            }
+            container.appendChild(wrapper);
+            return container;
         }
 
+        function createDangKyPage(container, bks, linkDangKyTruoc, linkDangKySau) {
+            const pageDiv = document.createElement('div');
+            pageDiv.className = 'dangky-page';
+
+            const bksDiv = document.createElement('div');
+            bksDiv.className = 'dangky-bks';
+            bksDiv.textContent = `Ảnh giấy đăng ký xe: ${bks}`;
+            pageDiv.appendChild(bksDiv);
+            
+            pageDiv.appendChild(createImageSection('MẶT TRƯỚC', linkDangKyTruoc, bks));
+            pageDiv.appendChild(createImageSection('MẶT SAU', linkDangKySau, bks));
+
+            container.appendChild(pageDiv);
+        }
+
+        function printTab(tabId) {
+            const activeTab = document.querySelector('.tab-content.active');
+            const targetTab = document.getElementById(tabId);
+            
+            if(activeTab) activeTab.classList.remove('active');
+            if(targetTab) targetTab.classList.add('active', 'printing');
+
+            window.print();
+            
+            if(targetTab) targetTab.classList.remove('active', 'printing');
+            if(activeTab) activeTab.classList.add('active');
+        }
 
         document.querySelectorAll('.tab-link').forEach(link => {
             link.addEventListener('click', function () {
-                const targetTab = this.getAttribute('data-tab');
-                document.querySelectorAll('.tab-link').forEach(l => l.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                const targetTabId = this.getAttribute('data-tab');
+                document.querySelectorAll('.tab-link.active, .tab-content.active').forEach(el => el.classList.remove('active'));
                 this.classList.add('active');
-                document.getElementById(targetTab).classList.add('active');
+                document.getElementById(targetTabId).classList.add('active');
             });
         });
+
     </script>
 </body>
 
