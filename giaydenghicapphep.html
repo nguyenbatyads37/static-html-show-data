@@ -315,20 +315,37 @@
             border-bottom: 2px solid #000;
         }
 
+        .dangky-image-container {
+            width: 100%;
+            margin-bottom: 30px;
+        }
+
+        .dangky-image-container:last-child {
+            margin-bottom: 0;
+        }
+
+        .dangky-image-label {
+            text-align: center;
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
         .dangky-image-wrapper {
             width: 100%;
             text-align: center;
             border: 1px solid #ddd;
             padding: 10px;
             background: #f9f9f9;
-            min-height: 200px; /* Tăng chiều cao tối thiểu */
+            overflow: auto;
+            min-height: 150px; /* Thêm chiều cao tối thiểu để thông báo lỗi dễ thấy hơn */
             display: flex;
             justify-content: center;
             align-items: center;
         }
 
         .dangky-image-wrapper img {
-            max-width: 100%;
+            max-width: 100%; /* Sửa lại cho phù hợp với trang A4 */
             height: auto;
             object-fit: contain;
             display: block;
@@ -379,16 +396,14 @@
             .page-container,
             .dangky-page {
                 width: 210mm;
-                min-height: 297mm;
+                min-height: 297mm; /* Đảm bảo chiều cao trang in */
                 margin: 0;
+                padding: 15mm 15mm 15mm 25mm; /* Đồng nhất padding */
                 box-shadow: none;
                 page-break-after: always;
             }
-             .page-container {
-                 padding: 15mm 15mm 15mm 25mm;
-             }
              .dangky-page {
-                padding: 20mm 15mm;
+                padding: 20mm 15mm; /* Padding riêng cho trang đăng ký */
             }
 
             .dangky-page:last-child {
@@ -489,6 +504,8 @@
                 <div class="main-content">
                     <p>6. Người liên hệ: <span id="contact-person">...</span>, Điện thoại: <span
                             id="contact-phone">...</span></p>
+                    <!-- Hai dòng đã được yêu cầu xóa đã được loại bỏ khỏi đây -->
+                </div>
                 <div class="footer-section">
                     <div class="footer-left">
                         <strong>Nơi nhận:</strong><br>
@@ -525,7 +542,6 @@
 
             const getParam = (key, defaultValue = '') => {
                 const rawValue = urlParams.get(key);
-                // Chỉ decode nếu có giá trị, tránh lỗi với giá trị null
                 return rawValue ? decodeURIComponent(rawValue) : defaultValue;
             };
 
@@ -549,9 +565,6 @@
                 }
             });
 
-            const requestType = getParam('loaidenghi', '...');
-            document.getElementById('request-type-2').textContent = requestType;
-
             // --- XỬ LÝ CHỮ KÝ ---
             const directorNameElement = document.getElementById('director-name');
             if (getParam('loaichuky').toLowerCase() !== 'chữ ký') {
@@ -569,17 +582,12 @@
 
             // --- ĐIỀN BẢNG DỮ LIỆU XE ---
             const dataString = getParam('data');
-            let bksList = [];
             if (dataString) {
                 const tableBody = document.getElementById('table-body');
                 const rows = dataString.split('_b_');
                 rows.forEach((rowData, index) => {
                     if (!rowData.trim()) return;
                     const cells = rowData.split('_a_').map(cell => cell.trim());
-                    // Lấy BKS từ cột đầu tiên của dữ liệu và lưu lại
-                    if (cells[0]) {
-                        bksList.push(cells[0]);
-                    }
                     const row = tableBody.insertRow();
                     row.insertCell().textContent = index + 1;
                     cells.forEach(cellData => {
@@ -608,33 +616,63 @@
             if (sealUrl) signatureContainer.appendChild(createImage(sealUrl, 'Con dấu', 'seal'));
             if (signatureUrl) signatureContainer.appendChild(createImage(signatureUrl, 'Chữ ký', 'signature'));
 
-            // --- TAB 2: TẠO CÁC TRANG ĐĂNG KÝ XE ---
+             // --- TAB 2: TẠO CÁC TRANG ĐĂNG KÝ XE ---
             const dangkyContainer = document.getElementById('dangky-container');
             const linkAnhData = getParam('linkanh');
 
             if (linkAnhData.trim()) {
-                const imageSets = linkAnhData.split('_b_');
-                imageSets.forEach((imageSet, index) => {
-                    if (!imageSet.trim()) return;
-                    
-                    // Tìm URL hợp lệ đầu tiên trong set ảnh này
-                    const imageUrl = imageSet.split('_a_')
-                                           .map(p => p.trim())
-                                           .find(p => p.toLowerCase().startsWith('http'));
-
-                    // Lấy BKS tương ứng từ danh sách đã tạo
-                    const bks = bksList[index] || 'Không rõ BKS';
-                    
-                    if (imageUrl) {
-                        createDangKyPage(dangkyContainer, bks, imageUrl);
+                const pages = linkAnhData.split('_b_');
+                pages.forEach(pageData => {
+                    if (!pageData.trim()) return;
+                    const parts = pageData.split('_a_').map(p => p.trim());
+                     // Cấu trúc dự kiến: [STT, BKS, Link mặt trước, Link mặt sau] hoặc [Link mặt trước, Link mặt sau]
+                    let bks = '', linkTruoc = '', linkSau = '';
+                    if (parts[0].toLowerCase().startsWith('http')) {
+                        // Không có BKS trong dữ liệu
+                        linkTruoc = parts[0];
+                        linkSau = parts[1] || '';
+                    } else {
+                        bks = parts[1] || 'Không rõ BKS';
+                        linkTruoc = parts[2] || '';
+                        linkSau = parts[3] || '';
                     }
+                    createDangKyPage(dangkyContainer, bks, linkTruoc, linkSau);
                 });
             } else {
                 dangkyContainer.innerHTML = '<div class="error-message">Không có dữ liệu ảnh đăng ký xe.</div>';
             }
         });
 
-        function createDangKyPage(container, bks, imageUrl) {
+        function createImageSection(label, imageUrl, bks) {
+            const container = document.createElement('div');
+            container.className = 'dangky-image-container';
+
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'dangky-image-label';
+            labelDiv.textContent = label;
+            container.appendChild(labelDiv);
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'dangky-image-wrapper';
+
+            if (!imageUrl || imageUrl === 'null' || !imageUrl.trim().toLowerCase().startsWith('http')) {
+                wrapper.innerHTML = `<div class="error-message">Không có ảnh ${label.toLowerCase()}</div>`;
+            } else {
+                const img = document.createElement('img');
+                img.src = imageUrl.trim();
+                img.alt = `BKS ${bks} - ${label}`;
+                img.loading = 'lazy';
+                img.onerror = function () {
+                    this.style.display = 'none';
+                    wrapper.innerHTML = `<div class="error-message">Lỗi tải ảnh. <br>URL có thể không công khai hoặc đã hết hạn.</div>`;
+                };
+                wrapper.appendChild(img);
+            }
+            container.appendChild(wrapper);
+            return container;
+        }
+
+        function createDangKyPage(container, bks, linkDangKyTruoc, linkDangKySau) {
             const pageDiv = document.createElement('div');
             pageDiv.className = 'dangky-page';
 
@@ -642,21 +680,10 @@
             bksDiv.className = 'dangky-bks';
             bksDiv.textContent = `Ảnh giấy đăng ký xe: ${bks}`;
             pageDiv.appendChild(bksDiv);
-
-            const wrapper = document.createElement('div');
-            wrapper.className = 'dangky-image-wrapper';
-
-            const img = document.createElement('img');
-            img.src = imageUrl;
-            img.alt = `Ảnh đăng ký xe ${bks}`;
-            img.loading = 'lazy';
-            img.onerror = function () {
-                this.style.display = 'none';
-                wrapper.innerHTML = `<div class="error-message">Lỗi tải ảnh. <br>URL có thể không công khai hoặc đã hết hạn.</div>`;
-            };
             
-            wrapper.appendChild(img);
-            pageDiv.appendChild(wrapper);
+            pageDiv.appendChild(createImageSection('MẶT TRƯỚC', linkDangKyTruoc, bks));
+            pageDiv.appendChild(createImageSection('MẶT SAU', linkDangKySau, bks));
+
             container.appendChild(pageDiv);
         }
 
@@ -669,13 +696,8 @@
 
             window.print();
             
-            // Khôi phục lại trạng thái tab sau khi in
-             if(targetTab) targetTab.classList.remove('printing');
-             if (activeTab && activeTab !== targetTab) {
-                activeTab.classList.add('active');
-             } else if (!activeTab) {
-                document.getElementById('tab1').classList.add('active'); // Mặc định về tab 1 nếu không có tab nào active
-             }
+            if(targetTab) targetTab.classList.remove('active', 'printing');
+            if(activeTab) activeTab.classList.add('active');
         }
 
         document.querySelectorAll('.tab-link').forEach(link => {
