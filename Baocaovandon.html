@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Cáo FFM Thanh Toán</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* --- BASE STYLES --- */
+        :root {
+            --primary-color: #4A6E23;
+            --primary-light: #8BC34A;
+            --primary-dark: #2E4617;
+            --secondary-color: #FFC107;
+            --accent-color: #2196F3;
+            --text-dark: #333;
+            --text-medium: #555;
+            --bg-light: #f8f9fa;
+            --border-color: #e0e0e0;
+            --success-color: #4CAF50;
+            --warning-color: #FF9800;
+            --font-main: 'Roboto', Arial, sans-serif;
+            --overall-total-bg: #8BC34A;
+            --overall-total-text: white;
+            --header-bg: #4A6E23;
+            --header-text: white;
+            --sticky-cell-bg: #ffffff; /* NEW: Solid background for sticky cells */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-main);
+            padding: 20px;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 20px;
+        }
+
+        /* --- CONTROLS / FILTERS --- */
+        .controls-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            gap: 15px;
+            flex-wrap: wrap;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .controls-header .user-info {
+            font-weight: 700;
+            font-size: 1.1em;
+            color: var(--primary-dark);
+        }
+
+        .controls-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .controls-group label {
+            font-weight: 500;
+            color: var(--text-medium);
+            white-space: nowrap;
+        }
+
+        .controls-group input[type="date"],
+        .controls-group select {
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.95em;
+        }
+        
+        .controls-group button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.1s ease, opacity 0.2s ease;
+            font-weight: 600;
+        }
+        .controls-group button:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .btn-green { background-color: var(--primary-color); color: white; }
+        .btn-green:hover:not(:disabled) { background-color: var(--primary-dark); }
+        .btn-blue { background-color: var(--accent-color); color: white; }
+        .btn-blue:hover:not(:disabled) { background-color: #1976D2; }
+        .btn-yellow { background-color: var(--secondary-color); color: var(--text-dark); }
+        .btn-yellow:hover:not(:disabled) { background-color: #FFB300; }
+
+        .status-text {
+            color: var(--success-color);
+            font-style: italic;
+            font-weight: 500;
+        }
+
+        /* --- TABLE STYLES --- */
+        .table-responsive-container {
+            overflow: auto;
+            max-width: 100%;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            min-width: 1200px;
+        }
+
+        th, td {
+            border: 1px solid var(--border-color);
+            padding: 10px 12px;
+            text-align: right;
+            white-space: nowrap;
+            vertical-align: middle;
+        }
+        
+        td {
+             font-weight: 500;
+             color: var(--text-dark);
+        }
+
+        th {
+            background-color: var(--header-bg);
+            color: var(--header-text);
+            font-weight: 700;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        /* --- STICKY COLUMNS FIX (SỬA LỖI) --- */
+        /* Sử dụng class thay vì :nth-child để xử lý rowspan/colspan chính xác */
+
+        /* Cài đặt cố định chung */
+        .sticky-col-1, .sticky-col-2, .sticky-col-3 {
+            position: sticky;
+            z-index: 2;
+        }
+        
+        /* Header cells cần z-index cao hơn để nằm trên các ô body khi cuộn */
+        th.sticky-col-1, th.sticky-col-2, th.sticky-col-3 {
+            z-index: 11;
+        }
+
+        /* Cột 1 */
+        .sticky-col-1 { left: 0; width: 120px; min-width: 120px; text-align: left; }
+        
+        /* Cột 2 */
+        .sticky-col-2 { left: 120px; width: 200px; min-width: 200px; text-align: left; }
+        
+        /* Cột 3 */
+        .sticky-col-3 { left: 320px; width: 140px; min-width: 140px; font-weight: 700; }
+
+        /* SỬA LỖI: Đặt màu nền cho các ô body được cố định để nội dung cuộn không bị nhìn xuyên qua */
+        td.sticky-col-1, td.sticky-col-2, td.sticky-col-3 {
+            background-color: var(--sticky-cell-bg); 
+        }
+        
+        /* Styling for specific rows */
+        .total-row td {
+            background-color: var(--overall-total-bg);
+            color: var(--overall-total-text);
+            font-weight: 900;
+            font-size: 1.05em;
+            text-align: center;
+        }
+        /* Đảm bảo ô cố định trong hàng tổng cộng cũng có nền chính xác (ghi đè lên --sticky-cell-bg) */
+        .total-row .sticky-col-1, .total-row .sticky-col-3 {
+            background-color: var(--overall-total-bg);
+        }
+
+        td.empty-cell { color: var(--text-medium); font-weight: 400; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="controls-header">
+            <div class="user-info">Nhân viên: Lê Thượng Thuận (Leader - Team)</div>
+
+            <div class="controls-group">
+                <label for="start-date">TỪ NGÀY ĐỐI SOÁT:</label>
+                <input type="date" id="start-date">
+            </div>
+
+            <div class="controls-group">
+                <label for="end-date">ĐẾN NGÀY ĐỐI SOÁT:</label>
+                <input type="date" id="end-date">
+            </div>
+
+            <div class="controls-group">
+                <select id="product-filter">
+                    <option value="all">Tất cả sản phẩm</option>
+                </select>
+                <select id="market-filter">
+                    <option value="all">Tất cả khu vực</option>
+                </select>
+                <button class="btn-yellow" id="clear-filters-btn">Xóa lọc</button>
+            </div>
+
+            <div class="controls-group" style="margin-left: auto;">
+                <button class="btn-green" id="load-btn">Load</button>
+                <button class="btn-blue" id="update-btn">Cập nhật</button>
+                <span class="status-text">Sẵn sàng</span>
+            </div>
+        </div>
+
+        <div class="table-responsive-container">
+            <table id="ffm-report-table">
+                <thead>
+                    <tr>
+                        <!-- SỬA LỖI: Thêm class vào các thẻ <th> -->
+                        <th class="sticky-col-1" rowspan="2">Thị trường</th>
+                        <th class="sticky-col-2" rowspan="2">Sản phẩm</th>
+                        <th class="sticky-col-3" rowspan="2">FFM thanh toán<br>(Trong kỳ)</th>
+                    </tr>
+                    <tr id="date-headers-dynamic"></tr>
+                </thead>
+                <tbody id="report-tbody">
+                    <!-- Data is dynamically inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Element mapping
+            const startDateInput = document.getElementById('start-date');
+            const endDateInput = document.getElementById('end-date');
+            const productFilter = document.getElementById('product-filter');
+            const marketFilter = document.getElementById('market-filter');
+            const reportTbody = document.getElementById('report-tbody');
+            const dateHeadersRow = document.getElementById('date-headers-dynamic');
+            const loadBtn = document.getElementById('load-btn');
+            const updateBtn = document.getElementById('update-btn');
+            const clearFiltersBtn = document.getElementById('clear-filters-btn');
+            const statusText = document.querySelector('.status-text');
+
+            let reportData = [];
+
+            // --- MOCK DATA: Simulating reconciled amounts per day ("Ngày Kế toán đối soát...") ---
+            // The keys in dailyReconciled are the reconciliation dates
+            const mockRawData = [
+                { market: 'US', product: 'DG', dailyReconciled: { '27/07/2025': 15, '28/07/2025': 11, '29/07/2025': 14, '30/07/2025': 15, '31/07/2025': 20, '01/08/2025': 17, '02/08/2025': 14, '03/08/2025': 17, '04/08/2025': 13, '05/08/2025': 9, '06/08/2025': 15, '07/08/2025': 11, '08/08/2025': 19, '09/08/2025': 17 } },
+                { market: 'US', product: 'Fitgum CAFE 20X', dailyReconciled: { '27/07/2025': 16, '28/07/2025': 19, '29/07/2025': 14, '30/07/2025': 30, '31/07/2025': 17, '01/08/2025': 30, '02/08/2025': 26, '03/08/2025': 18, '04/08/2025': 19, '05/08/2025': 24, '06/08/2025': 16, '07/08/2025': 17, '08/08/2025': 19, '09/08/2025': 9 } },
+                { market: 'US', product: 'Kem Body', dailyReconciled: { '27/07/2025': 36, '28/07/2025': 35, '29/07/2025': 35, '30/07/2025': 33, '31/07/2025': 37, '01/08/2025': 44, '02/08/2025': 47, '03/08/2025': 27, '04/08/2025': 48, '05/08/2025': 35, '06/08/2025': 26, '07/08/2025': 21, '08/08/2025': 25, '09/08/2025': 42 } },
+                { market: 'US', product: 'Serum Sâm', dailyReconciled: { '31/07/2025': 1, '01/08/2025': 1, '03/08/2025': 1, '10/08/2025': 3 } },
+                { market: 'US', product: 'Bakuchiol Retinol', dailyReconciled: { '28/07/2025': 3, '29/07/2025': 2, '01/08/2025': 2, '03/08/2025': 4, '05/08/2025': 3, '08/08/2025': 4 } },
+                { market: 'VN', product: 'Saffron Serum', dailyReconciled: { '28/07/2025': 18, '29/07/2025': 20, '01/08/2025': 25, '05/08/2025': 10 } },
+                { market: 'VN', product: 'Yến Sào Collagen', dailyReconciled: { '27/07/2025': 22, '29/07/2025': 18, '03/08/2025': 30, '04/08/2025': 33 } },
+                { market: 'CA', product: 'DG', dailyReconciled: { '01/08/2025': 10, '02/08/2025': 12, '04/08/2025': 15, '09/08/2025': 5 } },
+                { market: 'CA', product: 'Fitgum CAFE 20X', dailyReconciled: { '02/08/2025': 20, '03/08/2025': 15, '06/08/2025': 22, '11/08/2025': 15 } },
+                { market: 'AU', product: 'Kem Body', dailyReconciled: { '03/08/2025': 30, '04/08/2025': 25, '05/08/2025': 35 } },
+                { market: 'EU', product: 'Bakuchiol Retinol', dailyReconciled: { '06/08/2025': 15, '07/08/2025': 12, '09/08/2025': 20 } },
+            ];
+            
+            // --- Simulate API Call ---
+            function fetchData() {
+                statusText.textContent = 'Đang tải...';
+                statusText.style.color = 'var(--warning-color)';
+                [loadBtn, updateBtn, clearFiltersBtn, productFilter, marketFilter].forEach(el => el.disabled = true);
+
+                return new Promise(resolve => {
+                    setTimeout(() => {
+                        statusText.textContent = `Cập nhật lúc ${new Date().toLocaleTimeString('vi-VN')}`;
+                        statusText.style.color = 'var(--success-color)';
+                        [loadBtn, updateBtn, clearFiltersBtn, productFilter, marketFilter].forEach(el => el.disabled = false);
+                        resolve(mockRawData);
+                    }, 1000); // Simulate 1-second delay
+                });
+            }
+
+            // --- Helper Functions ---
+            const parseDateString = (dateStr) => { // "DD/MM/YYYY" to Date
+                const parts = dateStr.split('/');
+                return new Date(parts[2], parts[1] - 1, parts[0]);
+            };
+
+            const formatDateForInput = (date) => date.toISOString().split('T')[0];
+
+            const formatDateForTable = (date) => { // Date to "DD/MM/YYYY"
+                return date.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+            };
+
+            const getDatesInRange = (start, end) => {
+                const dates = [];
+                let currentDate = new Date(start);
+                while (currentDate <= end) {
+                    dates.push(new Date(currentDate));
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                return dates;
+            };
+            
+            const formatNumber = (value) => (value === null || value === undefined || isNaN(value) || value === 0) ? '-' : Number(value).toLocaleString('vi-VN');
+
+            // --- Filter Population ---
+            function populateFilters(data) {
+                const uniqueProducts = [...new Set(data.map(item => item.product))].sort();
+                productFilter.innerHTML = '<option value="all">Tất cả sản phẩm</option>' +
+                    uniqueProducts.map(product => `<option value="${product}">${product}</option>`).join('');
+
+                const uniqueMarkets = [...new Set(data.map(item => item.market))].sort();
+                marketFilter.innerHTML = '<option value="all">Tất cả khu vực</option>' +
+                    uniqueMarkets.map(market => `<option value="${market}">${market}</option>`).join('');
+            }
+
+            // --- RENDER TABLE ---
+            function renderReport() {
+                if (!reportData.length) return;
+                
+                const startDate = new Date(startDateInput.value);
+                const endDate = new Date(endDateInput.value);
+                
+                const selectedProduct = productFilter.value;
+                const selectedMarket = marketFilter.value;
+
+                // 1. Filter data by market/product
+                const filteredData = reportData.filter(item => 
+                    (selectedProduct === 'all' || item.product === selectedProduct) &&
+                    (selectedMarket === 'all' || item.market === selectedMarket)
+                );
+
+                // 2. Generate date range for table headers
+                const dateRange = getDatesInRange(startDate, endDate);
+                const dateHeaderHtml = dateRange.map(date => `<th>${formatDateForTable(date).slice(0, 5)}</th>`).join('');
+                dateHeadersRow.innerHTML = dateHeaderHtml;
+
+                // 3. Process data for display
+                const overallDailyTotals = {};
+                dateRange.forEach(date => overallDailyTotals[formatDateForTable(date)] = 0);
+
+                const dataForTable = [];
+                for (const item of filteredData) {
+                    let totalInPeriod = 0;
+                    const dailyValuesInPeriod = {};
+                    
+                    for (const dateStr in item.dailyReconciled) {
+                        const reconciledDate = parseDateString(dateStr);
+                        if (reconciledDate >= startDate && reconciledDate <= endDate) {
+                            const value = item.dailyReconciled[dateStr];
+                            totalInPeriod += value;
+                            dailyValuesInPeriod[dateStr] = value;
+                            overallDailyTotals[dateStr] += value;
+                        }
+                    }
+
+                    if (totalInPeriod > 0) { // Only show rows with data in the selected period
+                        dataForTable.push({ ...item, totalInPeriod, dailyValuesInPeriod });
+                    }
+                }
+
+                // 4. Build HTML
+                let tbodyHtml = '';
+
+                // Overall Total Row
+                const overallFfmTotal = Object.values(overallDailyTotals).reduce((a, b) => a + b, 0);
+                const totalRowDailyCells = dateRange.map(date => `<td>${formatNumber(overallDailyTotals[formatDateForTable(date)])}</td>`).join('');
+                
+                // SỬA LỖI: Thêm class vào các thẻ <td> của hàng tổng cộng
+                tbodyHtml += `
+                    <tr class="total-row">
+                        <td class="sticky-col-1" colspan="2" style="text-align: left;">Tổng cộng:</td>
+                        <td class="sticky-col-3">${formatNumber(overallFfmTotal)}</td>
+                        ${totalRowDailyCells}
+                    </tr>`;
+
+                // Group by market
+                const groupedByMarket = dataForTable.reduce((acc, item) => {
+                    (acc[item.market] = acc[item.market] || []).push(item);
+                    return acc;
+                }, {});
+
+                for (const market in groupedByMarket) {
+                    const marketProducts = groupedByMarket[market].sort((a, b) => a.product.localeCompare(b.product));
+                    marketProducts.forEach((item, index) => {
+                        const dailyCells = dateRange.map(date => {
+                            const dateKey = formatDateForTable(date);
+                            const value = item.dailyValuesInPeriod[dateKey];
+                            return `<td class="${value === undefined ? 'empty-cell' : ''}">${formatNumber(value)}</td>`;
+                        }).join('');
+
+                        // SỬA LỖI: Thêm class vào các thẻ <td> của hàng dữ liệu
+                        tbodyHtml += `
+                            <tr>
+                                ${index === 0 ? `<td class="sticky-col-1" rowspan="${marketProducts.length}" style="text-align: left;">${market}</td>` : ''}
+                                <td class="sticky-col-2" style="text-align: left;">${item.product}</td>
+                                <td class="sticky-col-3">${formatNumber(item.totalInPeriod)}</td>
+                                ${dailyCells}
+                            </tr>`;
+                    });
+                }
+                
+                reportTbody.innerHTML = tbodyHtml;
+            }
+            
+            async function handleLoadOrUpdate() {
+                 reportData = await fetchData();
+                 if(productFilter.options.length <= 1) {
+                    populateFilters(reportData);
+                 }
+                 renderReport();
+            }
+
+            // --- Event Listeners ---
+            [startDateInput, endDateInput, productFilter, marketFilter].forEach(el => {
+                el.addEventListener('change', renderReport);
+            });
+            
+            loadBtn.addEventListener('click', handleLoadOrUpdate);
+            updateBtn.addEventListener('click', handleLoadOrUpdate);
+            
+            clearFiltersBtn.addEventListener('click', () => {
+                setDefaultDates();
+                productFilter.value = 'all';
+                marketFilter.value = 'all';
+                renderReport();
+            });
+
+            // --- Initial Setup ---
+            function setDefaultDates() {
+                // Fixed date for consistent demonstration
+                const today = new Date('2025-08-09T12:00:00'); 
+                const endDate = new Date(today);
+                const startDate = new Date(today);
+                startDate.setDate(today.getDate() - 13); // Default to a 14-day range
+
+                startDateInput.value = formatDateForInput(startDate);
+                endDateInput.value = formatDateForInput(endDate);
+            }
+            
+            async function initializeApp() {
+                setDefaultDates();
+                await handleLoadOrUpdate();
+            }
+
+            initializeApp();
+        });
+    </script>
+</body>
+</html>
