@@ -525,11 +525,9 @@
             function setupInitialReportView() {
                 const urlParams = new URLSearchParams(window.location.search);
                 const idFromUrl = urlParams.get('id');
-                const teamsFromUrl = urlParams.get('teams');
                 const teamFilterBtn = document.getElementById('reportTeamFilterBtn');
 
                 if (!idFromUrl) {
-                    // Không có ID, hiển thị thông báo lỗi
                     vanDonReportApp.showError('Vui lòng cung cấp ID nhân viên trong URL (ví dụ: ...?id=123).');
                     if (teamFilterBtn) teamFilterBtn.disabled = false;
                     return null;
@@ -543,22 +541,27 @@
                     return null;
                 }
 
-                // Nếu có teams trong URL -> hiển thị full data của team(s)
-                if (teamsFromUrl) {
-                    const teams = teamsFromUrl.split(' , ');
+                // Nếu là Leader -> lấy danh sách tên nhân viên trong team
+                if (currentUser.chucVu === 'leader') {
+                    // Lấy tất cả nhân viên có cùng team với leader
+                    const teamMembers = employeeData.filter(emp => emp.team === currentUser.team);
+                    const memberNames = teamMembers.map(emp => emp.ten);
                     
                     if (teamFilterBtn) {
-                        teamFilterBtn.textContent = teams.join(' , ');
+                        teamFilterBtn.textContent = `Team: ${currentUser.team} (${memberNames.length} NV)`;
                         teamFilterBtn.disabled = true;
                     }
                     
+                    console.log(`Leader ${currentUser.ten} - Team: ${currentUser.team}`);
+                    console.log('Team members:', memberNames);
+                    
                     return { 
-                        filterType: 'team', 
-                        teams: teams,
-                        userName: currentUser.ten 
+                        filterType: 'team-members', 
+                        memberNames: memberNames,
+                        teamName: currentUser.team
                     };
                 } else {
-                    // Không có teams -> hiển thị full data của user theo ID
+                    // Nhân viên thường -> chỉ hiển thị data của mình
                     if (teamFilterBtn) {
                         teamFilterBtn.textContent = `${currentUser.ten}`;
                         teamFilterBtn.disabled = true;
@@ -581,17 +584,24 @@
                 // Áp dụng lọc dữ liệu theo URL params
                 let filteredData = response.rows;
                 if (authConfig) {
-                    if (authConfig.filterType === 'team') {
-                        // Lọc theo team(s) - hiển thị full data của team
-                        filteredData = response.rows.filter(row => 
-                            authConfig.teams.includes((row["Team"] || '').trim())
-                        );
-                        console.log(`Filtered by teams: ${authConfig.teams.join(', ')} - ${filteredData.length} records`);
+                    if (authConfig.filterType === 'team-members') {
+                        // Lọc theo danh sách tên nhân viên trong team
+                        // Lọc cột "Nhân viên Marketing" hoặc "Tên"
+                        filteredData = response.rows.filter(row => {
+                            const nhanVienMarketing = (row["Nhân viên Marketing"] || '').trim();
+                            const ten = (row["Tên"] || '').trim();
+                            return authConfig.memberNames.includes(nhanVienMarketing) || 
+                                   authConfig.memberNames.includes(ten);
+                        });
+                        console.log(`Filtered by team members (${authConfig.teamName}):`, authConfig.memberNames);
+                        console.log(`Found ${filteredData.length} records`);
                     } else if (authConfig.filterType === 'user') {
                         // Lọc theo tên user - hiển thị full data của user
-                        filteredData = response.rows.filter(row => 
-                            (row["Tên"] || '').trim() === authConfig.userName
-                        );
+                        filteredData = response.rows.filter(row => {
+                            const nhanVienMarketing = (row["Nhân viên Marketing"] || '').trim();
+                            const ten = (row["Tên"] || '').trim();
+                            return nhanVienMarketing === authConfig.userName || ten === authConfig.userName;
+                        });
                         console.log(`Filtered by user: ${authConfig.userName} - ${filteredData.length} records`);
                     }
                 }
@@ -775,6 +785,7 @@
 </body>
 
 </html>
+
 
 
 
