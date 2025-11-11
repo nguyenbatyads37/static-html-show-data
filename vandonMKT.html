@@ -472,7 +472,7 @@
                             <th rowspan="2" class="sortable-header header-lenvanhanh" data-col-id="success">Giao Thành Công</th>
                             <th rowspan="2" class="sortable-header header-lenvanhanh" data-col-id="inTransit">Đang Giao</th>
                             <th rowspan="2" class="sortable-header header-lenvanhanh" data-col-id="notShipped">Chưa Giao</th>
-                            <th rowspan="2" class="sortable-header header-lenvanhanh" data-col-id="pendingCheck">chờ check</th>
+                            <th rowspan="3" class="sortable-header header-lenvanhanh" data-col-id="pendingCheck">chờ check</th>
                             <th rowspan="2" class="sortable-header header-lenvanhanh" data-col-id="emptyStatus">Trống trạng thái</th>
                             <th rowspan="2" class="sortable-header header-tyle" data-col-id="shipRate">Tỷ lệ đơn lên vận hành</th>
                             <th rowspan="2" class="sortable-header header-tyle" data-col-id="paymentRate">Tỷ lệ thu tiền/giao thành công</th>
@@ -495,40 +495,111 @@
             const showLoader = () => loader.classList.add('visible');
             const hideLoader = () => loader.classList.remove('visible');
             let globalData = [];
+            let employeeData = [];
 
             // --- CÁC HÀM TIỆN ÍCH KHÔNG THAY ĐỔI ---
             function formatDateForInputLocal(date) { /* ... */ }
             const dateRangeHandler = { /* ... */ };
             function setupQuickDateSelect(quickSelectId, startDateId, endDateId, changeTriggerElementId) { /* ... */ }
             
-            function handleData(response) {
+            // --- HÀM LẤY DỮ LIỆU NHÂN VIÊN ---
+            async function fetchEmployeeData(result) {
+                try {
+                    return result
+                        .filter(r => r["Họ Và Tên"] && String(r["Họ Và Tên"]).trim() !== '')
+                        .map(r => ({
+                            idnv: (r["id"] || '').trim(),
+                            ten: (r["Họ Và Tên"] || 'N/A').trim(),
+                            email: (r["Email"] || '').trim(),
+                            team: (r["Team"] || 'N/A').trim(),
+                            chucVu: (r["Vị trí"] || '').trim().toLowerCase(),
+                            chiNhanh: (r["chi nhánh"] || 'N/A').trim(),
+                        }));
+                } catch (err) {
+                    console.error("Lỗi tải dữ liệu nhân viên:", err);
+                    return [];
+                }
+            }
+
+            // --- HÀM PHÂN QUYỀN DỰA TRÊN URL VÀ DỮ LIỆU NHÂN VIÊN ---
+            function setupInitialReportView() {
+                const idFromUrl = new URLSearchParams(window.location.search).get('id');
+                const teamFilterBtn = document.getElementById('reportTeamFilterBtn');
+
+                if (!idFromUrl) {
+                    // Không có ID, hiển thị thông báo lỗi
+                    vanDonReportApp.showError('Vui lòng cung cấp ID nhân viên trong URL (ví dụ: ...?id=123).');
+                    if (teamFilterBtn) teamFilterBtn.disabled = false;
+                    return null;
+                }
+
+                const currentUser = employeeData.find(emp => emp.idnv === idFromUrl && emp.email != '');
+                if (currentUser) {
+                    if (currentUser.chucVu === 'leader') {
+                        // Leader: lấy dữ liệu của team (có thể nhiều team)
+                        const teamsString = new URLSearchParams(window.location.search).get('teams');
+                        const teams = teamsString ? teamsString.split(' , ') : [currentUser.team];
+                        
+                        if (teamFilterBtn) {
+                            teamFilterBtn.textContent = teams.join(' , ');
+                            teamFilterBtn.disabled = true;
+                        }
+                        
+                        return { 
+                            filterType: 'team', 
+                            teams: teams,
+                            userName: currentUser.ten 
+                        };
+                    } else {
+                        // Nhân viên thường: chỉ xem dữ liệu cá nhân
+                        if (teamFilterBtn) {
+                            teamFilterBtn.textContent = `Cá nhân - ${currentUser.ten}`;
+                            teamFilterBtn.disabled = true;
+                        }
+                        
+                        return { 
+                            filterType: 'personal', 
+                            userName: currentUser.ten 
+                        };
+                    }
+                } else {
+                    // Không tìm thấy user
+                    vanDonReportApp.showError('Không tìm thấy thông tin nhân viên với ID được cung cấp.');
+                    if (teamFilterBtn) teamFilterBtn.disabled = false;
+                    return null;
+                }
+            }
+            
+            function handleData(response, authConfig) {
                 hideLoader();
                 if (response.error || !Array.isArray(response.rows)) {
                     vanDonReportApp.showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'));
                     return;
                 }
-                globalData = response.rows; 
+                
+                // Áp dụng phân quyền dữ liệu
+                let filteredData = response.rows;
+                if (authConfig) {
+                    if (authConfig.filterType === 'team') {
+                        // Lọc theo team(s)
+                        filteredData = response.rows.filter(row => 
+                            authConfig.teams.includes((row["Team"] || '').trim())
+                        );
+                    } else if (authConfig.filterType === 'personal') {
+                        // Lọc theo tên nhân viên
+                        filteredData = response.rows.filter(row => 
+                            (row["Tên"] || '').trim() === authConfig.userName
+                        );
+                    }
+                }
+                
+                globalData = filteredData; 
                 vanDonReportApp.populateReportFilters();
                 vanDonReportApp.applyAllFilters();
             }
             
             function loadData() {
                 showLoader();
-                const urlParams = new URLSearchParams(window.location.search);
-                const teamFromUrl = urlParams.get('teams');
-                
-                if (!teamFromUrl) {
-                    vanDonReportApp.showError('Vui lòng cung cấp thông tin team trong URL (ví dụ: ...?teams=Tên-Team).');
-                    hideLoader();
-                    return;
-                }
-                
-                const teamFilterBtn = document.getElementById('reportTeamFilterBtn');
-                if (teamFilterBtn) {
-                    teamFilterBtn.textContent = teamFromUrl;
-                    teamFilterBtn.disabled = true;
-                }
-
                 vanDonReportApp.showError('Đang tải dữ liệu, vui lòng chờ...');
                 const apiUrl = 'https://n-api-rouge.vercel.app/sheet/getAll';
                 
@@ -538,8 +609,14 @@
                         return response.json();
                     })
                     .then(fullResponse => {
-                        const filteredRows = fullResponse.rows.filter(row => row["Team"] === teamFromUrl);
-                        handleData({ rows: filteredRows }); 
+                        // Xử lý dữ liệu nhân viên
+                        employeeData = fetchEmployeeData(fullResponse.employeeData || []);
+                        
+                        // Thiết lập phân quyền
+                        const authConfig = setupInitialReportView();
+                        
+                        // Xử lý dữ liệu với cấu hình phân quyền
+                        handleData({ rows: fullResponse.rows }, authConfig); 
                     })
                     .catch(error => {
                         console.error('Đã xảy ra lỗi khi tải dữ liệu:', error.message);
