@@ -521,9 +521,11 @@
                 }
             }
 
-            // --- HÀM PHÂN QUYỀN DỰA TRÊN URL VÀ DỮ LIỆU NHÂN VIÊN ---
+            // --- HÀM LỌC DỮ LIỆU THEO URL PARAMS ---
             function setupInitialReportView() {
-                const idFromUrl = new URLSearchParams(window.location.search).get('id');
+                const urlParams = new URLSearchParams(window.location.search);
+                const idFromUrl = urlParams.get('id');
+                const teamsFromUrl = urlParams.get('teams');
                 const teamFilterBtn = document.getElementById('reportTeamFilterBtn');
 
                 if (!idFromUrl) {
@@ -533,40 +535,39 @@
                     return null;
                 }
 
+                // Tìm user theo ID
                 const currentUser = employeeData.find(emp => emp.idnv === idFromUrl && emp.email != '');
-                if (currentUser) {
-                    if (currentUser.chucVu === 'leader') {
-                        // Leader: lấy dữ liệu của team (có thể nhiều team)
-                        const teamsString = new URLSearchParams(window.location.search).get('teams');
-                        const teams = teamsString ? teamsString.split(' , ') : [currentUser.team];
-                        
-                        if (teamFilterBtn) {
-                            teamFilterBtn.textContent = teams.join(' , ');
-                            teamFilterBtn.disabled = true;
-                        }
-                        
-                        return { 
-                            filterType: 'team', 
-                            teams: teams,
-                            userName: currentUser.ten 
-                        };
-                    } else {
-                        // Nhân viên thường: chỉ xem dữ liệu cá nhân
-                        if (teamFilterBtn) {
-                            teamFilterBtn.textContent = `Cá nhân - ${currentUser.ten}`;
-                            teamFilterBtn.disabled = true;
-                        }
-                        
-                        return { 
-                            filterType: 'personal', 
-                            userName: currentUser.ten 
-                        };
-                    }
-                } else {
-                    // Không tìm thấy user
+                if (!currentUser) {
                     vanDonReportApp.showError('Không tìm thấy thông tin nhân viên với ID được cung cấp.');
                     if (teamFilterBtn) teamFilterBtn.disabled = false;
                     return null;
+                }
+
+                // Nếu có teams trong URL -> hiển thị full data của team(s)
+                if (teamsFromUrl) {
+                    const teams = teamsFromUrl.split(' , ');
+                    
+                    if (teamFilterBtn) {
+                        teamFilterBtn.textContent = teams.join(' , ');
+                        teamFilterBtn.disabled = true;
+                    }
+                    
+                    return { 
+                        filterType: 'team', 
+                        teams: teams,
+                        userName: currentUser.ten 
+                    };
+                } else {
+                    // Không có teams -> hiển thị full data của user theo ID
+                    if (teamFilterBtn) {
+                        teamFilterBtn.textContent = `${currentUser.ten}`;
+                        teamFilterBtn.disabled = true;
+                    }
+                    
+                    return { 
+                        filterType: 'user', 
+                        userName: currentUser.ten 
+                    };
                 }
             }
             
@@ -577,19 +578,21 @@
                     return;
                 }
                 
-                // Áp dụng phân quyền dữ liệu
+                // Áp dụng lọc dữ liệu theo URL params
                 let filteredData = response.rows;
                 if (authConfig) {
                     if (authConfig.filterType === 'team') {
-                        // Lọc theo team(s)
+                        // Lọc theo team(s) - hiển thị full data của team
                         filteredData = response.rows.filter(row => 
                             authConfig.teams.includes((row["Team"] || '').trim())
                         );
-                    } else if (authConfig.filterType === 'personal') {
-                        // Lọc theo tên nhân viên
+                        console.log(`Filtered by teams: ${authConfig.teams.join(', ')} - ${filteredData.length} records`);
+                    } else if (authConfig.filterType === 'user') {
+                        // Lọc theo tên user - hiển thị full data của user
                         filteredData = response.rows.filter(row => 
                             (row["Tên"] || '').trim() === authConfig.userName
                         );
+                        console.log(`Filtered by user: ${authConfig.userName} - ${filteredData.length} records`);
                     }
                 }
                 
@@ -602,21 +605,29 @@
                 showLoader();
                 vanDonReportApp.showError('Đang tải dữ liệu, vui lòng chờ...');
                 const apiUrl = 'https://n-api-rouge.vercel.app/sheet/getAll';
+                const employeeApiUrl = 'https://n-api-gamma.vercel.app/report/generate?tableName=Báo cáo MKT';
                 
-                fetch(apiUrl)
-                    .then(response => {
+                // Fetch cả dữ liệu vận đơn và dữ liệu nhân viên song song
+                Promise.all([
+                    fetch(apiUrl).then(response => {
+                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                        return response.json();
+                    }),
+                    fetch(employeeApiUrl).then(response => {
                         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                         return response.json();
                     })
-                    .then(fullResponse => {
+                ])
+                    .then(([vanDonResponse, employeeResponse]) => {
                         // Xử lý dữ liệu nhân viên
-                        employeeData = fetchEmployeeData(fullResponse.employeeData || []);
+                        employeeData = fetchEmployeeData(employeeResponse.employeeData || []);
+                        console.log('Employee data loaded:', employeeData.length, 'records');
                         
                         // Thiết lập phân quyền
                         const authConfig = setupInitialReportView();
                         
                         // Xử lý dữ liệu với cấu hình phân quyền
-                        handleData({ rows: fullResponse.rows }, authConfig); 
+                        handleData({ rows: vanDonResponse.rows }, authConfig); 
                     })
                     .catch(error => {
                         console.error('Đã xảy ra lỗi khi tải dữ liệu:', error.message);
@@ -625,6 +636,7 @@
                            userMessage += ' (Lỗi có thể do CORS hoặc mạng không ổn định).';
                         }
                         vanDonReportApp.showError(userMessage);
+                        hideLoader();
                     });
             }
 
@@ -763,4 +775,5 @@
 </body>
 
 </html>
+
 
