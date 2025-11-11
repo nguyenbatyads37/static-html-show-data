@@ -526,9 +526,6 @@
                     <div class="date-filter"><span>Từ:</span><input type="date"
                             id="reportStartDateFilter" /><span>Đến:</span><input type="date" id="reportEndDateFilter" />
                     </div>
-                    <div class="multi-select-container"><button id="reportTeamFilterBtn">Tất cả Team</button>
-                        <div id="reportTeamDropdown" class="checkbox-dropdown"></div>
-                    </div>
                     <div class="multi-select-container"><button id="reportStaffFilterBtn">Tất cả NV Marketing</button>
                         <div id="reportStaffDropdown" class="checkbox-dropdown"></div>
                     </div>
@@ -597,6 +594,50 @@
             const showLoader = () => loader.classList.add('visible');
             const hideLoader = () => loader.classList.remove('visible');
             let globalData = [];
+            let employeeData = [];
+            
+            // Danh sách ID của các leader - xem full data
+            const leaderIds = [
+                '5cb43d3b', 'e0a6c119', 'fgfdgd10', 'fgfdgd12', 'fgfdgd13',
+                'fgfdgd15', 'fgfdgd16', 'fgfdgd17', 'fgfdgd30', 'fgfdgd31',
+                'fgfdgd54', 'fgfdgd55', 'fgfdgd60', 'fgfdgd64', 'fgfdgd67',
+                'fgfdgd69', 'fgfdgd7', 'fgfdgd72', 'c81b7be8', 'fgfdgd23'
+            ];
+
+            // --- HÀM LẤY DỮ LIỆU NHÂN VIÊN ---
+            function fetchEmployeeData(result) {
+                try {
+                    const mapped = result
+                        .filter(r => r["Họ Và Tên"] && String(r["Họ Và Tên"]).trim() !== '')
+                        .map(r => {
+                            // Lấy tất cả các trường có thể liên quan đến chức vụ
+                            const viTri = (r["Vị trí"] || '').trim();
+                            const chucVu = (r["Chức vụ"] || '').trim();
+                            const position = (r["Position"] || '').trim();
+                            
+                            // Ưu tiên các trường có dữ liệu
+                            const chucVuFinal = (chucVu || viTri || position).toLowerCase();
+                            
+                            return {
+                                idnv: (r["id"] || '').trim(),
+                                ten: (r["Họ Và Tên"] || 'N/A').trim(),
+                                email: (r["Email"] || '').trim(),
+                                team: (r["Team"] || 'N/A').trim(),
+                                chucVu: chucVuFinal,
+                                chiNhanh: (r["chi nhánh"] || 'N/A').trim(),
+                            };
+                        });
+                    
+                    // Log để debug
+                    console.log('Employee data loaded:', mapped.length, 'employees');
+                    console.log('Sample employee:', mapped[0]);
+                    
+                    return mapped;
+                } catch (err) {
+                    console.error("Lỗi tải dữ liệu nhân viên:", err);
+                    return [];
+                }
+            }
 
             function formatDateForInputLocal(date) {
                 if (!date) return '';
@@ -676,12 +717,80 @@
             }
 
             function handleData(response) {
-                hideLoader();
+                console.log('Total rows received:', response?.rows?.length);
+                
                 if (response.error || !Array.isArray(response.rows)) {
                     vanDonReportApp.showError('Lỗi hoặc không có dữ liệu: ' + (response.error || 'Định dạng dữ liệu không đúng'));
+                    hideLoader();
                     return;
                 }
-                globalData = response.rows;
+                
+                // Kiểm tra có ID trong URL không
+                const urlParams = new URLSearchParams(window.location.search);
+                const idFromUrl = urlParams.get('id');
+                
+                let filteredData;
+                
+                if (idFromUrl) {
+                    // Kiểm tra ID có trong danh sách leader không
+                    console.log('Filtering by ID:', idFromUrl);
+                    const isLeader = leaderIds.includes(idFromUrl);
+                    
+                    if (isLeader) {
+                        // Leader - hiển thị full data (Team = Hà Nội)
+                        console.log('User is LEADER - showing full team data');
+                        
+                        filteredData = response.rows.filter(row => {
+                            const teamColumn = (row["Team"] || '').trim();
+                            return teamColumn === 'Hà Nội';
+                        });
+                        
+                        console.log(`Leader ID: ${idFromUrl} - Team: Hà Nội - Found ${filteredData.length} records`);
+                    } else {
+                        // Nhân viên thường - tìm tên trong data và chỉ hiển thị của mình
+                        console.log('User is regular employee - showing personal data only');
+                        
+                        // Tìm tên nhân viên từ dữ liệu
+                        const userRows = response.rows.filter(row => {
+                            const idInRow = (row["id"] || '').trim();
+                            return idInRow === idFromUrl;
+                        });
+                        
+                        if (userRows.length === 0) {
+                            console.error('No data found for ID:', idFromUrl);
+                            vanDonReportApp.showError('Không tìm thấy dữ liệu cho ID: ' + idFromUrl);
+                            hideLoader();
+                            return;
+                        }
+                        
+                        // Lấy tên từ dòng đầu tiên
+                        const userName = (userRows[0]["Nhân viên Marketing"] || userRows[0]["Tên"] || '').trim();
+                        console.log('Employee name:', userName);
+                        
+                        // Lọc tất cả data của nhân viên này
+                        filteredData = response.rows.filter(row => {
+                            const nhanVienMarketing = (row["Nhân viên Marketing"] || '').trim();
+                            const ten = (row["Tên"] || '').trim();
+                            return nhanVienMarketing === userName || ten === userName;
+                        });
+                        
+                        console.log(`Employee ${userName} - Found ${filteredData.length} records`);
+                    }
+                } else {
+                    // Nếu không có ID, lọc cứng theo cột "Team" = "Hà Nội" trong sheet F3
+                    console.log('No ID provided, filtering by Team column = Hà Nội');
+                    
+                    filteredData = response.rows.filter(row => {
+                        const teamColumn = (row["Team"] || '').trim();
+                        return teamColumn === 'Hà Nội';
+                    });
+                    
+                    console.log(`Filtered by Team column = Hà Nội - Found ${filteredData.length} records`);
+                }
+                
+                globalData = filteredData;
+                console.log('Final globalData length:', globalData.length);
+                hideLoader();
                 vanDonReportApp.populateReportFilters();
                 vanDonReportApp.applyAllFilters();
             }
@@ -689,24 +798,31 @@
             function loadData() {
                 showLoader();
                 vanDonReportApp.showError('Đang tải dữ liệu, vui lòng chờ...');
+                
+                // Dùng API cũ cho dữ liệu vận đơn
                 const apiUrl = 'https://n-api-rouge.vercel.app/sheet/getAll';
+                
                 fetch(apiUrl)
                     .then(response => {
                         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                         return response.json();
                     })
-                    .then(handleData)
+                    .then(vanDonResponse => {
+                        console.log('===== API RESPONSE =====');
+                        console.log('Van don data loaded, rows count:', vanDonResponse.rows?.length || 0);
+                        console.log('========================');
+                        
+                        // Xử lý dữ liệu vận đơn
+                        handleData({ rows: vanDonResponse.rows }); 
+                    })
                     .catch(error => {
                         console.error('Đã xảy ra lỗi khi tải dữ liệu:', error.message);
                         let userMessage = 'Tải dữ liệu thất bại. Vui lòng kiểm tra kết nối mạng và địa chỉ API.';
-
-                        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-                            userMessage += ' (Lỗi có thể do CORS hoặc mạng không ổn định). Hãy kiểm tra Console (F12) để biết thêm chi tiết.';
-                        } else {
-                            userMessage += ` (Chi tiết lỗi: ${error.message})`;
+                        if (error.message.includes('Failed to fetch')) {
+                           userMessage += ' (Lỗi có thể do CORS hoặc mạng không ổn định).';
                         }
-
                         vanDonReportApp.showError(userMessage);
+                        hideLoader();
                     });
             }
 
@@ -986,15 +1102,14 @@
                         document.getElementById('reportStartDateFilter').value = '';
                         document.getElementById('reportEndDateFilter').value = '';
                         document.getElementById('quick-date-vandon').value = '';
-                        ['reportProductDropdown', 'reportMarketDropdown', 'reportStaffDropdown', 'reportTeamDropdown', 'reportTrackingDropdown'].forEach(id => document.getElementById(id)?.querySelectorAll('input').forEach(cb => cb.checked = false));
+                        ['reportProductDropdown', 'reportMarketDropdown', 'reportStaffDropdown', 'reportTrackingDropdown'].forEach(id => document.getElementById(id)?.querySelectorAll('input').forEach(cb => cb.checked = false));
                         this.updateProductFilterButtonText();
                         this.updateMarketFilterButtonText();
                         this.updateStaffFilterButtonText();
-                        this.updateTeamFilterButtonText();
                         this.updateTrackingFilterButtonText();
                         this.applyAllFilters();
                     });
-                    ['reportStaffFilterBtn', 'reportTeamFilterBtn', 'reportProductFilterBtn', 'reportMarketFilterBtn', 'reportTrackingFilterBtn'].forEach(id => {
+                    ['reportStaffFilterBtn', 'reportProductFilterBtn', 'reportMarketFilterBtn', 'reportTrackingFilterBtn'].forEach(id => {
                         const btn = document.getElementById(id), dropdown = document.getElementById(id.replace('FilterBtn', 'Dropdown'));
                         if (btn && dropdown) {
                             btn.addEventListener('click', e => {
@@ -1009,11 +1124,8 @@
                 },
                 populateReportFilters: function () {
                     const allProducts = [...new Set(globalData.map(r => r["Mặt hàng"]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
-                    // ===== START: FIX (Corrected variable name from globala to globalData) =====
                     const allMarkets = [...new Set(globalData.map(r => r["Khu vực"] || r["khu vực"]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
-                    // ===== END: FIX (Corrected variable name from globala to globalData) =====
                     const allStaff = [...new Set(globalData.map(r => (r["Nhân viên Marketing"] || '').toString().trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
-                    const allTeams = [...new Set(globalData.map(r => r["Team"]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
                     const populate = (dropdownId, selectAllId, items, callback) => {
                         const dropdown = document.getElementById(dropdownId);
                         if (!dropdown) return;
@@ -1048,12 +1160,10 @@
                         });
                     };
                     populate('reportStaffDropdown', 'reportStaffSelectAll', allStaff, this.updateStaffFilterButtonText.bind(this));
-                    populate('reportTeamDropdown', 'reportTeamSelectAll', allTeams, this.updateTeamFilterButtonText.bind(this));
                     populate('reportProductDropdown', 'reportProductSelectAll', allProducts, this.updateProductFilterButtonText.bind(this));
                     populate('reportMarketDropdown', 'reportMarketSelectAll', allMarkets, this.updateMarketFilterButtonText.bind(this));
                     populate('reportTrackingDropdown', 'reportTrackingSelectAll', [], this.updateTrackingFilterButtonText.bind(this));
                     this.updateStaffFilterButtonText();
-                    this.updateTeamFilterButtonText();
                     this.updateProductFilterButtonText();
                     this.updateMarketFilterButtonText();
                     this.updateTrackingFilterButtonText();
@@ -1070,7 +1180,6 @@
                 updateProductFilterButtonText: function () { this.updateFilterButtonText('reportProductFilterBtn', 'reportProductDropdown', 'reportProductSelectAll', 'Tất cả sản phẩm', 'sản phẩm'); },
                 updateMarketFilterButtonText: function () { this.updateFilterButtonText('reportMarketFilterBtn', 'reportMarketDropdown', 'reportMarketSelectAll', 'Tất cả khu vực', 'khu vực'); },
                 updateStaffFilterButtonText: function () { this.updateFilterButtonText('reportStaffFilterBtn', 'reportStaffDropdown', 'reportStaffSelectAll', 'Tất cả NV Marketing', 'NV'); },
-                updateTeamFilterButtonText: function () { this.updateFilterButtonText('reportTeamFilterBtn', 'reportTeamDropdown', 'reportTeamSelectAll', 'Tất cả Team', 'Team'); },
                 updateTrackingFilterButtonText: function () { this.updateFilterButtonText('reportTrackingFilterBtn', 'reportTrackingDropdown', 'reportTrackingSelectAll', 'Tất cả mã tracking', 'trạng thái'); },
                 applyAllFilters: function () {
                     let data = [...globalData];
@@ -1100,13 +1209,11 @@
                     const products = getSelected('#reportProductDropdown input:checked:not(#reportProductSelectAll)');
                     const markets = getSelected('#reportMarketDropdown input:checked:not(#reportMarketSelectAll)');
                     const staff = getSelected('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)');
-                    const teams = getSelected('#reportTeamDropdown input:checked:not(#reportTeamSelectAll)');
                     const trackingFilters = getSelected('#reportTrackingDropdown input:checked:not(#reportTrackingSelectAll)');
                     
                     if (products.size) data = data.filter(r => products.has(r["Mặt hàng"]));
                     if (markets.size) data = data.filter(r => markets.has(r["Khu vực"] || r["khu vực"]));
                     if (staff.size) data = data.filter(r => staff.has(r["Nhân viên Marketing"]));
-                    if (teams.size) data = data.filter(r => teams.has(r["Team"]));
                     
                     if (trackingFilters.size > 0) {
                         data = data.filter(r => {
