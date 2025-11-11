@@ -953,12 +953,14 @@
     // =================================================================================
     // --- III. TẢI VÀ XỬ LÝ DỮ LIỆU ---
     // =================================================================================
-    //lấy dữ liệu nhân viên
+    
+    // === HÀM ĐÃ SỬA 1: TỰ ĐỘNG LÀM SẠCH ID KHI TẢI DỮ LIỆU ===
     async function fetchEmployeeData(result) {
       try {
         return result
           .filter(r => r["Họ Và Tên"] && String(r["Họ Và Tên"]).trim() !== '')
           .map(r => ({
+            // THÊM .trim() ĐỂ CẮT KHOẢNG TRẮNG THỪA Ở ĐẦU VÀ CUỐI
             idnv: (r["id"] || '').trim(),
             ten: (r["Họ Và Tên"] || 'N/A').trim(),
             email: (r["Email"] || '').trim(),
@@ -966,7 +968,8 @@
             chucVu: (r["Vị trí"] || '').trim().toLowerCase(),
             chiNhanh: (r["chi nhánh"] || 'N/A').trim(),
           }));
-      } catch (err) {
+      } catch (err)
+ {
         console.error("Lỗi tải dữ liệu nhân viên:", err);
         return [];
       }
@@ -1025,10 +1028,18 @@
       }
     }
 
+    // === HÀM ĐÃ SỬA 2: LÀM SẠCH ID TỪ URL VÀ THÊM BƯỚC GỠ LỖI ===
     function setupInitialReportView() {
-      const idFromUrl = new URLSearchParams(window.location.search).get('id');
+      // Lấy ID và dùng .trim() để cắt khoảng trắng ngay lập tức
+      const idFromUrl = new URLSearchParams(window.location.search).get('id')?.trim();
       const manualTabBtn = document.getElementById('manual-report-tab-btn');
       const vandonTabBtn = document.getElementById('vandon-report-tab-btn');
+
+      // --- BƯỚC GỠ LỖI QUAN TRỌNG ---
+      // Mở console (bấm F12 trên trình duyệt) để xem kết quả
+      console.log("Đang tìm kiếm ID từ URL:", `"${idFromUrl}"`);
+      console.log("Danh sách ID nhân viên có trong dữ liệu:", employeeData.map(emp => `"${emp.idnv}"`));
+      // --------------------------------
 
       if (!idFromUrl) {
         document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS';
@@ -1038,47 +1049,41 @@
         return;
       }
 
-      const currentUser = employeeData.find(emp => emp.idnv === idFromUrl && emp.email != '');
+      // So sánh sau khi đã làm sạch cả hai bên
+      const currentUser = employeeData.find(emp => emp.idnv === idFromUrl);
+
       if (currentUser) {
+        console.log("ĐÃ TÌM THẤY NHÂN VIÊN:", currentUser); // Thêm log để xác nhận
         if (currentUser.chucVu === 'leader') {
           const teamsString = new URLSearchParams(window.location.search).get('teams');
           const teams = teamsString ? teamsString.split(' , ') : [currentUser.team];
           document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${teams.join(' , ')}`;
-
-          // baseDataForReport = masterData.filter(r => (r.team || '').trim() === currentUser.team);
           baseDataForReport = masterData.filter(r => teams.includes((r.team || '').trim()));
-
         } else {
           document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ten}`;
           baseDataForReport = masterData.filter(r => (r.ten || '').trim() === currentUser.ten);
         }
 
-        // Hiển thị cả 2 tab
         manualTabBtn.style.display = 'block';
         vandonTabBtn.style.display = 'block';
         
-        // Setup iframe Báo cáo thủ công
         const manualIframe = document.getElementById('manual-report-iframe');
         const hoten = encodeURIComponent(currentUser.ten);
-        const email = `${currentUser.email}`;
+        const email = currentUser.email ? `${currentUser.email}` : '';
         const tableName = encodeURIComponent('Báo cáo MKT');
-        // THÊM THAM SỐ ĐỂ ẨN CỘT "PAGE"
         manualIframe.src = `https://nguyenbatyads37.github.io/static-html-show-data/baoCaoThuCong.html?hoten=${hoten}&email=${email}&tableName=${tableName}&hideColumns=Page`;
 
-        // Setup iframe Tình trạng vận đơn
         const vandonIframe = document.getElementById('vandon-report-iframe');
-        // Dùng file local để test
         vandonIframe.src = `http://127.0.0.1:5500/vandonMKT.html?id=${idFromUrl}`;
-        // Sau khi test OK, đổi về GitHub:
         // vandonIframe.src = `https://nguyenbatyads37.github.io/static-html-show-data/vandonMKT.html?id=${idFromUrl}`;
 
       } else {
+        console.error("KHÔNG TÌM THẤY NHÂN VIÊN VỚI ID ĐÃ CUNG CẤP."); // Thêm log lỗi
         document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
         baseDataForReport = [];
         manualTabBtn.style.display = 'none';
         vandonTabBtn.style.display = 'none';
       }
-
     }
 
     // =================================================================================
