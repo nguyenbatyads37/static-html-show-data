@@ -420,7 +420,7 @@ background-color: rgba(0,0,0,0.015);
 
         <!-- Tab 3: Vận đơn Sale -->
         <div id="tab-van-don-sale" class="tab-content">
-            <iframe id="iframe-van-don-sale" src="about:blank" frameborder="0"></iframe>
+            <iframe id="iframe-van-don-sale" src="https://nguyenbatyads37.github.io/static-html-show-data/Vandonsale.html" frameborder="0"></iframe>
         </div>
 
         <!-- Tab 4: Báo cáo thủ công -->
@@ -537,15 +537,6 @@ function fetchAndProcessData() {
             const apiData = result.data;
             const idFromUrl = getUrlParameter('id');
 
-            // --- START: CẬP NHẬT CHO IFRAME VẬN ĐƠN SALE ---
-            const vanDonSaleIframe = document.getElementById('iframe-van-don-sale');
-            let vanDonSaleSrc = 'https://nguyenbatyads37.github.io/static-html-show-data/Vandonsale.html';
-            if (idFromUrl) {
-                vanDonSaleSrc += `?id=${idFromUrl}`;
-            }
-            vanDonSaleIframe.src = vanDonSaleSrc;
-            // --- END: CẬP NHẬT CHO IFRAME VẬN ĐƠN SALE ---
-
             if (idFromUrl) {
                 const currentUserRecord = result.employeeData.find(record => record['id'] === idFromUrl && record['Email'] != '');
                 isRestrictedView = true;
@@ -571,3 +562,268 @@ function fetchAndProcessData() {
                     }
                 } else {
                     document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
+                    allowedNames = [];
+                    allowedBranch = null;
+                }
+            } else {
+                isRestrictedView = false;
+                allowedNames = [];
+                allowedBranch = null;
+                currentUserInfo = null;
+                document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
+            }
+
+            rawData = apiData
+                .filter(r => r['Tên'] && String(r['Tên']).trim() !== '' && r['Team'] && String(r['Team']).trim() !== '')
+                .map(r => ({
+                    chucVu: (r['Chức vụ'] || '').trim(),
+                    ten: (r['Tên'] || '').trim(),
+                    email: (r['Email'] || '').trim(),
+                    team: (r['Team'] || '').trim(),
+                    chiNhanh: (r['Chi nhánh'] || '').trim() || 'Không xác định',
+                    ngay: r['Ngày'],
+                    ca: r['Ca'],
+                    sanPham: r['Sản phẩm'],
+                    thiTruong: r['Thị trường'],
+                    soMessCmt: Number(r['Số Mess']) || 0,
+                    soDon: Number(r['Đơn Mess']) || 0,
+                    dsChot: Number(r['Doanh số Mess']) || 0,
+                    phanHoi: Number(r['Phản hồi']) || 0,
+                    doanhSoDi: Number(r['Doanh số đi']) || 0,
+                    soDonHuy: Number(r['Số đơn Hoàn huỷ']) || 0,
+                    doanhSoHuy: Number(r['Doanh số hoàn huỷ']) || 0,
+                    soDonThanhCong: Number(r['Số đơn thành công']) || 0,
+                    doanhSoThanhCong: Number(r['Doanh số thành công']) || 0,
+                    soDonThucTe: Number(r['Số đơn thực tế']) || 0,
+                    doanhThuChotThucTe: Number(r['Doanh thu chốt thực tế']) || 0,
+                    doanhSoDiThucTe: Number(r['Doanh số đi thực tế']) || 0,
+                    soDonHoanHuyThucTe: Number(r['Số đơn hoàn hủy thực tế']) || 0,
+                    doanhSoHoanHuyThucTe: Number(r['Doanh số hoàn hủy thực tế']) || 0,
+                    doanhSoSauHoanHuyThucTe: Number(r['Doanh số sau hoàn hủy thực tế']) || 0
+                }));
+
+            const dataForFilters = isRestrictedView
+                ? rawData.filter(r => (allowedBranch && r.chiNhanh === allowedBranch) || (allowedNames.length > 0 && allowedNames.includes(r.ten)))
+                : rawData;
+
+            populateAllFilters(dataForFilters);
+            applyFilters();
+        }).catch(err => {
+            console.error("Lỗi khi tải dữ liệu:", err);
+            alert('Không thể tải dữ liệu. Vui lòng kiểm tra lại đường link hoặc kết nối mạng.');
+        }).finally(() => {
+            hideLoader();
+        });
+}
+
+function summarizeAndSortSalesData(data) {
+    const summaryData = {};
+    const initialSummary = {
+        mess: 0, don: 0, chot: 0, phanHoi: 0,
+        doanhSoDi: 0, soDonHuy: 0, doanhSoHuy: 0,
+        soDonThanhCong: 0, doanhSoThanhCong: 0,
+        soDonThucTe: 0, doanhThuChotThucTe: 0, doanhSoDiThucTe: 0,
+        soDonHoanHuyThucTe: 0, doanhSoHoanHuyThucTe: 0, doanhSoSauHoanHuyThucTe: 0
+    };
+
+    data.forEach(r => {
+        const name = r.ten;
+        if (!summaryData[name]) {
+            summaryData[name] = {
+                chiNhanh: r.chiNhanh, team: r.team,
+                ...JSON.parse(JSON.stringify(initialSummary))
+            };
+        }
+        summaryData[name].mess += r.soMessCmt;
+        summaryData[name].don += r.soDon;
+        summaryData[name].chot += r.dsChot;
+        summaryData[name].phanHoi += r.phanHoi;
+        summaryData[name].soDonThucTe += r.soDonThucTe;
+        summaryData[name].doanhThuChotThucTe += r.doanhThuChotThucTe;
+        summaryData[name].soDonHoanHuyThucTe += r.soDonHoanHuyThucTe;
+        summaryData[name].doanhSoHoanHuyThucTe += r.doanhSoHoanHuyThucTe;
+        summaryData[name].doanhSoDi += r.doanhSoDi;
+        summaryData[name].soDonHuy += r.soDonHuy;
+        summaryData[name].doanhSoHuy += r.doanhSoHuy;
+        summaryData[name].soDonThanhCong += r.soDonThanhCong;
+        summaryData[name].doanhSoThanhCong += r.doanhSoThanhCong;
+    });
+
+    const flatList = Object.keys(summaryData).map(name => ({ name, ...summaryData[name] }))
+        .sort((a, b) => a.team.localeCompare(b.team) || b.chot - a.chot || a.name.localeCompare(b.name));
+
+    const total = flatList.reduce((acc, item) => {
+        Object.keys(initialSummary).forEach(key => { acc[key] += item[key]; });
+        return acc;
+    }, JSON.parse(JSON.stringify(initialSummary)));
+
+    return { flatList, total };
+}
+
+function populateAllFilters(data) {
+    const populate = (key, containerId, className) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+        const uniqueValues = [...new Set(data.map(r => r[key]).filter(Boolean))].sort();
+        container.innerHTML = uniqueValues.map(val =>
+            `<label><input type='checkbox' class='${className}' value='${val}' checked> ${val}</label>`
+        ).join('');
+    };
+    populate('sanPham', 'product-options', 'filter-product');
+    populate('thiTruong', 'market-options', 'filter-market');
+    populate('ca', 'ca-options', 'filter-ca');
+    populate('team', 'team-options', 'filter-team');
+}
+
+function handleCheckboxLogic(masterId, childClass, target) {
+    if (target.id === masterId) {
+        document.querySelectorAll(`.${childClass}`).forEach(cb => cb.checked = target.checked);
+    } else if (target.classList.contains(childClass)) {
+        const allChecked = [...document.querySelectorAll(`.${childClass}`)].every(cb => cb.checked);
+        document.getElementById(masterId).checked = allChecked;
+    }
+}
+
+function handleFilterChange(target) {
+    showLoader();
+    setTimeout(() => {
+        handleCheckboxLogic('product-all', 'filter-product', target);
+        handleCheckboxLogic('ca-all', 'filter-ca', target);
+        handleCheckboxLogic('team-all', 'filter-team', target);
+        handleCheckboxLogic('market-all', 'filter-market', target);
+        applyFilters();
+        hideLoader();
+    }, 10);
+}
+
+function applyFilters() {
+    const sdVal = document.getElementById('start-date').value;
+    const edVal = document.getElementById('end-date').value;
+    const startDate = sdVal ? new Date(sdVal) : null;
+    startDate && startDate.setHours(0,0,0,0);
+    const endDate = edVal ? new Date(edVal) : null;
+    endDate && endDate.setHours(23,59,59,999);
+
+    const getSelectedOptions = (masterId, childClass) => {
+        if (document.getElementById(masterId).checked) return null;
+        return [...document.querySelectorAll(`.${childClass}:checked`)].map(cb => cb.value);
+    };
+
+    const selectedProducts = getSelectedOptions('product-all', 'filter-product');
+    const selectedMarkets = getSelectedOptions('market-all', 'filter-market');
+    const selectedShifts = getSelectedOptions('ca-all', 'filter-ca');
+    const selectedTeams = getSelectedOptions('team-all', 'filter-team');
+
+    const filtered = rawData.filter(r => {
+        if (isRestrictedView) {
+            if (allowedBranch && r.chiNhanh !== allowedBranch) return false;
+            if (allowedNames.length > 0 && !allowedNames.includes(r.ten)) return false;
+        }
+        const recordDate = new Date(r.ngay);
+        recordDate.setHours(12,0,0,0);
+        const isDateOk = (!startDate || recordDate >= startDate) && (!endDate || recordDate <= endDate);
+        const isProductOk = !selectedProducts || selectedProducts.includes(r.sanPham);
+        const isMarketOk = !selectedMarkets || selectedMarkets.includes(r.thiTruong);
+        const isShiftOk = !selectedShifts || selectedShifts.includes(String(r.ca));
+        const isTeamOk = !selectedTeams || selectedTeams.includes(String(r.team));
+        return isDateOk && isProductOk && isMarketOk && isShiftOk && isTeamOk;
+    });
+
+    renderSummary(filtered);
+    renderDailyBreakdown(filtered);
+}
+
+function renderSummary(data) {
+    const { flatList, total } = summarizeAndSortSalesData(data);
+    
+    // --- Tab 1: Sale đã trừ hủy ---
+    const totalRateSauHuy = total.mess ? total.don / total.mess : 0;
+    const soDonSauHuyTotal = total.soDonThucTe - total.soDonHoanHuyThucTe;
+    const dsSauHuyTTTotal = total.doanhThuChotThucTe - total.doanhSoHoanHuyThucTe;
+    const totalRowHtmlSauHuy = `<tr class="total-row"><td class="total-label" colspan="4">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatNumber(total.phanHoi)}</td><td class="total-value">${formatNumber(soDonSauHuyTotal)}</td><td class="total-value">${formatCurrency(dsSauHuyTTTotal)}</td><td class="total-value">${formatPercent(totalRateSauHuy)}</td></tr>`;
+
+    const bodyRowsHtmlSauHuy = flatList.map((item, index) => {
+        const rate = item.mess ? item.don / item.mess : 0;
+        const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
+        const soDonSauHuy = item.soDonThucTe - item.soDonHoanHuyThucTe;
+        const dsSauHuyTT = item.doanhThuChotThucTe - item.doanhSoHoanHuyThucTe;
+        return `<tr style="--row-index: ${index}"><td class="text-center">${index + 1}</td><td class="text-left">${item.chiNhanh}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(item.mess)}</td><td>${formatNumber(item.phanHoi)}</td><td>${formatNumber(soDonSauHuy)}</td><td>${formatCurrency(dsSauHuyTT)}</td><td class="${rateClass}">${formatPercent(rate)}</td></tr>`;
+    }).join('');
+    document.getElementById('summary-body-sau-huy').innerHTML = totalRowHtmlSauHuy + bodyRowsHtmlSauHuy;
+
+    // --- Tab 2:Sale báo cáo tay ---
+    const totalRateChot = total.mess ? total.soDonThucTe / total.mess : 0;
+    const totalRowHtmlChot = `<tr class="total-row"><td class="total-label" colspan="4">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatNumber(total.phanHoi)}</td><td class="total-value">${formatNumber(total.don)}</td><td class="total-value">${formatNumber(total.soDonThucTe)}</td><td class="total-value">${formatCurrency(total.chot)}</td><td class="total-value">${formatCurrency(total.doanhThuChotThucTe)}</td><td class="total-value">${formatPercent(totalRateChot)}</td></tr>`;
+
+    const bodyRowsHtmlChot = flatList.map((item, index) => {
+        const rate = item.mess ? item.soDonThucTe / item.mess : 0;
+        const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
+        return `<tr style="--row-index: ${index}"><td class="text-center">${index + 1}</td><td class="text-left">${item.chiNhanh}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(item.mess)}</td><td>${formatNumber(item.phanHoi)}</td><td>${formatNumber(item.don)}</td><td>${formatNumber(item.soDonThucTe)}</td><td>${formatCurrency(item.chot)}</td><td>${formatCurrency(item.doanhThuChotThucTe)}</td><td class="${rateClass}">${formatPercent(rate)}</td></tr>`;
+    }).join('');
+    document.getElementById('summary-body-chot').innerHTML = totalRowHtmlChot + bodyRowsHtmlChot;
+}
+
+function renderDailyBreakdown(data) {
+    const containerSauHuy = document.getElementById('daily-breakdown-sau-huy');
+    const containerChot = document.getElementById('daily-breakdown-chot');
+
+    if (!data.length) {
+        const noDataHtml = '<h3>Không có dữ liệu chi tiết để hiển thị.</h3>';
+        containerSauHuy.innerHTML = noDataHtml;
+        containerChot.innerHTML = noDataHtml;
+        return;
+    }
+
+    const groupedByDate = data.reduce((acc, r) => {
+        const dateKey = formatDate(r.ngay);
+        if (!acc[dateKey]) acc[dateKey] = [];
+        acc[dateKey].push(r);
+        return acc;
+    }, {});
+
+    const sortedDates = Object.keys(groupedByDate).sort((a,b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
+    
+    let finalHtmlSauHuy = '';
+    let finalHtmlChot = '';
+
+    sortedDates.forEach(date => {
+        const dailyData = groupedByDate[date];
+        const { flatList, total } = summarizeAndSortSalesData(dailyData);
+        
+        // --- Bảng cho Tab 1: Sale đã trừ hủy ---
+        const totalRateSauHuy = total.mess ? total.don / total.mess : 0;
+        const soDonSauHuyTotal = total.soDonThucTe - total.soDonHoanHuyThucTe;
+        const dsSauHuyTTTotal = total.doanhThuChotThucTe - total.doanhSoHoanHuyThucTe;
+        const totalRowHtmlSauHuy = `<tr class='total-row'><td colspan='4' class='total-label'>TỔNG NGÀY ${date}</td><td class='total-value'>${formatNumber(total.mess)}</td><td class='total-value'>${formatNumber(total.phanHoi)}</td><td class="total-value">${formatNumber(soDonSauHuyTotal)}</td><td class="total-value">${formatCurrency(dsSauHuyTTTotal)}</td><td class='total-value'>${formatPercent(totalRateSauHuy)}</td></tr>`;
+        
+        const rowsHtmlSauHuy = flatList.map((item, index) => {
+            const rate = item.mess ? item.don / item.mess : 0;
+            const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
+            const soDonSauHuy = item.soDonThucTe - item.soDonHoanHuyThucTe;
+            const dsSauHuyTT = item.doanhThuChotThucTe - item.doanhSoHoanHuyThucTe;
+            return `<tr style="--row-index: ${index}"><td class="text-center">${index + 1}</td><td class="text-left">${item.chiNhanh}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(item.mess)}</td><td>${formatNumber(item.phanHoi)}</td><td>${formatNumber(soDonSauHuy)}</td><td>${formatCurrency(dsSauHuyTT)}</td><td class="${rateClass}">${formatPercent(rate)}</td></tr>`;
+        }).join('');
+
+        const tableHtmlSauHuy = `<h3>Chi tiết ngày: ${date}</h3><div class="table-responsive-container"><table><thead><tr><th>STT</th><th>Chi nhánh</th><th>Team</th><th>Sale</th><th>Số Mess</th><th>Phản hồi</th><th>Số đơn sau huỷ</th><th>DS Sau Hủy TT</th><th>Tỉ lệ chốt</th></tr></thead><tbody>${totalRowHtmlSauHuy + rowsHtmlSauHuy}</tbody></table></div>`;
+        finalHtmlSauHuy += tableHtmlSauHuy;
+
+        // --- Bảng cho Tab 2: Sale báo cáo tay ---
+        const totalRateChot = total.mess ? total.soDonThucTe / total.mess : 0;
+        const totalRowHtmlChot = `<tr class='total-row'><td colspan='4' class='total-label'>TỔNG NGÀY ${date}</td><td class='total-value'>${formatNumber(total.mess)}</td><td class='total-value'>${formatNumber(total.phanHoi)}</td><td class='total-value'>${formatNumber(total.don)}</td><td class="total-value">${formatNumber(total.soDonThucTe)}</td><td class='total-value'>${formatCurrency(total.chot)}</td><td class="total-value">${formatCurrency(total.doanhThuChotThucTe)}</td><td class='total-value'>${formatPercent(totalRateChot)}</td></tr>`;
+
+        const rowsHtmlChot = flatList.map((item, index) => {
+            const rate = item.mess ? item.soDonThucTe / item.mess : 0;
+            const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
+            return `<tr style="--row-index: ${index}"><td class="text-center">${index + 1}</td><td class="text-left">${item.chiNhanh}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(item.mess)}</td><td>${formatNumber(item.phanHoi)}</td><td>${formatNumber(item.don)}</td><td>${formatNumber(item.soDonThucTe)}</td><td>${formatCurrency(item.chot)}</td><td>${formatCurrency(item.doanhThuChotThucTe)}</td><td class="${rateClass}">${formatPercent(rate)}</td></tr>`;
+        }).join('');
+        
+        const tableHtmlChot = `<h3>Chi tiết ngày: ${date}</h3><div class="table-responsive-container"><table><thead><tr><th>STT</th><th>Chi nhánh</th><th>Team</th><th>Sale</th><th>Số Mess</th><th>Phản hồi</th><th>Số Đơn</th><th>Số Đơn TT</th><th>DS Chốt</th><th>DS Chốt TT</th><th>Tỉ lệ chốt</th></tr></thead><tbody>${totalRowHtmlChot + rowsHtmlChot}</tbody></table></div>`;
+        finalHtmlChot += tableHtmlChot;
+    });
+
+    containerSauHuy.innerHTML = finalHtmlSauHuy;
+    containerChot.innerHTML = finalHtmlChot;
+}
+</script>
+</body>
+</html>
