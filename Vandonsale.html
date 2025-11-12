@@ -732,49 +732,58 @@
                 let filteredData;
                 
                 if (idFromUrl) {
-                    // Kiểm tra ID có trong danh sách leader không
                     console.log('Filtering by ID:', idFromUrl);
-                    const isLeader = leaderIds.includes(idFromUrl);
                     
-                    if (isLeader) {
-                        // Leader - hiển thị full data (Team = Hà Nội)
-                        console.log('User is LEADER - showing full team data');
+                    // Tìm user trong employeeData theo id_NS
+                    const currentUser = employeeData.find(emp => emp.id_NS === idFromUrl);
+                    
+                    if (!currentUser) {
+                        console.error('User not found in employee data:', idFromUrl);
+                        vanDonReportApp.showError('Không tìm thấy thông tin nhân viên với ID: ' + idFromUrl);
+                        hideLoader();
+                        return;
+                    }
+                    
+                    console.log('User found:', currentUser.Ten, '- Chức vụ:', currentUser.ChucVu, '- Team:', currentUser.Team);
+                    
+                    // Kiểm tra Chức vụ = "Leader"
+                    if (currentUser.ChucVu === 'Leader') {
+                        console.log('User is LEADER - showing team data');
                         
+                        // Lấy danh sách Tên của những người cùng Team
+                        const teamMembers = employeeData
+                            .filter(emp => emp.Team === currentUser.Team)
+                            .map(emp => emp.Ten);
+                        
+                        console.log('Team members list:', teamMembers);
+                        
+                        // Lọc data theo danh sách tên
                         filteredData = response.rows.filter(row => {
-                            const teamColumn = (row["Team"] || '').trim();
-                            return teamColumn === 'Hà Nội';
+                            const nhanVienSale = (row["Nhân viên Sale"] || '').trim();
+                            return teamMembers.includes(nhanVienSale);
                         });
                         
-                        console.log(`Leader ID: ${idFromUrl} - Team: Hà Nội - Found ${filteredData.length} records`);
+                        console.log(`Leader ${currentUser.Ten} - Team: ${currentUser.Team} - Found ${filteredData.length} records`);
+                    } else if (currentUser.ChucVu === 'NV') {
+                        console.log('User is NV - showing personal data only');
+                        
+                        // Lọc data theo tên của NV
+                        filteredData = response.rows.filter(row => {
+                            const nhanVienSale = (row["Nhân viên Sale"] || '').trim();
+                            return nhanVienSale === currentUser.Ten;
+                        });
+                        
+                        console.log(`NV ${currentUser.Ten} - Found ${filteredData.length} records`);
                     } else {
-                        // Nhân viên thường - tìm tên trong data và chỉ hiển thị của mình
-                        console.log('User is regular employee - showing personal data only');
+                        console.log('User role not recognized - showing personal data');
                         
-                        // Tìm tên nhân viên từ dữ liệu
-                        const userRows = response.rows.filter(row => {
-                            const idInRow = (row["id"] || '').trim();
-                            return idInRow === idFromUrl;
-                        });
-                        
-                        if (userRows.length === 0) {
-                            console.error('No data found for ID:', idFromUrl);
-                            vanDonReportApp.showError('Không tìm thấy dữ liệu cho ID: ' + idFromUrl);
-                            hideLoader();
-                            return;
-                        }
-                        
-                        // Lấy tên từ dòng đầu tiên
-                        const userName = (userRows[0]["Nhân viên Sale"] || userRows[0]["Tên"] || '').trim();
-                        console.log('Employee name:', userName);
-                        
-                        // Lọc tất cả data của nhân viên này
+                        // Fallback: lọc theo tên
                         filteredData = response.rows.filter(row => {
-                            const nhanVienMarketing = (row["Nhân viên Sale"] || '').trim();
-                            const ten = (row["Tên"] || '').trim();
-                            return nhanVienMarketing === userName || ten === userName;
+                            const nhanVienSale = (row["Nhân viên Sale"] || '').trim();
+                            return nhanVienSale === currentUser.Ten;
                         });
                         
-                        console.log(`Employee ${userName} - Found ${filteredData.length} records`);
+                        console.log(`Employee ${currentUser.Ten} - Found ${filteredData.length} records`);
                     }
                 } else {
                     // Nếu không có ID, lọc cứng theo cột "Team" = "Hà Nội" trong sheet F3
@@ -799,18 +808,44 @@
                 showLoader();
                 vanDonReportApp.showError('Đang tải dữ liệu, vui lòng chờ...');
                 
-                // Dùng API cũ cho dữ liệu vận đơn
-                const apiUrl = 'https://n-api-rouge.vercel.app/sheet/getAll';
+                // Fetch cả 2 API: vận đơn + nhân sự
+                const vanDonApi = 'https://n-api-rouge.vercel.app/sheet/getAll';
+                const employeeApi = 'https://n-api-gamma.vercel.app/report/generate?tableName=' + encodeURIComponent('Báo cáo sale');
                 
-                fetch(apiUrl)
-                    .then(response => {
-                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                        return response.json();
+                Promise.all([
+                    fetch(vanDonApi).then(res => {
+                        if (!res.ok) throw new Error(`Van don API error: ${res.status}`);
+                        return res.json();
+                    }),
+                    fetch(employeeApi).then(res => {
+                        if (!res.ok) throw new Error(`Employee API error: ${res.status}`);
+                        return res.json();
                     })
-                    .then(vanDonResponse => {
-                        console.log('===== API RESPONSE =====');
+                ])
+                    .then(([vanDonResponse, employeeResponse]) => {
+                        console.log('===== API RESPONSES =====');
                         console.log('Van don data loaded, rows count:', vanDonResponse.rows?.length || 0);
+                        console.log('Employee API raw response:', employeeResponse);
+                        console.log('Employee data loaded, records count:', employeeResponse.employeeData?.length || 0);
                         console.log('========================');
+                        
+                        // Lưu dữ liệu nhân viên vào biến global - API trả về trong employeeData array
+                        if (employeeResponse.employeeData && Array.isArray(employeeResponse.employeeData)) {
+                            // Log first record để xem cấu trúc thực tế
+                            console.log('First employee record from API:', employeeResponse.employeeData[0]);
+                            
+                            employeeData = employeeResponse.employeeData.map(r => ({
+                                id_NS: (r["id_NS"] || r["id"] || r["ID"] || '').trim(),
+                                Ten: (r["Tên"] || r["ten"] || r["Họ Và Tên"] || '').trim(),
+                                ChucVu: (r["Chức vụ"] || r["chuc_vu"] || r["Vị trí"] || '').trim(),
+                                Team: (r["Team"] || r["team"] || '').trim()
+                            }));
+                            console.log('Processed employee data:', employeeData.length, 'employees');
+                            console.log('Sample employee:', employeeData[0]);
+                            console.log('Employee with data sample:', employeeData.find(e => e.Ten !== ''));
+                        } else {
+                            console.error('Employee data not found in response:', employeeResponse);
+                        }
                         
                         // Xử lý dữ liệu vận đơn
                         handleData({ rows: vanDonResponse.rows }); 
