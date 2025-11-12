@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="vi">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -301,8 +300,9 @@
             padding: 20mm 15mm;
             page-break-after: always;
         }
+
         .dangky-page:last-child {
-             page-break-after: auto;
+            page-break-after: auto;
         }
 
 
@@ -351,13 +351,34 @@
             display: block;
             margin: 0 auto;
         }
-        
+
         .error-message {
             color: red;
             font-size: 12pt;
             font-weight: bold;
             text-align: center;
             padding: 20px;
+        }
+
+        /* ===== NEW TAB: HOP DONG STYLES ===== */
+        #hopdong-content-wrapper {
+            max-width: 210mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            min-height: 297mm;
+        }
+        #hopdong-iframe {
+            width: 100%;
+            height: calc(297mm - 40px); /* Chiều cao A4 trừ padding */
+            border: none;
+            display: block;
+        }
+        .hopdong-error-message {
+            color: red;
+            font-size: 14pt;
+            text-align: center;
+            padding: 50px;
         }
 
         /* ===== PRINT STYLES ===== */
@@ -402,13 +423,25 @@
                 box-shadow: none;
                 page-break-after: always;
             }
-             .dangky-page {
+
+            .dangky-page {
                 padding: 20mm 15mm; /* Padding riêng cho trang đăng ký */
             }
 
             .dangky-page:last-child {
                 page-break-after: auto;
             }
+
+            /* Không in iframe, chỉ in nội dung của iframe nếu nó được load vào document chính */
+            #tab3.printing #hopdong-content-wrapper {
+                box-shadow: none;
+                padding: 0;
+                min-height: auto;
+            }
+            #tab3.printing #hopdong-iframe {
+                display: none; /* Không in iframe trực tiếp */
+            }
+            /* Nếu muốn in nội dung của iframe, bạn sẽ cần một cách khác để nhúng nó vào DOM chính khi in */
 
             .dangky-image-wrapper {
                 overflow: visible !important;
@@ -445,11 +478,11 @@
         }
     </style>
 </head>
-
 <body>
     <div class="tabs-container">
         <button class="tab-link active" data-tab="tab1">Giấy đề nghị</button>
         <button class="tab-link" data-tab="tab2">Đăng ký xe</button>
+        <button class="tab-link" data-tab="tab3">Hợp đồng</button> <!-- Nút tab mới -->
     </div>
 
     <div class="content-container">
@@ -477,7 +510,8 @@
                     <p>1. Tên đơn vị vận tải: <strong id="company-name-content">...</strong></p>
                     <p>2. Địa chỉ: <span id="address">...</span></p>
                     <p>3. Điện thoại: <span id="phone">...</span></p>
-                    <p>4. Giấy phép kinh doanh vận tải bằng xe ô tô số <span id="dkkd">...</span>, ngày cấp: <span id="dkkd-date">...</span>; nơi cấp: Sở
+                    <p>4. Giấy phép kinh doanh vận tải bằng xe ô tô số <span id="dkkd">...</span>, ngày cấp: <span
+                            id="dkkd-date">...</span>; nơi cấp: Sở
                         Giao thông vận tải Lạng Sơn.</p>
                     <p>5. Đề nghị cấp lại Giấy phép vận tải loại <span id="request-type"
                             style="color: red; font-weight: bold;">...</span> cho các phương tiện sau:</p>
@@ -534,6 +568,13 @@
             <div id="dangky-container">
             </div>
         </div>
+
+        <div id="tab3" class="tab-content">
+            <button class="print-button" onclick="printTab('tab3')">🖨️ In Hợp đồng</button>
+            <div id="hopdong-content-wrapper">
+                <!-- Nội dung hợp đồng sẽ được nhúng vào đây bằng iframe hoặc fetch -->
+            </div>
+        </div>
     </div>
 
     <script>
@@ -557,7 +598,7 @@
                 'loaidenghi': 'request-type', 'giamdoc': 'director-name',
                 'mahoso': 'ho-so-content', 'ngaycaplandau': 'ngay-cap-landau-content'
             };
-            
+
             Object.entries(fields).forEach(([param, id]) => {
                 const element = document.getElementById(id);
                 if (element) {
@@ -568,7 +609,7 @@
             // --- XỬ LÝ CHỮ KÝ ---
             const directorNameElement = document.getElementById('director-name');
             if (getParam('loaichuky').toLowerCase() !== 'chữ ký') {
-                 if(directorNameElement) directorNameElement.style.visibility = 'hidden';
+                if (directorNameElement) directorNameElement.style.visibility = 'hidden';
             }
 
             // --- XỬ LÝ NGÀY THÁNG ---
@@ -616,7 +657,7 @@
             if (sealUrl) signatureContainer.appendChild(createImage(sealUrl, 'Con dấu', 'seal'));
             if (signatureUrl) signatureContainer.appendChild(createImage(signatureUrl, 'Chữ ký', 'signature'));
 
-             // --- TAB 2: TẠO CÁC TRANG ĐĂNG KÝ XE ---
+            // --- TAB 2: TẠO CÁC TRANG ĐĂNG KÝ XE ---
             const dangkyContainer = document.getElementById('dangky-container');
             const linkAnhData = getParam('linkanh');
 
@@ -625,7 +666,7 @@
                 pages.forEach(pageData => {
                     if (!pageData.trim()) return;
                     const parts = pageData.split('_a_').map(p => p.trim());
-                     // Cấu trúc dự kiến: [STT, BKS, Link mặt trước, Link mặt sau] hoặc [Link mặt trước, Link mặt sau]
+                    // Cấu trúc dự kiến: [STT, BKS, Link mặt trước, Link mặt sau] hoặc [Link mặt trước, Link mặt sau]
                     let bks = '', linkTruoc = '', linkSau = '';
                     if (parts[0].toLowerCase().startsWith('http')) {
                         // Không có BKS trong dữ liệu
@@ -640,6 +681,27 @@
                 });
             } else {
                 dangkyContainer.innerHTML = '<div class="error-message">Không có dữ liệu ảnh đăng ký xe.</div>';
+            }
+
+            // --- TAB 3: TẢI NỘI DUNG HỢP ĐỒNG ---
+            const hopdongContentWrapper = document.getElementById('hopdong-content-wrapper');
+            const hdUrl = getParam('hd'); // Lấy link hợp đồng từ tham số 'hd'
+
+            if (hdUrl) {
+                // Sử dụng iframe để nhúng nội dung từ URL
+                const iframe = document.createElement('iframe');
+                iframe.id = 'hopdong-iframe';
+                iframe.src = hdUrl;
+                iframe.title = 'Nội dung hợp đồng';
+                iframe.allowfullscreen = true;
+                iframe.sandbox = "allow-scripts allow-same-origin allow-popups allow-forms"; // Cấu hình sandbox để tăng cường bảo mật
+                
+                iframe.onerror = () => {
+                    hopdongContentWrapper.innerHTML = '<div class="hopdong-error-message">Không thể tải nội dung hợp đồng từ URL đã cung cấp. <br>Vui lòng kiểm tra lại đường dẫn hoặc cấu hình CORS của máy chủ.</div>';
+                };
+                hopdongContentWrapper.appendChild(iframe);
+            } else {
+                hopdongContentWrapper.innerHTML = '<div class="hopdong-error-message">Không có đường dẫn hợp đồng (tham số "hd") trong URL.</div>';
             }
         });
 
@@ -680,7 +742,7 @@
             bksDiv.className = 'dangky-bks';
             bksDiv.textContent = `Ảnh giấy đăng ký xe: ${bks}`;
             pageDiv.appendChild(bksDiv);
-            
+
             pageDiv.appendChild(createImageSection('MẶT TRƯỚC', linkDangKyTruoc, bks));
             pageDiv.appendChild(createImageSection('MẶT SAU', linkDangKySau, bks));
 
@@ -690,14 +752,33 @@
         function printTab(tabId) {
             const activeTab = document.querySelector('.tab-content.active');
             const targetTab = document.getElementById(tabId);
-            
-            if(activeTab) activeTab.classList.remove('active');
-            if(targetTab) targetTab.classList.add('active', 'printing');
 
-            window.print();
-            
-            if(targetTab) targetTab.classList.remove('active', 'printing');
-            if(activeTab) activeTab.classList.add('active');
+            if (activeTab) activeTab.classList.remove('active');
+            if (targetTab) targetTab.classList.add('active', 'printing');
+
+            // Xử lý đặc biệt cho iframe khi in
+            if (tabId === 'tab3') {
+                const iframe = document.getElementById('hopdong-iframe');
+                if (iframe && iframe.contentWindow) {
+                    try {
+                        // Cố gắng in trực tiếp nội dung của iframe
+                        iframe.contentWindow.focus();
+                        iframe.contentWindow.print();
+                    } catch (e) {
+                        console.warn("Không thể in trực tiếp nội dung iframe do Same-Origin Policy hoặc hạn chế bảo mật. Cần giải pháp thay thế cho việc in iframe.", e);
+                        // Fallback: in trang chính (sẽ không bao gồm nội dung iframe)
+                        window.print();
+                    }
+                } else {
+                    window.print(); // In trang chính nếu không có iframe hoặc lỗi
+                }
+            } else {
+                window.print();
+            }
+
+
+            if (targetTab) targetTab.classList.remove('active', 'printing');
+            if (activeTab) activeTab.classList.add('active');
         }
 
         document.querySelectorAll('.tab-link').forEach(link => {
@@ -711,5 +792,4 @@
 
     </script>
 </body>
-
 </html>
