@@ -829,8 +829,6 @@
     let masterData = [];
     let employeeData = [];
     let baseDataForReport = [];
-    // Chỉ hiển thị dữ liệu của Team "Test"
-    const TEAM_TEST_NAME = 'test';
     const charts = {};
     const sortStates = {
       summary: { column: null, direction: 'asc' },
@@ -1018,10 +1016,6 @@
             };
           });
 
-        // Lọc ngay dữ liệu chỉ còn team Test (lowercase so sánh không phân biệt hoa thường)
-        masterData = masterData.filter(r => r.team && r.team.trim().toLowerCase() === TEAM_TEST_NAME);
-        baseDataForReport = [...masterData];
-
         setupInitialReportView();
         populateAllFilters();
         applyTab1Filters();
@@ -1048,7 +1042,8 @@
       // --------------------------------
 
       if (!idFromUrl) {
-        document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS - TEAM TEST';
+        document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU CHI PHÍ ADS';
+        baseDataForReport = masterData;
         manualTabBtn.style.display = 'none';
         vandonTabBtn.style.display = 'none';
         return;
@@ -1060,10 +1055,12 @@
       if (currentUser) {
         console.log("ĐÃ TÌM THẤY NHÂN VIÊN:", currentUser); // Thêm log để xác nhận
         if (currentUser.chucVu === 'leader') {
-          document.getElementById('report-title-tab1').textContent = 'DỮ LIỆU TEAM TEST';
-          baseDataForReport = [...masterData];
+          const teamsString = new URLSearchParams(window.location.search).get('teams');
+          const teams = teamsString ? teamsString.split(' , ') : [currentUser.team];
+          document.getElementById('report-title-tab1').textContent = `DỮ LIỆU TEAM ${teams.join(' , ')}`;
+          baseDataForReport = masterData.filter(r => teams.includes((r.team || '').trim()));
         } else {
-          document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ten} (TEAM TEST)`;
+          document.getElementById('report-title-tab1').textContent = `DỮ LIỆU CÁ NHÂN - ${currentUser.ten}`;
           baseDataForReport = masterData.filter(r => (r.ten || '').trim() === currentUser.ten);
         }
 
@@ -1084,8 +1081,8 @@
 
       } else {
         console.error("KHÔNG TÌM THẤY NHÂN VIÊN VỚI ID ĐÃ CUNG CẤP."); // Thêm log lỗi
-        document.getElementById('report-title-tab1').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU TEAM TEST';
-        baseDataForReport = [...masterData];
+        document.getElementById('report-title-tab1').textContent = `KHÔNG TÌM THẤY DỮ LIỆU`;
+        baseDataForReport = [];
         manualTabBtn.style.display = 'none';
         vandonTabBtn.style.display = 'none';
       }
@@ -1257,10 +1254,9 @@
     function populateAllFilters() {
       if (!masterData.length) return;
 
-      // Vì masterData đã bị lọc chỉ còn team Test nên các tập này đều là của team Test
       const products = [...new Set(masterData.map(r => r.sanPham).filter(Boolean))].sort();
       const cas = [...new Set(masterData.map(r => r.ca).filter(Boolean))].sort();
-      const teams = ['Test']; // Cố định chỉ hiển thị Team Test
+      const teams = [...new Set(masterData.map(r => r.team).filter(Boolean))].sort();
       const markets = [...new Set(masterData.map(r => r.thiTruong).filter(Boolean))].sort();
 
       const createCheckboxes = (items, className) => items.map(item => `<label class='indent'><input type='checkbox' class='${className}' value='${item}' checked> ${item}</label>`).join('');
@@ -1276,10 +1272,10 @@
       };
 
       ['tab1', 'tab3'].forEach(prefix => {
-        document.getElementById(`product-options-${prefix}`).innerHTML = products.length ? createCheckboxes(products, `filter-product-${prefix}`) : '<em>Không có sản phẩm</em>';
-        document.getElementById(`ca-options-${prefix}`).innerHTML = cas.length ? createCheckboxes(cas, `filter-ca-${prefix}`) : '<em>Không có ca</em>';
+        document.getElementById(`product-options-${prefix}`).innerHTML = createCheckboxes(products, `filter-product-${prefix}`);
+        document.getElementById(`ca-options-${prefix}`).innerHTML = createCheckboxes(cas, `filter-ca-${prefix}`);
         document.getElementById(`team-options-${prefix}`).innerHTML = createCheckboxes(teams, `filter-team-${prefix}`);
-        document.getElementById(`market-options-${prefix}`).innerHTML = markets.length ? createMarketCheckboxes(`filter-market-${prefix}`) : '<em>Không có thị trường</em>';
+        document.getElementById(`market-options-${prefix}`).innerHTML = createMarketCheckboxes(`filter-market-${prefix}`);
       });
 
       const createOptions = (items) => items.map(item => `<option value="${item}">${item}</option>`).join('');
@@ -1454,11 +1450,7 @@
       container.style.display = data.length > 0 ? 'block' : 'none';
       if (data.length === 0) {
         tableBody.innerHTML = `<tr><td colspan="15" class="text-center">Không có dữ liệu.</td></tr>`;
-        // FIX: Sai ID 'summary-mkt' gây lỗi null.style. Dùng đúng 'summary-market-mkt' + kiểm tra tồn tại
-        if (prefix === 'summary') {
-          const summaryContainer = document.getElementById('summary-market-mkt');
-          if (summaryContainer) summaryContainer.style.display = 'block';
-        }
+        if (prefix === 'summary') document.getElementById('summary-mkt').style.display = 'block';
         return;
       }
 
