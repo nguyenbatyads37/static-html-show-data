@@ -794,6 +794,9 @@
           const tongTien = Number(order['Tổng tiền VNĐ']) || 0;
           // Lấy phí ship từ F3 data
           const phiShip = Number(order['Phí ship']) || 0;
+          // Lấy Tiền Việt đã đối soát để làm DThu thành công
+          const doiSoatRaw = order['Tiền Việt đã đối soát'];
+          const tienVietDoiSoat = typeof doiSoatRaw === 'number' ? doiSoatRaw : (Number(doiSoatRaw) || 0);
           // Đã loại bỏ log ship để tránh spam console
 
           // Phân loại đơn
@@ -806,7 +809,10 @@
           const soDonHuyThucTe = isHuy ? 1 : 0;
           const dsHoanHuyThucTe = isHuy ? tongTien : 0;
           const dsSauHoanHuyThucTe = isHuy ? 0 : tongTien;
-          const dsThanhCongThucTe = isThanhCong ? tongTien : 0;
+          const dsThanhCongThucTe = isThanhCong ? tongTien : 0; // dùng cho cột DS đi như hiện tại
+          // Số đơn và DThu thành công lấy từ Tiền Việt đã đối soát
+          const soDonThuTienThucTe = tienVietDoiSoat > 0 ? 1 : 0;
+          const dThuThanhCongThucTe = tienVietDoiSoat;
 
           // Chỉ set cpqc ở record đầu tiên của mỗi marketing
           let cpqc = 0;
@@ -841,7 +847,10 @@
             dsHoanHuyThucTe,
             soDonHuyThucTe,
             dsSauHoanHuyThucTe,
-            dsThanhCongThucTe
+            dsThanhCongThucTe,
+            // DThu thành công từ Tiền Việt đã đối soát
+            soDonThuTienThucTe,
+            dThuThanhCongThucTe
           };
         }) : [];
         console.log(`✅ Master data created from F3 orders: ${masterData.length} records`);
@@ -1216,10 +1225,12 @@
           // cả hai = 0: coi là fallback (0)
           S.dsSauHuySourceFB += 1;
         }
-        S.soDonDi += r.soDonThucTe || 0; // Dùng số đơn thực tế (cần có cột tracking để lọc chính xác)
+        // Số đơn & DS đi (giữ nguyên logic hiện tại dựa vào dsThanhCongThucTe)
+        S.soDonDi += r.soDonThucTe || 0;
         S.dsDi += r.dsThanhCongThucTe || r.dsThanhCong || 0;
-        S.soDonThuTien += r.soDonThucTe || 0; // Dùng số đơn thực tế (cần cột xác nhận thu tiền)
-        S.dThuThanhCong += r.dsThanhCongThucTe || r.dsThanhCong || 0;
+        // Số đơn & DThu thành công lấy từ Tiền Việt đã đối soát
+        S.soDonThuTien += r.soDonThuTienThucTe || 0;
+        S.dThuThanhCong += r.dThuThanhCongThucTe || 0;
         S.ship += r.ship || 0; // Phí ship từ F3 data - field 'Phí ship'
         // DThu tính KPI sẽ tính sau = DS sau hủy - Ship
         
@@ -1238,7 +1249,8 @@
       // Tính DS sau hủy và DThu tính KPI cho tất cả các mục
       return Object.values(summary).map(s => {
         s.dsSauHuy = Math.max(0, s.dsChot - s.dsHuy);
-        s.dThuTinhKpi = Math.max(0, (s.dsSauHuy || 0) - (s.ship || 0));
+        // DThu tính KPI = DS sau hủy - Ship (cho phép âm nếu Ship > DS sau hủy)
+        s.dThuTinhKpi = (s.dsSauHuy || 0) - (s.ship || 0);
         return s;
       });
     }
@@ -1510,3 +1522,4 @@
 </body>
 
 </html>
+
