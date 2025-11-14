@@ -566,6 +566,8 @@
     <button class="tablinks" onclick="openTab(event, 'KpiReport')">Báo cáo KPI</button>
     <button class="tablinks" onclick="openTab(event, 'DailyReport')">Báo cáo theo ngày</button>
     <button class="tablinks" onclick="openTab(event, 'MarketReport')">Hiệu quả MKT</button>
+    <button class="tablinks" onclick="openTab(event, 'CeoKpiReport')">Báo cáo KPI CEO</button>
+
   </div>
   <!-- TAB 1: BÁO CÁO CHI TIẾT -->
   <div id="DetailedReport" class="tab-content">
@@ -745,6 +747,10 @@
         </div>
       </div>
     </div>
+  </div>
+  <div id="CeoKpiReport" class="tab-content">
+    <iframe id="kpi-ceo-iframe"
+      src="https://nguyenbatyads37.github.io/static-html-show-data/baocaokpiCEO.html?view=mkt"></iframe>
   </div>
   <!-- TAB 3: BÁO CÁO THEO NGÀY (BIỂU ĐỒ) -->
   <div id="DailyReport" class="tab-content">
@@ -1029,21 +1035,22 @@
     // =================================================================================
 
     /**
-    * @description URL của API để lấy dữ liệu báo cáo.
-    */
-    const API_URL = 'https://script.google.com/macros/s/AKfycbyF3qX5mKkehGeCQzAurocYduBcEy03jveC67fvamd9-atATgBFqTcVxGehP82Gd8YP/exec?tableName=Báo cáo MKT';
+     * @description URL của API để lấy dữ liệu báo cáo.
+     */
+    const API_URL =
+      'https://script.google.com/macros/s/AKfycbyF3qX5mKkehGeCQzAurocYduBcEy03jveC67fvamd9-atATgBFqTcVxGehP82Gd8YP/exec?tableName=Báo cáo MKT';
 
     /**
-    * @description Mảng màu sắc để sử dụng cho các biểu đồ, giúp phân biệt các danh mục.
-    */
+     * @description Mảng màu sắc để sử dụng cho các biểu đồ, giúp phân biệt các danh mục.
+     */
     const CHART_COLORS = [
       '#4CAF50', '#2196F3', '#FFC107', '#F44336', '#9C27B0', '#009688',
       '#FF9800', '#795548', '#607D8B', '#E91E63', '#3F51B5', '#8BC34A'
     ];
 
     /**
-    * @description Cấu trúc nhóm các thị trường để lọc và hiển thị.
-    */
+     * @description Cấu trúc nhóm các thị trường để lọc và hiển thị.
+     */
     const MARKET_GROUPS = {
       'Châu Á': ['Hàn Quốc', 'Nhật Bản', 'VN'],
       'Ngoài Châu Á': ['Úc', 'US', 'Canada']
@@ -1054,51 +1061,144 @@
     let baseDataForReport = [];
     const charts = {};
     const sortStates = {
-      summary: { column: null, direction: 'asc' },
-      kpi: { column: null, direction: 'asc' },
-      modal: { column: null, direction: 'asc' },
+      summary: {
+        column: null,
+        direction: 'asc'
+      },
+      kpi: {
+        column: null,
+        direction: 'asc'
+      },
+      modal: {
+        column: null,
+        direction: 'asc'
+      },
       daily: {}
     };
 
     /**
-    * @description Cấu hình các key để sắp xếp cho từng cột trong bảng Báo cáo chi tiết.
-    */
+     * @description Cấu hình các key để sắp xếp cho từng cột trong bảng Báo cáo chi tiết.
+     */
     const summaryColumnSortKeys = {
-      1: { prop: 'team', type: 'string' },
-      2: { prop: 'name', type: 'string' },
-      3: { prop: 'mess', type: 'number' },
-      4: { prop: 'cpqc', type: 'number' },
-      5: { prop: 'don', type: 'number' },
-      6: { prop: 'donThucTe', type: 'number' },
-      7: { prop: 'chot', type: 'number' },
-      8: { prop: 'chotThucTe', type: 'number' },
-      9: { prop: (s) => s.mess ? s.don / s.mess : 0, type: 'number' }, // Tỉ lệ chốt
-      10: { prop: (s) => s.mess ? s.donThucTe / s.mess : 0, type: 'number' }, // Tỉ lệ chốt (TT)
-      11: { prop: (s) => s.mess ? s.cpqc / s.mess : 0, type: 'number' }, // Giá Mess
-      12: { prop: (s) => s.don ? s.cpqc / s.don : 0, type: 'number' },   // CPS
-      13: { prop: (s) => s.chot ? s.cpqc / s.chot : 0, type: 'number' }, // %CP/DS
-      14: { prop: (s) => s.don ? s.chot / s.don : 0, type: 'number' }  // Giá TB Đơn
+      1: {
+        prop: 'team',
+        type: 'string'
+      },
+      2: {
+        prop: 'name',
+        type: 'string'
+      },
+      3: {
+        prop: 'mess',
+        type: 'number'
+      },
+      4: {
+        prop: 'cpqc',
+        type: 'number'
+      },
+      5: {
+        prop: 'don',
+        type: 'number'
+      },
+      6: {
+        prop: 'donThucTe',
+        type: 'number'
+      },
+      7: {
+        prop: 'chot',
+        type: 'number'
+      },
+      8: {
+        prop: 'chotThucTe',
+        type: 'number'
+      },
+      9: {
+        prop: (s) => s.mess ? s.don / s.mess : 0,
+        type: 'number'
+      }, // Tỉ lệ chốt
+      10: {
+        prop: (s) => s.mess ? s.donThucTe / s.mess : 0,
+        type: 'number'
+      }, // Tỉ lệ chốt (TT)
+      11: {
+        prop: (s) => s.mess ? s.cpqc / s.mess : 0,
+        type: 'number'
+      }, // Giá Mess
+      12: {
+        prop: (s) => s.don ? s.cpqc / s.don : 0,
+        type: 'number'
+      }, // CPS
+      13: {
+        prop: (s) => s.chot ? s.cpqc / s.chot : 0,
+        type: 'number'
+      }, // %CP/DS
+      14: {
+        prop: (s) => s.don ? s.chot / s.don : 0,
+        type: 'number'
+      } // Giá TB Đơn
     };
 
 
     /**
-    * @description Cấu hình các key để sắp xếp cho từng cột trong bảng Báo cáo KPI.
-    */
+     * @description Cấu hình các key để sắp xếp cho từng cột trong bảng Báo cáo KPI.
+     */
     const kpiColumnSortKeys = {
-      1: { prop: 'team', type: 'string' },
-      2: { prop: 'name', type: 'string' },
-      3: { prop: 'cpqc', type: 'number' },
-      4: { prop: 'dsChot', type: 'number' },
-      5: { prop: 'dsChotThucTe', type: 'number' },
-      6: { prop: 'soDonHuy', type: 'number' },
-      7: { prop: 'soDonHuyThucTe', type: 'number' },
-      8: { prop: 'doanhSoHuy', type: 'number' },
-      9: { prop: 'dsHoanHuyThucTe', type: 'number' },
-      10: { prop: 'dsSauShip', type: 'number' },
-      11: { prop: 'dsThanhCongThucTe', type: 'number' }, // Updated from dsSauHoanHuyThucTe
-      12: { prop: 'dsThanhCong', type: 'number' },
-      13: { prop: (s) => s.dsSauShip ? s.cpqc / s.dsSauShip : 0, type: 'number' }, // %CP/DS
-      14: { prop: (s) => s.kpiValue ? s.dsSauShip / s.kpiValue : 0, type: 'number' } // % KPI
+      1: {
+        prop: 'team',
+        type: 'string'
+      },
+      2: {
+        prop: 'name',
+        type: 'string'
+      },
+      3: {
+        prop: 'cpqc',
+        type: 'number'
+      },
+      4: {
+        prop: 'dsChot',
+        type: 'number'
+      },
+      5: {
+        prop: 'dsChotThucTe',
+        type: 'number'
+      },
+      6: {
+        prop: 'soDonHuy',
+        type: 'number'
+      },
+      7: {
+        prop: 'soDonHuyThucTe',
+        type: 'number'
+      },
+      8: {
+        prop: 'doanhSoHuy',
+        type: 'number'
+      },
+      9: {
+        prop: 'dsHoanHuyThucTe',
+        type: 'number'
+      },
+      10: {
+        prop: 'dsSauShip',
+        type: 'number'
+      },
+      11: {
+        prop: 'dsThanhCongThucTe',
+        type: 'number'
+      }, // Updated from dsSauHoanHuyThucTe
+      12: {
+        prop: 'dsThanhCong',
+        type: 'number'
+      },
+      13: {
+        prop: (s) => s.dsSauShip ? s.cpqc / s.dsSauShip : 0,
+        type: 'number'
+      }, // %CP/DS
+      14: {
+        prop: (s) => s.kpiValue ? s.dsSauShip / s.kpiValue : 0,
+        type: 'number'
+      } // % KPI
     };
 
 
@@ -1159,9 +1259,12 @@
       }
 
       // Sorting table listeners
-      document.getElementById('summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e, 'summary'));
-      document.getElementById('kpi-summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e, 'kpi'));
-      document.getElementById('modal-summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e, 'modal'));
+      document.getElementById('summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e,
+        'summary'));
+      document.getElementById('kpi-summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(e,
+        'kpi'));
+      document.getElementById('modal-summary-table').querySelector('thead').addEventListener('click', (e) => sortTable(
+        e, 'modal'));
       document.getElementById('daily-breakdown').addEventListener('click', (e) => {
         if (e.target.closest('th')) {
           sortTable(e, 'daily');
@@ -1175,11 +1278,17 @@
     function setupModalEventListeners() {
       const modal = document.getElementById('daily-detail-modal');
       const closeBtn = modal.querySelector('.close-button');
-      closeBtn.onclick = () => { modal.style.display = "none"; };
-      window.onclick = (event) => { if (event.target == modal) { modal.style.display = "none"; } };
+      closeBtn.onclick = () => {
+        modal.style.display = "none";
+      };
+      window.onclick = (event) => {
+        if (event.target == modal) {
+          modal.style.display = "none";
+        }
+      };
       document.getElementById('date-summary-body').addEventListener('click', (e) => {
         const row = e.target.closest('tr');
-        const dateText = row?.cells[0]?.textContent.trim();
+        const dateText = row ? .cells[0] ? .textContent.trim();
         if (dateText) {
           showDailyDetailModal(dateText);
         }
@@ -1362,14 +1471,17 @@
       const selection = event.target.value;
       if (!selection) return;
 
-      const { startDate, endDate } = getDateRange(selection);
+      const {
+        startDate,
+        endDate
+      } = getDateRange(selection);
       const formattedStart = startDate.toLocaleDateString('en-CA');
       const formattedEnd = endDate.toLocaleDateString('en-CA');
 
-      const tabId = event.target.closest('.tab-content')?.id ||
+      const tabId = event.target.closest('.tab-content') ? .id ||
         (event.target.id.includes('mkt') ? 'MarketReport' :
           event.target.id.includes('tab1') ? 'DetailedReport' :
-            event.target.id.includes('tab2') ? 'DailyReport' : 'KpiReport');
+          event.target.id.includes('tab2') ? 'DailyReport' : 'KpiReport');
 
       let startDateId, endDateId;
       if (tabId === 'MarketReport') {
@@ -1390,7 +1502,9 @@
       document.getElementById(endDateId).value = formattedEnd;
 
       // Manually trigger the change event to apply the filter
-      document.getElementById(startDateId).dispatchEvent(new Event('change', { bubbles: true }));
+      document.getElementById(startDateId).dispatchEvent(new Event('change', {
+        bubbles: true
+      }));
     }
 
 
@@ -1405,8 +1519,10 @@
 
       let selectedProducts, selectedMarkets, selectedCas, selectedTeams;
       if (isMktTab) {
-        selectedProducts = Array.from(document.getElementById('product-filter-mkt').selectedOptions).map(opt => opt.value);
-        selectedMarkets = Array.from(document.getElementById('market-filter-mkt').selectedOptions).map(opt => opt.value);
+        selectedProducts = Array.from(document.getElementById('product-filter-mkt').selectedOptions).map(opt => opt
+          .value);
+        selectedMarkets = Array.from(document.getElementById('market-filter-mkt').selectedOptions).map(opt => opt
+          .value);
       } else {
         const getSelected = (type) => {
           const allCheckbox = document.getElementById(`${type}-all-${tabPrefix}`);
@@ -1421,8 +1537,8 @@
 
       // Áp dụng bộ lọc và lưu kết quả vào một biến
       const filteredDataResult = baseDataForReport.filter(r => {
-        const date = new Date(r.ngay);                // Ép kiểu ngày
-        if (!r.ngay || isNaN(date)) return false;     // Loại nếu không có hoặc sai định dạng
+        const date = new Date(r.ngay); // Ép kiểu ngày
+        if (!r.ngay || isNaN(date)) return false; // Loại nếu không có hoặc sai định dạng
         const isDateOk =
           (!startDate || date >= startDate) &&
           (!endDate || date <= endDate);
@@ -1433,7 +1549,8 @@
         if (!isProductOk) return false;
 
         const marketGroup = getMarketGroup(normalize(r.thiTruong));
-        const isMarketOk = selectedMarkets.length === 0 || selectedMarkets.includes(r.thiTruong) || selectedMarkets.includes(marketGroup);
+        const isMarketOk = selectedMarkets.length === 0 || selectedMarkets.includes(r.thiTruong) || selectedMarkets
+          .includes(marketGroup);
         if (!isMarketOk) return false;
 
         if (isMktTab) return true;
@@ -1461,23 +1578,32 @@
       const teams = [...new Set(masterData.map(r => r.team).filter(Boolean))].sort();
       const markets = [...new Set(masterData.map(r => r.thiTruong).filter(Boolean))].sort();
 
-      const createCheckboxes = (items, className) => items.map(item => `<label class='indent'><input type='checkbox' class='${className}' value='${item}' checked> ${item}</label>`).join('');
+      const createCheckboxes = (items, className) => items.map(item =>
+          `<label class='indent'><input type='checkbox' class='${className}' value='${item}' checked> ${item}</label>`)
+        .join('');
       const createMarketCheckboxes = (className) => {
         let html = '';
         Object.keys(MARKET_GROUPS).forEach(group => {
-          html += `<label><input type='checkbox' class='${className} filter-market-group' value='${group}' checked> <b>${group}</b></label>`;
-          html += MARKET_GROUPS[group].map(child => `<label class='indent'><input type='checkbox' class='${className}' value='${child}' checked> ${child}</label>`).join('');
+          html +=
+            `<label><input type='checkbox' class='${className} filter-market-group' value='${group}' checked> <b>${group}</b></label>`;
+          html += MARKET_GROUPS[group].map(child =>
+            `<label class='indent'><input type='checkbox' class='${className}' value='${child}' checked> ${child}</label>`
+          ).join('');
         });
-        const ungroupedMarkets = markets.filter(m => !Object.values(MARKET_GROUPS).flat().map(normalize).includes(normalize(m)));
+        const ungroupedMarkets = markets.filter(m => !Object.values(MARKET_GROUPS).flat().map(normalize).includes(
+          normalize(m)));
         html += createCheckboxes(ungroupedMarkets, className);
         return html;
       };
 
       ['tab1', 'tab3'].forEach(prefix => {
-        document.getElementById(`product-options-${prefix}`).innerHTML = createCheckboxes(products, `filter-product-${prefix}`);
+        document.getElementById(`product-options-${prefix}`).innerHTML = createCheckboxes(products,
+          `filter-product-${prefix}`);
         document.getElementById(`ca-options-${prefix}`).innerHTML = createCheckboxes(cas, `filter-ca-${prefix}`);
-        document.getElementById(`team-options-${prefix}`).innerHTML = createCheckboxes(teams, `filter-team-${prefix}`);
-        document.getElementById(`market-options-${prefix}`).innerHTML = createMarketCheckboxes(`filter-market-${prefix}`);
+        document.getElementById(`team-options-${prefix}`).innerHTML = createCheckboxes(teams,
+          `filter-team-${prefix}`);
+        document.getElementById(`market-options-${prefix}`).innerHTML = createMarketCheckboxes(
+          `filter-market-${prefix}`);
       });
       document.getElementById(`product-options-tab2`).innerHTML = createCheckboxes(products, `filter-product-tab2`);
       document.getElementById(`market-options-tab2`).innerHTML = createMarketCheckboxes(`filter-market-tab2`);
@@ -1494,7 +1620,10 @@
     function applyTab1Filters() {
       const filteredData = getFilteredData('tab1');
       const summaryList = generateSummaryTableData(filteredData);
-      sortList(summaryList, sortStates.summary, summaryColumnSortKeys, { prop: 'team', type: 'string' });
+      sortList(summaryList, sortStates.summary, summaryColumnSortKeys, {
+        prop: 'team',
+        type: 'string'
+      });
       renderSummary(summaryList);
       updateSortIcons(document.getElementById('summary-table'), sortStates.summary);
       renderDailyBreakdown(filteredData);
@@ -1503,7 +1632,10 @@
     function applyTab3Filters() {
       const filteredData = getFilteredData('tab3');
       const kpiList = generateKpiTableData(filteredData);
-      sortList(kpiList, sortStates.kpi, kpiColumnSortKeys, { prop: 'team', type: 'string' });
+      sortList(kpiList, sortStates.kpi, kpiColumnSortKeys, {
+        prop: 'team',
+        type: 'string'
+      });
       renderKpiSummary(kpiList);
       updateSortIcons(document.getElementById('kpi-summary-table'), sortStates.kpi);
     }
@@ -1525,9 +1657,11 @@
             hideLoader();
             return;
           }
-          document.getElementById('report-date-mkt').textContent = `Từ ngày ${formatDate(new Date(startDateVal))} đến ngày ${formatDate(new Date(endDateVal))}`;
+          document.getElementById('report-date-mkt').textContent =
+            `Từ ngày ${formatDate(new Date(startDateVal))} đến ngày ${formatDate(new Date(endDateVal))}`;
           const filteredData = getFilteredData('mkt');
-          const asiaData = [], nonAsiaData = [];
+          const asiaData = [],
+            nonAsiaData = [];
           const nonAsiaMarketsLower = MARKET_GROUPS['Ngoài Châu Á'].map(m => m.toLowerCase());
           filteredData.forEach(record => {
             if (nonAsiaMarketsLower.includes((record.thiTruong || '').toLowerCase())) {
@@ -1566,8 +1700,14 @@
         const key = r.ten || 'N/A';
         if (!summary[key]) {
           summary[key] = {
-            team: r.team, name: r.ten, mess: 0, don: 0, chot: 0, cpqc: 0,
-            donThucTe: 0, chotThucTe: 0
+            team: r.team,
+            name: r.ten,
+            mess: 0,
+            don: 0,
+            chot: 0,
+            cpqc: 0,
+            donThucTe: 0,
+            chotThucTe: 0
           };
         }
         const S = summary[key];
@@ -1587,18 +1727,33 @@
         const key = r.ten || 'N/A';
         if (!summary[key]) {
           summary[key] = {
-            name: r.ten, team: r.team, cpqc: 0, dsChot: 0,
-            soDonHuy: 0, doanhSoHuy: 0, dsSauShip: 0, dsThanhCong: 0, kpiValue: 0,
-            dsChotThucTe: 0, soDonHuyThucTe: 0, dsHoanHuyThucTe: 0, dsSauHoanHuyThucTe: 0,
+            name: r.ten,
+            team: r.team,
+            cpqc: 0,
+            dsChot: 0,
+            soDonHuy: 0,
+            doanhSoHuy: 0,
+            dsSauShip: 0,
+            dsThanhCong: 0,
+            kpiValue: 0,
+            dsChotThucTe: 0,
+            soDonHuyThucTe: 0,
+            dsHoanHuyThucTe: 0,
+            dsSauHoanHuyThucTe: 0,
             dsThanhCongThucTe: 0
           };
         }
         const S = summary[key];
-        S.cpqc += r.cpqc; S.dsChot += r.dsChot;
-        S.dsSauShip += r.dsSauShip; S.dsThanhCong += r.dsThanhCong;
-        S.kpiValue += r.kpiValue; S.soDonHuy += r.soDonHuy; S.doanhSoHuy += r.doanhSoHuy;
+        S.cpqc += r.cpqc;
+        S.dsChot += r.dsChot;
+        S.dsSauShip += r.dsSauShip;
+        S.dsThanhCong += r.dsThanhCong;
+        S.kpiValue += r.kpiValue;
+        S.soDonHuy += r.soDonHuy;
+        S.doanhSoHuy += r.doanhSoHuy;
         S.dsChotThucTe += r.dsChotThucTe;
-        S.soDonHuyThucTe += r.soDonHuyThucTe; S.dsHoanHuyThucTe += r.dsHoanHuyThucTe;
+        S.soDonHuyThucTe += r.soDonHuyThucTe;
+        S.dsHoanHuyThucTe += r.dsHoanHuyThucTe;
         S.dsSauHoanHuyThucTe += r.dsSauHoanHuyThucTe;
         S.dsThanhCongThucTe += r.dsThanhCongThucTe;
       });
@@ -1611,16 +1766,33 @@
 
     function renderSummary(dataList) {
       const selM = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
-      const { bodyHtml } = generateSummaryTableHTML(dataList, selM);
+      const {
+        bodyHtml
+      } = generateSummaryTableHTML(dataList, selM);
       document.getElementById('summary-body').innerHTML = bodyHtml;
       document.getElementById('summary-foot').innerHTML = '';
     }
 
     function renderKpiSummary(dataList) {
-      let total = { cpqc: 0, dsChot: 0, soDonHuy: 0, doanhSoHuy: 0, dsSauShip: 0, dsThanhCong: 0, kpis: 0, dsChotThucTe: 0, soDonHuyThucTe: 0, dsHoanHuyThucTe: 0, dsSauHoanHuyThucTe: 0, dsThanhCongThucTe: 0 };
+      let total = {
+        cpqc: 0,
+        dsChot: 0,
+        soDonHuy: 0,
+        doanhSoHuy: 0,
+        dsSauShip: 0,
+        dsThanhCong: 0,
+        kpis: 0,
+        dsChotThucTe: 0,
+        soDonHuyThucTe: 0,
+        dsHoanHuyThucTe: 0,
+        dsSauHoanHuyThucTe: 0,
+        dsThanhCongThucTe: 0
+      };
       const bodyRowsHtml = dataList.map((s, i) => {
         Object.keys(total).forEach(key => total[key] += s[key] || 0);
-        const cpds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0, kpiP = s.kpiValue ? s.dsSauShip / s.kpiValue : 0, cpdsClass = cpds > 0.33 ? 'bg-yellow' : '';
+        const cpds = s.dsSauShip ? s.cpqc / s.dsSauShip : 0,
+          kpiP = s.kpiValue ? s.dsSauShip / s.kpiValue : 0,
+          cpdsClass = cpds > 0.33 ? 'bg-yellow' : '';
         return `<tr>
                 <td class="text-center">${i + 1}</td>
                 <td class="text-left">${s.team}</td>
@@ -1635,7 +1807,8 @@
                 <td>${formatPercent(kpiP)}</td>
             </tr>`;
       }).join('');
-      const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0, totalKpiP = total.kpis ? total.dsSauShip / total.kpis : 0;
+      const totalCpds = total.dsSauShip ? total.cpqc / total.dsSauShip : 0,
+        totalKpiP = total.kpis ? total.dsSauShip / total.kpis : 0;
       const totalRowHtml = `<tr class="total-row">
             <td class="total-label" colspan="3">TỔNG CỘNG</td>
             <td class="total-value">${formatCurrency(total.cpqc)}</td>
@@ -1668,7 +1841,16 @@
         const marketKey = showMarket ? (r.thiTruong || 'Không xác định') : '_';
         if (!productGroups[productKey]) productGroups[productKey] = {};
         if (!productGroups[productKey][marketKey]) {
-          productGroups[productKey][marketKey] = { cpqc: 0, soDon: 0, soDonThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsSauHoanHuy: 0, dsSauHoanHuyThucTe: 0 };
+          productGroups[productKey][marketKey] = {
+            cpqc: 0,
+            soDon: 0,
+            soDonThucTe: 0,
+            soMessCmt: 0,
+            dsChot: 0,
+            dsChotThucTe: 0,
+            dsSauHoanHuy: 0,
+            dsSauHoanHuyThucTe: 0
+          };
         }
         const group = productGroups[productKey][marketKey];
         group.cpqc += r.cpqc;
@@ -1681,11 +1863,29 @@
         group.dsSauHoanHuyThucTe += r.dsSauHoanHuyThucTe;
       });
 
-      const grandTotal = { cpqc: 0, soDon: 0, soDonThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsSauHoanHuy: 0, dsSauHoanHuyThucTe: 0 };
+      const grandTotal = {
+        cpqc: 0,
+        soDon: 0,
+        soDonThucTe: 0,
+        soMessCmt: 0,
+        dsChot: 0,
+        dsChotThucTe: 0,
+        dsSauHoanHuy: 0,
+        dsSauHoanHuyThucTe: 0
+      };
       let tableHtml = '';
       Object.keys(productGroups).sort().forEach(product => {
         const markets = productGroups[product];
-        const productTotal = { cpqc: 0, soDon: 0, soDonThucTe: 0, soMessCmt: 0, dsChot: 0, dsChotThucTe: 0, dsSauHoanHuy: 0, dsSauHoanHuyThucTe: 0 };
+        const productTotal = {
+          cpqc: 0,
+          soDon: 0,
+          soDonThucTe: 0,
+          soMessCmt: 0,
+          dsChot: 0,
+          dsChotThucTe: 0,
+          dsSauHoanHuy: 0,
+          dsSauHoanHuyThucTe: 0
+        };
         Object.keys(markets).sort().forEach(market => {
           const marketData = markets[market];
           tableHtml += createMktRow(product, market, marketData, showMarket);
@@ -1708,8 +1908,10 @@
       const rateClass = closingRate > 0.1 ? 'bg-green' : (closingRate > 0.05 ? 'bg-yellow' : '');
       const rateThucTeClass = closingRateThucTe > 0.1 ? 'bg-green' : (closingRateThucTe > 0.05 ? 'bg-yellow' : '');
       const isTotalRow = className.includes('total-row');
-      const productCell = isTotalRow ? `<td class="total-label" colspan="2">${productName}</td>` : `<td class="text-left">${productName}</td>`;
-      const marketCell = showMarket && !isTotalRow ? `<td class="text-left">${marketName}</td>` : (isTotalRow ? '' : '<td></td>');
+      const productCell = isTotalRow ? `<td class="total-label" colspan="2">${productName}</td>` :
+        `<td class="text-left">${productName}</td>`;
+      const marketCell = showMarket && !isTotalRow ? `<td class="text-left">${marketName}</td>` : (isTotalRow ? '' :
+        '<td></td>');
       return `<tr class="${className}">
             ${productCell} ${marketCell}
             <td>${formatCurrency(data.cpqc)}</td>
@@ -1729,20 +1931,33 @@
     }
 
     function renderDailyBreakdown(filteredData) {
-      const container = document.getElementById('daily-breakdown'); container.innerHTML = '';
-      if (filteredData.length === 0) { container.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không có dữ liệu chi tiết.</p>'; return; }
+      const container = document.getElementById('daily-breakdown');
+      container.innerHTML = '';
+      if (filteredData.length === 0) {
+        container.innerHTML = '<p style="text-align:center; margin-top: 20px;">Không có dữ liệu chi tiết.</p>';
+        return;
+      }
       const groupedByDate = {};
       filteredData.forEach(r => {
         const d = formatDate(r.ngay);
         if (!groupedByDate[d]) groupedByDate[d] = [];
         groupedByDate[d].push(r);
       });
-      const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')));
+      const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b.split('/').reverse().join('-')) -
+        new Date(a.split('/').reverse().join('-')));
       const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
       let finalHtml = sortedDates.map(date => {
         let dailyList = generateSummaryTableData(groupedByDate[date]);
-        sortList(dailyList, { column: null, direction: 'asc' }, summaryColumnSortKeys, { prop: 'team', type: 'string' });
-        const { bodyHtml } = generateSummaryTableHTML(dailyList, selectedMarkets);
+        sortList(dailyList, {
+          column: null,
+          direction: 'asc'
+        }, summaryColumnSortKeys, {
+          prop: 'team',
+          type: 'string'
+        });
+        const {
+          bodyHtml
+        } = generateSummaryTableHTML(dailyList, selectedMarkets);
         return `<h3>${date}</h3><div class="table-responsive-container"><table class="sortable-table daily-summary-table" data-date="${date}">
         <thead><tr>
         <th class="green-header">STT<span class="sort-icon"></span></th>
@@ -1767,7 +1982,14 @@
     }
 
     function generateSummaryTableHTML(dataList, selectedMarkets) {
-      let total = { mess: 0, don: 0, chot: 0, cpqc: 0, donThucTe: 0, chotThucTe: 0 };
+      let total = {
+        mess: 0,
+        don: 0,
+        chot: 0,
+        cpqc: 0,
+        donThucTe: 0,
+        chotThucTe: 0
+      };
       const bodyRowsHtml = dataList.map((s, index) => {
         Object.keys(total).forEach(key => total[key] += s[key] || 0);
         const rate = s.mess ? s.don / s.mess : 0;
@@ -1819,7 +2041,9 @@
             <td class="total-value">${formatPercent(tPc)}</td>
             <td class="total-value">${formatCurrency(tPdt)}</td>
         </tr>`;
-      return { bodyHtml: totalRowHtml + bodyRowsHtml };
+      return {
+        bodyHtml: totalRowHtml + bodyRowsHtml
+      };
     }
 
 
@@ -1838,7 +2062,10 @@
 
       if (tableType === 'daily') {
         const date = tableElement.dataset.date;
-        if (!sortStates.daily[date]) sortStates.daily[date] = { column: null, direction: 'asc' };
+        if (!sortStates.daily[date]) sortStates.daily[date] = {
+          column: null,
+          direction: 'asc'
+        };
         sortState = sortStates.daily[date];
       } else {
         sortState = sortStates[tableType];
@@ -1873,15 +2100,23 @@
       const filteredData = getFilteredData('tab1');
       const dailyData = filteredData.filter(r => formatDate(r.ngay) === date);
       let dailyList = generateSummaryTableData(dailyData);
-      sortList(dailyList, sortState, summaryColumnSortKeys, { prop: 'team', type: 'string' });
+      sortList(dailyList, sortState, summaryColumnSortKeys, {
+        prop: 'team',
+        type: 'string'
+      });
       const selectedMarkets = [...document.querySelectorAll('.filter-market-tab1:checked')].map(cb => cb.value);
-      const { bodyHtml } = generateSummaryTableHTML(dailyList, selectedMarkets);
+      const {
+        bodyHtml
+      } = generateSummaryTableHTML(dailyList, selectedMarkets);
       table.querySelector('tbody').innerHTML = bodyHtml;
       updateSortIcons(table, sortState);
     }
 
     function sortList(list, sortState, columnKeys, defaultSortKey) {
-      const { column, direction } = sortState;
+      const {
+        column,
+        direction
+      } = sortState;
       const sortInfo = columnKeys[column];
       if (!sortInfo && !defaultSortKey) return;
       list.sort((a, b) => {
@@ -1951,7 +2186,10 @@
       const filteredData = getFilteredData('tab2');
       const dailyData = filteredData.filter(r => formatDate(r.ngay) === dateString);
       const modalDataList = generateSummaryTableData(dailyData);
-      sortStates.modal = { column: null, direction: 'asc' };
+      sortStates.modal = {
+        column: null,
+        direction: 'asc'
+      };
       sortList(modalDataList, sortStates.modal, summaryColumnSortKeys);
       renderModalSummaryTable(modalDataList);
       updateSortIcons(document.getElementById('modal-summary-table'), sortStates.modal);
@@ -1960,7 +2198,9 @@
 
     function renderModalSummaryTable(dataList) {
       const selM = [...document.querySelectorAll('.filter-market-tab2:checked')].map(cb => cb.value);
-      const { bodyHtml } = generateSummaryTableHTML(dataList, selM);
+      const {
+        bodyHtml
+      } = generateSummaryTableHTML(dataList, selM);
       document.getElementById('modal-summary-body').innerHTML = bodyHtml;
       document.getElementById('modal-summary-foot').innerHTML = '';
     }
@@ -1969,11 +2209,22 @@
       const daily = {};
       filteredData.forEach(r => {
         const d = formatDate(r.ngay);
-        if (!daily[d]) daily[d] = { cpqc: 0, don: 0, mess: 0, chot: 0, chotThucTe: 0 };
+        if (!daily[d]) daily[d] = {
+          cpqc: 0,
+          don: 0,
+          mess: 0,
+          chot: 0,
+          chotThucTe: 0
+        };
         const D = daily[d];
-        D.cpqc += r.cpqc; D.don += r.soDon; D.mess += r.soMessCmt; D.chot += r.dsChot; D.chotThucTe += r.dsChotThucTe;
+        D.cpqc += r.cpqc;
+        D.don += r.soDon;
+        D.mess += r.soMessCmt;
+        D.chot += r.dsChot;
+        D.chotThucTe += r.dsChotThucTe;
       });
-      const html = Object.keys(daily).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')))
+      const html = Object.keys(daily).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/')
+          .reverse().join('-')))
         .map(d => {
           const day = daily[d];
           const avg = day.mess ? day.don / day.mess : 0;
@@ -1990,7 +2241,8 @@
       if (target.id === 'toggle-all-charts') {
         document.querySelectorAll('.chart-toggle').forEach(cb => cb.checked = target.checked);
       } else {
-        document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(cb => cb.checked);
+        document.getElementById('toggle-all-charts').checked = [...document.querySelectorAll('.chart-toggle')].every(
+          cb => cb.checked);
       }
       document.querySelectorAll('.chart-toggle').forEach(c => {
         const wrapper = document.querySelector(`.chart-wrapper[data-chart="${c.dataset.chart}"]`);
@@ -2026,40 +2278,80 @@
       if (!charts.cpqcChart) return;
       const daily = {};
       filteredData.forEach(r => {
-        const d = formatDate(r.ngay); if (!d) return;
-        if (!daily[d]) daily[d] = { cpqc: 0, don: 0, mess: 0, chot: 0, products: {}, markets: {} };
+        const d = formatDate(r.ngay);
+        if (!d) return;
+        if (!daily[d]) daily[d] = {
+          cpqc: 0,
+          don: 0,
+          mess: 0,
+          chot: 0,
+          products: {},
+          markets: {}
+        };
         const D = daily[d];
-        D.cpqc += r.cpqc; D.don += r.soDon; D.mess += r.soMessCmt; D.chot += r.dsChot;
+        D.cpqc += r.cpqc;
+        D.don += r.soDon;
+        D.mess += r.soMessCmt;
+        D.chot += r.dsChot;
         if (r.sanPham) D.products[r.sanPham] = (D.products[r.sanPham] || 0) + r.dsChot;
         if (r.thiTruong) D.markets[r.thiTruong] = (D.markets[r.thiTruong] || 0) + r.dsChot;
       });
 
-      const labels = Object.keys(daily).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split('/').reverse().join('-')));
+      const labels = Object.keys(daily).sort((a, b) => new Date(a.split('/').reverse().join('-')) - new Date(b.split(
+        '/').reverse().join('-')));
       const clrs = {
-        cpqc: { b: '#3F51B5', f: 'rgba(63,81,181,0.2)' },
-        dsChot: { b: '#4CAF50', f: 'rgba(76,175,80,0.2)' },
-        rate: { b: '#F44336', f: 'rgba(244,67,54,0.2)' },
-        mess: { b: '#FF9800', f: 'rgba(255,152,0,0.2)' },
-        cps: { b: '#009688', f: 'rgba(0,150,136,0.2)' },
-        cpDsRatio: { b: '#9C27B0', f: 'rgba(156,39,176,0.2)' }
+        cpqc: {
+          b: '#3F51B5',
+          f: 'rgba(63,81,181,0.2)'
+        },
+        dsChot: {
+          b: '#4CAF50',
+          f: 'rgba(76,175,80,0.2)'
+        },
+        rate: {
+          b: '#F44336',
+          f: 'rgba(244,67,54,0.2)'
+        },
+        mess: {
+          b: '#FF9800',
+          f: 'rgba(255,152,0,0.2)'
+        },
+        cps: {
+          b: '#009688',
+          f: 'rgba(0,150,136,0.2)'
+        },
+        cpDsRatio: {
+          b: '#9C27B0',
+          f: 'rgba(156,39,176,0.2)'
+        }
       };
 
       updateChart(charts.cpqcChart, 'CPQC', labels, labels.map(d => daily[d].cpqc), clrs.cpqc);
       updateChart(charts.dsChotChart, 'DS Chốt', labels, labels.map(d => daily[d].chot), clrs.dsChot);
-      updateChart(charts.rateChart, 'Tỉ lệ chốt', labels, labels.map(d => daily[d].mess ? daily[d].don / daily[d].mess : 0), clrs.rate);
-      updateChart(charts.messChart, 'Giá Mess', labels, labels.map(d => daily[d].mess ? daily[d].cpqc / daily[d].mess : 0), clrs.mess);
-      updateChart(charts.cpsChart, 'CPS', labels, labels.map(d => daily[d].don ? daily[d].cpqc / daily[d].don : 0), clrs.cps);
-      updateChart(charts.cpDsRatioChart, '%CP/DS', labels, labels.map(d => daily[d].chot ? daily[d].cpqc / daily[d].chot : 0), clrs.cpDsRatio);
+      updateChart(charts.rateChart, 'Tỉ lệ chốt', labels, labels.map(d => daily[d].mess ? daily[d].don / daily[d].mess :
+        0), clrs.rate);
+      updateChart(charts.messChart, 'Giá Mess', labels, labels.map(d => daily[d].mess ? daily[d].cpqc / daily[d].mess :
+        0), clrs.mess);
+      updateChart(charts.cpsChart, 'CPS', labels, labels.map(d => daily[d].don ? daily[d].cpqc / daily[d].don : 0), clrs
+        .cps);
+      updateChart(charts.cpDsRatioChart, '%CP/DS', labels, labels.map(d => daily[d].chot ? daily[d].cpqc / daily[d]
+        .chot : 0), clrs.cpDsRatio);
 
-      const pSales = {}, mSales = {};
+      const pSales = {},
+        mSales = {};
       Object.values(daily).forEach(d => {
         Object.entries(d.products).forEach(([p, val]) => pSales[p] = (pSales[p] || 0) + val);
         Object.entries(d.markets).forEach(([m, val]) => mSales[m] = (mSales[m] || 0) + val);
       });
 
-      const sP = Object.entries(pSales).sort((a, b) => b[1] - a[1]), sM = Object.entries(mSales).sort((a, b) => b[1] - a[1]);
-      updateChart(charts.productSalesChart, 'DS theo SP', sP.map(p => p[0]), sP.map(p => p[1]), { b: CHART_COLORS }, 'bar');
-      updateChart(charts.marketSalesChart, 'DS theo TT', sM.map(m => m[0]), sM.map(m => m[1]), { b: CHART_COLORS }, 'bar');
+      const sP = Object.entries(pSales).sort((a, b) => b[1] - a[1]),
+        sM = Object.entries(mSales).sort((a, b) => b[1] - a[1]);
+      updateChart(charts.productSalesChart, 'DS theo SP', sP.map(p => p[0]), sP.map(p => p[1]), {
+        b: CHART_COLORS
+      }, 'bar');
+      updateChart(charts.marketSalesChart, 'DS theo TT', sM.map(m => m[0]), sM.map(m => m[1]), {
+        b: CHART_COLORS
+      }, 'bar');
     }
 
     function renderMktCharts(data) {
@@ -2067,7 +2359,13 @@
       const productMetrics = {};
       data.forEach(r => {
         const p = r.sanPham || 'Chưa xác định';
-        if (!productMetrics[p]) productMetrics[p] = { cpqc: 0, dsSauHoanHuy: 0, soDon: 0, dsChot: 0, soMessCmt: 0 };
+        if (!productMetrics[p]) productMetrics[p] = {
+          cpqc: 0,
+          dsSauHoanHuy: 0,
+          soDon: 0,
+          dsChot: 0,
+          soMessCmt: 0
+        };
         productMetrics[p].cpqc += r.cpqc;
         productMetrics[p].dsSauHoanHuy += r.dsSauHoanHuy;
         productMetrics[p].soDon += r.soDon;
@@ -2087,40 +2385,130 @@
       updateMktChartData(charts.mktProductSalesChart, sortedProducts.map(([, p]) => p.dsSauHoanHuy));
       updateMktChartData(charts.mktProductDsChotChart, sortedProducts.map(([, p]) => p.dsChot));
       updateMktChartData(charts.mktProductCpqcChart, sortedProducts.map(([, p]) => p.cpqc));
-      updateMktChartData(charts.mktProductCpsChart, sortedProducts.map(([, p]) => (p.soDon > 0 ? p.cpqc / p.soDon : 0)));
-      updateMktChartData(charts.mktProductClosingRateChart, sortedProducts.map(([, p]) => (p.soMessCmt > 0 ? p.soDon / p.soMessCmt : 0)));
-      updateMktChartData(charts.mktProductCostRatioChart, sortedProducts.map(([, p]) => (p.dsSauHoanHuy > 0 ? p.cpqc / p.dsSauHoanHuy : 0)));
+      updateMktChartData(charts.mktProductCpsChart, sortedProducts.map(([, p]) => (p.soDon > 0 ? p.cpqc / p.soDon :
+        0)));
+      updateMktChartData(charts.mktProductClosingRateChart, sortedProducts.map(([, p]) => (p.soMessCmt > 0 ? p.soDon / p
+        .soMessCmt : 0)));
+      updateMktChartData(charts.mktProductCostRatioChart, sortedProducts.map(([, p]) => (p.dsSauHoanHuy > 0 ? p.cpqc / p
+        .dsSauHoanHuy : 0)));
     }
 
 
-    function getLineChartConfig(yTitle, formatter = formatPriceShort) { return { type: 'line', options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, datalabels: { display: true, align: 'top', formatter } }, scales: { y: { title: { display: true, text: yTitle }, ticks: { callback: formatter } } } } }; }
+    function getLineChartConfig(yTitle, formatter = formatPriceShort) {
+      return {
+        type: 'line',
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              display: false
+            },
+            datalabels: {
+              display: true,
+              align: 'top',
+              formatter
+            }
+          },
+          scales: {
+            y: {
+              title: {
+                display: true,
+                text: yTitle
+              },
+              ticks: {
+                callback: formatter
+              }
+            }
+          }
+        }
+      };
+    }
+
     function createBarChart(canvasId, chartTitle) {
       return new Chart(document.getElementById(canvasId), {
         type: 'bar',
-        data: { labels: [], datasets: [{ backgroundColor: CHART_COLORS, data: [] }] },
+        data: {
+          labels: [],
+          datasets: [{
+            backgroundColor: CHART_COLORS,
+            data: []
+          }]
+        },
         options: {
-          responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          indexAxis: 'y',
           plugins: {
-            legend: { display: false },
-            title: { display: true, text: chartTitle, font: { size: 16 } },
-            datalabels: { anchor: 'end', align: 'right', offset: 4, color: '#333', font: { weight: '600' }, formatter: formatPriceShort }
+            legend: {
+              display: false
+            },
+            title: {
+              display: true,
+              text: chartTitle,
+              font: {
+                size: 16
+              }
+            },
+            datalabels: {
+              anchor: 'end',
+              align: 'right',
+              offset: 4,
+              color: '#333',
+              font: {
+                weight: '600'
+              },
+              formatter: formatPriceShort
+            }
           },
-          scales: { x: { display: false }, y: { grid: { display: false } } }
+          scales: {
+            x: {
+              display: false
+            },
+            y: {
+              grid: {
+                display: false
+              }
+            }
+          }
         }
       });
     }
+
     function createPieChart(canvasId, chartTitle) {
       return new Chart(document.getElementById(canvasId), {
         type: 'doughnut',
-        data: { labels: [], datasets: [{ backgroundColor: CHART_COLORS, data: [] }] },
+        data: {
+          labels: [],
+          datasets: [{
+            backgroundColor: CHART_COLORS,
+            data: []
+          }]
+        },
         options: {
-          responsive: true, maintainAspectRatio: false,
+          responsive: true,
+          maintainAspectRatio: false,
           plugins: {
-            legend: { position: 'bottom' },
-            title: { display: true, text: chartTitle, font: { size: 16 } },
-            tooltip: { callbacks: { label: (ctx) => `${ctx.label}: ${formatPercent(ctx.raw)}` } },
+            legend: {
+              position: 'bottom'
+            },
+            title: {
+              display: true,
+              text: chartTitle,
+              font: {
+                size: 16
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => `${ctx.label}: ${formatPercent(ctx.raw)}`
+              }
+            },
             datalabels: {
-              color: '#fff', font: { weight: 'bold' },
+              color: '#fff',
+              font: {
+                weight: 'bold'
+              },
               formatter: (value, ctx) => {
                 const total = ctx.chart.getDatasetMeta(0).total;
                 if (total === 0) return '0%';
@@ -2132,15 +2520,27 @@
         }
       });
     }
+
     function updateChart(chart, label, labels, data, colors, type = 'line') {
       if (!chart) return;
       const chartType = chart.config.type;
       if (chartType === 'bar' || chartType === 'doughnut') {
         chart.data.labels = labels;
-        chart.data.datasets = [{ label, data, backgroundColor: CHART_COLORS }];
+        chart.data.datasets = [{
+          label,
+          data,
+          backgroundColor: CHART_COLORS
+        }];
       } else { // line
         chart.data.labels = labels;
-        chart.data.datasets = [{ label, data, backgroundColor: colors.f, borderColor: colors.b, fill: true, tension: 0.1 }];
+        chart.data.datasets = [{
+          label,
+          data,
+          backgroundColor: colors.f,
+          borderColor: colors.b,
+          fill: true,
+          tension: 0.1
+        }];
       }
       chart.update('none');
     }
@@ -2152,19 +2552,33 @@
     const showLoader = () => loader.classList.add('visible');
     const hideLoader = () => loader.classList.remove('visible');
 
-    function normalize(s) { return (s || '').trim().toLowerCase(); }
+    function normalize(s) {
+      return (s || '').trim().toLowerCase();
+    }
+
     function getMarketGroup(normalizedMarket) {
       for (const group in MARKET_GROUPS) {
         if (MARKET_GROUPS[group].map(normalize).includes(normalizedMarket)) return group;
       }
       return null;
     }
+
     function formatDate(dateObj) {
       if (!(dateObj instanceof Date) || isNaN(dateObj)) return '';
       return `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
     }
-    function formatCurrency(v) { return Number(v || 0).toLocaleString('vi-VN', { style: 'currency', currency: 'VND' }); }
-    function formatNumber(v) { return Number(v || 0).toLocaleString('vi-VN'); }
+
+    function formatCurrency(v) {
+      return Number(v || 0).toLocaleString('vi-VN', {
+        style: 'currency',
+        currency: 'VND'
+      });
+    }
+
+    function formatNumber(v) {
+      return Number(v || 0).toLocaleString('vi-VN');
+    }
+
     function formatPriceShort(v) {
       const n = Number(v || 0);
       if (isNaN(n)) return '0';
@@ -2173,10 +2587,12 @@
       if (Math.abs(n) >= 1e3) return (n / 1e3).toFixed(0) + ' k';
       return n.toLocaleString('vi-VN');
     }
+
     function formatPercent(v) {
       if (!isFinite(v)) return '0.00%';
       return `${(Number(v || 0) * 100).toFixed(2)}%`;
     }
+
     function getCpsCellStyle(cps, selectedMarkets) {
       const hasAsia = selectedMarkets.some(m => m === 'Châu Á' || MARKET_GROUPS['Châu Á'].includes(m));
       const hasNonAsia = selectedMarkets.some(m => m === 'Ngoài Châu Á' || MARKET_GROUPS['Ngoài Châu Á'].includes(m));
@@ -2189,18 +2605,52 @@
       }
       return '';
     }
+
     function getDateRange(selection) {
       const now = new Date();
       let startDate, endDate = new Date(now);
-      const currentYear = now.getFullYear(), currentMonth = now.getMonth(), currentDay = now.getDay();
+      const currentYear = now.getFullYear(),
+        currentMonth = now.getMonth(),
+        currentDay = now.getDay();
       const dayOfWeek = currentDay === 0 ? 6 : currentDay - 1;
       switch (selection) {
-        case 'today': startDate = new Date(now.setHours(0, 0, 0, 0)); endDate = new Date(now.setHours(23, 59, 59, 999)); break;
-        case 'yesterday': startDate = new Date(new Date().setDate(new Date().getDate() - 1)); startDate.setHours(0, 0, 0, 0); endDate = new Date(startDate); endDate.setHours(23, 59, 59, 999); break;
-        case 'thisWeek': startDate = new Date(now.setDate(now.getDate() - dayOfWeek)); startDate.setHours(0, 0, 0, 0); endDate = new Date(startDate); endDate.setDate(startDate.getDate() + 6); endDate.setHours(23, 59, 59, 999); break;
-        case 'lastWeek': startDate = new Date(); startDate.setDate(new Date().getDate() - dayOfWeek - 7); startDate.setHours(0, 0, 0, 0); endDate = new Date(startDate); endDate.setDate(startDate.getDate() + 6); endDate.setHours(23, 59, 59, 999); break;
-        case 'nextWeek': startDate = new Date(); startDate.setDate(new Date().getDate() - dayOfWeek + 7); startDate.setHours(0, 0, 0, 0); endDate = new Date(startDate); endDate.setDate(startDate.getDate() + 6); endDate.setHours(23, 59, 59, 999); break;
-        case 'thisMonth': startDate = new Date(currentYear, currentMonth, 1); endDate = new Date(currentYear, currentMonth + 1, 0); break;
+        case 'today':
+          startDate = new Date(now.setHours(0, 0, 0, 0));
+          endDate = new Date(now.setHours(23, 59, 59, 999));
+          break;
+        case 'yesterday':
+          startDate = new Date(new Date().setDate(new Date().getDate() - 1));
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(startDate);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'thisWeek':
+          startDate = new Date(now.setDate(now.getDate() - dayOfWeek));
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'lastWeek':
+          startDate = new Date();
+          startDate.setDate(new Date().getDate() - dayOfWeek - 7);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'nextWeek':
+          startDate = new Date();
+          startDate.setDate(new Date().getDate() - dayOfWeek + 7);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(startDate);
+          endDate.setDate(startDate.getDate() + 6);
+          endDate.setHours(23, 59, 59, 999);
+          break;
+        case 'thisMonth':
+          startDate = new Date(currentYear, currentMonth, 1);
+          endDate = new Date(currentYear, currentMonth + 1, 0);
+          break;
         default:
           if (selection.startsWith('month_')) {
             const month = parseInt(selection.split('_')[1], 10) - 1;
@@ -2214,7 +2664,10 @@
           }
           break;
       }
-      return { startDate, endDate };
+      return {
+        startDate,
+        endDate
+      };
     }
   </script>
 </body>
