@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<!--
+===== ENHANCED NUMBER INPUT HANDLING =====
+- Tự động format và làm sạch input số nguyên
+- Hỗ trợ các format nhập khác nhau như 300.000,777 hoặc 777,000.333
+- Validation real-time khi nhập và khi rời khỏi trường
+- Làm sạch dữ liệu trước khi gửi lên server
+- Áp dụng cho tất cả các trường: Số Mess, Phản hồi, Đơn Mess, Doanh số Mess, CPQC, Số_Mess_Cmt, Số đơn, Doanh số
+-->
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Báo Cáo LumiGlobal</title>
+    <style>
+        :root {
+            --primary-color: #0056b3;
+            --primary-color-dark: #003d82;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --info-color: #17a2b8;
+            --light-gray: #f8f9fa;
+            --medium-gray: #ddd;
+            --dark-gray: #333;
+            --border-radius: 6px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--light-gray);
+            color: var(--dark-gray);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 95vw;
+            margin: 2rem auto;
+            background-color: white;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: 2rem;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 2px solid var(--primary-color);
+        }
+
+        .logo {
+            height: 60px;
+            margin-right: 1.5rem;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-weight: 600;
+            font-size: 2rem;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            border: 1px solid var(--medium-gray);
+            border-radius: var(--border-radius);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background-color: white;
+            table-layout: auto;
+        }
+
+        th,
+        td {
+            border: 1px solid var(--medium-gray);
+            padding: 0.8rem 1rem;
+            text-align: left;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        th {
+            background-color: var(--primary-color);
+            color: white;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        tr:nth-child(even) {
+            background-color: var(--light-gray);
+        }
+
+        tr:hover {
+            background-color: #e9ecef;
+        }
+
+        input,
+        textarea,
+        button,
+        select {
+            box-sizing: border-box;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--medium-gray);
+            border-radius: var(--border-radius);
+            width: 100%;
+            font-family: inherit;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        td input,
+        td select {
+            white-space: normal;
+            height: auto;
+            min-height: 42px;
+            min-width: 150px;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 86, 179, 0.2);
+            outline: none;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: var(--primary-color-dark);
+        }
+
+        .action-buttons {
+            gap: 0.5rem;
+            justify-content: center;
+            min-width: 80px;
+        }
+
+        .action-buttons button {
+            padding: 0.4rem 0.6rem;
+        }
+
+        .removeRow {
+            background-color: #6c757d;
+        }
+
+        .removeRow:hover {
+            background-color: #5a6268;
+        }
+
+        .add-row-btn {
+            background-color: var(--success-color);
+            margin-bottom: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1.1rem;
+        }
+
+        .add-row-btn:hover {
+            background-color: #218838;
+        }
+
+        .submit-btn {
+            background-color: var(--danger-color);
+            margin-top: 1.5rem;
+            padding: 0.75rem 1.5rem;
+            font-size: 1.1rem;
+        }
+
+        .submit-btn:hover {
+            background-color: #c82333;
+        }
+
+        #responseMessage {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        #responseMessage.visible {
+            display: block;
+        }
+
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+
+        .error-cell {
+            background-color: #f8d7da !important;
+            border: 1px solid var(--danger-color) !important;
+        }
+
+        .hidden-col {
+            display: none;
+        }
+
+        .addSimilar {
+            background-color: var(--info-color);
+        }
+
+        .addSimilar:hover {
+            background-color: #138496;
+        }
+
+        .input-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .input-container input,
+        .input-container select {
+            flex-grow: 1;
+        }
+
+        .input-container .addSimilar {
+            flex-shrink: 0;
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            font-size: 1.2rem;
+        }
+
+        .status {
+            background: #e9ecef;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #495057;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg"
+                alt="LumiGlobal Logo" class="logo">
+            <h1 id="formTitle">Báo Cáo LumiGlobal</h1>
+        </div>
+
+        <div class="status" id="status">Đang khởi tạo ứng dụng...</div>
+
+        <button id="addRowBtn" type="button" class="add-row-btn" disabled>➕ Thêm dòng trống</button>
+
+        <form id="dataForm" novalidate>
+            <div class="table-wrapper">
+                <table id="dataTable">
+                    <thead>
+                        <!-- Headers sẽ được tạo tự động bằng JavaScript -->
+                    </thead>
+                    <tbody id="tableBody">
+                        <!-- Dữ liệu sẽ được tải vào đây -->
+                    </tbody>
+                </table>
+            </div>
+            <button type="submit" id="submitBtn" class="submit-btn" disabled>🚀 Gửi báo cáo</button>
+        </form>
+
+        <div id="responseMessage"></div>
+        <datalist id="employee-datalist"></datalist>
+    </div>
+
+    <script>
+        // ===== CONFIG =====
+        const host = 'prod';
+        const hostUse = host === 'local' ? 'http://localhost:8081' : 'https://n-api-gamma.vercel.app';
+        const SCRIPT_URL = `${hostUse}/bulk-insert`;
+        const SPREADSHEET_ID = '1ylYT0UAcahij5UtDikKyJFWT3gIyRZsuFsYQ5aUTi2Y';
+        const EMPLOYEE_API_URL = 'https://n-api-rouge.vercel.app/sheet/getSheets?rangeSheet=A:K&sheetName=Nh%C3%A2n%20s%E1%BB%B1&spreadsheetId=1Cl-56By1eYFB4G7ITuG0IQhH39ITwo0AkZPFvsLfo54';
+
+        // ===== APP STATE =====
+        let appData = {
+            employeeDetails: [], // ===== MODIFIED =====: Lưu trữ object nhân viên chi tiết
+            shiftList: ["Hết ca", "Giữa ca"],
+            productList: ["Ladi Fitgum CAFE 20X", "Ladi Dầu gội", "Ladi Gel XK", "Dr yutitan", "Gel Dạ dày Thái", "Gel XK", "Gel Trĩ"],
+            marketList: ["Nhật Bản", "Hàn Quốc", "Canada", "US", "Úc", "Anh"],
+        };
+        let tableHeaders = [];
+        let userEmail = '';
+        let currentTableName = '';
+        let employeeNameFromUrl = '';
+
+        // ===== DOM ELEMENTS =====
+        const table = document.getElementById('dataTable');
+        const tableBody = document.getElementById('tableBody');
+        const addRowBtn = document.getElementById('addRowBtn');
+        const submitBtn = document.getElementById('submitBtn');
+        const form = document.getElementById('dataForm');
+        const statusDiv = document.getElementById('status');
+        const respMsg = document.getElementById('responseMessage');
+        const employeeDatalist = document.getElementById('employee-datalist');
+        const formTitle = document.getElementById('formTitle');
+
+        // ===== UTILITY FUNCTIONS =====
+        function updateStatus(message, isError = false) {
+            console.log(`[STATUS] ${isError ? 'ERROR' : 'INFO'}: ${message}`);
+            statusDiv.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            statusDiv.style.color = isError ? '#721c24' : '#495057';
+            statusDiv.style.backgroundColor = isError ? '#f8d7da' : '#e9ecef';
+        }
+
+        function showResponseMessage(message, isSuccess = true) {
+            respMsg.textContent = message;
+            respMsg.className = isSuccess ? 'success visible' : 'error visible';
+        }
+
+        function getToday() {
+            const today = new Date();
+            return today.toLocaleDateString('en-CA');
+        }
+
+        function escapeHtml(unsafe) {
+            if (typeof unsafe !== 'string') {
+                unsafe = String(unsafe);
+            }
+            return unsafe
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // ===== MODIFIED =====: Lưu trữ chi tiết thông tin nhân viên
+        async function fetchEmployeeList() {
+            updateStatus('Đang tải danh sách nhân viên...');
+            try {
+                const response = await fetch(EMPLOYEE_API_URL);
+                if (!response.ok) throw new Error(`Lỗi HTTP! status: ${response.status}`);
+                const result = await response.json();
+
+                let headers, rowObjects;
+                if (result.headers && result.rows) {
+                    headers = result.headers;
+                    rowObjects = result.rows;
+                } else if (Array.isArray(result)) {
+                    rowObjects = result;
+                    headers = rowObjects.length > 0 ? Object.keys(rowObjects[0]) : [];
+                } else {
+                    throw new Error("Cấu trúc dữ liệu API không được hỗ trợ");
+                }
+
+                // Helper để tìm tên cột một cách linh hoạt
+                const findHeader = (keywords) => headers.find(h => keywords.every(kw => h.toLowerCase().includes(kw))) || null;
+
+                const nameCol = findHeader(['họ', 'tên']) || 'Họ và Tên';
+                const deptCol = findHeader(['bộ', 'phận']) || 'Bộ phận';
+                const emailCol = findHeader(['email']) || 'email';
+                const teamCol = findHeader(['team']) || 'Team';
+                const idCol = findHeader(['id']) || 'id';
+                const branchCol = findHeader(['chi nhánh']) || 'chi nhánh';
+
+                // ===== IMPROVED: Xử lý logic lọc bộ phận =====
+                let targetDepts;
+                if (currentTableName === 'Báo cáo MKT') {
+                    targetDepts = ['MKT']; // Chỉ MKT
+                } else {
+                    targetDepts = ['Sale', 'CSKH']; // Cả Sale và CSKH
+                }
+
+                const filteredEmployees = rowObjects
+                    .filter(row => {
+                        const dept = row[deptCol];
+                        const name = row[nameCol];
+                        // Kiểm tra xem bộ phận có chứa bất kỳ từ khóa nào trong targetDepts không
+                        const deptMatch = dept && targetDepts.some(target =>
+                            dept.toString().toUpperCase().includes(target.toUpperCase())
+                        );
+                        return deptMatch && name && name.toString().trim() !== '';
+                    })
+                    .map(row => ({
+                        // Chuẩn hóa tên thuộc tính để dễ sử dụng
+                        name: row[nameCol]?.toString().trim(),
+                        email: row[emailCol]?.toString().trim() || '',
+                        team: row[teamCol]?.toString().trim() || '',
+                        id_ns: row[idCol]?.toString().trim() || '',
+                        branch: row[branchCol]?.toString().trim() || ''
+                    }))
+                    .filter((emp, idx, arr) => arr.findIndex(e => e.name === emp.name) === idx); // Loại bỏ tên trùng lặp
+
+
+                updateStatus(`Đã tải thành công ${filteredEmployees.length} nhân viên ${targetDepts.join(', ')}.`);
+                return filteredEmployees;
+
+            } catch (error) {
+                console.error("Lỗi chi tiết:", error);
+                updateStatus(`Lỗi khi tải danh sách nhân viên: ${error.message}. Sử dụng dữ liệu demo.`, true);
+                
+                // Trả về dữ liệu demo khi API thất bại
+                return [
+                    { name: 'Demo User', email: userEmail, team: 'Demo Team', id_ns: 'DEMO001', branch: 'Demo Branch' },
+                    { name: 'Test User', email: 'test@lumiglobal.com', team: 'Test Team', id_ns: 'TEST001', branch: 'Test Branch' }
+                ];
+            }
+        }
+
+        // ===== MODIFIED =====: Tạo datalist từ danh sách chi tiết
+        function populateEmployeeDatalist() {
+            try {
+                if (!employeeDatalist || !appData.employeeDetails || !Array.isArray(appData.employeeDetails)) return;
+
+                const sortedList = [...appData.employeeDetails].sort((a, b) =>
+                    a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' })
+                );
+                const optionsHtml = sortedList
+                    .map(emp => `<option value="${escapeHtml(emp.name)}"></option>`)
+                    .join('');
+                employeeDatalist.innerHTML = optionsHtml;
+            } catch (error) {
+                console.error('Lỗi khi tạo datalist:', error);
+            }
+        }
+
+        // ===== IMPROVED NUMBER FORMATTING =====
+        // Xử lý format số với nhiều trường hợp nhập liệu khác nhau
+        function formatNumberInput(input) {
+            // Lưu vị trí con trỏ
+            const cursorPosition = input.selectionStart;
+            const oldLength = input.value.length;
+
+            // Loại bỏ tất cả ký tự không phải số (bao gồm dấu phẩy, chấm, khoảng trắng)
+            let cleanValue = input.value.replace(/[^0-9]/g, '');
+
+            // Nếu có giá trị thì format, không thì để trống
+            let formattedValue = cleanValue ? new Intl.NumberFormat('de-DE').format(cleanValue) : '';
+
+            // Cập nhật giá trị
+            input.value = formattedValue;
+
+            // Tính toán vị trí con trỏ mới (để giữ vị trí sau khi format)
+            const newLength = formattedValue.length;
+            const lengthDiff = newLength - oldLength;
+            const newCursorPosition = Math.max(0, cursorPosition + lengthDiff);
+
+            // Đặt lại vị trí con trỏ
+            input.setSelectionRange(newCursorPosition, newCursorPosition);
+        }
+
+        // ===== VALIDATION FOR NUMBER FIELDS =====
+        // Kiểm tra và cảnh báo nếu giá trị không hợp lệ
+        function validateNumberField(input) {
+            const cleanValue = input.value.replace(/[^0-9]/g, '');
+            if (input.value && !cleanValue) {
+                input.style.borderColor = '#dc3545';
+                input.title = 'Vui lòng chỉ nhập số nguyên';
+                return false;
+            } else {
+                input.style.borderColor = '';
+                input.title = '';
+                return true;
+            }
+        }
+
+        function createOptions(list, selectedValue = '') {
+            return list.map(item => `<option value="${escapeHtml(item)}" ${item === selectedValue ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('');
+        }
+
+        function renderTable(headers) {
+            tableHeaders = headers;
+            const thead = table.tHead || table.createTHead();
+            thead.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            const headerRow = thead.insertRow();
+
+            const actionTh = document.createElement('th');
+            actionTh.textContent = 'Hành động';
+            headerRow.appendChild(actionTh);
+
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                if (['id', 'id phản hồi', 'id số mess', 'team', 'id_ns', 'trạng thái', 'chi nhánh', 'doanh số đi', 'số đơn hoàn huỷ', 'doanh số hoàn huỷ', 'số đơn thành công', 'doanh số thành công', 'khách mới', 'khách cũ', 'bán chéo', 'bán chéo team', 'id_ns', 'doanh số đi', 'số đơn hoàn hủy', 'ds chốt', 'ds sau hoàn hủy', 'số đơn sau hoàn hủy', 'doanh số sau ship', 'doanh số tc', 'kpis', 'cpqc theo tkqc', 'báo cáo theo page', 'trạng thái', 'cảnh báo'].includes(header.toLowerCase())) {
+                    th.classList.add('hidden-col');
+                }
+                headerRow.appendChild(th);
+            });
+
+            updateStatus(`Bắt đầu với một dòng mới.`);
+            addNewRow({
+                'Tên': employeeNameFromUrl, 'Email': userEmail
+            });
+        }
+
+        // Cập nhật function addNewRow để luôn áp dụng logic tự động điền
+        function addNewRow(data = {}, insertAfterElement = null) {
+            const row = document.createElement('tr');
+
+            const actionCell = row.insertCell();
+            actionCell.className = 'action-buttons';
+            actionCell.innerHTML = `<button type="button" class="removeRow" onclick="removeRow(this)">❌</button>`;
+
+            // ===== IMPROVED: Tự động điền thông tin nhân viên dựa trên tên =====
+            let employeeToUse = null;
+
+            // Trường hợp 1: Nếu data có 'Tên', tìm thông tin nhân viên theo tên đó
+            if (data['Tên']) {
+                employeeToUse = appData.employeeDetails.find(emp => emp.name === data['Tên']);
+            }
+
+            // Trường hợp 2: Nếu không có tên hoặc không tìm thấy, dùng thông tin từ userEmail
+            if (!employeeToUse) {
+                employeeToUse = appData.employeeDetails.find(emp => emp.email.toLowerCase() === userEmail.toLowerCase());
+            }
+
+            // Áp dụng thông tin nhân viên nếu tìm thấy
+            if (employeeToUse) {
+                data['Tên'] = data['Tên'] || employeeToUse.name;
+                data['Email'] = data['Email'] || employeeToUse.email;
+                data['Team'] = data['Team'] || employeeToUse.team;
+                data['id_NS'] = data['id_NS'] || employeeToUse.id_ns;
+                data['Chi nhánh'] = data['Chi nhánh'] || employeeToUse.branch;
+            } else {
+                // Fallback: chỉ gán email nếu không tìm thấy thông tin nhân viên
+                data['Email'] = data['Email'] || userEmail;
+                if (employeeNameFromUrl) {
+                    data['Tên'] = data['Tên'] || employeeNameFromUrl;
+                }
+            }
+
+            tableHeaders.forEach(header => {
+                const cell = row.insertCell();
+                const value = data[header] || '';
+                let inputHtml = '';
+                if (['id', 'id phản hồi', 'id số mess', 'team', 'id_ns', 'trạng thái', 'chi nhánh', 'doanh số đi', 'số đơn hoàn huỷ', 'doanh số hoàn huỷ', 'số đơn thành công', 'doanh số thành công', 'khách mới', 'khách cũ', 'bán chéo', 'bán chéo team', 'id_ns', 'doanh số đi', 'số đơn hoàn hủy', 'ds chốt', 'ds sau hoàn hủy', 'số đơn sau hoàn hủy', 'doanh số sau ship', 'doanh số tc', 'kpis', 'cpqc theo tkqc', 'báo cáo theo page', 'trạng thái', 'cảnh báo'].includes(header.toLowerCase())) {
+                    cell.classList.add('hidden-col');
+                }
+
+                switch (header) {
+                    case 'Ngày':
+                        inputHtml = `<input name="${header}" type="date" value="${value ? new Date(value).toLocaleDateString('en-CA') : getToday()}">`;
+                        break;
+                    case 'Ca': case 'ca':
+                        inputHtml = `<select name="${header}"><option value="">-- Chọn ca --</option>${createOptions(appData.shiftList, value)}</select>`;
+                        break;
+                    case 'Sản phẩm': case 'Sản_phẩm':
+                        inputHtml = `<select name="${header}"><option value="">-- Chọn sản phẩm --</option>${createOptions(appData.productList, value)}</select>`;
+                        break;
+                    case 'Thị trường': case 'Thị_trường':
+                        inputHtml = `<div class="input-container">
+                                    <select name="${header}"><option value="">-- Chọn thị trường --</option>${createOptions(appData.marketList, value)}</select>
+                                    <button type="button" class="addSimilar" onclick="addSimilarRow(this)">➕</button>
+                                 </div>`;
+                        break;
+                    case 'Số Mess': case 'Phản hồi': case 'Đơn Mess': case 'Doanh số Mess':
+                        // ===== IMPROVED: Enhanced number input for better user experience =====
+                        const formattedValue1 = value ? new Intl.NumberFormat('de-DE').format(value) : '';
+                        inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue1}" 
+                                    placeholder="Chỉ nhập số nguyên (VD: 300000)" 
+                                    pattern="[0-9.,\\s]*" 
+                                    title="Chỉ được nhập số nguyên. Hệ thống sẽ tự động format."
+                                    autocomplete="off">`;
+                        break;
+                    case 'CPQC': case 'Số_Mess_Cmt': case 'Số đơn': case 'Doanh số':
+                        // ===== IMPROVED: Enhanced number input for better user experience =====
+                        const formattedValue2 = value ? new Intl.NumberFormat('de-DE').format(value) : '';
+                        inputHtml = `<input name="${header}" type="text" inputmode="numeric" value="${formattedValue2}" 
+                                    placeholder="Chỉ nhập số nguyên (VD: 777000)" 
+                                    pattern="[0-9.,\\s]*" 
+                                    title="Chỉ được nhập số nguyên. Hệ thống sẽ tự động format."
+                                    autocomplete="off">`;
+                        break;
+                    case 'id':
+                        inputHtml = `<input name="${header}" value="${value || crypto.randomUUID()}" readonly>`;
+                        break;
+                    case 'Tên':
+                        inputHtml = `<input name="${header}" list="employee-datalist" placeholder="-- Chọn hoặc nhập tên --" value="${escapeHtml(value)}" autocomplete="off">`;
+                        break;
+                    default:
+                        inputHtml = `<input name="${header}" type="text" value="${escapeHtml(value)}" autocomplete="off">`;
+                }
+                cell.innerHTML = inputHtml;
+            });
+
+            if (insertAfterElement) insertAfterElement.after(row);
+            else tableBody.appendChild(row);
+
+            return row;
+        }
+
+        window.removeRow = (button) => {
+            const row = button.closest('tr');
+            if (tableBody.rows.length <= 1) {
+                alert('Bạn không thể xóa dòng cuối cùng.');
+                return;
+            }
+            row.remove();
+        }
+
+        // Cập nhật function addSimilarRow để copy tên từ hàng hiện tại
+        window.addSimilarRow = (button) => {
+            const currentRow = button.closest('tr');
+            const data = {};
+            currentRow.querySelectorAll('input, select').forEach(input => {
+                const name = input.name;
+                // ===== IMPROVED: Bao gồm cả trường 'Tên' để tự động điền thông tin nhân viên =====
+                if (name && name !== 'id' && name !== 'Số Mess' && name !== 'Phản hồi' && name !== 'Số_Mess_Cmt' && name !== 'CPQC' && name !== 'Số đơn' && name !== 'Doanh số') {
+                    data[name] = input.value;
+                }
+            });
+            addNewRow(data, currentRow);
+        }
+
+        function validateForm() {
+            document.querySelectorAll('.error-cell').forEach(cell => cell.classList.remove('error-cell'));
+            let isValid = true;
+            const rowsToSubmit = tableBody.querySelectorAll('tr');
+
+            if (rowsToSubmit.length === 0) {
+                showResponseMessage('Không có dữ liệu để gửi.', false);
+                return false;
+            }
+
+            rowsToSubmit.forEach(row => {
+                ['Tên', 'Ngày', 'Ca', 'Sản phẩm', 'Thị trường', 'ca', 'Sản_phẩm', 'Thị_trường', 'TKQC', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'].forEach(fieldName => {
+                    const headerExists = tableHeaders.includes(fieldName);
+                    if (headerExists) {
+                        const input = row.querySelector(`[name="${fieldName}"]`);
+                        if (input && !input.value.trim()) {
+                            isValid = false;
+                            input.closest('td').classList.add('error-cell');
+                        }
+                    }
+                });
+            });
+
+            if (!isValid) {
+                showResponseMessage('Lỗi: Vui lòng điền đầy đủ thông tin cho các ô màu đỏ.', false);
+            } else {
+                respMsg.className = '';
+                respMsg.textContent = '';
+            }
+            return isValid;
+        }
+
+        async function handleSubmit(e) {
+            e.preventDefault();
+            if (!validateForm()) return;
+
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Đang gửi...';
+            updateStatus('Bắt đầu quá trình gửi dữ liệu...');
+
+            const rowsData = [];
+            tableBody.querySelectorAll('tr').forEach(row => {
+                const rowObject = {};
+                row.querySelectorAll('input, select').forEach(input => {
+                    if (input.name) {
+                        let value = input.value;
+                        // ===== IMPROVED: Clean number data before sending =====
+                        // Làm sạch dữ liệu số trước khi gửi - loại bỏ tất cả định dạng
+                        const numberFields = ['Số Mess', 'Phản hồi', 'Đơn Mess', 'Doanh số Mess', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'];
+                        if (numberFields.includes(input.name)) {
+                            value = value.replace(/[^0-9]/g, ''); // Chỉ giữ lại số
+                        }
+                        // ===== MODIFIED =====: Đảm bảo trường Email luôn được cập nhật đúng
+                        // Mặc dù đã tự động điền, nhưng nếu ô Email bị ẩn, giá trị có thể không được lấy đúng
+                        // Cách làm hiện tại đã đúng vì nó lặp qua tất cả input, kể cả input ẩn.
+                        rowObject[input.name] = value;
+                    }
+                });
+                // Gán lại email từ biến toàn cục userEmail nếu ô Email trống (dự phòng)
+                if (!rowObject['Email']) {
+                    rowObject['Email'] = userEmail;
+                }
+                rowsData.push(rowObject);
+            });
+
+            const payload = {
+                sheetName: currentTableName,
+                spreadsheetId: SPREADSHEET_ID,
+                fields: tableHeaders,
+                rows: rowsData,
+                settings: {
+                    checkDuplicates: true,
+                    validateData: true,
+                    returnDetails: true
+                }
+            };
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || `Lỗi HTTP: ${response.status}`);
+                }
+
+                const summary = result.summary;
+                showResponseMessage(`Thành công! Đã thêm ${summary.added} dòng. Trùng lặp: ${summary.duplicates}. Lỗi: ${summary.validationErrors}.`, true);
+                updateStatus('Gửi báo cáo thành công.');
+
+                tableBody.innerHTML = '';
+                addNewRow({ 'Tên': employeeNameFromUrl, 'Email': userEmail });
+
+            } catch (error) {
+                console.error('Lỗi khi gửi dữ liệu:', error);
+                showResponseMessage('Lỗi khi gửi dữ liệu: ' + error.message, false);
+                updateStatus('Gửi báo cáo thất bại: ' + error.message, true);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🚀 Gửi báo cáo';
+            }
+        }
+
+        async function fetchAndRenderTableStructure() {
+            updateStatus(`Đang chuẩn bị bảng '${currentTableName}'...`);
+            try {
+                const headerMkt = ["id", "Tên", "Email", "Ngày", "ca", "Sản_phẩm", "Thị_trường", "TKQC", "CPQC", "Số_Mess_Cmt", "Số đơn", "Doanh số", "Team", "id_NS", "Doanh số đi", "Số đơn hoàn hủy", "DS chốt", "DS sau hoàn hủy", "Số đơn hoàn hủy", "Doanh số sau ship", "Doanh số TC", "KPIs", "CPQC theo TKQC", "Báo cáo theo Page", "Trạng thái", "Cảnh báo"];
+                const headerSale = ["id", "Email", "Tên", "Ngày", "Ca", "Sản phẩm", "Thị trường", "Số Mess", "Phản hồi", "Đơn Mess", "Doanh số Mess", "id số mess", "id phản hồi", "Team", "Trạng thái", "Chi nhánh", "id_NS", "Doanh số đi", "Số đơn Hoàn huỷ", "Doanh số hoàn huỷ", "Số đơn thành công", "Doanh số thành công", "Khách mới", "Khách cũ", "Bán chéo"];
+
+                const headersForTable = currentTableName === 'Báo cáo MKT' ? headerMkt : headerSale;
+                renderTable(headersForTable);
+
+            } catch (error) {
+                updateStatus(`Không thể tải cấu trúc bảng. Lỗi: ${error.message}`, true);
+                tableBody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:red;">Lỗi tải dữ liệu. Vui lòng kiểm tra lại URL hoặc liên hệ quản trị viên.</td></tr>`;
+            }
+        }
+
+        // ===== NEW FUNCTION =====
+        function handleNameChange(event) {
+            const nameInput = event.target;
+            const selectedName = nameInput.value;
+            const currentRow = nameInput.closest('tr');
+
+            if (!currentRow) return;
+
+            const employee = appData.employeeDetails.find(emp => emp.name === selectedName);
+
+            // Tìm các ô input trong hàng hiện tại
+            const emailInput = currentRow.querySelector('[name="Email"]');
+            const teamInput = currentRow.querySelector('[name="Team"]');
+            const idNsInput = currentRow.querySelector('[name="id_NS"]');
+            const branchInput = currentRow.querySelector('[name="Chi nhánh"]');
+
+            if (employee) {
+                // Nếu tìm thấy nhân viên, cập nhật các trường
+                if (emailInput) emailInput.value = employee.email || '';
+                if (teamInput) teamInput.value = employee.team || '';
+                if (idNsInput) idNsInput.value = employee.id_ns || '';
+                if (branchInput) branchInput.value = employee.branch || '';
+            } else {
+                // Nếu không tìm thấy (ví dụ: người dùng xóa tên), xóa các trường liên quan
+                // Giữ lại email mặc định của người dùng đang đăng nhập
+                if (emailInput) emailInput.value = userEmail;
+                if (teamInput) teamInput.value = '';
+                if (idNsInput) idNsInput.value = '';
+                if (branchInput) branchInput.value = '';
+            }
+        }
+
+        // Tạo function mới để lấy dữ liệu từ dòng cuối cùng
+        function getLastRowData() {
+            const lastRow = tableBody.querySelector('tr:last-child');
+            if (!lastRow) {
+                // Nếu không có dòng nào, trả về dữ liệu mặc định
+                return { 'Tên': employeeNameFromUrl, 'Email': userEmail };
+            }
+
+            const data = {};
+            lastRow.querySelectorAll('input, select').forEach(input => {
+                const name = input.name;
+                // Sao chép tất cả trường trừ các trường số liệu và id
+                if (name && name !== 'id' && name !== 'Số Mess' && name !== 'Phản hồi' && name !== 'Số_Mess_Cmt' && name !== 'CPQC' && name !== 'Số đơn' && name !== 'Doanh số' && name !== 'Đơn Mess' && name !== 'Doanh số Mess' && name !== 'id số mess' && name !== 'id phản hồi') {
+                    data[name] = input.value;
+                }
+            });
+
+            // Đảm bảo có ít nhất tên và email
+            if (!data['Tên'] && employeeNameFromUrl) {
+                data['Tên'] = employeeNameFromUrl;
+            }
+            if (!data['Email'] && userEmail) {
+                data['Email'] = userEmail;
+            }
+
+            return data;
+        }
+
+        async function initializeApp() {
+            const urlParams = new URLSearchParams(window.location.search);
+            userEmail = urlParams.get('email') || 'demo@lumiglobal.com';
+            currentTableName = urlParams.get('tableName') || 'Báo cáo Sale';
+            employeeNameFromUrl = urlParams.get('hoten') || 'Demo User';
+            formTitle.textContent += ` (${currentTableName || 'Chưa chọn bảng'})`;
+
+            // Thông báo nếu đang sử dụng dữ liệu demo
+            if (!urlParams.get('email') || !urlParams.get('tableName')) {
+                updateStatus('Đang sử dụng dữ liệu demo. Để sử dụng đầy đủ, vui lòng truy cập với các tham số URL đúng.', false);
+                console.log('Demo mode - URL parameters:', {
+                    email: urlParams.get('email'),
+                    tableName: urlParams.get('tableName'),
+                    hoten: urlParams.get('hoten')
+                });
+            }
+
+            // ===== MODIFIED =====: Gán kết quả vào employeeDetails
+            appData.employeeDetails = await fetchEmployeeList();
+            populateEmployeeDatalist();
+            await fetchAndRenderTableStructure();
+
+            updateStatus('Ứng dụng đã sẵn sàng.');
+            addRowBtn.disabled = false;
+            submitBtn.disabled = false;
+
+            form.addEventListener('submit', handleSubmit);
+            // ===== MODIFIED: Sử dụng dữ liệu từ dòng cuối cùng thay vì dữ liệu cố định =====
+            addRowBtn.addEventListener('click', () => {
+                const lastRowData = getLastRowData();
+                addNewRow(lastRowData);
+            });
+
+            tableBody.addEventListener('input', e => {
+                // Sự kiện tự động điền thông tin nhân viên
+                if (e.target && e.target.getAttribute('name') === 'Tên') {
+                    handleNameChange(e);
+                }
+
+                // ===== IMPROVED: Enhanced number field handling =====
+                // Sự kiện định dạng số cho tất cả các trường số
+                const numberFields = ['Số Mess', 'Phản hồi', 'Đơn Mess', 'Doanh số Mess', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'];
+                if (e.target && numberFields.some(field => e.target.matches(`[name="${field}"]`))) {
+                    formatNumberInput(e.target);
+                }
+            });
+
+            // ===== IMPROVED: Add blur event for validation =====
+            // Validation khi user rời khỏi trường input
+            tableBody.addEventListener('blur', e => {
+                const numberFields = ['Số Mess', 'Phản hồi', 'Đơn Mess', 'Doanh số Mess', 'CPQC', 'Số_Mess_Cmt', 'Số đơn', 'Doanh số'];
+                if (e.target && numberFields.some(field => e.target.matches(`[name="${field}"]`))) {
+                    validateNumberField(e.target);
+                }
+            }, true); // true để capture phase
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+    </script>
+</body>
+
+</html>
