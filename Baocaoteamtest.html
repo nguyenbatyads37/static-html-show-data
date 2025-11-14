@@ -1179,6 +1179,10 @@
 
 
     function getFilteredData(tabPrefix) {
+      if (!baseDataForReport || !Array.isArray(baseDataForReport)) {
+        console.warn('baseDataForReport is not valid array');
+        return [];
+      }
       const isMktTab = tabPrefix === 'mkt';
       const startDateVal = document.getElementById(`start-date-${tabPrefix}`).value;
       const endDateVal = document.getElementById(`end-date-${tabPrefix}`).value;
@@ -1252,12 +1256,41 @@
     }
 
     function populateAllFilters() {
-      if (!masterData.length) return;
+      if (!masterData || !Array.isArray(masterData) || !masterData.length) {
+        console.warn('masterData is not valid or empty');
+        return;
+      }
 
-      const products = [...new Set(masterData.map(r => r.sanPham).filter(Boolean))].sort();
-      const cas = [...new Set(masterData.map(r => r.ca).filter(Boolean))].sort();
-      const teams = [...new Set(masterData.map(r => r.team).filter(Boolean))].sort();
-      const markets = [...new Set(masterData.map(r => r.thiTruong).filter(Boolean))].sort();
+      // Map 7 sản phẩm chỉ định với tên thật trong dữ liệu
+      const productMapping = {
+        'Ladi Fitgum CAFE 20X': ['Fitgum CAFE 20X'],
+        'Ladi Dầu gội': ['Dầu gội', 'Gel Dạ Dày'],
+        'Ladi Gel XK': ['Gel XK Phi', 'Gel XK Thái', 'Gel XK'],
+        'Dr yutitan': ['Dr yutitan'],
+        'Gel Dạ dày Thái': ['Gel Dạ Dày', 'Gel Dạ dày Thái'],
+        'Gel XK': ['Gel XK', 'Gel XK Phi', 'Gel XK Thái'],
+        'Gel Trĩ': ['Gel Trĩ']
+      };
+      
+      const allRealProducts = [...new Set(masterData.map(r => r && r.sanPham).filter(Boolean))];
+      console.log('Tất cả sản phẩm thật:', allRealProducts);
+      
+      // Tìm sản phẩm thật nào khớp với 7 sản phẩm chỉ định
+      const products = [];
+      Object.keys(productMapping).forEach(key => {
+        const matchingProducts = allRealProducts.filter(realProduct => 
+          productMapping[key].some(pattern => realProduct && realProduct.includes(pattern))
+        );
+        products.push(...matchingProducts);
+      });
+      
+      // Loại bỏ trùng lặp và sắp xếp
+      const uniqueProducts = [...new Set(products)].sort();
+      console.log('Sản phẩm được map:', uniqueProducts);
+      const products_final = uniqueProducts;
+      const cas = [...new Set(masterData.map(r => r && r.ca).filter(Boolean))].sort();
+      const teams = [...new Set(masterData.map(r => r && r.team).filter(Boolean))].sort();
+      const markets = [...new Set(masterData.map(r => r && r.thiTruong).filter(Boolean))].sort();
 
       const createCheckboxes = (items, className) => items.map(item => `<label class='indent'><input type='checkbox' class='${className}' value='${item}' checked> ${item}</label>`).join('');
       const createMarketCheckboxes = (className) => {
@@ -1272,7 +1305,7 @@
       };
 
       ['tab1', 'tab3'].forEach(prefix => {
-        document.getElementById(`product-options-${prefix}`).innerHTML = createCheckboxes(products, `filter-product-${prefix}`);
+        document.getElementById(`product-options-${prefix}`).innerHTML = createCheckboxes(products_final, `filter-product-${prefix}`);
         document.getElementById(`ca-options-${prefix}`).innerHTML = createCheckboxes(cas, `filter-ca-${prefix}`);
         document.getElementById(`team-options-${prefix}`).innerHTML = createCheckboxes(teams, `filter-team-${prefix}`);
         document.getElementById(`market-options-${prefix}`).innerHTML = createMarketCheckboxes(`filter-market-${prefix}`);
@@ -1292,10 +1325,19 @@
 
     function applyTab1Filters() {
       const filteredData = getFilteredData('tab1');
-      // Lọc chỉ hiển thị các hàng có chứa "Team Test"
+      if (!filteredData || !Array.isArray(filteredData)) {
+        console.warn('filteredData is not valid array');
+        return;
+      }
+      // Lọc chỉ hiển thị các hàng có chứa "Team Test" 
       const teamTestData = filteredData.filter(record => {
-        return record.team && record.team.includes('Team Test');
+        if (!record) return false;
+        const hasTeamTest = record.team && typeof record.team === 'string' && record.team.includes('Team Test');
+        return hasTeamTest;
       });
+      // Debug: Kiểm tra dữ liệu Team Test
+      console.log('Dữ liệu Team Test:', teamTestData.length, 'records');
+      console.log('Sản phẩm trong Team Test:', [...new Set(teamTestData.map(r => r.sanPham))]);
       const summaryList = generateSummaryTableData(teamTestData);
       sortList(summaryList, sortStates.summary, summaryColumnSortKeys, { prop: 'team', type: 'string' });
       renderSummary(summaryList);
@@ -1305,9 +1347,15 @@
 
     function applyTab3Filters() {
       const filteredData = getFilteredData('tab3');
+      if (!filteredData || !Array.isArray(filteredData)) {
+        console.warn('filteredData is not valid array');
+        return;
+      }
       // Lọc chỉ hiển thị các hàng có chứa "Team Test"
       const teamTestData = filteredData.filter(record => {
-        return record.team && record.team.includes('Team Test');
+        if (!record) return false;
+        const hasTeamTest = record.team && typeof record.team === 'string' && record.team.includes('Team Test');
+        return hasTeamTest;
       });
       const kpiList = generateKpiTableData(teamTestData);
       sortList(kpiList, sortStates.kpi, kpiColumnSortKeys, { prop: 'team', type: 'string' });
