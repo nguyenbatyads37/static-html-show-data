@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>In Hàng Loạt - Viet Long Global</title>
+    <style>
+        /* --- CẤU HÌNH CHUNG --- */
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #555; /* Màu nền tối để dễ nhìn từng trang */
+            margin: 0;
+            padding: 20px;
+            color: #000;
+        }
+
+        /* CONTAINER CHỨA TẤT CẢ HÓA ĐƠN */
+        #invoice-container {
+            width: 100%;
+            max-width: 85mm; 
+            margin: 0 auto;
+        }
+
+        /* --- KHUNG HÓA ĐƠN (TỪNG TRANG) --- */
+        .invoice-page {
+            width: 78mm; /* Chuẩn K80 */
+            margin: 0 auto 20px auto; 
+            background: #fff;
+            padding: 5mm;
+            position: relative;
+            overflow: hidden;
+            min-height: 160mm;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            
+            /* NGẮT TRANG KHI IN */
+            page-break-after: always; 
+            break-after: page;
+        }
+
+        /* Ẩn ngắt trang ở phần tử cuối cùng */
+        .invoice-page:last-child {
+            page-break-after: auto;
+        }
+
+        /* --- WATERMARK (LOGO CHÌM TO & ĐẬM) --- */
+        .watermark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url('https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F64ec6826.%E1%BA%A2nh.114246.png');
+            background-repeat: no-repeat;
+            
+            /* Cấu hình logo to đậm */
+            background-position: center center;
+            background-size: 95%; /* To gần tràn viền */
+            opacity: 0.15; /* Đậm hơn */
+            z-index: 0;
+            pointer-events: none;
+            filter: grayscale(100%);
+        }
+
+        .content {
+            position: relative;
+            z-index: 1;
+        }
+
+        /* HEADER */
+        .header {
+            text-align: center;
+            margin-bottom: 15px;
+            border-bottom: 2px dashed #333;
+            padding-bottom: 10px;
+        }
+
+        .company-name {
+            color: #cc0000; 
+            font-weight: 900;
+            font-size: 22px;
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1.2;
+            text-shadow: 2px 2px 0px #fff; 
+        }
+
+        .company-contact {
+            font-size: 10px;
+            margin-top: 4px;
+            font-weight: bold;
+        }
+
+        /* CUSTOMER INFO */
+        .customer-info {
+            font-size: 12px;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+            background-color: rgba(255,255,255, 0.65); 
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .row { display: flex; margin-bottom: 4px; }
+        .label { font-weight: bold; width: 50px; flex-shrink: 0; }
+        .value { flex-grow: 1; word-break: break-word; font-weight: 600; }
+
+        /* TABLE */
+        table {
+            width: 100%;
+            font-size: 12px;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            background-color: rgba(255,255,255, 0.65);
+        }
+        th {
+            text-align: left;
+            border-bottom: 1px solid #000;
+            padding: 5px 0;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+        td {
+            padding: 8px 0;
+            border-bottom: 1px dotted #333;
+            vertical-align: top;
+            font-weight: 600;
+        }
+        .col-qty { text-align: center; width: 30px; }
+        .col-amt { text-align: right; width: 70px; }
+        .detail-note {
+            display: block;
+            font-size: 11px;
+            color: #333;
+            font-style: italic;
+            margin-top: 2px;
+            font-weight: normal;
+        }
+
+        /* TOTAL */
+        .total-section {
+            text-align: right;
+            font-size: 14px;
+            font-weight: bold;
+            border-top: 2px dashed #000;
+            padding-top: 10px;
+            margin-bottom: 15px;
+            background-color: rgba(255,255,255, 0.8);
+        }
+        .total-price { color: #cc0000; font-size: 20px; }
+
+        /* QR CODE */
+        .qr-container {
+            text-align: center;
+            margin-top: 10px;
+            border-top: 1px dotted #aaa;
+            padding-top: 10px;
+            background-color: rgba(255,255,255, 0.8);
+        }
+        .qr-image {
+            width: 50mm;
+            height: 50mm;
+            border: 3px solid #000;
+            padding: 2px;
+            display: block;
+            margin: 0 auto;
+        }
+        .qr-text {
+            margin-top: 5px;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .footer {
+            text-align: center;
+            font-size: 10px;
+            margin-top: 15px;
+            font-style: italic;
+            font-weight: bold;
+        }
+
+        .loading {
+            color: white;
+            text-align: center;
+            font-size: 20px;
+            margin-top: 50px;
+        }
+
+        /* CẤU HÌNH IN */
+        @media print {
+            body { margin: 0; padding: 0; background: none; }
+            #invoice-container { max-width: none; width: 100%; }
+            .invoice-page {
+                width: 100%; 
+                margin: 0;
+                box-shadow: none;
+                border: none;
+                page-break-after: always;
+            }
+            .loading { display: none; }
+            .company-name, .total-price {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="loading" class="loading">Loading orders...</div>
+    <div id="invoice-container"></div>
+
+<script>
+    const DATA_URL = 'https://script.google.com/macros/s/AKfycbyKjBkwJR6OdGt4hB45Kf6yBRX0l7kUicHUK9XY1vLU4iho9uk--YvDirw-CuG7rGjc/exec';
+
+    function getNow() {
+        const now = new Date();
+        return now.toLocaleString('en-GB', { hour12: false });
+    }
+
+    function formatCurrency(amount) {
+        if (!amount) return "0";
+        return new Intl.NumberFormat().format(amount);
+    }
+
+    function createInvoiceHTML(order) {
+        let qrValue = order['ID oder'];
+        if (!qrValue || qrValue === "") {
+            qrValue = order['ID'];
+        }
+        const qrApiLink = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=10&data=${qrValue}`;
+
+        let productDetailHtml = '';
+        if (order['Detail']) {
+            productDetailHtml = `<span class="detail-note">${order['Detail']}</span>`;
+        }
+
+        return `
+        <div class="invoice-page">
+            <div class="watermark"></div>
+            <div class="content">
+                <div class="header">
+                    <div class="company-name">Viet Long Global</div>
+                    <div class="company-contact">International Logistics & Trading</div>
+                </div>
+                <div class="customer-info">
+                    <div class="row"><span class="label">Date:</span><span class="value">${getNow()}</span></div>
+                    <div class="row"><span class="label">To:</span><span class="value">${order['Customer name'] || ''}</span></div>
+                    <div class="row"><span class="label">Tel:</span><span class="value">${order['Mobile'] || ''}</span></div>
+                    <div class="row"><span class="label">Addr:</span><span class="value">${order['Address'] || ''}</span></div>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th class="col-qty">Qty</th>
+                            <th class="col-amt">Amt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                ${order['Product'] || ''}
+                                ${productDetailHtml}
+                            </td>
+                            <td class="col-qty">${order['Quantity'] || 0}</td>
+                            <td class="col-amt">${formatCurrency(order['Total MNT'])}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="total-section">
+                    Total: <span class="total-price">${formatCurrency(order['Total MNT'])}</span>
+                </div>
+                <div class="qr-container">
+                    <img src="${qrApiLink}" alt="QR Code" class="qr-image">
+                    <div class="qr-text">${qrValue}</div>
+                </div>
+                <div class="footer">Thank you for trusting Viet Long Global!</div>
+            </div>
+        </div>
+        `;
+    }
+
+    async function loadAndRender() {
+        const container = document.getElementById('invoice-container');
+        const loading = document.getElementById('loading');
+
+        try {
+            const response = await fetch(DATA_URL);
+            const json = await response.json();
+
+            if (json.data && json.data.length > 0) {
+                loading.style.display = 'none';
+                
+                let fullHtml = '';
+                let count = 0;
+
+                json.data.forEach(order => {
+                    // --- ĐIỀU KIỆN LỌC ---
+                    // Chỉ lấy các dòng có ID tồn tại và không phải là chuỗi rỗng
+                    if (order['ID'] && String(order['ID']).trim() !== "") {
+                        fullHtml += createInvoiceHTML(order);
+                        count++;
+                    }
+                });
+
+                if (count > 0) {
+                    container.innerHTML = fullHtml;
+                } else {
+                    loading.style.display = 'block';
+                    loading.innerText = "No orders with valid ID found.";
+                }
+                
+            } else {
+                loading.innerText = "No data found.";
+            }
+        } catch (error) {
+            console.error(error);
+            loading.innerText = "Error loading data.";
+        }
+    }
+
+    loadAndRender();
+</script>
+
+</body>
+</html>
