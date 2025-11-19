@@ -3,227 +3,466 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hóa đơn K80 - Viet Long Global</title>
+    <title>In Full Đơn - Viet Long Global</title>
     <style>
-        /* --- CẤU HÌNH CHUNG --- */
+        /* --- CẤU HÌNH IN NHIỆT K80 --- */
         body {
-            font-family: 'Courier New', Courier, monospace;
-            background-color: #555;
+            font-family: 'Arial', sans-serif;
+            background-color: #555; /* Nền tối để nổi bật giấy in */
             margin: 0;
             padding: 20px;
             color: #000;
         }
 
-        #invoice-container {
+        /* Container bao quanh danh sách */
+        #invoices-wrapper {
             width: 100%;
-            max-width: 85mm; 
+            max-width: 85mm;
             margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 30px; /* Khoảng cách giữa các đơn khi xem trên màn hình */
         }
 
-        /* KHUNG HÓA ĐƠN K80 */
+        /* Controls */
+        .controls {
+            max-width: 85mm;
+            margin: 0 auto 20px;
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            background: rgba(255,255,255, 0.9);
+            border-radius: 5px;
+            flex-wrap: wrap;
+        }
+
+        .search-box {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 10px 15px;
+            background: #cc0000;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background: #aa0000;
+        }
+
+        /* KHUNG HÓA ĐƠN (TỪNG TRANG) */
         .invoice-page {
-            width: 78mm; 
-            margin: 0 auto 20px auto; 
-            background: #fff;
-            padding: 5mm;
+            width: 76mm; /* Khổ giấy 80mm trừ lề an toàn */
+            background-color: #fff;
+            padding: 4mm;
+            box-sizing: border-box;
             position: relative;
             overflow: hidden;
-            min-height: 160mm;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            page-break-after: always; 
+            min-height: 150mm;
+            border: 1px solid #ccc; /* Viền mờ để dễ nhìn trên web */
+            
+            /* QUAN TRỌNG: LỆNH NGẮT TRANG */
+            page-break-after: always;
             break-after: page;
         }
-        .invoice-page:last-child { page-break-after: auto; }
+        
+        /* Xóa ngắt trang ở đơn cuối cùng để không thừa giấy */
+        .invoice-page:last-child {
+            page-break-after: auto;
+        }
 
-        /* WATERMARK LOGO */
+        /* LOGO CHÌM - TO VÀ ĐẬM */
         .watermark {
             position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url('https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F64ec6826.%E1%BA%A2nh.114246.png');
-            background-repeat: no-repeat;
-            background-position: center center;
-            background-size: 95%;
-            opacity: 0.15;
-            z-index: 0;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 110%; /* To hơn */
+            opacity: 0.3; /* Đậm hơn */
+            z-index: 0; /* Ở phía sau nội dung */
             pointer-events: none;
-            filter: grayscale(100%);
+            filter: grayscale(0%) brightness(0.8) contrast(1.2); /* Giữ màu đậm, tăng contrast */
         }
+
         .content { position: relative; z-index: 1; }
 
         /* HEADER */
-        .header { text-align: center; margin-bottom: 15px; border-bottom: 2px dashed #333; padding-bottom: 10px; }
-        .company-name {
-            color: #cc0000; font-weight: 900; font-size: 22px; text-transform: uppercase; margin: 0; line-height: 1.2;
-            text-shadow: 2px 2px 0px #fff; 
+        .header {
+            text-align: center;
+            margin-bottom: 10px;
+            border-bottom: 2px dashed #000;
+            padding-bottom: 8px;
         }
-        .company-contact { font-size: 10px; margin-top: 4px; font-weight: bold; }
+
+        .company-name {
+            color: #cc0000; 
+            font-weight: 900; 
+            font-size: 19pt;
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1.1;
+        }
+
+        .company-sub { font-size: 9pt; font-weight: bold; margin-top: 5px; }
 
         /* CUSTOMER INFO */
         .customer-info {
-            font-size: 12px; margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 10px;
-            background-color: rgba(255,255,255, 0.65); padding: 5px; border-radius: 4px;
+            font-size: 10pt;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #aaa;
+            padding-bottom: 8px;
+            background: rgba(255,255,255, 0.7);
         }
+
         .row { display: flex; margin-bottom: 4px; }
-        .label { font-weight: bold; width: 50px; flex-shrink: 0; }
-        .value { flex-grow: 1; word-break: break-word; font-weight: 600; }
+        .label { font-weight: bold; width: 60px; flex-shrink: 0; }
+        .value { font-weight: 600; flex-grow: 1; word-break: break-word; }
 
         /* TABLE */
-        table { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 10px; background-color: rgba(255,255,255, 0.65); }
-        th { text-align: left; border-bottom: 1px solid #000; padding: 5px 0; font-size: 11px; text-transform: uppercase; }
-        td { padding: 8px 0; border-bottom: 1px dotted #333; vertical-align: top; font-weight: 600; }
-        .col-qty { text-align: center; width: 30px; }
-        .col-amt { text-align: right; width: 70px; }
-        .detail-note { display: block; font-size: 11px; color: #333; font-style: italic; margin-top: 2px; font-weight: normal; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10pt;
+            margin-bottom: 10px;
+            background: rgba(255,255,255, 0.7);
+        }
+        th {
+            text-align: left;
+            border-bottom: 2px solid #000;
+            padding: 4px 0;
+            text-transform: uppercase;
+            font-size: 9pt;
+        }
+        td {
+            padding: 6px 0;
+            border-bottom: 1px dotted #999;
+            vertical-align: top;
+            font-weight: 600;
+        }
+        .text-center { text-align: center; }
+        .text-right { text-align: right; }
+        
+        .detail-note { display: block; font-size: 9pt; font-style: italic; font-weight: normal; margin-top: 2px; }
 
         /* TOTAL */
         .total-section {
-            text-align: right; font-size: 14px; font-weight: bold; border-top: 2px dashed #000;
-            padding-top: 10px; margin-bottom: 15px; background-color: rgba(255,255,255, 0.8);
+            text-align: right;
+            font-size: 12pt;
+            font-weight: 900;
+            border-top: 2px dashed #000;
+            padding-top: 8px;
+            margin-bottom: 15px;
+            background: rgba(255,255,255, 0.8);
         }
-        .total-price { color: #cc0000; font-size: 20px; }
+        .total-price { color: #cc0000; font-size: 16pt; }
 
-        /* QR */
+        /* QR CODE */
         .qr-container {
-            text-align: center; margin-top: 10px; border-top: 1px dotted #aaa; padding-top: 10px; background-color: rgba(255,255,255, 0.8);
+            text-align: center;
+            margin-top: 5px;
+            padding-top: 10px;
+            border-top: 1px dotted #000;
+            background: rgba(255,255,255, 0.8);
         }
-        .qr-image { width: 50mm; height: 50mm; border: 3px solid #000; padding: 2px; display: block; margin: 0 auto; }
-        .qr-text { margin-top: 5px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
-        .footer { text-align: center; font-size: 10px; margin-top: 15px; font-style: italic; font-weight: bold; }
-        
-        .loading { color: white; text-align: center; font-size: 16px; margin-top: 50px; font-family: sans-serif; }
-        .error-msg { color: #ff6b6b; background: #333; padding: 20px; border-radius: 5px; margin: 20px; font-family: sans-serif; }
+        .qr-img { width: 45mm; height: 45mm; border: 2px solid #000; padding: 2px; }
+        .qr-text { margin-top: 5px; font-weight: bold; font-size: 10pt; }
 
+        .footer { text-align: center; font-size: 9pt; margin-top: 15px; font-style: italic; font-weight: bold; }
+        
+        #status-message { 
+            text-align: center; 
+            color: white; 
+            font-size: 20px; 
+            padding: 20px; 
+            max-width: 85mm;
+            margin: 0 auto;
+        }
+        .error { color: #ff6b6b; }
+
+        /* IN ẤN - Giao diện giống như view trên màn hình */
         @media print {
-            body { margin: 0; padding: 0; background: none; }
-            #invoice-container { max-width: none; width: 100%; }
-            .invoice-page { width: 100%; margin: 0; box-shadow: none; border: none; page-break-after: always; }
-            .loading, .error-msg { display: none; }
-            .company-name, .total-price { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            body { 
+                margin: 0; 
+                padding: 0; 
+                background: #555; /* Giữ background như màn hình */
+            }
+            .controls { 
+                display: none; 
+            }
+            #status-message { 
+                display: none; 
+            }
+            #invoices-wrapper { 
+                max-width: 85mm; 
+                gap: 30px; /* Giữ gap như màn hình */
+                margin: 0 auto;
+            }
+            
+            .invoice-page {
+                width: 76mm; /* Giữ kích thước như màn hình */
+                margin: 0 auto; 
+                border: 1px solid #ccc; /* Giữ border như màn hình */
+                page-break-after: always; /* Bắt buộc ngắt trang */
+            }
+            
+            .invoice-page:last-child {
+                page-break-after: auto;
+            }
+            
+            .company-name, .total-price { 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+            }
+            
+            /* Đảm bảo logo và nội dung hiển thị đúng */
+            .watermark {
+                opacity: 0.3;
+            }
         }
     </style>
 </head>
 <body>
 
-    <div id="loading" class="loading">
-        Đang kết nối dữ liệu...<br>
-        <small>(Vui lòng không chạy trên OneCompiler)</small>
+    <div id="status-message">Đang tải dữ liệu (Full Data)...</div>
+
+    <div class="controls" id="controls" style="display: none;">
+        <button class="btn" onclick="loadData()" style="width: 100%;">🔄 Refresh</button>
     </div>
-    <div id="invoice-container"></div>
 
-<script>
-    const ORIGINAL_URL = 'https://script.google.com/macros/s/AKfycbyKjBkwJR6OdGt4hB45Kf6yBRX0l7kUicHUK9XY1vLU4iho9uk--YvDirw-CuG7rGjc/exec';
-    
-    // Sử dụng AllOrigins.win với chế độ lấy "contents" để tránh lỗi SyntaxError
-    const PROXY_URL = `https://api.allorigins.win/get?url=${encodeURIComponent(ORIGINAL_URL)}`;
+    <div id="invoices-wrapper"></div>
 
-    function getNow() {
-        return new Date().toLocaleString('en-GB', { hour12: false });
-    }
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbwMjUW_Ya2um8F8vr9-ryTksCAruIyuMhjw3U0xn5Z__Wzov4V6axpPOXQoeSnz6JNm6w/exec";
+        let allData = [];
 
-    function formatCurrency(amount) {
-        if (!amount) return "0";
-        return new Intl.NumberFormat().format(amount);
-    }
+        function formatMoney(amount) {
+            if (!amount) return "0";
+            return new Intl.NumberFormat('en-US').format(amount);
+        }
 
-    function createInvoiceHTML(order) {
-        let qrValue = order['ID oder'] || order['ID'];
-        // Nếu không có cả 2 ID thì dùng chuỗi tạm
-        if (!qrValue) qrValue = "NO-ID";
-        
-        const qrApiLink = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=10&data=${qrValue}`;
+        function getPrintTime() {
+            return new Date().toLocaleString('en-GB', { hour12: false });
+        }
 
-        let productDetailHtml = order['Detail'] ? `<span class="detail-note">${order['Detail']}</span>` : '';
-
-        return `
-        <div class="invoice-page">
-            <div class="watermark"></div>
-            <div class="content">
-                <div class="header">
-                    <div class="company-name">Viet Long Global</div>
-                    <div class="company-contact">International Logistics & Trading</div>
-                </div>
-                <div class="customer-info">
-                    <div class="row"><span class="label">Date:</span><span class="value">${getNow()}</span></div>
-                    <div class="row"><span class="label">To:</span><span class="value">${order['Customer name'] || ''}</span></div>
-                    <div class="row"><span class="label">Tel:</span><span class="value">${order['Mobile'] || ''}</span></div>
-                    <div class="row"><span class="label">Addr:</span><span class="value">${order['Address'] || ''}</span></div>
-                </div>
-                <table>
-                    <thead>
-                        <tr><th>Product</th><th class="col-qty">Qty</th><th class="col-amt">Amt</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td>${order['Product'] || ''}${productDetailHtml}</td>
-                            <td class="col-qty">${order['Quantity'] || 0}</td>
-                            <td class="col-amt">${formatCurrency(order['Total MNT'])}</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div class="total-section">Total: <span class="total-price">${formatCurrency(order['Total MNT'])}</span></div>
-                <div class="qr-container">
-                    <img src="${qrApiLink}" alt="QR Code" class="qr-image">
-                    <div class="qr-text">${qrValue}</div>
-                </div>
-                <div class="footer">Thank you for trusting Viet Long Global!</div>
-            </div>
-        </div>`;
-    }
-
-    async function loadAndRender() {
-        const container = document.getElementById('invoice-container');
-        const loading = document.getElementById('loading');
-
-        try {
-            // Bước 1: Gọi Proxy
-            const response = await fetch(PROXY_URL);
-            
-            if (!response.ok) throw new Error(`Lỗi Proxy: ${response.status}`);
-            
-            // Bước 2: Lấy dữ liệu bọc trong JSON của Proxy
-            const wrapperData = await response.json();
-            
-            // Bước 3: Parse nội dung thật từ Google Sheet
-            // AllOrigins trả về dữ liệu trong thuộc tính .contents
-            if (!wrapperData.contents) throw new Error("Proxy không trả về nội dung.");
-            
-            const json = JSON.parse(wrapperData.contents);
-
-            // Bước 4: Xử lý dữ liệu
-            if (json.data && json.data.length > 0) {
-                loading.style.display = 'none';
-                let fullHtml = '';
-                let count = 0;
-
-                json.data.forEach(order => {
-                    // Điều kiện lọc: Có ID và ID không rỗng
-                    if (order['ID'] && String(order['ID']).trim() !== "") {
-                        fullHtml += createInvoiceHTML(order);
-                        count++;
-                    }
+        function formatDate(dateString) {
+            if (!dateString) return "";
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleString('en-GB', { 
+                    year: 'numeric', 
+                    month: '2-digit', 
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
                 });
+            } catch (e) {
+                return dateString;
+            }
+        }
 
-                if (count > 0) {
-                    container.innerHTML = fullHtml;
-                } else {
-                    loading.innerHTML = "<div class='error-msg'>Dữ liệu tải thành công nhưng không có đơn nào có ID.</div>";
-                }
-            } else {
-                loading.innerHTML = "<div class='error-msg'>Google Sheet trả về danh sách trống.</div>";
+        function filterData() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (!searchTerm) {
+                renderInvoices(allData);
+                return;
             }
 
-        } catch (error) {
-            console.error(error);
-            loading.innerHTML = `<div class='error-msg'>
-                <b>Lỗi:</b> ${error.message}<br><br>
-                <b>Lưu ý:</b> Bạn KHÔNG thể chạy code này trên OneCompiler.<br>
-                Hãy lưu thành file <b>.html</b> trên máy tính và mở bằng Chrome.
-            </div>`;
+            const filtered = allData.filter(item => {
+                return Object.values(item).some(value => 
+                    String(value).toLowerCase().includes(searchTerm)
+                );
+            });
+
+            renderInvoices(filtered);
         }
-    }
 
-    loadAndRender();
-</script>
+        function renderInvoices(orders) {
+            const wrapper = document.getElementById('invoices-wrapper');
+            wrapper.innerHTML = "";
 
+            if (!orders || orders.length === 0) {
+                wrapper.innerHTML = '<div style="text-align: center; padding: 40px; color: white;">Không có dữ liệu</div>';
+                return;
+            }
+
+            let htmlContent = "";
+            let count = 0;
+
+            // --- LOOP QUA TOÀN BỘ DỮ LIỆU ---
+            orders.forEach(item => {
+                // Chỉ bỏ qua những dòng hoàn toàn rỗng (không có ID)
+                if (!item['ID']) return;
+
+                count++;
+
+                // Mapping Data
+                const customerName = item['Customer name'] || '';
+                const mobile = item['Mobile'] || '';
+                const address = item['Address'] || '';
+                const productName = item['Product'] || '';
+                const productDetail = item['Detail'] ? `<span class="detail-note">${item['Detail']}</span>` : '';
+                const quantity = item['Quantity'] || 0;
+                const totalMoney = formatMoney(item['Total MNT']);
+
+                // QR Code: Ưu tiên link có sẵn, không có thì tạo mới từ ID
+                let qrSrc = item['QR code']; 
+                let qrText = item['ID oder'] || item['ID']; // Text hiển thị dưới QR
+
+                if (!qrSrc || qrSrc === "") {
+                    qrSrc = `https://quickchart.io/qr?text=${encodeURIComponent(qrText)}&size=200`;
+                }
+
+                // Cộng dồn HTML
+                htmlContent += `
+                <div class="invoice-page">
+                    <img src="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&tableName=Kho%20%E1%BA%A3nh&fileName=Kho%20%E1%BA%A3nh_Images%2F64ec6826.%E1%BA%A2nh.114246.png" class="watermark" onerror="this.style.display='none'">
+                    
+                    <div class="content">
+                        <div class="header">
+                            <h1 class="company-name">Viet Long Global</h1>
+                            <div class="company-sub">Logistics & Trading Services</div>
+                        </div>
+
+                        <div class="customer-info">
+                            <div class="row"><span class="label">Date:</span><span class="value">${formatDate(item['Date'])}</span></div>
+                            <div class="row"><span class="label">To:</span><span class="value">${customerName}</span></div>
+                            <div class="row"><span class="label">Phone:</span><span class="value">${mobile}</span></div>
+                            <div class="row"><span class="label">Addr:</span><span class="value">${address}</span></div>
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th style="width:55%">Product</th>
+                                    <th class="text-center" style="width:15%">Qty</th>
+                                    <th class="text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>${productName}${productDetail}</td>
+                                    <td class="text-center">${quantity}</td>
+                                    <td class="text-right">${totalMoney}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div class="total-section">
+                            Total: <span class="total-price">${totalMoney} ₮</span>
+                        </div>
+
+                        <div class="qr-container">
+                            <img src="${qrSrc}" class="qr-img" alt="QR Code">
+                            <div class="qr-text">${qrText}</div>
+                        </div>
+
+                        <div class="footer">Thank you for your business!</div>
+                    </div>
+                </div>
+                `;
+            });
+
+            if (count > 0) {
+                wrapper.innerHTML = htmlContent;
+            } else {
+                wrapper.innerHTML = '<div style="text-align: center; padding: 40px; color: white;">Dữ liệu trống hoặc không tìm thấy ID.</div>';
+            }
+        }
+
+        async function loadData() {
+            const status = document.getElementById('status-message');
+            const wrapper = document.getElementById('invoices-wrapper');
+            const controls = document.getElementById('controls');
+            
+            wrapper.innerHTML = "";
+            status.style.display = 'block';
+            status.innerHTML = "Đang tải dữ liệu...";
+            status.classList.remove('error');
+            controls.style.display = 'none';
+
+            try {
+                console.log('🔗 Đang kết nối đến:', API_URL);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => {
+                    console.log('⏰ Timeout: Hủy request sau 30 giây');
+                    controller.abort();
+                }, 30000);
+                
+                const response = await fetch(API_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-cache',
+                    signal: controller.signal
+                });
+                
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                console.log('✅ Kết nối thành công, đang parse JSON...');
+                const json = await response.json();
+                console.log('📦 Dữ liệu nhận được:', json);
+
+                if (!json || !json.ok || !json.data) {
+                    throw new Error("Lỗi cấu trúc dữ liệu: không có trường 'data' hoặc dữ liệu rỗng.");
+                }
+
+                allData = json.data;
+                renderInvoices(allData);
+                
+                status.style.display = 'none';
+                controls.style.display = 'flex';
+
+            } catch (e) {
+                console.error('❌ Lỗi:', e);
+                status.classList.add('error');
+                
+                if (e.name === 'AbortError') {
+                    status.innerHTML = `
+                        <strong>⏰ Lỗi Timeout</strong><br><br>
+                        Không thể tải dữ liệu sau 30 giây.<br><br>
+                        <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
+                    `;
+                } else if (e.message.includes('Failed to fetch') || e.message.includes('CORS')) {
+                    status.innerHTML = `
+                        <strong>🚫 Lỗi Kết Nối</strong><br><br>
+                        Không thể kết nối từ localhost.<br><br>
+                        <strong>Giải pháp:</strong><br>
+                        1. Deploy file lên web server<br>
+                        2. Mở file trực tiếp (double-click)<br>
+                        3. Thêm CORS headers vào Google Apps Script<br><br>
+                        <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
+                    `;
+                } else {
+                    status.innerHTML = `
+                        <strong>❌ Lỗi: ${e.message}</strong><br><br>
+                        <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
+                    `;
+                }
+            }
+        }
+
+        // Load data on page load
+        window.addEventListener('load', loadData);
+    </script>
 </body>
 </html>
+
