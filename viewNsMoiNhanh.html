@@ -457,7 +457,8 @@
   <div id="loading-overlay">Đang tải dữ liệu...</div>
   <div class="tab-container">
     <button class="tablinks" onclick="openTab(event, 'DetailedReport')" id="defaultOpen">Báo cáo chi tiết</button>
-    <button class="tablinks" onclick="openTab(event, 'KpiReport')">Báo cáo KPI</button>
+    <button class="tablinks" onclick="openTab(event, 'KpiReport')" style="display: none;">Báo cáo KPI</button>
+    <button class="tablinks" onclick="openTab(event, 'HieuSuatKPI')">Hiệu suất KPI</button>
     <button class="tablinks" onclick="openTab(event, 'MarketReport')">Hiệu quả MKT</button>
     <!-- TAB MỚI: Báo cáo thủ công, ẩn mặc định -->
     <button class="tablinks" onclick="openTab(event, 'ManualReport')" id="manual-report-tab-btn"
@@ -641,6 +642,14 @@
       </div>
     </div>
   </div>
+  <!-- TAB MỚI: HIỆU SUẤT KPI -->
+  <div id="HieuSuatKPI" class="tab-content">
+    <div style="width: 100%; height: 100vh; border: none; padding: 0; margin: 0;">
+      <iframe id="hieu-suat-kpi-iframe" 
+              src="" 
+              style="width: 100%; height: 100vh; border: none; display: block;"></iframe>
+    </div>
+  </div>
   <!-- TAB 3: HIỆU QUẢ MKT (GIAO DIỆN MỚI) -->
   <div id="MarketReport" class="tab-content">
     <div class="report-header">
@@ -807,7 +816,8 @@
     */
     const host = 'prod'
     const hostUse = host === 'local' ? 'http://localhost:8081' : 'https://n-api-gamma.vercel.app';
-    const API_URL = `${hostUse}/report/generate?tableName=Báo cáo MKT`;
+    const API_URL_MKT = `${hostUse}/report/generate?tableName=Báo cáo MKT`;
+    // Đã bỏ API_URL_SALE - chỉ dùng MKT
 
     /**
     * @description Mảng màu sắc để sử dụng cho các biểu đồ, giúp phân biệt các danh mục.
@@ -957,8 +967,37 @@
     // === HÀM ĐÃ SỬA 1: TỰ ĐỘNG LÀM SẠCH ID KHI TẢI DỮ LIỆU ===
     async function fetchEmployeeData(result) {
       try {
-        return result
-          .filter(r => r["Họ Và Tên"] && String(r["Họ Và Tên"]).trim() !== '')
+        // Xử lý nhiều định dạng: array, object với rows/data, hoặc object cần convert
+        let dataArray = [];
+        
+        if (Array.isArray(result)) {
+          dataArray = result;
+        } else if (result && typeof result === 'object') {
+          // Thử lấy từ các field phổ biến
+          if (Array.isArray(result.rows)) {
+            dataArray = result.rows;
+          } else if (Array.isArray(result.data)) {
+            dataArray = result.data;
+          } else if (Array.isArray(result.employeeData)) {
+            dataArray = result.employeeData;
+          } else {
+            // Nếu là object với các key là số, convert sang array
+            try {
+              dataArray = Object.values(result).filter(item => item && typeof item === 'object');
+            } catch (e) {
+              console.warn('Cannot convert result to array:', e);
+              dataArray = [];
+            }
+          }
+        }
+        
+        if (!Array.isArray(dataArray)) {
+          console.warn('fetchEmployeeData: result is not an array, returning empty array');
+          return [];
+        }
+        
+        return dataArray
+          .filter(r => r && r["Họ Và Tên"] && String(r["Họ Và Tên"]).trim() !== '')
           .map(r => ({
             // THÊM .trim() ĐỂ CẮT KHOẢNG TRẮNG THỪA Ở ĐẦU VÀ CUỐI
             idnv: (r["id"] || '').trim(),
@@ -968,8 +1007,7 @@
             chucVu: (r["Vị trí"] || '').trim().toLowerCase(),
             chiNhanh: (r["chi nhánh"] || 'N/A').trim(),
           }));
-      } catch (err)
- {
+      } catch (err) {
         console.error("Lỗi tải dữ liệu nhân viên:", err);
         return [];
       }
@@ -978,10 +1016,32 @@
     async function fetchAndProcessData() {
       showLoader();
       try {
-        const response = await fetch(API_URL);
-        const result = await response.json();
-        employeeData = await fetchEmployeeData(result.employeeData || { rows: [] });
-        masterData = result.data
+        // Chỉ gọi API MKT, bỏ API Sale
+        const responseMKT = await fetch(API_URL_MKT);
+
+        // Kiểm tra response status
+        if (!responseMKT.ok) {
+          console.error(`Lỗi tải dữ liệu MKT: HTTP ${responseMKT.status} ${responseMKT.statusText}`);
+        }
+
+        let resultMKT = null;
+        
+        try {
+          resultMKT = responseMKT.ok ? await responseMKT.json() : null;
+        } catch (e) {
+          console.error('Lỗi parse JSON từ MKT:', e);
+          resultMKT = null;
+        }
+
+        // Lấy dữ liệu nhân sự từ API MKT
+        // Hàm fetchEmployeeData đã được sửa để xử lý nhiều định dạng (array, object với rows/data, etc.)
+        const employeeDataMKT = await fetchEmployeeData(resultMKT.employeeData || resultMKT || []);
+        
+        // Chỉ dùng dữ liệu từ MKT
+        employeeData = employeeDataMKT;
+
+        // Merge dữ liệu masterData từ cả 2 API
+        const masterDataMKT = (resultMKT.data || [])
           .filter(r => r["Tên"] && String(r["Tên"]).trim() !== '')
           .map(r => {
             const dsChot = Number(r["Doanh số"]) || 0;
@@ -1015,6 +1075,13 @@
               dsThanhCongThucTe: Number(r["Doanh số đi thực tế"]) || 0,
             };
           });
+
+        // Chỉ dùng dữ liệu từ MKT
+        masterData = masterDataMKT;
+
+        console.log(`✅ Đã tải dữ liệu từ API MKT:`);
+        console.log(`   - Báo cáo MKT: ${masterDataMKT.length} bản ghi, ${employeeDataMKT.length} nhân viên`);
+        console.log(`   - Tổng hợp: ${masterData.length} bản ghi, ${employeeData.length} nhân viên`);
 
         setupInitialReportView();
         populateAllFilters();
@@ -1076,7 +1143,7 @@
         // === THAY ĐỔI THEO YÊU CẦU MỚI NHẤT ===
         const vandonIframe = document.getElementById('vandon-report-iframe');
         // Chỉ lấy duy nhất biến id đã được trích xuất ở đầu hàm
-        vandonIframe.src = `https://nguyenbatyads37.github.io/static-html-show-data/vandonMKT.html?id=${idFromUrl}`;
+        vandonIframe.src = `https://nguyenbatyads37.github.io/static-html-show-data/vandonCEO.html?id=${idFromUrl}`;
         // =====================================
 
       } else {
@@ -1716,6 +1783,21 @@
       );
       if (currentTabButton) currentTabButton.classList.add("active");
 
+      // Xử lý tab Hiệu suất KPI: load iframe với id từ URL
+      if (tabName === 'HieuSuatKPI') {
+        const idFromUrl = new URLSearchParams(window.location.search).get('id')?.trim();
+        const iframe = document.getElementById('hieu-suat-kpi-iframe');
+        if (iframe) {
+          let url = 'https://nguyenbatyads37.github.io/static-html-show-data/baocaokpiCEO.html';
+          if (idFromUrl) {
+            url += `?id=${encodeURIComponent(idFromUrl)}`;
+          }
+          iframe.src = url;
+          console.log('📊 Loading Hiệu suất KPI with URL:', url);
+        }
+        return; // Không cần showLoader cho iframe
+      }
+
       showLoader();
       setTimeout(() => {
         try {
@@ -1896,4 +1978,6 @@
 </body>
 
 </html>
+
+
 
