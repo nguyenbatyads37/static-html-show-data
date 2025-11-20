@@ -683,9 +683,13 @@
                             <label><input type="checkbox" value="Marketing"> Marketing</label>
                             <label><input type="checkbox" value="Sale"> Sale</label>
                             <label><input type="checkbox" value="Vận đơn"> Vận đơn</label>
+                            <label><input type="checkbox" value="CSKH"> CSKH</label>
                         </div>
                     </div>
-                    <div class="multi-select-container"><button id="reportStaffFilterBtn">Tất cả NV Sale</button>
+                    <div class="multi-select-container"><button id="reportTeamFilterBtn">Tất cả Team</button>
+                        <div id="reportTeamDropdown" class="checkbox-dropdown"></div>
+                    </div>
+                    <div class="multi-select-container"><button id="reportStaffFilterBtn">Tất cả nhân viên</button>
                         <div id="reportStaffDropdown" class="checkbox-dropdown"></div>
                     </div>
                     <div class="multi-select-container"><button id="reportProductFilterBtn">Tất cả sản phẩm</button>
@@ -720,7 +724,7 @@
                 <table class="summary-table">
                     <thead>
                         <tr>
-                            <th rowspan="2" class="header-main" data-col-id="staff">NV Sale</th>
+                            <th rowspan="2" class="header-main" data-col-id="staff">Tên NV</th>
                             <th colspan="2" class="header-tonghop" data-col-group="payment">Đã Thanh Toán (có bill)</th>
                             <th rowspan="2" class="sortable-header header-tonghop" data-col-id="partialCount">Bill 1
                                 phần</th>
@@ -770,6 +774,7 @@
             let globalData = [];
             let rawData = []; // Lưu toàn bộ dữ liệu từ API trước khi filter
             let employeeData = [];
+            let nhanSuData = []; // Dữ liệu nhân sự từ Firebase để lọc Team
 
             // Danh sách ID của các leader - xem full data
             const leaderIds = [
@@ -977,6 +982,32 @@
                 vanDonReportApp.applyAllFilters();
             }
 
+            // Hàm fetch dữ liệu nhân sự từ Firebase
+            async function fetchNhanSuData() {
+                try {
+                    const firebaseUrl = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nhân_sự.json';
+                    const response = await fetch(firebaseUrl);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const data = await response.json();
+                    
+                    // Chuyển đổi object thành array nếu cần
+                    if (data && typeof data === 'object' && !Array.isArray(data)) {
+                        nhanSuData = Object.values(data).filter(item => item && item["Team"]);
+                    } else if (Array.isArray(data)) {
+                        nhanSuData = data.filter(item => item && item["Team"]);
+                    } else {
+                        nhanSuData = [];
+                    }
+                    
+                    console.log('✅ Nhân sự data loaded from Firebase:', nhanSuData.length, 'records');
+                    return nhanSuData;
+                } catch (error) {
+                    console.error('❌ Lỗi tải dữ liệu nhân sự từ Firebase:', error);
+                    nhanSuData = [];
+                    return [];
+                }
+            }
+
             function loadData() {
                 showLoader();
                 vanDonReportApp.showError('Đang tải dữ liệu, vui lòng chờ...');
@@ -984,18 +1015,23 @@
                 // Dùng API cũ cho dữ liệu vận đơn
                 const apiUrl = 'https://n-api-rouge.vercel.app/sheet/getAll';
 
-                fetch(apiUrl)
-                    .then(response => {
-                        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                        return response.json();
+                // Gọi cả 2 API song song
+                Promise.all([
+                    fetch(apiUrl),
+                    fetchNhanSuData()
+                ])
+                    .then(([vanDonResponse, nhanSuResult]) => {
+                        if (!vanDonResponse.ok) throw new Error(`HTTP error! status: ${vanDonResponse.status}`);
+                        return vanDonResponse.json().then(vanDonData => ({ vanDonData, nhanSuResult }));
                     })
-                    .then(vanDonResponse => {
+                    .then(({ vanDonData, nhanSuResult }) => {
                         console.log('===== API RESPONSE =====');
-                        console.log('Van don data loaded, rows count:', vanDonResponse.rows?.length || 0);
+                        console.log('Van don data loaded, rows count:', vanDonData.rows?.length || 0);
+                        console.log('Nhân sự data loaded, records count:', nhanSuData.length || 0);
                         console.log('========================');
 
                         // Xử lý dữ liệu vận đơn
-                        handleData({ rows: vanDonResponse.rows });
+                        handleData({ rows: vanDonData.rows });
                     })
                     .catch(error => {
                         console.error('Đã xảy ra lỗi khi tải dữ liệu:', error.message);
@@ -1057,8 +1093,13 @@
                 buildSummaryData: function (filteredData) {
                     const staffStats = {};
                     const grandTotal = this.createEmptyStats();
+                    
+                    // Lấy danh sách nhân sự đã chọn từ bộ lọc (theo rule: Cột Tên NV sẽ đi theo bộ lọc theo NV)
+                    const selectedStaff = new Set(Array.from(document.querySelectorAll('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)')).map(cb => cb.value));
+                    console.log('📋 Nhân sự đã chọn trong bộ lọc:', selectedStaff.size, 'người');
 
                     // BƯỚC 1: Tính số liệu từ filteredData cho cả 3 loại nhân viên
+                    // CHỈ tính cho nhân viên đã chọn trong filter (theo rule mới)
                     filteredData.forEach(row => {
                         const amount = parseFloat(String(row["Tổng tiền VNĐ"] || '0').replace(/[^\d.-]/g, '')) || 0;
                         const payment = row["Trạng thái thu tiền"] || "";
@@ -1074,7 +1115,17 @@
 
                         const staffList = [];
                         if (nhanVienMarketing) staffList.push({ name: nhanVienMarketing, type: 'Marketing' });
-                        if (nhanVienSale) staffList.push({ name: nhanVienSale, type: 'Sale' });
+                        if (nhanVienSale) {
+                            // Kiểm tra xem nhân viên Sale này có phải là CSKH trong selectedStaff không
+                            const isCSKH = selectedStaff.size > 0 && selectedStaff.has(`${nhanVienSale}|||CSKH`);
+                            if (isCSKH) {
+                                // Nếu là CSKH, thêm với type CSKH
+                                staffList.push({ name: nhanVienSale, type: 'CSKH' });
+                            } else {
+                                // Nếu không phải CSKH (hoặc không có filter), thêm với type Sale
+                                staffList.push({ name: nhanVienSale, type: 'Sale' });
+                            }
+                        }
                         if (nhanVienVanDon) staffList.push({ name: nhanVienVanDon, type: 'Vận đơn' });
 
                         if (staffList.length === 0) {
@@ -1082,8 +1133,16 @@
                         }
 
                         // Tính số liệu cho từng nhân viên tham gia
+                        // Nếu có chọn nhân viên, chỉ tính cho nhân viên đã chọn
+                        // Nếu không chọn nhân viên nào (xóa tất cả), tính cho tất cả
                         staffList.forEach(staffInfo => {
                             const key = `${staffInfo.name}|||${staffInfo.type}`;
+                            
+                            // Nếu có filter nhân sự, chỉ tính cho nhân sự đã chọn
+                            // Nếu không có filter (selectedStaff.size === 0), tính cho tất cả
+                            if (selectedStaff.size > 0 && !selectedStaff.has(key)) {
+                                return; // Bỏ qua nhân viên không được chọn (chỉ khi có filter)
+                            }
 
                             if (!staffStats[key]) {
                                 staffStats[key] = this.createEmptyStats();
@@ -1166,14 +1225,30 @@
                         else if (delivery.includes("chờ check")) grandTotal["chờ check"].count++;
                     });
 
-                    // BƯỚC 2: Thêm tất cả nhân viên từ Team Hà Nội (chỉ lấy nhân viên Hà Nội)
-                    console.log('=== STEP 2: Adding all staff from Team Hà Nội ===');
-                    const allStaffFromRaw = new Set();
-                    rawData.forEach(row => {
-                        const teamColumn = (row["Team"] || '').trim();
-
-                        // CHỈ LẤY NHÂN VIÊN TỪ TEAM HÀ NỘI
-                        if (teamColumn === 'Hà Nội') {
+                    // BƯỚC 2: Thêm nhân viên chưa có dữ liệu vào bảng
+                    // Lấy danh sách nhân viên đã chọn từ dropdown
+                    const selectedStaffFromDropdown = new Set(
+                        Array.from(document.querySelectorAll('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)')).map(cb => cb.value)
+                    );
+                    
+                    if (selectedStaffFromDropdown.size > 0) {
+                        // Có chọn nhân viên → chỉ thêm nhân viên đã chọn (ngay cả khi chưa có dữ liệu)
+                        console.log('=== STEP 2: Adding selected staff from filter ===');
+                        selectedStaffFromDropdown.forEach(key => {
+                            if (!staffStats[key]) {
+                                const [name, type] = key.split('|||');
+                                staffStats[key] = this.createEmptyStats();
+                                staffStats[key].staffName = name;
+                                staffStats[key].staffType = type;
+                            }
+                        });
+                        console.log('✅ Added selected staff to table:', selectedStaffFromDropdown.size);
+                    } else {
+                        // Không chọn nhân viên nào (xóa tất cả) → hiển thị tất cả nhân viên từ dữ liệu
+                        // Thêm tất cả nhân viên có trong filteredData nhưng chưa có trong staffStats
+                        console.log('=== STEP 2: No staff selected, adding all staff from data ===');
+                        const allStaffFromRaw = new Set();
+                        filteredData.forEach(row => {
                             const marketing = (row["Nhân viên Marketing"] || "").trim();
                             const sale = (row["Nhân viên Sale"] || "").trim();
                             const vandon = (row["NV Vận đơn"] || "").trim();
@@ -1181,20 +1256,19 @@
                             if (marketing) allStaffFromRaw.add(`${marketing}|||Marketing`);
                             if (sale) allStaffFromRaw.add(`${sale}|||Sale`);
                             if (vandon) allStaffFromRaw.add(`${vandon}|||Vận đơn`);
-                        }
-                    });
+                        });
 
-                    console.log('✅ Total unique staff from Team Hà Nội:', allStaffFromRaw.size);
-
-                    // Thêm các nhân viên chưa có với giá trị = 0
-                    allStaffFromRaw.forEach(key => {
-                        if (!staffStats[key]) {
-                            const [name, type] = key.split('|||');
-                            staffStats[key] = this.createEmptyStats();
-                            staffStats[key].staffName = name;
-                            staffStats[key].staffType = type;
-                        }
-                    });
+                        // Thêm các nhân viên chưa có với giá trị = 0
+                        allStaffFromRaw.forEach(key => {
+                            if (!staffStats[key]) {
+                                const [name, type] = key.split('|||');
+                                staffStats[key] = this.createEmptyStats();
+                                staffStats[key].staffName = name;
+                                staffStats[key].staffType = type;
+                            }
+                        });
+                        console.log('✅ Added all staff from data:', allStaffFromRaw.size);
+                    }
 
                     console.log('✅ Total staff in table:', Object.keys(staffStats).length);
 
@@ -1279,12 +1353,14 @@
                     let renderedCount = 0;
                     rows.forEach(r => {
                         const tr = document.createElement('tr');
+                        // Lưu staffType vào data attribute để dùng cho filter
+                        tr.setAttribute('data-staff-type', r.staffType || '');
 
                         // ===== START: MODIFICATION (Round amount to nearest thousand) =====
                         const roundedRowAmount = Math.round(r.paidAmount / 1000) * 1000;
                         // ===== END: MODIFICATION (Round amount to nearest thousand) =====
 
-                        tr.innerHTML = `<td data-col-id="staff">${r.staff} <span style="color: #666; font-size: 0.85em;">(${r.staffType})</span></td>
+                        tr.innerHTML = `<td data-col-id="staff">${r.staff}</td>
                                         <td data-col-id="paidCount">${r.paidCount}</td>
                                         <td data-col-id="paidAmount">${new Intl.NumberFormat('vi-VN').format(roundedRowAmount)} ₫</td>
                                         <td data-col-id="partialCount">${r.partialCount}</td>
@@ -1384,15 +1460,16 @@
                         document.getElementById('reportStartDateFilter').value = '';
                         document.getElementById('reportEndDateFilter').value = '';
                         document.getElementById('quick-date-vandon').value = '';
-                        ['reportProductDropdown', 'reportMarketDropdown', 'reportStaffDropdown', 'reportTrackingDropdown', 'reportStaffTypeDropdown'].forEach(id => document.getElementById(id)?.querySelectorAll('input').forEach(cb => cb.checked = false));
+                        ['reportProductDropdown', 'reportMarketDropdown', 'reportTeamDropdown', 'reportStaffDropdown', 'reportTrackingDropdown', 'reportStaffTypeDropdown'].forEach(id => document.getElementById(id)?.querySelectorAll('input').forEach(cb => cb.checked = false));
                         this.updateProductFilterButtonText();
                         this.updateMarketFilterButtonText();
+                        this.updateTeamFilterButtonText();
                         this.updateStaffFilterButtonText();
                         this.updateTrackingFilterButtonText();
                         this.updateStaffTypeFilterButtonText();
                         this.applyAllFilters();
                     });
-                    ['reportStaffFilterBtn', 'reportProductFilterBtn', 'reportMarketFilterBtn', 'reportTrackingFilterBtn', 'reportStaffTypeFilterBtn'].forEach(id => {
+                    ['reportStaffFilterBtn', 'reportProductFilterBtn', 'reportMarketFilterBtn', 'reportTeamFilterBtn', 'reportTrackingFilterBtn', 'reportStaffTypeFilterBtn'].forEach(id => {
                         const btn = document.getElementById(id), dropdown = document.getElementById(id.replace('FilterBtn', 'Dropdown'));
                         if (btn && dropdown) {
                             btn.addEventListener('click', e => {
@@ -1408,6 +1485,48 @@
                 populateReportFilters: function () {
                     const allProducts = [...new Set(globalData.map(r => r["Mặt hàng"]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
                     const allMarkets = [...new Set(globalData.map(r => r["Khu vực"] || r["khu vực"]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'vi'));
+                    
+                    // Lấy Team từ dữ liệu nhân sự Firebase, lọc theo "Bộ phận" dựa trên "Loại NV" đã chọn
+                    const staffTypeFilters = new Set(Array.from(document.querySelectorAll('#reportStaffTypeDropdown input:checked:not(#reportStaffTypeSelectAll)')).map(cb => cb.value));
+                    
+                    // Map loại NV sang Bộ phận
+                    const boPhanMap = {
+                        'Marketing': 'MKT',
+                        'Sale': 'Sale',
+                        'Vận đơn': 'Vận đơn',
+                        'CSKH': 'CSKH'
+                    };
+                    
+                    // Lọc Team từ nhanSuData dựa trên Bộ phận
+                    let filteredTeams = [];
+                    if (staffTypeFilters.size === 0) {
+                        // Nếu không chọn gì, lấy tất cả Team từ nhanSuData
+                        filteredTeams = [...new Set(nhanSuData.map(r => (r["Team"] || '').trim()).filter(Boolean))];
+                    } else {
+                        // Lọc theo Bộ phận tương ứng với Loại NV đã chọn
+                        const boPhanFilters = new Set();
+                        staffTypeFilters.forEach(type => {
+                            if (boPhanMap[type]) {
+                                boPhanFilters.add(boPhanMap[type]);
+                            }
+                        });
+                        
+                        // Lấy Team từ nhanSuData (bao gồm cả Vận đơn)
+                        filteredTeams = [...new Set(
+                            nhanSuData
+                                .filter(r => {
+                                    const boPhan = (r["Bộ phận"] || '').trim();
+                                    return boPhanFilters.has(boPhan);
+                                })
+                                .map(r => (r["Team"] || '').trim())
+                                .filter(Boolean)
+                        )];
+                        
+                        console.log(`📊 Chọn loại NV: ${Array.from(staffTypeFilters).join(', ')} → Lọc Team theo Bộ phận: ${Array.from(boPhanFilters).join(', ')}`);
+                        console.log(`✅ Tìm thấy ${filteredTeams.length} Team`);
+                    }
+                    
+                    const allTeams = filteredTeams.sort((a, b) => a.localeCompare(b, 'vi'));
 
                     // Thu thập tất cả 3 loại nhân viên từ rawData (CHỈ TEAM HÀ NỘI)
                     const staffWithTypes = [];
@@ -1477,6 +1596,52 @@
 
                     populate('reportProductDropdown', 'reportProductSelectAll', allProducts, this.updateProductFilterButtonText.bind(this));
                     populate('reportMarketDropdown', 'reportMarketSelectAll', allMarkets, this.updateMarketFilterButtonText.bind(this));
+                    
+                    // Setup Team Filter với callback để cập nhật khi thay đổi
+                    const teamDropdown = document.getElementById('reportTeamDropdown');
+                    if (teamDropdown) {
+                        const teamSelectAllId = 'reportTeamSelectAll';
+                        // Lưu trạng thái checkbox đã chọn trước đó
+                        const previouslySelected = new Set(
+                            Array.from(teamDropdown.querySelectorAll('input:checked:not(#reportTeamSelectAll)')).map(cb => cb.value)
+                        );
+                        
+                        // Xây dựng HTML string trước rồi set một lần
+                        let teamHtml = `<label style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;"><input type="checkbox" id="${teamSelectAllId}"> Chọn tất cả</label>`;
+                        allTeams.forEach(team => {
+                            const isChecked = previouslySelected.has(team) ? 'checked' : '';
+                            const escapedTeam = team.replace(/"/g, '&quot;');
+                            teamHtml += `<label><input type="checkbox" value="${escapedTeam}" ${isChecked}> ${team}</label>`;
+                        });
+                        
+                        // Set innerHTML trước
+                        teamDropdown.innerHTML = teamHtml;
+                        
+                        // Thêm event listener một lần (flag sẽ được giữ khi innerHTML được set)
+                        if (!teamDropdown.dataset.listenerAttached) {
+                            teamDropdown.addEventListener('change', function(e) {
+                                if (e.target && e.target.type === 'checkbox') {
+                                    const dropdown = document.getElementById('reportTeamDropdown');
+                                    if (!dropdown) return;
+                                    
+                                    if (e.target.id === teamSelectAllId) {
+                                        dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+                                    } else {
+                                        const allCb = document.getElementById(teamSelectAllId);
+                                        if (allCb) {
+                                            const checkedCount = dropdown.querySelectorAll(`input:checked:not(#${teamSelectAllId})`).length;
+                                            allCb.checked = checkedCount === allTeams.length;
+                                        }
+                                    }
+                                    this.updateTeamFilterButtonText();
+                                    this.populateStaffDropdown(); // Cập nhật dropdown nhân viên khi thay đổi Team
+                                    this.applyAllFilters();
+                                }
+                            }.bind(this), false);
+                            teamDropdown.dataset.listenerAttached = 'true';
+                        }
+                    }
+                    
                     populate('reportTrackingDropdown', 'reportTrackingSelectAll', [], this.updateTrackingFilterButtonText.bind(this));
 
                     // Setup Staff Type Filter
@@ -1487,9 +1652,10 @@
                                 staffTypeDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
                             } else {
                                 const allCb = document.getElementById('reportStaffTypeSelectAll');
-                                if (allCb) allCb.checked = staffTypeDropdown.querySelectorAll(`input:checked:not(#reportStaffTypeSelectAll)`).length === 3;
+                                if (allCb) allCb.checked = staffTypeDropdown.querySelectorAll(`input:checked:not(#reportStaffTypeSelectAll)`).length === 4;
                             }
                             this.updateStaffTypeFilterButtonText();
+                            this.populateReportFilters(); // Cập nhật lại Team filter khi thay đổi loại nhân viên
                             this.populateStaffDropdown(); // Cập nhật dropdown nhân viên khi thay đổi loại
                             this.applyStaffTypeFilter();
                         });
@@ -1498,6 +1664,7 @@
                     this.updateStaffFilterButtonText();
                     this.updateProductFilterButtonText();
                     this.updateMarketFilterButtonText();
+                    this.updateTeamFilterButtonText();
                     this.updateTrackingFilterButtonText();
                     this.updateStaffTypeFilterButtonText();
                 },
@@ -1505,25 +1672,106 @@
                     // Lấy các loại nhân viên đã chọn
                     const staffTypeFilters = new Set(Array.from(document.querySelectorAll('#reportStaffTypeDropdown input:checked:not(#reportStaffTypeSelectAll)')).map(cb => cb.value));
                     
-                    // Lọc danh sách nhân viên theo loại đã chọn
-                    let filteredStaff = this.allStaffData;
-                    if (staffTypeFilters.size > 0 && staffTypeFilters.size < 3) {
-                        filteredStaff = this.allStaffData.filter(staff => staffTypeFilters.has(staff.type));
+                    // Lấy danh sách Team đã chọn từ filter
+                    const selectedTeams = new Set(Array.from(document.querySelectorAll('#reportTeamDropdown input:checked:not(#reportTeamSelectAll)')).map(cb => cb.value));
+                    
+                    // Map loại NV sang Bộ phận
+                    const boPhanMap = {
+                        'Marketing': 'MKT',
+                        'Sale': 'Sale',
+                        'Vận đơn': 'Vận đơn',
+                        'CSKH': 'CSKH'
+                    };
+                    
+                    // Lấy nhân sự từ nhanSuData theo Team đã chọn
+                    let staffFromNhanSu = [];
+                    if (selectedTeams.size === 0) {
+                        // Nếu không chọn Team, lấy tất cả nhân sự
+                        staffFromNhanSu = nhanSuData;
+                    } else {
+                        // Chỉ lấy nhân sự từ Team đã chọn
+                        staffFromNhanSu = nhanSuData.filter(r => {
+                            const team = (r["Team"] || '').trim();
+                            return selectedTeams.has(team);
+                        });
+                    }
+                    
+                    // Chuyển đổi sang format {name, type} dựa trên Bộ phận
+                    const staffWithTypes = [];
+                    staffFromNhanSu.forEach(r => {
+                        const ten = (r["Họ Và Tên"] || r["Tên"] || '').trim();
+                        const boPhan = (r["Bộ phận"] || '').trim();
+                        
+                        if (!ten) return;
+                        
+                        // Map Bộ phận sang loại NV
+                        let type = '';
+                        if (boPhan === 'MKT') type = 'Marketing';
+                        else if (boPhan === 'Sale') type = 'Sale';
+                        else if (boPhan === 'Vận đơn') type = 'Vận đơn';
+                        else if (boPhan === 'CSKH') type = 'CSKH';
+                        
+                        if (type) {
+                            staffWithTypes.push({ name: ten, type: type });
+                        }
+                    });
+                    
+                    // Nhân viên Vận đơn đã được lấy từ nhanSuData ở trên, không cần lấy từ rawData nữa
+                    
+                    // Loại bỏ trùng lặp
+                    const uniqueStaffMap = new Map();
+                    staffWithTypes.forEach(s => {
+                        const key = `${s.name}|||${s.type}`;
+                        if (!uniqueStaffMap.has(key)) {
+                            uniqueStaffMap.set(key, s);
+                        }
+                    });
+                    
+                    let filteredStaff = Array.from(uniqueStaffMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
+                    
+                    // Lọc theo loại nhân viên đã chọn
+                    if (staffTypeFilters.size > 0 && staffTypeFilters.size < 4) {
+                        filteredStaff = filteredStaff.filter(staff => staffTypeFilters.has(staff.type));
                     }
 
                     const staffDropdown = document.getElementById('reportStaffDropdown');
                     if (staffDropdown) {
-                        // Lưu trạng thái checkbox đã chọn trước đó
+                        // Lưu trạng thái checkbox đã chọn trước đó (TRƯỚC KHI clear innerHTML)
                         const previouslySelected = new Set(
                             Array.from(staffDropdown.querySelectorAll('input:checked:not(#reportStaffSelectAll)')).map(cb => cb.value)
                         );
+                        
+                        // Lấy danh sách nhân viên hiện tại (trước khi rebuild)
+                        const currentStaffValues = new Set(
+                            Array.from(staffDropdown.querySelectorAll('input:not(#reportStaffSelectAll)')).map(cb => cb.value)
+                        );
+                        
+                        // Tạo danh sách giá trị nhân viên mới
+                        const newStaffValues = new Set(filteredStaff.map(s => `${s.name}|||${s.type}`));
+                        
+                        // Kiểm tra xem danh sách có thay đổi không (có team mới được chọn)
+                        const listChanged = currentStaffValues.size !== newStaffValues.size || 
+                                          ![...currentStaffValues].every(v => newStaffValues.has(v));
+                        
+                        console.log('📋 Trạng thái nhân sự trước khi populate:', previouslySelected.size, 'người đã chọn');
+                        console.log('📋 Danh sách nhân viên có thay đổi:', listChanged);
 
-                        staffDropdown.innerHTML = `<label style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;"><input type="checkbox" id="reportStaffSelectAll"> Chọn tất cả</label>`;
+                        // Tự động chọn tất cả nếu:
+                        // 1. Không có nhân sự nào được chọn trước đó, HOẶC
+                        // 2. Danh sách nhân viên thay đổi (có team mới được chọn)
+                        const shouldSelectAll = (previouslySelected.size === 0 || listChanged) && filteredStaff.length > 0;
+                        
+                        if (shouldSelectAll) {
+                            console.log('✅ Tự động chọn tất cả nhân sự (', filteredStaff.length, 'người)');
+                        }
+
+                        staffDropdown.innerHTML = `<label style="font-weight: bold; border-bottom: 1px solid #ccc; padding-bottom: 5px;"><input type="checkbox" id="reportStaffSelectAll" ${shouldSelectAll ? 'checked' : ''}> Chọn tất cả</label>`;
                         
                         filteredStaff.forEach(staff => {
-                            const displayText = `${staff.name} (${staff.type})`;
+                            const displayText = staff.name; // Chỉ hiển thị tên, bỏ phần trong ngoặc
                             const value = `${staff.name}|||${staff.type}`;
-                            const isChecked = previouslySelected.has(value) ? 'checked' : '';
+                            // Nếu shouldSelectAll = true hoặc (nhân sự này đã được chọn trước đó VÀ danh sách không thay đổi), thì check
+                            const isChecked = shouldSelectAll || (!listChanged && previouslySelected.has(value)) ? 'checked' : '';
                             staffDropdown.innerHTML += `<label><input type="checkbox" value="${value.replace(/"/g, '&quot;')}" ${isChecked}> ${displayText}</label>`;
                         });
                         
@@ -1534,16 +1782,29 @@
                             allCb.checked = checkedCount === filteredStaff.length && filteredStaff.length > 0;
                         }
 
-                        staffDropdown.addEventListener('change', e => {
-                            if (e.target.id === 'reportStaffSelectAll') {
-                                staffDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
-                            } else {
-                                const allCb = document.getElementById('reportStaffSelectAll');
-                                if (allCb) allCb.checked = staffDropdown.querySelectorAll(`input:checked:not(#reportStaffSelectAll)`).length === filteredStaff.length;
-                            }
-                            this.updateStaffFilterButtonText();
-                            this.applyAllFilters();
-                        });
+                        // Chỉ thêm event listener một lần
+                        if (!staffDropdown.dataset.listenerAttached) {
+                            staffDropdown.addEventListener('change', function(e) {
+                                if (e.target && e.target.type === 'checkbox') {
+                                    const dropdown = document.getElementById('reportStaffDropdown');
+                                    if (!dropdown) return;
+                                    
+                                    if (e.target.id === 'reportStaffSelectAll') {
+                                        dropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = e.target.checked);
+                                    } else {
+                                        const allCb = document.getElementById('reportStaffSelectAll');
+                                        if (allCb) {
+                                            const totalCount = dropdown.querySelectorAll('input:not(#reportStaffSelectAll)').length;
+                                            const checkedCount = dropdown.querySelectorAll('input:checked:not(#reportStaffSelectAll)').length;
+                                            allCb.checked = checkedCount === totalCount && totalCount > 0;
+                                        }
+                                    }
+                                    this.updateStaffFilterButtonText();
+                                    this.applyAllFilters();
+                                }
+                            }.bind(this), false);
+                            staffDropdown.dataset.listenerAttached = 'true';
+                        }
                         
                         this.updateStaffFilterButtonText();
                     }
@@ -1559,6 +1820,7 @@
                 },
                 updateProductFilterButtonText: function () { this.updateFilterButtonText('reportProductFilterBtn', 'reportProductDropdown', 'reportProductSelectAll', 'Tất cả sản phẩm', 'sản phẩm'); },
                 updateMarketFilterButtonText: function () { this.updateFilterButtonText('reportMarketFilterBtn', 'reportMarketDropdown', 'reportMarketSelectAll', 'Tất cả khu vực', 'khu vực'); },
+                updateTeamFilterButtonText: function () { this.updateFilterButtonText('reportTeamFilterBtn', 'reportTeamDropdown', 'reportTeamSelectAll', 'Tất cả Team', 'Team'); },
                 updateStaffFilterButtonText: function () { this.updateFilterButtonText('reportStaffFilterBtn', 'reportStaffDropdown', 'reportStaffSelectAll', 'Tất cả Nhân viên', 'NV'); },
                 updateTrackingFilterButtonText: function () { this.updateFilterButtonText('reportTrackingFilterBtn', 'reportTrackingDropdown', 'reportTrackingSelectAll', 'Tất cả mã tracking', 'trạng thái'); },
                 updateStaffTypeFilterButtonText: function () { this.updateFilterButtonText('reportStaffTypeFilterBtn', 'reportStaffTypeDropdown', 'reportStaffTypeSelectAll', 'Tất cả loại NV', 'loại'); },
@@ -1567,7 +1829,7 @@
                     const staffTypeFilters = new Set(Array.from(document.querySelectorAll('#reportStaffTypeDropdown input:checked:not(#reportStaffTypeSelectAll)')).map(cb => cb.value));
 
                     // Nếu không chọn gì hoặc chọn tất cả -> hiển thị hết
-                    if (staffTypeFilters.size === 0 || staffTypeFilters.size === 3) {
+                    if (staffTypeFilters.size === 0 || staffTypeFilters.size === 4) {
                         document.querySelectorAll('#summaryTableBody tr').forEach(tr => {
                             if (!tr.classList.contains('summary-grand-total')) {
                                 tr.style.display = '';
@@ -1580,18 +1842,10 @@
                     document.querySelectorAll('#summaryTableBody tr').forEach(tr => {
                         if (tr.classList.contains('summary-grand-total')) return;
 
-                        const staffCell = tr.querySelector('td[data-col-id="staff"]');
-                        if (!staffCell) return;
-
-                        const text = staffCell.textContent;
-                        const hasMarketing = text.includes('(Marketing)');
-                        const hasSale = text.includes('(Sale)');
-                        const hasVanDon = text.includes('(Vận đơn)');
-
-                        const shouldShow =
-                            (hasMarketing && staffTypeFilters.has('Marketing')) ||
-                            (hasSale && staffTypeFilters.has('Sale')) ||
-                            (hasVanDon && staffTypeFilters.has('Vận đơn'));
+                        // Lấy staffType từ data attribute thay vì parse từ textContent
+                        const staffType = tr.getAttribute('data-staff-type') || '';
+                        
+                        const shouldShow = staffTypeFilters.has(staffType);
 
                         tr.style.display = shouldShow ? '' : 'none';
                     });
@@ -1623,14 +1877,26 @@
                     const getSelected = (selector) => new Set(Array.from(document.querySelectorAll(selector)).map(cb => cb.value));
                     const products = getSelected('#reportProductDropdown input:checked:not(#reportProductSelectAll)');
                     const markets = getSelected('#reportMarketDropdown input:checked:not(#reportMarketSelectAll)');
+                    // const teams = getSelected('#reportTeamDropdown input:checked:not(#reportTeamSelectAll)'); // Bỏ lọc theo cột Team trong data, chỉ dùng để lọc list nhân viên
                     const staffFilters = getSelected('#reportStaffDropdown input:checked:not(#reportStaffSelectAll)');
                     const trackingFilters = getSelected('#reportTrackingDropdown input:checked:not(#reportTrackingSelectAll)');
 
                     if (products.size) data = data.filter(r => products.has(r["Mặt hàng"]));
                     if (markets.size) data = data.filter(r => markets.has(r["Khu vực"] || r["khu vực"]));
+                    // if (teams.size) data = data.filter(r => teams.has((r["Team"] || '').trim())); // Đã bỏ lọc cứng theo Team
+
 
                     // Filter theo nhân viên và loại
                     if (staffFilters.size > 0) {
+                        // Lấy danh sách tên nhân viên CSKH từ staffFilters
+                        const cskhStaffNames = new Set();
+                        staffFilters.forEach(filterValue => {
+                            const [name, type] = filterValue.split('|||');
+                            if (type === 'CSKH') {
+                                cskhStaffNames.add(name);
+                            }
+                        });
+
                         data = data.filter(r => {
                             const marketing = (r["Nhân viên Marketing"] || '').trim();
                             const sale = (r["Nhân viên Sale"] || '').trim();
@@ -1639,8 +1905,10 @@
                             const hasMarketing = marketing && staffFilters.has(`${marketing}|||Marketing`);
                             const hasSale = sale && staffFilters.has(`${sale}|||Sale`);
                             const hasVandon = vandon && staffFilters.has(`${vandon}|||Vận đơn`);
+                            // CSKH khớp với cột "Nhân viên Sale"
+                            const hasCSKH = sale && cskhStaffNames.has(sale);
 
-                            return hasMarketing || hasSale || hasVandon;
+                            return hasMarketing || hasSale || hasVandon || hasCSKH;
                         });
                     }
 
