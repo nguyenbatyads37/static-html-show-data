@@ -776,13 +776,252 @@
             let employeeData = [];
             let nhanSuData = []; // Dữ liệu nhân sự từ Firebase để lọc Team
 
-            // Danh sách ID của các leader - xem full data
-            const leaderIds = [
-                '5cb43d3b', 'e0a6c119', 'fgfdgd10', 'fgfdgd12', 'fgfdgd13',
-                'fgfdgd15', 'fgfdgd16', 'fgfdgd17', 'fgfdgd30', 'fgfdgd31',
-                'fgfdgd54', 'fgfdgd55', 'fgfdgd60', 'fgfdgd64', 'fgfdgd67',
-                'fgfdgd69', 'fgfdgd7', 'fgfdgd72', 'c81b7be8', 'fgfdgd23'
-            ];
+            // Biến quản lý quyền truy cập
+            let allowedNames = null; // Set<string> hoặc null (null = xem tất cả)
+            let userPosition = '';
+            let userTeam = '';
+            let userName = '';
+
+            // Hàm lấy query parameter từ URL
+            function getQueryParam(key) {
+                try {
+                    const params = new URLSearchParams(window.location.search);
+                    let val = params.get(key);
+                    if (!val) {
+                        const hash = window.location.hash || '';
+                        const match = hash.match(new RegExp(`[?#&]?(?:${key})=([^&]+)`));
+                        if (match && match[1]) val = decodeURIComponent(match[1]);
+                    }
+                    return val ? String(val).trim() : '';
+                } catch (_) { return ''; }
+            }
+
+            // Hàm normalize tên để so sánh (loại bỏ khoảng trắng thừa, chuyển về lowercase)
+            function normalizeName(name) {
+                if (!name) return '';
+                return String(name).trim().toLowerCase().replace(/\s+/g, ' ');
+            }
+
+            // Hàm tính toán quyền truy cập dựa trên id và HR data
+            function computeAccessScope() {
+                allowedNames = null;
+                userPosition = '';
+                userTeam = '';
+                userName = '';
+
+                console.log('🔐 computeAccessScope() called');
+                console.log('📊 nhanSuData length:', nhanSuData?.length || 0);
+
+                // Nếu có scope=allF3 trên URL → không giới hạn, xem full data
+                const scope = getQueryParam('scope');
+                if (scope === 'allF3') {
+                    console.log('🌐 scope=allF3 → no restriction');
+                    return;
+                }
+
+                if (!Array.isArray(nhanSuData) || !nhanSuData.length) {
+                    console.warn('⚠️ No HR data available');
+                    return;
+                }
+
+                const idParam = getQueryParam('id');
+                console.log('🆔 ID from URL:', idParam);
+                
+                if (!idParam) {
+                    // Không có id → admin mode, xem tất cả
+                    allowedNames = null;
+                    console.log('🌐 No ID → admin mode, showing all');
+                    return;
+                }
+
+                // Tìm nhân viên trong HR data theo sid (QUAN TRỌNG: so với cột "sid" không phải "id")
+                const matchId = (row) => {
+                    // Ưu tiên tìm theo cột "sid" trước
+                    const candidates = ['sid', 'SID', 'Sid', 'sId', 'id', 'ID', 'Id', 'uid', 'UID', 'Uid', 'Mã nhân sự', 'Mã_Nhân_sự', 'Ma_Nhan_su', 'Mã', 'mã'];
+                    for (const k of candidates) {
+                        if (row[k] !== undefined && String(row[k]).trim() === idParam) {
+                            console.log(`✅ Matched ID via key "${k}":`, row[k]);
+                            return true;
+                        }
+                    }
+                    // Kiểm tra tất cả các key có chứa "sid" hoặc "id" (case-insensitive)
+                    for (const k in row) {
+                        if (k && (k.toLowerCase() === 'sid' || k.toLowerCase().includes('sid') || k.toLowerCase() === 'id' || k.toLowerCase().includes('id')) && String(row[k]).trim() === idParam) {
+                            console.log(`✅ Matched ID via key "${k}":`, row[k]);
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+
+                const me = nhanSuData.find(matchId);
+                if (!me) {
+                    console.warn(`❌ Không tìm thấy id: "${idParam}" trong Nhân sự`);
+                    console.log('📋 Total HR records:', nhanSuData.length);
+                    console.log('📋 Sample HR records (first 10):');
+                    nhanSuData.slice(0, 10).forEach((r, idx) => {
+                        const sid = r['sid'] || r['SID'] || r['Sid'] || 'no sid';
+                        const id = r['id'] || r['ID'] || r['Id'] || 'no id';
+                        const name = r['Tên'] || r['Name'] || r['Họ và tên'] || r['Họ Và Tên'] || 'no name';
+                        const viTri = r['Vị trí'] || r['Vi_tri'] || r['Position'] || 'no position';
+                        console.log(`  [${idx}] sid="${sid}", id="${id}", name="${name}", position="${viTri}"`);
+                    });
+                    // Không tìm thấy → CHẶN hoàn toàn (không cho xem gì cả)
+                    allowedNames = new Set(); // Empty set = không có quyền xem gì
+                    console.log('❌ User not found → BLOCKING all data (no access)');
+                    return;
+                }
+
+                console.log('✅ Found user in HR data:', me);
+
+                userName = (me['Tên'] ?? me['Name'] ?? me['Họ và tên'] ?? me['Họ_và_tên'] ?? me['Họ Và Tên'] ?? '').toString().trim();
+                userPosition = (me['Vị trí'] ?? me['Vi_tri'] ?? me['Vi trí'] ?? me['Position'] ?? '').toString().trim();
+                userTeam = (me['Team'] ?? '').toString().trim();
+
+                // Kiểm tra Vị trí chính xác: "NV" hoặc "Leader"
+                const positionUpper = userPosition.toUpperCase();
+                const isLeader = positionUpper === 'LEADER' || positionUpper.includes('LEADER');
+                const isNV = positionUpper === 'NV' || positionUpper === 'NHÂN VIÊN' || positionUpper === 'NHAN VIEN';
+
+                console.log('👤 User info:', { 
+                    id: idParam, 
+                    sid: me['sid'] || me['SID'] || me['Sid'],
+                    userName, 
+                    userPosition, 
+                    userTeam, 
+                    isLeader, 
+                    isNV 
+                });
+
+                const set = new Set();
+                if (isLeader) {
+                    // Leader: xem full Team của mình
+                    console.log(`👔 Leader "${userName}" (Team: "${userTeam}") - loading all team members...`);
+                    let teamCount = 0;
+                    nhanSuData.forEach(r => {
+                        const t = (r['Team'] ?? '').toString().trim();
+                        if (t === userTeam && t) { // Chỉ lấy nhân viên cùng Team
+                            const n = (r['Tên'] ?? r['Name'] ?? r['Họ và tên'] ?? r['Họ_và_tên'] ?? r['Họ Và Tên'] ?? '').toString().trim();
+                            if (n) {
+                                set.add(n);
+                                // Thêm cả tên đã normalize để so sánh tốt hơn
+                                const normalized = normalizeName(n);
+                                if (normalized && normalized !== n.toLowerCase()) {
+                                    set.add(normalized);
+                                }
+                                teamCount++;
+                            }
+                        }
+                    });
+                    console.log(`👔 Leader - Found ${teamCount} team members. Allowed names:`, Array.from(set).slice(0, 10), teamCount > 10 ? '...' : '');
+                } else if (isNV) {
+                    // NV: chỉ xem của chính mình
+                    console.log(`👷 NV "${userName}" - showing personal data only`);
+                    if (userName) {
+                        set.add(userName);
+                        // Thêm cả tên đã normalize
+                        const normalized = normalizeName(userName);
+                        if (normalized && normalized !== userName.toLowerCase()) {
+                            set.add(normalized);
+                        }
+                    }
+                    console.log('👷 NV - allowed name (self only):', userName);
+                } else {
+                    // Vị trí khác: chỉ xem của chính mình
+                    console.log(`👤 Position "${userPosition}" - showing personal data only`);
+                    if (userName) {
+                        set.add(userName);
+                        const normalized = normalizeName(userName);
+                        if (normalized && normalized !== userName.toLowerCase()) {
+                            set.add(normalized);
+                        }
+                    }
+                }
+                allowedNames = set.size ? set : null;
+                console.log('🔒 Final allowedNames count:', allowedNames ? allowedNames.size : 'null (all access)');
+            }
+
+            // Hàm áp dụng phân quyền vào UI (disable các bộ lọc khi có id=)
+            function applyAccessControlToUI() {
+                const idParam = getQueryParam('id');
+                if (!idParam) return; // Không có id → không áp dụng
+
+                console.log('🔒 Applying access control to UI...');
+                console.log('📋 User Team:', userTeam);
+                console.log('📋 User Name:', userName);
+
+                // 1. Ẩn/Disable bộ lọc "Loại NV"
+                const staffTypeBtn = document.getElementById('reportStaffTypeFilterBtn');
+                const staffTypeDropdown = document.getElementById('reportStaffTypeDropdown');
+                if (staffTypeBtn && staffTypeDropdown) {
+                    staffTypeBtn.disabled = true;
+                    staffTypeBtn.style.opacity = '0.5';
+                    staffTypeBtn.style.cursor = 'not-allowed';
+                    staffTypeDropdown.style.pointerEvents = 'none';
+                    console.log('✅ Disabled "Loại NV" filter');
+                }
+
+                // 2. Auto-select và Disable bộ lọc Team
+                const teamBtn = document.getElementById('reportTeamFilterBtn');
+                const teamDropdown = document.getElementById('reportTeamDropdown');
+                if (teamBtn && teamDropdown && userTeam) {
+                    // Tự động chọn Team của user
+                    const teamCheckboxes = teamDropdown.querySelectorAll('input[type="checkbox"]:not(#reportTeamSelectAll)');
+                    teamCheckboxes.forEach(cb => {
+                        if (cb.value === userTeam) {
+                            cb.checked = true;
+                            console.log('✅ Auto-selected team:', userTeam);
+                        } else {
+                            cb.checked = false;
+                        }
+                    });
+                    // Disable bộ lọc
+                    teamBtn.disabled = true;
+                    teamBtn.style.opacity = '0.5';
+                    teamBtn.style.cursor = 'not-allowed';
+                    teamDropdown.style.pointerEvents = 'none';
+                    
+                    // Cập nhật text của button
+                    teamBtn.textContent = userTeam || 'Tất cả Team';
+                    console.log('✅ Disabled "Team" filter and set to:', userTeam);
+                }
+
+                // 3. Auto-select và Disable bộ lọc Nhân viên
+                const staffBtn = document.getElementById('reportStaffFilterBtn');
+                const staffDropdown = document.getElementById('reportStaffDropdown');
+                if (staffBtn && staffDropdown && allowedNames && allowedNames.size > 0) {
+                    // Tự động chọn các nhân viên trong allowedNames
+                    const staffCheckboxes = staffDropdown.querySelectorAll('input[type="checkbox"]:not(#reportStaffSelectAll)');
+                    let selectedCount = 0;
+                    staffCheckboxes.forEach(cb => {
+                        const cbValue = cb.value;
+                        // cbValue có format "name|||type"
+                        const [name, type] = cbValue.split('|||');
+                        const nameNormalized = normalizeName(name);
+                        
+                        if (allowedNames.has(name) || allowedNames.has(nameNormalized)) {
+                            cb.checked = true;
+                            selectedCount++;
+                        } else {
+                            cb.checked = false;
+                        }
+                    });
+                    
+                    // Disable bộ lọc
+                    staffBtn.disabled = true;
+                    staffBtn.style.opacity = '0.5';
+                    staffBtn.style.cursor = 'not-allowed';
+                    staffDropdown.style.pointerEvents = 'none';
+                    
+                    // Cập nhật text của button
+                    if (selectedCount === 1 && userName) {
+                        staffBtn.textContent = userName;
+                    } else if (selectedCount > 1) {
+                        staffBtn.textContent = `${selectedCount} nhân viên`;
+                    }
+                    console.log('✅ Disabled "Nhân viên" filter and selected', selectedCount, 'staff');
+                }
+            }
 
             // --- HÀM LẤY DỮ LIỆU NHÂN VIÊN ---
             function fetchEmployeeData(result) {
@@ -908,77 +1147,20 @@
                 // LƯU TOÀN BỘ RAW DATA TRƯỚC KHI FILTER
                 rawData = response.rows || [];
                 console.log('✅ Raw data saved:', rawData.length, 'total rows');
+                console.log('🔐 handleData: allowedNames =', allowedNames ? `Set with ${allowedNames.size} names` : 'null');
 
-                // Kiểm tra có ID trong URL không
-                const urlParams = new URLSearchParams(window.location.search);
-                const idFromUrl = urlParams.get('id');
-
-                let filteredData;
-
-                if (idFromUrl) {
-                    // Kiểm tra ID có trong danh sách leader không
-                    console.log('Filtering by ID:', idFromUrl);
-                    const isLeader = leaderIds.includes(idFromUrl);
-
-                    if (isLeader) {
-                        // Leader - hiển thị full data (Team = Hà Nội)
-                        console.log('User is LEADER - showing full team data');
-
-                        filteredData = response.rows.filter(row => {
-                            const teamColumn = (row["Team"] || '').trim();
-                            return teamColumn === 'Hà Nội';
-                        });
-
-                        console.log(`Leader ID: ${idFromUrl} - Team: Hà Nội - Found ${filteredData.length} records`);
-                    } else {
-                        // Nhân viên thường - tìm tên trong data và chỉ hiển thị của mình
-                        console.log('User is regular employee - showing personal data only');
-
-                        // Tìm tên nhân viên từ dữ liệu
-                        const userRows = response.rows.filter(row => {
-                            const idInRow = (row["id"] || '').trim();
-                            return idInRow === idFromUrl;
-                        });
-
-                        if (userRows.length === 0) {
-                            console.error('No data found for ID:', idFromUrl);
-                            vanDonReportApp.showError('Không tìm thấy dữ liệu cho ID: ' + idFromUrl);
-                            hideLoader();
-                            return;
-                        }
-
-                        // Lấy tên từ dòng đầu tiên
-                        const userName = (userRows[0]["Nhân viên Marketing"] || userRows[0]["Tên"] || '').trim();
-                        console.log('Employee name:', userName);
-
-                        // Lọc tất cả data của nhân viên này
-                        filteredData = response.rows.filter(row => {
-                            const nhanVienMarketing = (row["Nhân viên Marketing"] || '').trim();
-                            const NVVD = (row["NV Vận đơn"] || '').trim();
-                            const NVSL = (row["Nhân viên Sale"] || '').trim();
-                            console.log(`Checking row - NV Marketing: ${nhanVienMarketing}, NV Vận đơn: ${NVVD}, NV Sale: ${NVSL}`);
-                            const ten = (row["Tên"] || '').trim();
-                            return nhanVienMarketing === userName || ten === userName;
-                        });
-
-                        console.log(`Employee ${userName} - Found ${filteredData.length} records`);
-                    }
-                } else {
-                    // Nếu không có ID, lọc cứng theo cột "Team" = "Hà Nội" trong sheet F3
-                    console.log('No ID provided, filtering by Team column = Hà Nội');
-
-                    filteredData = response.rows.filter(row => {
-                        const teamColumn = (row["Team"] || '').trim();
-                        return teamColumn === 'Hà Nội';
-                    });
-
-                    console.log(`Filtered by Team column = Hà Nội - Found ${filteredData.length} records`);
-                }
-
-                globalData = filteredData;
-                console.log('Final globalData length:', globalData.length);
+                // KHÔNG LỌC Ở ĐÂY - để globalData giữ nguyên toàn bộ dữ liệu
+                // Phân quyền sẽ được áp dụng trong buildSummaryData()
+                globalData = response.rows;
+                console.log('📊 Final globalData length:', globalData.length);
+                console.log('📊 Raw data length:', rawData.length);
+                console.log('🔐 Final allowedNames:', allowedNames ? Array.from(allowedNames) : 'null');
                 hideLoader();
                 vanDonReportApp.populateReportFilters();
+                
+                // Áp dụng phân quyền vào UI (disable các bộ lọc khi có id=)
+                applyAccessControlToUI();
+                
                 vanDonReportApp.applyAllFilters();
             }
 
@@ -1028,7 +1210,21 @@
                         console.log('===== API RESPONSE =====');
                         console.log('Van don data loaded, rows count:', vanDonData.rows?.length || 0);
                         console.log('Nhân sự data loaded, records count:', nhanSuData.length || 0);
+                        if (nhanSuData.length > 0) {
+                            console.log('📋 Sample HR data (first 3):', nhanSuData.slice(0, 3).map(r => ({
+                                sid: r['sid'] || r['SID'] || r['Sid'] || 'no sid',
+                                id: r['id'] || r['ID'] || r['Id'] || 'no id',
+                                ten: r['Tên'] || r['Name'] || r['Họ và tên'] || r['Họ Và Tên'] || 'no name',
+                                viTri: r['Vị trí'] || r['Vi_tri'] || r['Position'] || 'no position',
+                                team: r['Team'] || 'no team'
+                            })));
+                        }
                         console.log('========================');
+
+                        // Tính toán quyền truy cập sau khi load HR data
+                        console.log('🔐 About to call computeAccessScope(), nhanSuData length:', nhanSuData.length);
+                        computeAccessScope();
+                        console.log('🔐 After computeAccessScope(), allowedNames =', allowedNames ? Array.from(allowedNames) : 'null');
 
                         // Xử lý dữ liệu vận đơn
                         handleData({ rows: vanDonData.rows });
@@ -1138,6 +1334,16 @@
                         staffList.forEach(staffInfo => {
                             const key = `${staffInfo.name}|||${staffInfo.type}`;
                             
+                            // ÁP DỤNG PHÂN QUYỀN - Chỉ xử lý nhân viên trong allowedNames
+                            if (allowedNames && allowedNames.size > 0) {
+                                const staffName = staffInfo.name;
+                                const staffNameNormalized = normalizeName(staffName);
+                                // Kiểm tra xem tên có trong allowedNames không
+                                if (!allowedNames.has(staffName) && !allowedNames.has(staffNameNormalized)) {
+                                    return; // Bỏ qua nhân viên không có quyền xem
+                                }
+                            }
+                            
                             // Nếu có filter nhân sự, chỉ tính cho nhân sự đã chọn
                             // Nếu không có filter (selectedStaff.size === 0), tính cho tất cả
                             if (selectedStaff.size > 0 && !selectedStaff.has(key)) {
@@ -1235,14 +1441,23 @@
                         // Có chọn nhân viên → chỉ thêm nhân viên đã chọn (ngay cả khi chưa có dữ liệu)
                         console.log('=== STEP 2: Adding selected staff from filter ===');
                         selectedStaffFromDropdown.forEach(key => {
+                            const [name, type] = key.split('|||');
+                            
+                            // ÁP DỤNG PHÂN QUYỀN - Chỉ thêm nhân viên trong allowedNames
+                            if (allowedNames && allowedNames.size > 0) {
+                                const staffNameNormalized = normalizeName(name);
+                                if (!allowedNames.has(name) && !allowedNames.has(staffNameNormalized)) {
+                                    return; // Bỏ qua nhân viên không có quyền xem
+                                }
+                            }
+                            
                             if (!staffStats[key]) {
-                                const [name, type] = key.split('|||');
                                 staffStats[key] = this.createEmptyStats();
                                 staffStats[key].staffName = name;
                                 staffStats[key].staffType = type;
                             }
                         });
-                        console.log('✅ Added selected staff to table:', selectedStaffFromDropdown.size);
+                        console.log('✅ Added selected staff to table:', Object.keys(staffStats).length);
                     } else {
                         // Không chọn nhân viên nào (xóa tất cả) → hiển thị tất cả nhân viên từ dữ liệu
                         // Thêm tất cả nhân viên có trong filteredData nhưng chưa có trong staffStats
@@ -1253,9 +1468,22 @@
                             const sale = (row["Nhân viên Sale"] || "").trim();
                             const vandon = (row["NV Vận đơn"] || "").trim();
 
-                            if (marketing) allStaffFromRaw.add(`${marketing}|||Marketing`);
-                            if (sale) allStaffFromRaw.add(`${sale}|||Sale`);
-                            if (vandon) allStaffFromRaw.add(`${vandon}|||Vận đơn`);
+                            // ÁP DỤNG PHÂN QUYỀN khi thu thập danh sách
+                            if (marketing) {
+                                if (!allowedNames || allowedNames.size === 0 || allowedNames.has(marketing) || allowedNames.has(normalizeName(marketing))) {
+                                    allStaffFromRaw.add(`${marketing}|||Marketing`);
+                                }
+                            }
+                            if (sale) {
+                                if (!allowedNames || allowedNames.size === 0 || allowedNames.has(sale) || allowedNames.has(normalizeName(sale))) {
+                                    allStaffFromRaw.add(`${sale}|||Sale`);
+                                }
+                            }
+                            if (vandon) {
+                                if (!allowedNames || allowedNames.size === 0 || allowedNames.has(vandon) || allowedNames.has(normalizeName(vandon))) {
+                                    allStaffFromRaw.add(`${vandon}|||Vận đơn`);
+                                }
+                            }
                         });
 
                         // Thêm các nhân viên chưa có với giá trị = 0
@@ -1851,7 +2079,12 @@
                     });
                 },
                 applyAllFilters: function () {
+                    // BẮT ĐẦU TỪ GLOBALDATA - KHÔNG LỌC PHÂN QUYỀN Ở ĐÂY
                     let data = [...globalData];
+                    
+                    console.log('🔍 applyAllFilters: Starting with', data.length, 'records from globalData');
+                    console.log('🔐 allowedNames status:', allowedNames ? `Set with ${allowedNames.size} names` : 'null (no restriction)');
+                    
                     const startValue = document.getElementById('reportStartDateFilter')?.value;
                     const endValue = document.getElementById('reportEndDateFilter')?.value;
 
