@@ -4,11 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng Kê Hồ Sơ</title>
-    <!-- THÊM: Thư viện SheetJS để xử lý Excel -->
+    
+    <!-- 1. Thư viện SheetJS để xử lý Excel -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    <!-- 2. Thư viện html2pdf để xử lý PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
     <style>
-        /* === STYLE CHO MÀN HÌNH (HIỂN THỊ WEB) === */
+        /* === STYLE CHO MÀN HÌNH === */
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
@@ -20,41 +23,60 @@
             margin-bottom: 20px;
             display: flex;
             justify-content: center;
-            gap: 15px; /* Tăng khoảng cách giữa các nút */
+            gap: 15px;
         }
 
         .print-button {
-            font-size: 16px;
+            font-size: 15px;
             font-weight: bold;
             color: #fff;
-            background-color: #007bff;
+            background-color: #007bff; /* Màu xanh dương (In) */
             border: none;
-            padding: 12px 24px;
+            padding: 10px 20px;
             border-radius: 5px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            transition: background-color 0.3s ease, transform 0.1s;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+        
+        .print-button:active {
+            transform: scale(0.98);
         }
 
         .print-button:hover {
             background-color: #0056b3;
         }
 
-        /* THÊM: Style riêng cho nút Excel */
+        /* Style nút Excel (Xanh lá) */
         .excel-button {
-            background-color: #28a745; /* Màu xanh lá */
+            background-color: #28a745; 
         }
-
         .excel-button:hover {
             background-color: #218838;
         }
 
+        /* THÊM: Style nút PDF (Đỏ) */
+        .pdf-button {
+            background-color: #dc3545;
+        }
+        .pdf-button:hover {
+            background-color: #c82333;
+        }
+
+        /* Container bao quanh bảng để PDF chụp chính xác */
+        .table-container {
+            background-color: #fff;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 10px; /* Thêm đệm trắng xung quanh khi xuất PDF */
+            border-radius: 4px;
+        }
+
         table {
             width: 100%;
-            max-width: 1200px;
             border-collapse: collapse;
             border: 1px solid #aaa;
             background-color: #fff;
@@ -62,7 +84,6 @@
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
             border-radius: 4px;
             overflow: hidden;
-            margin: 0 auto; 
         }
 
         th, td {
@@ -78,14 +99,13 @@
             padding: 15px;
             text-align: center;
         }
-        caption h2, caption h3 {
+        caption h2 {
             margin: 0;
+            font-size: 1.5em;
             color: #333;
         }
-        caption h2 {
-            font-size: 1.5em;
-        }
         caption h3 {
+            margin: 5px 0 0 0;
             font-size: 1.1em;
             font-weight: normal;
             color: #555;
@@ -108,139 +128,98 @@
         tbody tr.even-row {
             background-color: #f9f9f9;
         }
-
         tbody tr:hover {
             background-color: #f0f0f0;
         }
 
-        .cell-center {
-            text-align: center;
-            color: #555;
-        }
-        .cell-right-mono {
-            text-align: right;
-            font-family: 'Courier New', Courier, monospace;
-        }
-        .cell-no-data {
-            text-align: center;
-            padding: 20px;
-            color: #777;
-        }
-
+        .cell-center { text-align: center; color: #555; }
+        .cell-right-mono { text-align: right; font-family: 'Courier New', Courier, monospace; }
+        .cell-no-data { text-align: center; padding: 20px; color: #777; }
 
         /* === STYLE CHO IN ẤN (PRINT VIEW) === */
         @media print {
-            .print-button-container {
-                display: none;
-            }
-
-            @page {
-                size: A4;
-                margin: 1cm;
-            }
-
-            body {
-                background-color: #fff;
-                padding: 0;
-                margin: 0;
-            }
-
-            table {
-                width: 100%;
-                max-width: 100%;
-                box-shadow: none;
-                border-radius: 0;
-                border: 1px solid #000; 
-                font-size: 10pt; 
-                border-collapse: collapse; 
-            }
-            
-            caption {
-                color: #000;
-            }
-
-            th, td {
-                border: 1px solid #000 !important; 
-                padding: 5px;
-                background-color: #fff !important;
-                color: #000 !important;
-            }
-
-            thead tr.main-header th {
-                border-bottom: 2px solid #000 !important;
-            }
-            
-            tbody tr:hover,
-            tbody tr.even-row {
-                background-color: #fff !important;
-            }
+            .print-button-container { display: none; }
+            @page { size: A4; margin: 1cm; }
+            body { background-color: #fff; padding: 0; margin: 0; }
+            .table-container { box-shadow: none; padding: 0; width: 100%; }
+            table { width: 100%; border: 1px solid #000; font-size: 10pt; }
+            th, td { border: 1px solid #000 !important; padding: 5px; color: #000 !important; }
+            thead tr.main-header th { border-bottom: 2px solid #000 !important; }
         }
     </style>
 </head>
 <body>
 
-    <!-- Nút Chức Năng -->
+    <!-- Khu vực các nút chức năng -->
     <div class="print-button-container">
-        <button onclick="window.print()" class="print-button">🖨️ In Bảng Kê</button>
-        
-        <!-- THÊM: Nút Tải Excel -->
+        <button onclick="window.print()" class="print-button">🖨️ In</button>
         <button onclick="exportToExcel()" class="print-button excel-button">📊 Tải Excel</button>
+        <button onclick="exportToPDF()" class="print-button pdf-button">📄 Tải PDF</button>
     </div>
 
     <div id="error-message" style="color: red; text-align: center; margin-bottom: 10px; font-weight: bold; display: none;"></div>
 
-    <!-- Thêm ID cho bảng để dễ truy xuất -->
-    <table id="bang-ke-ho-so">
-        <caption>
-            <h2>BẢNG KÊ SỐ LƯỢNG HỒ SƠ THÁNG</h2>
-            <h3 id="ngay-thang-phu">(Từ ngày ... đến ngày ...)</h3>
-        </caption>
-        
-        <thead>
-            <tr class="info-header">
-                <th colspan="2">Kính gửi Quý khách hàng:</th>
-                <th colspan="6" id="khach-hang-ten">(Chưa có dữ liệu)</th>
-            </tr>
-            <tr class="info-header">
-                <th>Tổng HS:</th>
-                <th id="tong-hs-value">0</th>
-                <th colspan="6"></th>
-            </tr>
-            <tr class="info-header">
-                <th>Trong đó:</th>
-                <th>Hữu Nghị:</th>
-                <th id="huu-nghi-value">0</th>
-                <th>Cốc Nam:</th>
-                <th id="coc-nam-value">0</th>
-                <th colspan="3"></th>
-            </tr>
-            <tr class="info-header">
-                <th></th>
-                <th>Tân Thanh:</th>
-                <th id="tan-thanh-value">0</th>
-                <th>Chi Ma:</th>
-                <th id="chi-ma-value">0</th>
-                <th colspan="3"></th>
-            </tr>
-            <tr class="main-header">
-                <th>TT</th>
-                <th>Ngày</th>
-                <th>MHS</th>
-                <th>BS xe</th>
-                <th>BS moóc</th>
-                <th>Time</th>
-                <th>Cửa khẩu</th>
-                <th>Ghi chú</th>
-            </tr>
-        </thead>
-        
-        <tbody id="table-body">
-            <!-- Dữ liệu sẽ được chèn vào đây -->
-        </tbody>
-    </table>
+    <!-- Bao bảng trong div container để html2pdf xử lý tốt hơn -->
+    <div class="table-container" id="content-to-export">
+        <table id="bang-ke-ho-so">
+            <caption>
+                <h2>BẢNG KÊ SỐ LƯỢNG HỒ SƠ THÁNG</h2>
+                <h3 id="ngay-thang-phu">(Từ ngày ... đến ngày ...)</h3>
+            </caption>
+            
+            <thead>
+                <tr class="info-header">
+                    <th colspan="2">Kính gửi Quý khách hàng:</th>
+                    <th colspan="6" id="khach-hang-ten">(Chưa có dữ liệu)</th>
+                </tr>
+                <tr class="info-header">
+                    <th>Tổng HS:</th>
+                    <th id="tong-hs-value">0</th>
+                    <th colspan="6"></th>
+                </tr>
+                <tr class="info-header">
+                    <th>Trong đó:</th>
+                    <th>Hữu Nghị:</th>
+                    <th id="huu-nghi-value">0</th>
+                    <th>Cốc Nam:</th>
+                    <th id="coc-nam-value">0</th>
+                    <th colspan="3"></th>
+                </tr>
+                <tr class="info-header">
+                    <th></th>
+                    <th>Tân Thanh:</th>
+                    <th id="tan-thanh-value">0</th>
+                    <th>Chi Ma:</th>
+                    <th id="chi-ma-value">0</th>
+                    <th colspan="3"></th>
+                </tr>
+                <tr class="main-header">
+                    <th>TT</th>
+                    <th>Ngày</th>
+                    <th>MHS</th>
+                    <th>BS xe</th>
+                    <th>BS moóc</th>
+                    <th>Time</th>
+                    <th>Cửa khẩu</th>
+                    <th>Ghi chú</th>
+                </tr>
+            </thead>
+            
+            <tbody id="table-body">
+                <!-- Dữ liệu sẽ được chèn vào đây -->
+            </tbody>
+        </table>
+    </div>
 
     <script>
-        // Chạy kịch bản khi trang được tải xong
+        // Hàm tiện ích lấy tên file an toàn
+        function getSafeFileName() {
+            var khName = document.getElementById('khach-hang-ten').innerText.trim();
+            var safeName = khName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9 ]/g, "").replace(/\s+/g, "_");
+            if (!safeName || safeName === "Chưa có dữ liệu") safeName = "KhachHang";
+            return "BangKe_" + safeName;
+        }
+
         window.onload = function() {
             try {
                 const params = new URLSearchParams(window.location.search);
@@ -264,7 +243,6 @@
                     td.className = 'cell-no-data';
                     tr.appendChild(td);
                     tbody.appendChild(tr);
-                    document.getElementById('tong-hs-value').innerText = 0;
                     return; 
                 }
 
@@ -327,7 +305,7 @@
                      const tr = document.createElement('tr');
                     const td = document.createElement('td');
                     td.colSpan = 8;
-                    td.innerText = 'Dữ liệu được truyền vào không chứa hàng hợp lệ.';
+                    td.innerText = 'Dữ liệu không hợp lệ.';
                     td.className = 'cell-no-data';
                     tr.appendChild(td);
                     tbody.appendChild(tr);
@@ -346,29 +324,47 @@
             }
         };
 
-        // === THÊM: HÀM XUẤT EXCEL ===
+        // === 1. HÀM XUẤT EXCEL ===
         function exportToExcel() {
             try {
-                // 1. Lấy phần tử bảng
                 var elt = document.getElementById('bang-ke-ho-so');
-                
-                // 2. Chuyển bảng HTML thành Sheet Excel
-                // raw: true giúp giữ nguyên định dạng số/chuỗi, tránh tự động parse ngày tháng sai
                 var wb = XLSX.utils.table_to_book(elt, {sheet: "Bảng Kê", raw: true});
-
-                // 3. Tạo tên file dựa trên tên khách hàng và thời gian
-                var khName = document.getElementById('khach-hang-ten').innerText.trim();
-                // Loại bỏ các ký tự đặc biệt để làm tên file an toàn
-                var safeName = khName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9 ]/g, "").replace(/\s+/g, "_");
-                if (!safeName || safeName === "Chưa có dữ liệu") safeName = "KhachHang";
-                
-                var fileName = "BangKe_" + safeName + ".xlsx";
-
-                // 4. Tải file xuống
-                XLSX.writeFile(wb, fileName);
+                XLSX.writeFile(wb, getSafeFileName() + ".xlsx");
             } catch (e) {
                 alert("Có lỗi khi xuất Excel: " + e.message);
             }
+        }
+
+        // === 2. HÀM XUẤT PDF ===
+        function exportToPDF() {
+            // Lấy phần tử chứa nội dung cần in
+            var element = document.getElementById('content-to-export');
+            
+            // Cấu hình tùy chọn cho PDF
+            var opt = {
+                margin:       [10, 10, 10, 10], // Lề: Trên, Trái, Dưới, Phải (mm)
+                filename:     getSafeFileName() + '.pdf',
+                image:        { type: 'jpeg', quality: 0.98 },
+                html2canvas:  { scale: 2, useCORS: true }, // Scale 2 để nét hơn
+                jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
+                pagebreak:    { mode: ['css', 'legacy'] } // Tránh cắt ngang dòng
+            };
+
+            // Thực hiện chuyển đổi và tải về
+            // Hiển thị thông báo đang xử lý (tùy chọn)
+            var btn = document.querySelector('.pdf-button');
+            var oldText = btn.innerText;
+            btn.innerText = "⏳ Đang tạo...";
+            btn.disabled = true;
+
+            html2pdf().set(opt).from(element).save().then(function(){
+                btn.innerText = oldText;
+                btn.disabled = false;
+            }).catch(function(err){
+                alert("Lỗi tạo PDF: " + err);
+                btn.innerText = oldText;
+                btn.disabled = false;
+            });
         }
     </script>
 
