@@ -58,7 +58,7 @@
             background-color: #218838;
         }
 
-        /* THÊM: Style nút PDF (Đỏ) */
+        /* Style nút PDF (Đỏ) */
         .pdf-button {
             background-color: #dc3545;
         }
@@ -71,7 +71,7 @@
             background-color: #fff;
             max-width: 1200px;
             margin: 0 auto;
-            padding: 10px; /* Thêm đệm trắng xung quanh khi xuất PDF */
+            padding: 10px;
             border-radius: 4px;
         }
 
@@ -168,14 +168,15 @@
             </caption>
             
             <thead>
+                <!-- Đã chỉnh sửa colspan để phù hợp với 7 cột -->
                 <tr class="info-header">
                     <th colspan="2">Kính gửi Quý khách hàng:</th>
-                    <th colspan="6" id="khach-hang-ten">(Chưa có dữ liệu)</th>
+                    <th colspan="5" id="khach-hang-ten">(Chưa có dữ liệu)</th>
                 </tr>
                 <tr class="info-header">
                     <th>Tổng HS:</th>
                     <th id="tong-hs-value">0</th>
-                    <th colspan="6"></th>
+                    <th colspan="5"></th>
                 </tr>
                 <tr class="info-header">
                     <th>Trong đó:</th>
@@ -183,7 +184,7 @@
                     <th id="huu-nghi-value">0</th>
                     <th>Cốc Nam:</th>
                     <th id="coc-nam-value">0</th>
-                    <th colspan="3"></th>
+                    <th colspan="2"></th>
                 </tr>
                 <tr class="info-header">
                     <th></th>
@@ -191,14 +192,14 @@
                     <th id="tan-thanh-value">0</th>
                     <th>Chi Ma:</th>
                     <th id="chi-ma-value">0</th>
-                    <th colspan="3"></th>
+                    <th colspan="2"></th>
                 </tr>
                 <tr class="main-header">
                     <th>TT</th>
                     <th>Ngày</th>
                     <th>MHS</th>
                     <th>BS xe</th>
-                    <th>BS moóc</th>
+                    <!-- Đã XÓA cột BS moóc -->
                     <th>Time</th>
                     <th>Cửa khẩu</th>
                     <th>Ghi chú</th>
@@ -235,10 +236,13 @@
                 const tbody = document.getElementById('table-body');
                 tbody.innerHTML = ''; 
 
+                // Tổng số cột mới là 7 (Đã bỏ BS moóc)
+                const totalColumnsInTable = 7; 
+
                 if (!tableData) {
                     const tr = document.createElement('tr');
                     const td = document.createElement('td');
-                    td.colSpan = 8;
+                    td.colSpan = totalColumnsInTable;
                     td.innerText = 'Không có dữ liệu bàn kê để hiển thị.';
                     td.className = 'cell-no-data';
                     tr.appendChild(td);
@@ -279,18 +283,31 @@
                         countChiMa++;
                     }
                     
-                    const totalColumnsInTable = 8; 
-
                     for (let i = 0; i < totalColumnsInTable; i++) {
                         const td = document.createElement('td');
                         let cellText = '';
 
                         if (i === 0) {
+                            // Cột STT
                             cellText = totalRows;
                             td.classList.add('cell-center');
                         } else {
-                            cellText = cols[i - 1] || ''; 
-                            if (i === 2) { 
+                            // Tính toán chỉ số dữ liệu lấy từ mảng cols
+                            // Cấu trúc cols gốc: [0:Ngày, 1:MHS, 2:BSXe, 3:BSMooc, 4:Time, 5:Gate, 6:Note]
+                            
+                            // i=1 (Ngày) -> lấy cols[0]
+                            // i=2 (MHS) -> lấy cols[1]
+                            // i=3 (BS Xe) -> lấy cols[2]
+                            // i=4 (Time) -> Cần lấy cols[4], BỎ QUA cols[3] (BS Mooc)
+                            
+                            let dataIndex = i - 1;
+                            if (dataIndex >= 3) { 
+                                dataIndex = dataIndex + 1; // Nhảy qua cột BS Mooc (index 3)
+                            }
+
+                            cellText = cols[dataIndex] || ''; 
+                            
+                            if (i === 2) { // Cột MHS
                                 td.classList.add('cell-right-mono');
                             }
                         }
@@ -302,9 +319,9 @@
                 });
                 
                 if (totalRows === 0) {
-                     const tr = document.createElement('tr');
+                    const tr = document.createElement('tr');
                     const td = document.createElement('td');
-                    td.colSpan = 8;
+                    td.colSpan = totalColumnsInTable;
                     td.innerText = 'Dữ liệu không hợp lệ.';
                     td.className = 'cell-no-data';
                     tr.appendChild(td);
@@ -337,21 +354,16 @@
 
         // === 2. HÀM XUẤT PDF ===
         function exportToPDF() {
-            // Lấy phần tử chứa nội dung cần in
             var element = document.getElementById('content-to-export');
-            
-            // Cấu hình tùy chọn cho PDF
             var opt = {
-                margin:       [10, 10, 10, 10], // Lề: Trên, Trái, Dưới, Phải (mm)
+                margin:       [10, 10, 10, 10], 
                 filename:     getSafeFileName() + '.pdf',
                 image:        { type: 'jpeg', quality: 0.98 },
-                html2canvas:  { scale: 2, useCORS: true }, // Scale 2 để nét hơn
+                html2canvas:  { scale: 2, useCORS: true },
                 jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' },
-                pagebreak:    { mode: ['css', 'legacy'] } // Tránh cắt ngang dòng
+                pagebreak:    { mode: ['css', 'legacy'] }
             };
 
-            // Thực hiện chuyển đổi và tải về
-            // Hiển thị thông báo đang xử lý (tùy chọn)
             var btn = document.querySelector('.pdf-button');
             var oldText = btn.innerText;
             btn.innerText = "⏳ Đang tạo...";
