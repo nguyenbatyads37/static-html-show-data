@@ -4,23 +4,23 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng Kê Hồ Sơ</title>
+    <!-- THÊM: Thư viện SheetJS để xử lý Excel -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
     <style>
         /* === STYLE CHO MÀN HÌNH (HIỂN THỊ WEB) === */
         body {
             font-family: Arial, sans-serif;
             background-color: #f4f4f4;
-            /* Thay đổi: Bỏ flex để nút in ở trên cùng */
             padding: 20px;
         }
 
-        /* Thêm: Nút In */
         .print-button-container {
             text-align: center;
             margin-bottom: 20px;
-            /* Thêm: Sắp xếp các nút */
             display: flex;
             justify-content: center;
-            gap: 10px;
+            gap: 15px; /* Tăng khoảng cách giữa các nút */
         }
 
         .print-button {
@@ -34,25 +34,34 @@
             cursor: pointer;
             transition: background-color 0.3s ease;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
 
         .print-button:hover {
             background-color: #0056b3;
         }
-        
-        /* Xóa Nút Gửi Dữ Liệu */
+
+        /* THÊM: Style riêng cho nút Excel */
+        .excel-button {
+            background-color: #28a745; /* Màu xanh lá */
+        }
+
+        .excel-button:hover {
+            background-color: #218838;
+        }
 
         table {
             width: 100%;
             max-width: 1200px;
             border-collapse: collapse;
-            border: 1px solid #aaa; /* Viền ngoài đậm hơn */
+            border: 1px solid #aaa;
             background-color: #fff;
             font-size: 14px;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
             border-radius: 4px;
             overflow: hidden;
-            /* Thêm: Căn giữa bảng */
             margin: 0 auto; 
         }
 
@@ -96,7 +105,6 @@
             border: 1px solid #ddd; 
         }
 
-        /* Thay đổi: Dùng class cho hàng chẵn thay vì :nth-child */
         tbody tr.even-row {
             background-color: #f9f9f9;
         }
@@ -105,7 +113,6 @@
             background-color: #f0f0f0;
         }
 
-        /* Thay đổi: Dùng class cho căn chỉnh */
         .cell-center {
             text-align: center;
             color: #555;
@@ -123,137 +130,95 @@
 
         /* === STYLE CHO IN ẤN (PRINT VIEW) === */
         @media print {
-            /* Thêm: Ẩn nút in khi in */
             .print-button-container {
                 display: none;
             }
 
-            /* Định dạng trang A4, lề 1cm */
             @page {
                 size: A4;
                 margin: 1cm;
             }
 
             body {
-                /* Reset body về nền trắng, không lề, không đệm */
                 background-color: #fff;
                 padding: 0;
                 margin: 0;
-                font-family: Arial, sans-serif; /* Đảm bảo font nhất quán */
             }
 
             table {
-                /* Bảng chiếm 100% chiều rộng của trang in */
                 width: 100%;
                 max-width: 100%;
-                /* Reset các hiệu ứng cho màn hình */
                 box-shadow: none;
                 border-radius: 0;
-                /* Viền ngoài màu đen */
                 border: 1px solid #000; 
-                /* Cỡ chữ nhỏ hơn một chút cho vừa trang */
                 font-size: 10pt; 
                 border-collapse: collapse; 
             }
             
             caption {
-                text-align: center;
-                font-weight: bold;
-                padding: 10px 0;
-                font-size: 12pt;
                 color: #000;
-            }
-            caption h2 {
-                font-size: 1.2em;
-            }
-            caption h3 {
-                font-size: 1.0em;
-                font-weight: normal;
             }
 
             th, td {
-                /* Viền đen cho tất cả các ô */
                 border: 1px solid #000 !important; 
-                /* Giảm padding cho vừa trang */
                 padding: 5px;
-                /* Đảm bảo nền trắng và chữ đen */
                 background-color: #fff !important;
                 color: #000 !important;
-                vertical-align: top;
             }
 
-            /* Đảm bảo header của bảng in rõ ràng */
             thead tr.main-header th {
-                border-bottom: 2px solid #000 !important; /* Viền dưới đen đậm */
-                font-weight: bold;
+                border-bottom: 2px solid #000 !important;
             }
             
-            /* Bỏ các hiệu ứng hover và nền xen kẽ */
             tbody tr:hover,
             tbody tr.even-row {
                 background-color: #fff !important;
-            }
-            
-            /* Giữ nguyên căn chỉnh */
-            .cell-center {
-                text-align: center;
-            }
-            .cell-right-mono {
-                text-align: right;
-                font-family: 'Courier New', Courier, monospace;
-            }
-            .cell-no-data {
-                text-align: center;
             }
         }
     </style>
 </head>
 <body>
 
-    <!-- Thêm: Nút In (Nút gửi đã bị xóa) -->
+    <!-- Nút Chức Năng -->
     <div class="print-button-container">
         <button onclick="window.print()" class="print-button">🖨️ In Bảng Kê</button>
+        
+        <!-- THÊM: Nút Tải Excel -->
+        <button onclick="exportToExcel()" class="print-button excel-button">📊 Tải Excel</button>
     </div>
 
-    <!-- Thêm: Khu vực thông báo lỗi (giữ lại) -->
     <div id="error-message" style="color: red; text-align: center; margin-bottom: 10px; font-weight: bold; display: none;"></div>
 
-    <table>
+    <!-- Thêm ID cho bảng để dễ truy xuất -->
+    <table id="bang-ke-ho-so">
         <caption>
             <h2>BẢNG KÊ SỐ LƯỢNG HỒ SƠ THÁNG</h2>
-            <!-- Thêm ID để JS cập nhật -->
             <h3 id="ngay-thang-phu">(Từ ngày ... đến ngày ...)</h3>
         </caption>
         
         <thead>
             <tr class="info-header">
                 <th colspan="2">Kính gửi Quý khách hàng:</th>
-                <!-- Thêm ID và Colspan để JS cập nhật -->
                 <th colspan="6" id="khach-hang-ten">(Chưa có dữ liệu)</th>
             </tr>
             <tr class="info-header">
                 <th>Tổng HS:</th>
-                <!-- Thêm ID để JS cập nhật -->
                 <th id="tong-hs-value">0</th>
                 <th colspan="6"></th>
             </tr>
             <tr class="info-header">
                 <th>Trong đó:</th>
                 <th>Hữu Nghị:</th>
-                <!-- Thêm ID để JS cập nhật -->
                 <th id="huu-nghi-value">0</th>
                 <th>Cốc Nam:</th>
-                <!-- Thêm ID để JS cập nhật -->
                 <th id="coc-nam-value">0</th>
                 <th colspan="3"></th>
             </tr>
             <tr class="info-header">
                 <th></th>
                 <th>Tân Thanh:</th>
-                <!-- Thêm ID để JS cập nhật -->
                 <th id="tan-thanh-value">0</th>
                 <th>Chi Ma:</th>
-                <!-- Thêm ID để JS cập nhật -->
                 <th id="chi-ma-value">0</th>
                 <th colspan="3"></th>
             </tr>
@@ -269,18 +234,15 @@
             </tr>
         </thead>
         
-        <!-- Thân bảng trống, sẽ được điền bởi JS -->
         <tbody id="table-body">
             <!-- Dữ liệu sẽ được chèn vào đây -->
         </tbody>
     </table>
 
-    <!-- Thêm: JavaScript để điền dữ liệu từ URL -->
     <script>
         // Chạy kịch bản khi trang được tải xong
         window.onload = function() {
             try {
-                // 1. Lấy các tham số từ URL
                 const params = new URLSearchParams(window.location.search);
                 
                 const kh = params.get('kh') || '(Chưa có dữ liệu)';
@@ -288,29 +250,24 @@
                 const toingay = params.get('toingay') || '...';
                 const tableData = params.get('table');
 
-                // 2. Cập nhật thông tin header
                 document.getElementById('khach-hang-ten').innerText = kh;
                 document.getElementById('ngay-thang-phu').innerText = `(Từ ngày ${tungay} đến ngày ${toingay})`;
 
-                // 3. Xử lý và điền dữ liệu bảng
                 const tbody = document.getElementById('table-body');
-                tbody.innerHTML = ''; // Xóa bất kỳ nội dung tĩnh nào
+                tbody.innerHTML = ''; 
 
                 if (!tableData) {
                     const tr = document.createElement('tr');
                     const td = document.createElement('td');
-                    td.colSpan = 8; // Bảng có 8 cột
+                    td.colSpan = 8;
                     td.innerText = 'Không có dữ liệu bàn kê để hiển thị.';
                     td.className = 'cell-no-data';
                     tr.appendChild(td);
                     tbody.appendChild(tr);
-                    
-                    // Cập nhật tổng HS là 0
                     document.getElementById('tong-hs-value').innerText = 0;
-                    return; // Dừng lại ở đây
+                    return; 
                 }
 
-                // Khởi tạo biến đếm
                 let totalRows = 0;
                 let countHuuNghi = 0;
                 let countCocNam = 0;
@@ -320,27 +277,19 @@
                 const rows = tableData.split('_b_');
 
                 rows.forEach((rowString) => {
-                    if (!rowString) return; // Bỏ qua hàng trống
-                    
-                    // Lọc ra các hàng tóm tắt
-                    // THAY ĐỔI: Đã BỎ kiểm tra (cols.length < 8)
+                    if (!rowString) return; 
                     if (rowString.startsWith('Tổng HS:') || rowString.includes('Hữu Nghị:')) {
-                        return; // Đây là hàng tóm tắt hoặc hàng không hợp lệ, bỏ qua
+                        return; 
                     }
                     
-                    const cols = rowString.split('_a_'); // Lấy các cột dữ liệu
-
-                    totalRows++; // Đếm hàng dữ liệu hợp lệ
+                    const cols = rowString.split('_a_'); 
+                    totalRows++; 
                     
                     const tr = document.createElement('tr');
-                    
-                    // Thêm lớp cho hàng chẵn (zebra striping)
                     if (totalRows % 2 === 0) {
                         tr.classList.add('even-row');
                     }
                     
-                    // THAY ĐỔI: Đếm linh hoạt
-                    // Quét toàn bộ chuỗi hàng để tìm tên cửa khẩu, bất kể nó ở cột nào
                     const lowerCaseRow = rowString.toLowerCase();
                     if (lowerCaseRow.includes("hữu nghị")) {
                         countHuuNghi++;
@@ -352,25 +301,18 @@
                         countChiMa++;
                     }
                     
-                    const totalColumnsInTable = 8; // Bảng luôn có 8 cột
+                    const totalColumnsInTable = 8; 
 
-                    // THAY ĐỔI: Hiển thị linh hoạt và Tự động đánh số TT
-                    // Luôn lặp 8 lần (để tạo 8 cột)
                     for (let i = 0; i < totalColumnsInTable; i++) {
                         const td = document.createElement('td');
                         let cellText = '';
 
                         if (i === 0) {
-                            // Cột 0 là TT, tự động điền số thứ tự
                             cellText = totalRows;
                             td.classList.add('cell-center');
                         } else {
-                            // Các cột khác (i > 0), lấy dữ liệu từ (i-1) vì URL không có TT
-                            // Ví dụ: Cột "Ngày" (i=1) sẽ lấy dữ liệu từ cols[0]
                             cellText = cols[i - 1] || ''; 
-                            
-                            // Áp dụng style căn chỉnh (vẫn dựa trên vị trí cột hiển thị)
-                            if (i === 2) { // Cột MHS (vị trí 2)
+                            if (i === 2) { 
                                 td.classList.add('cell-right-mono');
                             }
                         }
@@ -378,13 +320,9 @@
                         td.innerText = cellText;
                         tr.appendChild(td);
                     }
-                    
                     tbody.appendChild(tr);
-
-                    // Logic đếm đã được chuyển lên trên
                 });
                 
-                // Nếu sau khi lặp, không có hàng nào, hiển thị "Không có dữ liệu"
                 if (totalRows === 0) {
                      const tr = document.createElement('tr');
                     const td = document.createElement('td');
@@ -395,7 +333,6 @@
                     tbody.appendChild(tr);
                 }
 
-                // 4. Cập nhật các số liệu thống kê
                 document.getElementById('tong-hs-value').innerText = totalRows;
                 document.getElementById('huu-nghi-value').innerText = countHuuNghi;
                 document.getElementById('coc-nam-value').innerText = countCocNam;
@@ -403,13 +340,36 @@
                 document.getElementById('chi-ma-value').innerText = countChiMa;
 
             } catch (error) {
-                console.error("Lỗi khi điền dữ liệu từ URL:", error);
-                const tbody = document.getElementById('table-body');
-                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red; padding: 20px;">Đã xảy ra lỗi khi tải dữ liệu: ${error.message}</td></tr>`;
-                document.getElementById("error-message").innerText = `Lỗi khi tải dữ liệu: ${error.message}`;
+                console.error("Lỗi:", error);
+                document.getElementById("error-message").innerText = `Lỗi: ${error.message}`;
                 document.getElementById("error-message").style.display = 'block';
             }
         };
+
+        // === THÊM: HÀM XUẤT EXCEL ===
+        function exportToExcel() {
+            try {
+                // 1. Lấy phần tử bảng
+                var elt = document.getElementById('bang-ke-ho-so');
+                
+                // 2. Chuyển bảng HTML thành Sheet Excel
+                // raw: true giúp giữ nguyên định dạng số/chuỗi, tránh tự động parse ngày tháng sai
+                var wb = XLSX.utils.table_to_book(elt, {sheet: "Bảng Kê", raw: true});
+
+                // 3. Tạo tên file dựa trên tên khách hàng và thời gian
+                var khName = document.getElementById('khach-hang-ten').innerText.trim();
+                // Loại bỏ các ký tự đặc biệt để làm tên file an toàn
+                var safeName = khName.replace(/[^a-zA-Z0-9\u00C0-\u1EF9 ]/g, "").replace(/\s+/g, "_");
+                if (!safeName || safeName === "Chưa có dữ liệu") safeName = "KhachHang";
+                
+                var fileName = "BangKe_" + safeName + ".xlsx";
+
+                // 4. Tải file xuống
+                XLSX.writeFile(wb, fileName);
+            } catch (e) {
+                alert("Có lỗi khi xuất Excel: " + e.message);
+            }
+        }
     </script>
 
 </body>
