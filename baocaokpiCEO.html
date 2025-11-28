@@ -1214,6 +1214,8 @@
             if (fid === 'filterTeam') {
               // Rebuild Name options when Team changes
               populateNameDropdownBasedOnTeam();
+              // Áp dụng ẩn/hiện các dòng theo team (sau khi render)
+              setTimeout(() => applyTeamFilterVisibility(), 0);
             }
             applyFiltersAndRender();
           }
@@ -1383,7 +1385,30 @@
     function parseNumber(val) {
       if (val === null || val === undefined || val === '') return 0;
       if (typeof val === 'number') return val;
-      const s = String(val).replace(/\./g, '').replace(/,/g, '');
+      let s = String(val).trim();
+      // Xử lý định dạng số: có thể là "1.234.567" (VN) hoặc "1,234.56" (US) hoặc "1234567"
+      // Kiểm tra nếu có dấu chấm ở 3 vị trí cuối (định dạng US với phần thập phân)
+      const lastDotIndex = s.lastIndexOf('.');
+      const lastCommaIndex = s.lastIndexOf(',');
+      if (lastDotIndex > -1 && lastDotIndex === s.length - 3) {
+        // Có dấu chấm ở vị trí thứ 3 từ cuối -> có thể là phần thập phân (US format)
+        // Kiểm tra xem có dấu phẩy trước đó không (như "1,234.56")
+        if (lastCommaIndex > -1 && lastCommaIndex < lastDotIndex) {
+          // Định dạng US: "1,234.56" -> giữ dấu chấm, xóa dấu phẩy
+          s = s.replace(/,/g, '');
+        } else {
+          // Có thể là định dạng VN với dấu chấm làm phân cách hàng nghìn
+          // Xóa tất cả dấu chấm và phẩy
+          s = s.replace(/\./g, '').replace(/,/g, '');
+        }
+      } else if (lastCommaIndex > -1 && lastCommaIndex === s.length - 3) {
+        // Có dấu phẩy ở vị trí thứ 3 từ cuối -> có thể là phần thập phân (VN format)
+        // Thay dấu phẩy bằng dấu chấm cho parseFloat, xóa các dấu chấm khác
+        s = s.replace(/\./g, '').replace(',', '.');
+      } else {
+        // Không có phần thập phân -> xóa tất cả dấu chấm và phẩy (định dạng VN)
+        s = s.replace(/\./g, '').replace(/,/g, '');
+      }
       const n = Number(s);
       return isNaN(n) ? 0 : n;
     }
@@ -1434,21 +1459,22 @@
         const ship = parseNumber(r['Phí ship']);
         if (!includeZero && ship === 0) return false;
         
-        // Filter by CA - Default to "Hết ca" only (giống baocaomkt)
-        const caFields = ['Ca', 'ca', 'CA'];
-        let hasHetCa = false;
-        for (const field of caFields) {
-          if (r[field]) {
-            const cas = String(r[field] || '').split(',').map(x => x.trim()).filter(Boolean);
-            if (cas.length === 0 || !cas.includes('Hết ca')) {
-              // Không có ca hoặc không có "Hết ca"
-            } else {
-              hasHetCa = true;
-              break;
-            }
-          }
-        }
-        if (!hasHetCa) return false; // Chỉ lấy đơn có "Hết ca"
+        // Filter by CA - Bỏ filter "Hết ca" để không loại bỏ đơn hàng
+        // (Có thể thêm lại filter này nếu cần)
+        // const caFields = ['Ca', 'ca', 'CA'];
+        // let hasCaField = false;
+        // let hasHetCa = false;
+        // for (const field of caFields) {
+        //   if (r[field] !== undefined && r[field] !== null && r[field] !== '') {
+        //     hasCaField = true;
+        //     const cas = String(r[field] || '').split(',').map(x => x.trim()).filter(Boolean);
+        //     if (cas.length > 0 && cas.includes('Hết ca')) {
+        //       hasHetCa = true;
+        //       break;
+        //     }
+        //   }
+        // }
+        // if (hasCaField && !hasHetCa) return false;
         
         // Filter by Product
         if (!selectedProduct.all && (selectedProduct.values.length > 0 || selectedProduct.empty)) {
@@ -1598,16 +1624,16 @@
             console.log('📊 After filtering by department:', staffFromHR.length, 'staff members');
          }
          
-         // Sau đó lọc theo Team nếu có filter
-         if (!selectedTeam.all && (selectedTeam.values.length > 0 || selectedTeam.empty)) {
-            staffFromHR = staffFromHR.filter(r => {
-               const team = (r['Team'] || '').toString().trim();
-               const isEmpty = team === '';
-               if (selectedTeam.empty && isEmpty) return true;
-               if (selectedTeam.values.length > 0 && selectedTeam.values.includes(team)) return true;
-               return false;
-            });
-         }
+         // Bỏ filter Team ở cấp dữ liệu - sẽ ẩn/hiện trong UI thay vì loại bỏ khỏi danh sách
+         // if (!selectedTeam.all && (selectedTeam.values.length > 0 || selectedTeam.empty)) {
+         //    staffFromHR = staffFromHR.filter(r => {
+         //       const team = (r['Team'] || '').toString().trim();
+         //       const isEmpty = team === '';
+         //       if (selectedTeam.empty && isEmpty) return true;
+         //       if (selectedTeam.values.length > 0 && selectedTeam.values.includes(team)) return true;
+         //       return false;
+         //    });
+         // }
       }
 
       // Chuyển đổi sang format {name, type, team} dựa trên Bộ phận
@@ -1655,6 +1681,39 @@
             if (countByType.hasOwnProperty(s.type)) countByType[s.type]++;
          });
          console.log('📊 Staff count by type:', countByType);
+         
+         // Bổ sung: Lấy thêm nhân viên từ F3 data nếu họ không có trong HR
+         // Điều này đảm bảo không bỏ sót đơn hàng
+         const existingNames = new Set(staffWithTypes.map(s => `${s.name.toLowerCase()}|||${s.type}`));
+         const nameTeamMap = new Map();
+         roleColumns.forEach(rc => {
+            const nameSet = new Set();
+            filtered.forEach(r => {
+               const name = (r[rc.col] || '').toString().trim();
+               if (name) {
+                  const key = `${name.toLowerCase()}|||${rc.type}`;
+                  // Chỉ thêm nếu chưa có trong HR data
+                  if (!existingNames.has(key)) {
+                     nameSet.add(name);
+                     // Thử lấy Team từ MKT index nếu là Marketing
+                     if (rc.type === 'Marketing' && mktIndex.has(name)) {
+                        const map = mktIndex.get(name);
+                        if (map.size > 0) {
+                           const team = map.values().next().value.team;
+                           if (team && !nameTeamMap.has(name)) nameTeamMap.set(name, team);
+                        }
+                     }
+                  }
+               }
+            });
+            nameSet.forEach(name => {
+               const team = nameTeamMap.get(name) || '';
+               staffWithTypes.push({ name: name, type: rc.type, team: team });
+            });
+         });
+         if (nameTeamMap.size > 0) {
+            console.log('✅ Bổ sung thêm', nameTeamMap.size, 'nhân viên từ F3 data');
+         }
       } else {
          // Fallback: Nếu không có HR data, lấy từ F3 data (logic cũ)
          const nameTeamMap = new Map();
@@ -1767,8 +1826,12 @@
             const f3Column = nameToF3Column.get(`${s.name}|||${s.type}`);
             if (!f3Column) return;
             
-            const nameInF3 = (r[f3Column] || '').toString().trim();
-            const nameFromHR = (s.name || '').toString().trim();
+            let nameInF3 = (r[f3Column] || '').toString().trim();
+            let nameFromHR = (s.name || '').toString().trim();
+            
+            // Normalize: loại bỏ khoảng trắng thừa (nhiều khoảng trắng thành 1)
+            nameInF3 = nameInF3.replace(/\s+/g, ' ').trim();
+            nameFromHR = nameFromHR.replace(/\s+/g, ' ').trim();
             
             // Match không phân biệt hoa/thường và trim
             if (nameInF3.toLowerCase() !== nameFromHR.toLowerCase()) return; // Tên không khớp
@@ -1817,8 +1880,12 @@
         finalStaffList.forEach(s => {
           const f3Column = nameToF3Column.get(`${s.name}|||${s.type}`);
           if (f3Column) {
-            const nameInF3 = (r[f3Column] || '').toString().trim();
-            if (nameInF3.toLowerCase() === s.name.toLowerCase()) {
+            let nameInF3 = (r[f3Column] || '').toString().trim();
+            let nameFromHR = (s.name || '').toString().trim();
+            // Normalize: loại bỏ khoảng trắng thừa
+            nameInF3 = nameInF3.replace(/\s+/g, ' ').trim();
+            nameFromHR = nameFromHR.replace(/\s+/g, ' ').trim();
+            if (nameInF3.toLowerCase() === nameFromHR.toLowerCase()) {
               staffInOrder.push(`${s.name} (${s.type})`);
             }
           }
@@ -1974,7 +2041,7 @@
         const cpdt = s.dThuTinhKpi > 0 ? (s.cpqc / s.dThuTinhKpi) : 0;
         const staffName = (s.name || '').toString().trim() || 'N/A';
         const staffTeam = (s.team || '').toString().trim() || '';
-        return `<tr>
+        return `<tr data-team="${staffTeam}">
                 <td class="text-center">${i + 1}</td>
                 <td class="text-left">${staffTeam}</td>
                 <td class="text-left">${staffName}</td>
@@ -2031,6 +2098,36 @@
       document.getElementById('kpi-summary-body').innerHTML = totalRowHtml + bodyRowsHtml;
       document.getElementById('kpi-summary-foot').innerHTML = '';
       reapplyKpiColumnVisibility();
+      applyTeamFilterVisibility();
+    }
+    
+    function applyTeamFilterVisibility() {
+      const selectedTeam = getSelectedDropdown('filterTeam');
+      const table = document.getElementById('kpi-summary-table');
+      if (!table) return;
+      
+      const rows = table.querySelectorAll('tbody tr[data-team]');
+      const isAllSelected = selectedTeam.all || (selectedTeam.values.length === 0 && !selectedTeam.empty);
+      
+      rows.forEach(row => {
+        const rowTeam = row.getAttribute('data-team') || '';
+        if (isAllSelected) {
+          // Hiển thị tất cả nếu chọn "Tất cả"
+          row.style.display = '';
+        } else {
+          // Ẩn/hiện dựa trên team được chọn
+          const isEmpty = rowTeam === '';
+          let shouldShow = false;
+          
+          if (selectedTeam.empty && isEmpty) {
+            shouldShow = true;
+          } else if (selectedTeam.values.length > 0 && selectedTeam.values.includes(rowTeam)) {
+            shouldShow = true;
+          }
+          
+          row.style.display = shouldShow ? '' : 'none';
+        }
+      });
     }
 
     function sortKpiTable(event) {
