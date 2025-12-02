@@ -237,10 +237,11 @@
 </head>
 <body>
 
-    <div id="status-message">Đang tải dữ liệu (Full Data)...</div>
+    <div id="status-message">Đang tải dữ liệu...</div>
 
     <div class="controls" id="controls" style="display: none;">
-        <button class="btn" onclick="loadData()" style="width: 100%;">🔄 Refresh</button>
+        <!-- Ẩn ô tìm kiếm nếu đang lọc theo ID URL để tránh rối -->
+        <button class="btn" onclick="window.location.reload()" style="width: 100%;">🔄 Refresh / Tải lại trang</button>
     </div>
 
     <div id="invoices-wrapper"></div>
@@ -252,10 +253,6 @@
         function formatMoney(amount) {
             if (!amount) return "0";
             return new Intl.NumberFormat('en-US').format(amount);
-        }
-
-        function getPrintTime() {
-            return new Date().toLocaleString('en-GB', { hour12: false });
         }
 
         function formatDate(dateString) {
@@ -274,41 +271,21 @@
             }
         }
 
-        function filterData() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            
-            if (!searchTerm) {
-                renderInvoices(allData);
-                return;
-            }
-
-            const filtered = allData.filter(item => {
-                return Object.values(item).some(value => 
-                    String(value).toLowerCase().includes(searchTerm)
-                );
-            });
-
-            renderInvoices(filtered);
-        }
-
         function renderInvoices(orders) {
             const wrapper = document.getElementById('invoices-wrapper');
             wrapper.innerHTML = "";
 
             if (!orders || orders.length === 0) {
-                wrapper.innerHTML = '<div style="text-align: center; padding: 40px; color: white;">Không có dữ liệu</div>';
+                wrapper.innerHTML = '<div style="text-align: center; padding: 40px; color: white;">Không tìm thấy đơn hàng phù hợp.</div>';
                 return;
             }
 
             let htmlContent = "";
-            let count = 0;
-
-            // --- LOOP QUA TOÀN BỘ DỮ LIỆU ---
+            
+            // --- LOOP QUA DỮ LIỆU ĐÃ LỌC ---
             orders.forEach(item => {
                 // Chỉ bỏ qua những dòng hoàn toàn rỗng (không có ID)
                 if (!item['ID']) return;
-
-                count++;
 
                 // Mapping Data
                 const customerName = item['Customer name'] || '';
@@ -377,11 +354,7 @@
                 `;
             });
 
-            if (count > 0) {
-                wrapper.innerHTML = htmlContent;
-            } else {
-                wrapper.innerHTML = '<div style="text-align: center; padding: 40px; color: white;">Dữ liệu trống hoặc không tìm thấy ID.</div>';
-            }
+            wrapper.innerHTML = htmlContent;
         }
 
         async function loadData() {
@@ -396,37 +369,57 @@
             controls.style.display = 'none';
 
             try {
-                console.log('🔗 Đang kết nối đến:', API_URL);
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => {
-                    console.log('⏰ Timeout: Hủy request sau 30 giây');
-                    controller.abort();
-                }, 30000);
-                
-                const response = await fetch(API_URL, {
-                    method: 'GET',
-                    mode: 'cors',
-                    cache: 'no-cache',
-                    signal: controller.signal
-                });
-                
-                clearTimeout(timeoutId);
-
+                // Fetch dữ liệu từ Google Sheets
+                const response = await fetch(API_URL);
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
 
-                console.log('✅ Kết nối thành công, đang parse JSON...');
                 const json = await response.json();
-                console.log('📦 Dữ liệu nhận được:', json);
-
+                
                 if (!json || !json.ok || !json.data) {
-                    throw new Error("Lỗi cấu trúc dữ liệu: không có trường 'data' hoặc dữ liệu rỗng.");
+                    throw new Error("Dữ liệu trả về bị lỗi hoặc rỗng.");
                 }
 
                 allData = json.data;
-                renderInvoices(allData);
+
+                // --- XỬ LÝ LỌC THEO URL (ID) ---
+                const urlParams = new URLSearchParams(window.location.search);
+                const idParam = urlParams.get('id');
+
+                if (idParam) {
+                    // Tách chuỗi ID từ URL (vd: "1,2,3") thành mảng ["1", "2", "3"]
+                    // Xóa khoảng trắng thừa nếu có
+                    const targetIds = idParam.split(',').map(id => id.trim());
+
+                    console.log("Đang lọc các ID:", targetIds);
+
+                    // Lọc dữ liệu: Chỉ giữ lại các đơn có ID nằm trong danh sách targetIds
+                    // Chuyển item['ID'] về chuỗi để so sánh chính xác
+                    const filteredData = allData.filter(item => {
+                        return targetIds.includes(String(item['ID']));
+                    });
+                    
+                    // Sắp xếp thứ tự in theo thứ tự ID trên URL (tùy chọn, giúp in đúng thứ tự mong muốn)
+                    const sortedData = [];
+                    targetIds.forEach(id => {
+                        const found = filteredData.find(item => String(item['ID']) === id);
+                        if(found) sortedData.push(found);
+                    });
+
+                    renderInvoices(sortedData);
+                    
+                    if (sortedData.length === 0) {
+                        wrapper.innerHTML = `<div style="text-align: center; padding: 40px; color: white;">
+                            Đã tải xong dữ liệu nhưng không tìm thấy ID nào trong danh sách yêu cầu:<br>
+                            <b>${idParam}</b>
+                        </div>`;
+                    }
+
+                } else {
+                    // Nếu không có param ?id= thì hiển thị tất cả (hoặc hiển thị thông báo tùy ý)
+                    renderInvoices(allData);
+                }
                 
                 status.style.display = 'none';
                 controls.style.display = 'flex';
@@ -434,33 +427,14 @@
             } catch (e) {
                 console.error('❌ Lỗi:', e);
                 status.classList.add('error');
-                
-                if (e.name === 'AbortError') {
-                    status.innerHTML = `
-                        <strong>⏰ Lỗi Timeout</strong><br><br>
-                        Không thể tải dữ liệu sau 30 giây.<br><br>
-                        <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
-                    `;
-                } else if (e.message.includes('Failed to fetch') || e.message.includes('CORS')) {
-                    status.innerHTML = `
-                        <strong>🚫 Lỗi Kết Nối</strong><br><br>
-                        Không thể kết nối từ localhost.<br><br>
-                        <strong>Giải pháp:</strong><br>
-                        1. Deploy file lên web server<br>
-                        2. Mở file trực tiếp (double-click)<br>
-                        3. Thêm CORS headers vào Google Apps Script<br><br>
-                        <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
-                    `;
-                } else {
-                    status.innerHTML = `
-                        <strong>❌ Lỗi: ${e.message}</strong><br><br>
-                        <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
-                    `;
-                }
+                status.innerHTML = `
+                    <strong>❌ Lỗi: ${e.message}</strong><br><br>
+                    <button class="btn" onclick="loadData()" style="margin-top: 10px;">🔄 Thử lại</button>
+                `;
             }
         }
 
-        // Load data on page load
+        // Tải dữ liệu khi mở trang
         window.addEventListener('load', loadData);
     </script>
 </body>
