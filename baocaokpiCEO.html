@@ -74,12 +74,7 @@
       min-width: 40px;
       max-width: 40px;
     }
-    /* Cột "Số đơn" - hẹp lại, tự động fit theo nội dung */
-    #kpi-summary-table th[data-col-index="4"]:nth-of-type(1),
-    #kpi-summary-table th[data-col-index="5"]:nth-of-type(1),
-    #kpi-summary-table th[data-col-index="6"]:nth-of-type(1),
-    #kpi-summary-table th[data-col-index="7"]:nth-of-type(1),
-    #kpi-summary-table th[data-col-index="12"]:nth-of-type(1),
+    /* Cột "Số đơn" - hẹp lại, vừa với dữ liệu */
     #kpi-summary-table td[data-col-index="4"].text-center,
     #kpi-summary-table td[data-col-index="5"].text-center,
     #kpi-summary-table td[data-col-index="6"].text-center,
@@ -90,11 +85,12 @@
     #kpi-summary-table tfoot td[data-col-index="6"].text-center,
     #kpi-summary-table tfoot td[data-col-index="7"].text-center,
     #kpi-summary-table tfoot td[data-col-index="12"].text-center {
-      width: auto !important;
-      min-width: fit-content !important;
-      max-width: fit-content !important;
-      padding: 4px 4px !important;
+      width: 55px !important;
+      min-width: 55px !important;
+      max-width: 55px !important;
+      padding: 4px 2px !important;
       white-space: nowrap !important;
+      text-align: center !important;
     }
     /* Cột "Doanh số" - to ra (các ô không có class text-center) */
     #kpi-summary-table th[data-col-index="4"]:nth-of-type(2),
@@ -259,6 +255,7 @@
       background-color: #eff5fb;
     }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
   <div class="container">
@@ -335,6 +332,7 @@
       <span class="spacer"></span>
       <button id="showAllBtn" class="btn btn-secondary">Hiện tất cả</button>
       <button id="refreshBtn" class="btn btn-secondary">Làm mới</button>
+      <button id="exportExcelBtn" class="btn btn-primary">📥 Tải Excel</button>
       </div>
 
       <div class="column-controls" style="margin-bottom: 15px; padding: 10px; background: #f9f9f9; border-radius: 5px;">
@@ -532,6 +530,22 @@
     let rawOrders = [];
     let currentData = [];
     let sortState = { column: null, direction: 'asc' };
+    
+    // Debounce function để giảm lag khi lọc
+    let filterTimeout = null;
+    function debounceFilter(callback, delay = 300) {
+      if (filterTimeout) clearTimeout(filterTimeout);
+      filterTimeout = setTimeout(callback, delay);
+    }
+    
+    // Wrapper function cho applyFiltersAndRender với debounce
+    function debouncedApplyFilters() {
+      debounceFilter(() => {
+        requestAnimationFrame(() => {
+          applyFiltersAndRender();
+        });
+      }, 200);
+    }
     // RAW view state
     let rawColumns = [];
     let rawFiltered = [];
@@ -1159,19 +1173,21 @@
         const quickDateRadios = document.querySelectorAll('input[name="quickDate"]');
         quickDateRadios.forEach(radio => radio.checked = false);
         updateRangeBadge(); 
-        applyFiltersAndRender(); 
+        debouncedApplyFilters(); 
       });
       document.getElementById('endDate').addEventListener('change', () => { 
         // Clear quick date selection when manually changing dates
         const quickDateRadios = document.querySelectorAll('input[name="quickDate"]');
         quickDateRadios.forEach(radio => radio.checked = false);
         updateRangeBadge(); 
-        applyFiltersAndRender(); 
+        debouncedApplyFilters(); 
       });
       // Name dropdown uses checkbox menu; removed text search
       document.getElementById('refreshBtn').addEventListener('click', () => loadData());
       const showAllBtn = document.getElementById('showAllBtn');
       if (showAllBtn) showAllBtn.addEventListener('click', () => clearFiltersToShowAll());
+      const exportExcelBtn = document.getElementById('exportExcelBtn');
+      if (exportExcelBtn) exportExcelBtn.addEventListener('click', () => exportKpiToExcel());
       // Dropdown open/close for checkbox dropdowns
       ['filterProduct','filterBranch','filterTeam','filterMarket','filterName','filterStaffType'].forEach(fid => {
         const wrap = document.getElementById(`dd-${fid}`);
@@ -1217,7 +1233,7 @@
               // Áp dụng ẩn/hiện các dòng theo team (sau khi render)
               setTimeout(() => applyTeamFilterVisibility(), 0);
             }
-            applyFiltersAndRender();
+            debouncedApplyFilters();
           }
         });
       });
@@ -1297,7 +1313,7 @@
               const endDay = String(end.getDate()).padStart(2, '0');
               endDate.value = `${endYear}-${endMonth}-${endDay}`;
               updateRangeBadge();
-              applyFiltersAndRender();
+              debouncedApplyFilters();
             }
           }
         });
@@ -1305,7 +1321,7 @@
       }
       document.addEventListener('click', () => closeAllDropdowns());
       const includeZeroEl = document.getElementById('includeZeroShip');
-      if (includeZeroEl) includeZeroEl.addEventListener('change', () => applyFiltersAndRender());
+      if (includeZeroEl) includeZeroEl.addEventListener('change', () => debouncedApplyFilters());
 
       const kpiHead = document.getElementById('kpi-summary-table')?.querySelector('thead');
       if (kpiHead) kpiHead.addEventListener('click', (e) => sortKpiTable(e));
@@ -1766,32 +1782,36 @@
       const cpqcByName = new Map();
       const cpqcProcessed = new Set(); // Track đã cộng CPQC cho (name, date) nào
       
-      // Map tên HR -> cột F3 tương ứng
-      const nameToF3Column = new Map();
-      const vanDonStaff = [];
-      finalStaffList.forEach(s => {
-         const key = `${s.name}|||${s.type}`;
-         if (s.type === 'Marketing') nameToF3Column.set(key, 'Nhân viên Marketing');
-         else if (s.type === 'Sale') nameToF3Column.set(key, 'Nhân viên Sale');
-         else if (s.type === 'Vận đơn') {
-            nameToF3Column.set(key, 'NV Vận đơn');
-            vanDonStaff.push(s.name);
-         }
-      });
-      if (vanDonStaff.length > 0) {
-         console.log('📦 Vận đơn staff found:', vanDonStaff.length, 'staff:', vanDonStaff.slice(0, 5));
-      }
+      // TỐI ƯU: Tạo Map index từ tên nhân viên (lowercase) để lookup nhanh O(1) thay vì O(n)
+      // Map: tên (lowercase) -> { name, type, key, f3Column }
+      const staffByNameLower = new Map(); // name lowercase -> staff info
+      const staffByF3Column = {
+        'Nhân viên Marketing': new Map(),
+        'Nhân viên Sale': new Map(),
+        'NV Vận đơn': new Map()
+      };
       
-      // Khởi tạo stats cho tất cả nhân viên từ HR
-      console.log('🔧 Initializing stats for', finalStaffList.length, 'staff members');
+      // Khởi tạo stats cho tất cả nhân viên từ HR và xây dựng index
       finalStaffList.forEach(s => {
          const key = `${s.name}|||${s.type}`;
-         if (!s.name || s.name.trim() === '') {
-            console.warn('⚠️ Staff with empty name:', s);
-            return;
+         if (!s.name || s.name.trim() === '') return;
+         
+         const nameTrimmed = s.name.trim();
+         const nameLower = nameTrimmed.toLowerCase().replace(/\s+/g, ' ');
+         
+         // Xác định cột F3 tương ứng
+         let f3Column = null;
+         if (s.type === 'Marketing') f3Column = 'Nhân viên Marketing';
+         else if (s.type === 'Sale') f3Column = 'Nhân viên Sale';
+         else if (s.type === 'Vận đơn') f3Column = 'NV Vận đơn';
+         
+         if (f3Column && staffByF3Column[f3Column]) {
+           staffByF3Column[f3Column].set(nameLower, { name: nameTrimmed, type: s.type, key, team: s.team || '' });
          }
+         
+         // Khởi tạo stats
          byName.set(key, {
-            name: s.name.trim(),
+            name: nameTrimmed,
             team: s.team || '',
             type: s.type,
             soDonChot: 0, dsChot: 0,
@@ -1802,123 +1822,69 @@
             ship: 0, cpqc: 0
          });
       });
-      console.log('✅ Initialized', byName.size, 'staff stats in byName map');
       
-      // Tính toán số liệu từ F3 data cho từng nhân viên từ HR
-      let vanDonMatchCount = 0;
+      // TỐI ƯU: Tính toán số liệu - O(n) thay vì O(n*m)
+      // Với mỗi đơn hàng, chỉ lookup tên từ các cột F3 trong Map (O(1))
+      const f3Columns = ['Nhân viên Marketing', 'Nhân viên Sale', 'NV Vận đơn'];
+      
       filtered.forEach(r => {
         const ship = parseNumber(r['Phí ship']);
-        const orderDate = toDate(r['Ngày lên đơn']);
         const tongTien = parseNumber(r['Tổng tiền VNĐ']);
         const ketQuaCheck = (r['Kết quả Check'] || '').toString().trim();
         const maTracking = (r['Mã Tracking'] || '').toString().trim();
         const tienVietDoiSoat = parseNumber(r['Tiền Việt đã đối soát']);
-        // Lấy cột "Kế toán xác nhận thu tiền về" (thử nhiều tên cột khác nhau)
-        const keToanXacNhan = (r['Kế toán xác nhận thu tiền về'] ?? r['Ke toan xac nhan thu tien ve'] ?? r['Kế toán xác nhận'] ?? r['Xác nhận thu tiền'] ?? '').toString().trim();
+        const keToanXacNhan = (r['Kế toán xác nhận thu tiền về'] ?? r['Ke toan xac nhan thu tien ve'] ?? '').toString().trim();
         const isHuy = ketQuaCheck === 'Huỷ';
         const isDi = maTracking !== '';
         const isThanhCong = ketQuaCheck === 'OK' && isDi;
-        // Rule tính "Số đơn thu tiền" và "DThu thành công": "Kế toán xác nhận thu tiền về" = "Đã thu tiền"
         const isDaThuTien = keToanXacNhan === 'Đã thu tiền' || keToanXacNhan === 'Da thu tien';
 
-        // Tìm nhân viên từ HR data có tên khớp trong F3 data
-        finalStaffList.forEach(s => {
-            const f3Column = nameToF3Column.get(`${s.name}|||${s.type}`);
-            if (!f3Column) return;
-            
-            let nameInF3 = (r[f3Column] || '').toString().trim();
-            let nameFromHR = (s.name || '').toString().trim();
-            
-            // Normalize: loại bỏ khoảng trắng thừa (nhiều khoảng trắng thành 1)
-            nameInF3 = nameInF3.replace(/\s+/g, ' ').trim();
-            nameFromHR = nameFromHR.replace(/\s+/g, ' ').trim();
-            
-            // Match không phân biệt hoa/thường và trim
-            if (nameInF3.toLowerCase() !== nameFromHR.toLowerCase()) return; // Tên không khớp
-            
-            // Log match với Vận đơn (chỉ log 3 lần đầu)
-            if (s.type === 'Vận đơn' && vanDonMatchCount < 3) {
-               console.log('✅ Vận đơn match:', { nameFromHR, nameInF3, f3Column });
-               vanDonMatchCount++;
-            }
-            
-            const key = `${s.name}|||${s.type}`;
-            const agg = byName.get(key);
-            if (!agg) return;
-
-            // Tính "Số đơn chốt" và "DS chốt": Tất cả đơn đã pass filter và match nhân viên (không cần điều kiện Kết quả Check hay Mã Tracking)
-            agg.soDonChot += 1;
-            agg.dsChot += tongTien;
-            if (isHuy) {
-              agg.soDonHuy += 1;
-              agg.dsHuy += tongTien;
-            }
-            if (isThanhCong) {
-              agg.soDonDi += 1;
-              agg.dsDi += tongTien;
-            }
-            // Tính "Số đơn thu tiền" và "DThu thành công": "Kế toán xác nhận thu tiền về" = "Đã thu tiền"
-            if (isDaThuTien && tienVietDoiSoat > 0) {
-              agg.soDonThuTien += 1;
-              agg.dThuThanhCong += tienVietDoiSoat;
-            }
-            agg.ship += ship;
-
-            // CPQC được tính trực tiếp từ mktIndex sau khi xử lý F3 data
-            // Không tính ở đây nữa để tránh thiếu sót
-        });
-      });
-      
-      // Debug: Kiểm tra đơn hàng bị tính trùng
-      console.log('🔍 Debug: Kiểm tra đơn hàng bị tính trùng');
-      const orderDebug = new Map();
-      filtered.slice(0, 100).forEach(r => { // Chỉ check 100 đơn đầu
-        const tongTien = parseNumber(r['Tổng tiền VNĐ']);
-        const maDon = (r['Mã đơn hàng'] || r['Mã đơn'] || r['Mã_đơn_hàng'] || 'N/A').toString().trim();
-        const staffInOrder = [];
+        // Tránh tính trùng cho cùng một nhân viên trong cùng một đơn hàng
+        const processedStaffForOrder = new Set();
         
-        finalStaffList.forEach(s => {
-          const f3Column = nameToF3Column.get(`${s.name}|||${s.type}`);
-          if (f3Column) {
-            let nameInF3 = (r[f3Column] || '').toString().trim();
-            let nameFromHR = (s.name || '').toString().trim();
-            // Normalize: loại bỏ khoảng trắng thừa
-            nameInF3 = nameInF3.replace(/\s+/g, ' ').trim();
-            nameFromHR = nameFromHR.replace(/\s+/g, ' ').trim();
-            if (nameInF3.toLowerCase() === nameFromHR.toLowerCase()) {
-              staffInOrder.push(`${s.name} (${s.type})`);
-            }
+        // Chỉ lookup trong các cột F3 có trong đơn hàng (O(3) constant)
+        for (const f3Column of f3Columns) {
+          const nameInF3Raw = r[f3Column];
+          if (!nameInF3Raw) continue;
+          
+          const nameInF3 = nameInF3Raw.toString().trim().toLowerCase().replace(/\s+/g, ' ');
+          if (!nameInF3) continue;
+          
+          // Tránh tính trùng
+          if (processedStaffForOrder.has(nameInF3)) continue;
+          
+          // Lookup nhanh O(1) trong Map
+          const staffInfo = staffByF3Column[f3Column]?.get(nameInF3);
+          if (!staffInfo) continue;
+          
+          processedStaffForOrder.add(nameInF3);
+          
+          const agg = byName.get(staffInfo.key);
+          if (!agg) continue;
+
+          // Tính toán số liệu
+          agg.soDonChot += 1;
+          agg.dsChot += tongTien;
+          if (isHuy) {
+            agg.soDonHuy += 1;
+            agg.dsHuy += tongTien;
           }
-        });
-        
-        if (staffInOrder.length > 1) {
-          orderDebug.set(maDon, { tongTien, staff: staffInOrder });
+          if (isThanhCong) {
+            agg.soDonDi += 1;
+            agg.dsDi += tongTien;
+          }
+          if (isDaThuTien && tienVietDoiSoat > 0) {
+            agg.soDonThuTien += 1;
+            agg.dThuThanhCong += tienVietDoiSoat;
+          }
+          if (isDi) {
+            agg.ship += ship;
+          }
         }
       });
       
-      if (orderDebug.size > 0) {
-        console.warn('⚠️ Tìm thấy đơn hàng có nhiều nhân viên:', orderDebug.size, 'đơn');
-        let totalDuplicate = 0;
-        let count = 0;
-        orderDebug.forEach((val, key) => {
-          if (count < 10) { // Chỉ log 10 đơn đầu tiên
-            console.log(`Đơn ${key}: ${val.tongTien.toLocaleString('vi-VN')} ₫ - ${val.staff.length} nhân viên:`, val.staff);
-          }
-          totalDuplicate += val.tongTien * (val.staff.length - 1); // Số tiền bị tính thừa
-          count++;
-        });
-        console.log(`💰 Tổng số tiền bị tính thừa (ước tính từ ${orderDebug.size} đơn): ${totalDuplicate.toLocaleString('vi-VN')} ₫`);
-        console.log(`📊 Tỷ lệ: ${orderDebug.size}/${filtered.length} đơn có nhiều nhân viên (${((orderDebug.size/filtered.length)*100).toFixed(2)}%)`);
-      } else {
-        console.log('✅ Không tìm thấy đơn hàng có nhiều nhân viên trong 100 đơn đầu tiên');
-      }
-      
       // Tính CPQC trực tiếp từ mktIndex cho TẤT CẢ nhân viên trong finalStaffList
       // CPQC là cột độc lập, lấy từ BAO_CAO_MKT_URL (đã filter theo date, team, name)
-      // Tính theo tên trong cột "Nhân viên"
-      console.log('🔍 Tính CPQC từ mktIndex (cột độc lập, filter theo bộ lọc)...');
-      console.log('📊 mktIndex có', mktIndex.size, 'nhân viên (đã filter theo date, team, name)');
-      console.log('📊 finalStaffList có', finalStaffList.length, 'nhân viên');
       
       finalStaffList.forEach(staff => {
         if (staff.name) {
@@ -1944,39 +1910,19 @@
           
           if (matchedName && matchedDateMap) {
             let totalCpqc = 0;
-            // Tổng hợp TẤT CẢ CPQC từ mktIndex (đã filter theo date, team, name ở trên)
             matchedDateMap.forEach((entry, dateKey) => {
               totalCpqc += entry.cpqc || 0;
             });
             if (totalCpqc > 0) {
               cpqcByName.set(name, totalCpqc);
-              console.log(`✅ CPQC for ${name} (matched: ${matchedName}): ${totalCpqc.toLocaleString('vi-VN')} ₫`);
-            }
-          } else {
-            // Log để debug (chỉ log 5 nhân viên đầu)
-            if (finalStaffList.indexOf(staff) < 5) {
-              console.log(`⚠️ ${name} không tìm thấy trong mktIndex. Các tên trong mktIndex:`, Array.from(mktIndex.keys()).slice(0, 10));
             }
           }
         }
       });
-      
-      console.log('📊 Tổng số nhân viên có CPQC:', cpqcByName.size);
-      
-      // Log tổng kết nhân viên Vận đơn
-      const vanDonInTable = [...byName.values()].filter(it => it.type === 'Vận đơn');
-      if (vanDonInTable.length > 0) {
-         const vanDonWithData = vanDonInTable.filter(it => it.soDonChot > 0);
-         console.log('📦 Vận đơn in table:', vanDonInTable.length, 'total,', vanDonWithData.length, 'with data');
-      } else {
-         console.warn('⚠️ No Vận đơn staff found in table!');
-      }
 
-      console.log('📊 Preparing rows from byName map:', byName.size, 'entries');
       let rows = [...byName.values()]
         .map((it, idx) => {
           if (!it.name || it.name.trim() === '') {
-            console.warn('⚠️ Row with empty name at index', idx, ':', it);
           }
           const cpqc = cpqcByName.get(it.name) || 0;
           const dsSauHuy = Math.max(0, (it.dsChot || 0) - (it.dsHuy || 0));
@@ -2394,6 +2340,245 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+    }
+
+    function exportKpiToExcel() {
+      if (!currentData || currentData.length === 0) {
+        alert('Không có dữ liệu để xuất Excel!');
+        return;
+      }
+
+      // Lấy thông tin bộ lọc hiện tại
+      const startDate = document.getElementById('startDate')?.value || '';
+      const endDate = document.getElementById('endDate')?.value || '';
+      const selectedName = getSelectedDropdown('filterName');
+      const selectedTeam = getSelectedDropdown('filterTeam');
+      const selectedStaffType = getSelectedDropdown('filterStaffType');
+      
+      // Tạo thông tin bộ lọc để hiển thị
+      let filterInfo = [];
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const startStr = `${String(start.getDate()).padStart(2, '0')}/${String(start.getMonth() + 1).padStart(2, '0')}/${start.getFullYear()}`;
+        const endStr = `${String(end.getDate()).padStart(2, '0')}/${String(end.getMonth() + 1).padStart(2, '0')}/${end.getFullYear()}`;
+        filterInfo.push(`Khoảng thời gian: ${startStr} - ${endStr}`);
+      }
+      if (!selectedName.all && selectedName.values.length > 0) {
+        const nameList = selectedName.values.length <= 3 
+          ? selectedName.values.join(', ') 
+          : `${selectedName.values.slice(0, 3).join(', ')}... (+${selectedName.values.length - 3} nhân viên)`;
+        filterInfo.push(`Nhân viên: ${nameList}`);
+      }
+      if (!selectedTeam.all && selectedTeam.values.length > 0) {
+        filterInfo.push(`Team: ${selectedTeam.values.join(', ')}`);
+      }
+      if (!selectedStaffType.all && selectedStaffType.values.length > 0) {
+        filterInfo.push(`Loại NV: ${selectedStaffType.values.join(', ')}`);
+      }
+
+      // Tính tổng các giá trị
+      let total = { 
+        cpqc: 0, 
+        soDonChot: 0, dsChot: 0,
+        soDonHuy: 0, dsHuy: 0,
+        soDonSauHuy: 0, dsSauHuy: 0,
+        soDonDi: 0, dsDi: 0,
+        soDonThuTien: 0, dThuThanhCong: 0,
+        ship: 0, dThuTinhKpi: 0
+      };
+
+      currentData.forEach(s => {
+        Object.keys(total).forEach(key => total[key] += s[key] || 0);
+      });
+
+      const totalTyLeThuTien = total.dsDi > 0 ? (total.dThuThanhCong / total.dsDi) : 0;
+      const totalCpdt = total.dThuTinhKpi > 0 ? (total.cpqc / total.dThuTinhKpi) : 0;
+
+      // Chuẩn bị dữ liệu Excel
+      const excelData = [];
+      
+      // Thêm thông tin bộ lọc vào đầu file
+      if (filterInfo.length > 0) {
+        excelData.push(['BỘ LỌC ÁP DỤNG:']);
+        filterInfo.forEach(info => {
+          excelData.push([info]);
+        });
+        excelData.push([]); // Dòng trống
+      }
+
+      // Header row 1
+      excelData.push([
+        'STT',
+        'Team',
+        'Nhân viên',
+        'CPQC',
+        'Số đơn và DS chốt',
+        '',
+        'Số đơn và DS hủy',
+        '',
+        'Số đơn và DS sau hủy',
+        '',
+        'Số đơn và DS đi',
+        '',
+        'Số đơn và DThu thành công',
+        '',
+        'Ship',
+        'DThu tính KPI',
+        'Tỷ lệ thu tiền',
+        '%CP/DT'
+      ]);
+
+      // Header row 2
+      excelData.push([
+        '',
+        '',
+        '',
+        '',
+        'Số đơn',
+        'DS chốt',
+        'Số đơn',
+        'DS hủy',
+        'Số đơn',
+        'DS sau hủy',
+        'Số đơn',
+        'DS đi',
+        'Số đơn',
+        'DThu TC',
+        '',
+        '',
+        '',
+        ''
+      ]);
+
+      // Data rows
+      currentData.forEach((s, i) => {
+        const tyLeThuTien = s.dsDi > 0 ? (s.dThuThanhCong / s.dsDi) : 0;
+        const cpdt = s.dThuTinhKpi > 0 ? (s.cpqc / s.dThuTinhKpi) : 0;
+        const staffName = (s.name || '').toString().trim() || 'N/A';
+        const staffTeam = (s.team || '').toString().trim() || '';
+
+        excelData.push([
+          i + 1,
+          staffTeam,
+          staffName,
+          s.cpqc || 0,
+          s.soDonChot || 0,
+          s.dsChot || 0,
+          s.soDonHuy || 0,
+          s.dsHuy || 0,
+          s.soDonSauHuy || 0,
+          s.dsSauHuy || 0,
+          s.soDonDi || 0,
+          s.dsDi || 0,
+          s.soDonThuTien || 0,
+          s.dThuThanhCong || 0,
+          s.ship || 0,
+          s.dThuTinhKpi || 0,
+          tyLeThuTien,
+          cpdt
+        ]);
+      });
+
+      // Total row
+      excelData.push([
+        '',
+        '',
+        'TỔNG CỘNG',
+        total.cpqc || 0,
+        total.soDonChot || 0,
+        total.dsChot || 0,
+        total.soDonHuy || 0,
+        total.dsHuy || 0,
+        total.soDonSauHuy || 0,
+        total.dsSauHuy || 0,
+        total.soDonDi || 0,
+        total.dsDi || 0,
+        total.soDonThuTien || 0,
+        total.dThuThanhCong || 0,
+        total.ship || 0,
+        total.dThuTinhKpi || 0,
+        totalTyLeThuTien,
+        totalCpdt
+      ]);
+
+      // Tạo workbook và worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+
+      // Set độ rộng cột
+      ws['!cols'] = [
+        { wch: 6 },   // STT
+        { wch: 15 },  // Team
+        { wch: 25 },  // Nhân viên
+        { wch: 12 },  // CPQC
+        { wch: 10 },  // Số đơn chốt
+        { wch: 15 },  // DS chốt
+        { wch: 10 },  // Số đơn hủy
+        { wch: 15 },  // DS hủy
+        { wch: 10 },  // Số đơn sau hủy
+        { wch: 15 },  // DS sau hủy
+        { wch: 10 },  // Số đơn đi
+        { wch: 15 },  // DS đi
+        { wch: 10 },  // Số đơn thu tiền
+        { wch: 15 },  // DThu TC
+        { wch: 12 },  // Ship
+        { wch: 15 },  // DThu tính KPI
+        { wch: 12 },  // Tỷ lệ thu tiền
+        { wch: 10 }   // %CP/DT
+      ];
+
+      // Merge header cells for row 1 (tính offset dựa trên số dòng thông tin bộ lọc)
+      const filterRows = filterInfo.length > 0 ? filterInfo.length + 2 : 0; // +2 cho dòng tiêu đề và dòng trống
+      const headerRow1 = filterRows; // Dòng header đầu tiên
+      const headerRow2 = filterRows + 1; // Dòng header thứ hai
+      
+      if (!ws['!merges']) ws['!merges'] = [];
+      ws['!merges'].push(
+        { s: { r: headerRow1, c: 4 }, e: { r: headerRow1, c: 5 } }, // Số đơn và DS chốt
+        { s: { r: headerRow1, c: 6 }, e: { r: headerRow1, c: 7 } }, // Số đơn và DS hủy
+        { s: { r: headerRow1, c: 8 }, e: { r: headerRow1, c: 9 } }, // Số đơn và DS sau hủy
+        { s: { r: headerRow1, c: 10 }, e: { r: headerRow1, c: 11 } }, // Số đơn và DS đi
+        { s: { r: headerRow1, c: 12 }, e: { r: headerRow1, c: 13 } }  // Số đơn và DThu thành công
+      );
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Bao_cao_KPI');
+
+      // Tạo tên file với thông tin bộ lọc
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      
+      let fileName = 'Bao_cao_KPI_CEO';
+      
+      // Thêm thông tin tháng vào tên file nếu có
+      if (startDate && endDate) {
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        // Nếu cùng tháng, thêm tháng vào tên file
+        if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+          const month = String(start.getMonth() + 1).padStart(2, '0');
+          const year = start.getFullYear();
+          fileName += `_Thang${month}_${year}`;
+        } else {
+          // Nếu khác tháng, thêm khoảng thời gian
+          const startStr = `${String(start.getMonth() + 1).padStart(2, '0')}${String(start.getDate()).padStart(2, '0')}`;
+          const endStr = `${String(end.getMonth() + 1).padStart(2, '0')}${String(end.getDate()).padStart(2, '0')}`;
+          fileName += `_${startStr}_${endStr}`;
+        }
+      }
+      
+      // Thêm tên nhân viên nếu chỉ chọn 1 nhân viên
+      if (!selectedName.all && selectedName.values.length === 1) {
+        const name = selectedName.values[0].replace(/[^a-zA-Z0-9]/g, '_').substring(0, 20);
+        fileName += `_${name}`;
+      }
+      
+      fileName += `_${dateStr}.xlsx`;
+
+      // Xuất file
+      XLSX.writeFile(wb, fileName);
+      
+      alert(`Đã tải xuống ${currentData.length} nhân viên thành công!\nFile: ${fileName}`);
     }
 
     // ===== Helpers used by KPI-like table =====
