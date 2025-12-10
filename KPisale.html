@@ -845,10 +845,17 @@
       const restrict = allowedNames && allowedNames.size > 0;
       rawOrders.forEach(r => {
         if (restrict) {
-          const nm = (r && r['Nhân viên Marketing'] ? String(r['Nhân viên Marketing']).trim() : '');
+          const nm = (r ? String(getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim() : '');
           if (!allowedNames.has(nm)) return;
         }
-        const v = r && r[field];
+        // Map field name nếu cần
+        let possibleFields = [field];
+        if (field === 'Kết quả Check') {
+          possibleFields = ['Kết_quả_Check', 'Kết quả Check'];
+        } else if (field === 'Trạng thái giao hàng NB') {
+          possibleFields = ['Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng'];
+        }
+        const v = r ? getRowValue(r, ...possibleFields) : null;
         if (v === undefined || v === null) return;
         if (field === 'Ca') {
           String(v).split(',').map(x => x.trim()).filter(Boolean).forEach(tok => s.add(tok));
@@ -902,6 +909,7 @@
       // RAW tab filters
       populateSelectOptions('rawFilterCa', caValues);
       populateRawNameOptions();
+      // Populate raw filters với tên cột đúng
       populateRawSelectFromField('rawCheck', 'Kết quả Check');
       populateRawSelectFromField('rawDelivery', 'Trạng thái giao hàng NB');
     }
@@ -1006,18 +1014,41 @@
       const nameSet = new Set();
 
       rawOrders.forEach(r => {
-        const fieldsToCheck = field ? [field] : ['Nhân viên Marketing','Nhân viên Sale','NV Vận đơn'];
-        fieldsToCheck.forEach(f => {
-          const v = r && r[f];
-          if (v === undefined || v === null) return;
-          const name = String(v).trim();
-          if (!name) return;
-          // Giới hạn theo allowedNames nếu đang lọc theo MKT
-          if (dept === 'MKT' && f === 'Nhân viên Marketing' && allowedNames && allowedNames.size > 0) {
-            if (!allowedNames.has(name)) return;
+        if (field) {
+          // Map field name
+          let possibleFields = [];
+          if (field === 'Nhân viên Marketing') {
+            possibleFields = ['Nhân_viên_Marketing', 'Nhân viên Marketing'];
+          } else if (field === 'Nhân viên Sale') {
+            possibleFields = ['Nhân_viên_Sale', 'Nhân viên Sale'];
+          } else if (field === 'NV Vận đơn') {
+            possibleFields = ['NV_Vận_đơn', 'NV Vận đơn'];
+          } else {
+            possibleFields = [field];
           }
-          nameSet.add(name);
-        });
+          const v = r ? getRowValue(r, ...possibleFields) : null;
+          if (v) {
+            const name = String(v).trim();
+            if (name) nameSet.add(name);
+          }
+        } else {
+          // Không có field - kiểm tra tất cả các cột
+          const v1 = getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing');
+          const v2 = getRowValue(r, 'Nhân_viên_Sale', 'Nhân viên Sale');
+          const v3 = getRowValue(r, 'NV_Vận_đơn', 'NV Vận đơn');
+          [v1, v2, v3].forEach(v => {
+            if (v) {
+              const name = String(v).trim();
+              if (name) {
+                // Giới hạn theo allowedNames nếu đang lọc theo MKT
+                if (dept === 'MKT' && allowedNames && allowedNames.size > 0) {
+                  if (!allowedNames.has(name)) return;
+                }
+                nameSet.add(name);
+              }
+            }
+          });
+        }
       });
 
       const names = Array.from(nameSet).sort((a,b)=>a.localeCompare(b));
@@ -1030,8 +1061,16 @@
       const select = document.getElementById(selectId);
       if (!select) return;
       const values = new Set();
+      // Map field name nếu cần
+      let possibleFields = [field];
+      if (field === 'Kết quả Check') {
+        possibleFields = ['Kết_quả_Check', 'Kết quả Check'];
+      } else if (field === 'Trạng thái giao hàng NB') {
+        possibleFields = ['Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng'];
+      }
+      
       rawOrders.forEach(r => {
-        const v = r && r[field];
+        const v = r ? getRowValue(r, ...possibleFields) : null;
         if (v === undefined || v === null) return;
         const s = String(v).trim();
         if (!s) return;
@@ -1107,7 +1146,7 @@
               }
               // F3 fallback
               rawOrders.forEach(r => {
-                const n = (r['Nhân viên Marketing'] || '').toString().trim();
+                const n = String(getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim();
                 if (!n) return;
                 // F3 ko có team info trực tiếp cho NV, giả sử empty team hoặc check logic khác
                 // Ở đây tạm bỏ qua check team chặt chẽ cho fallback F3
@@ -1592,6 +1631,16 @@
       document.querySelectorAll('.dd.open').forEach(el => el.classList.remove('open'));
     }
 
+    // Helper function để lấy giá trị từ row với nhiều tên cột khác nhau
+    function getRowValue(row, ...columnNames) {
+      for (const colName of columnNames) {
+        if (row[colName] !== undefined && row[colName] !== null && row[colName] !== '') {
+          return row[colName];
+        }
+      }
+      return '';
+    }
+
     function parseNumber(val) {
       if (val === null || val === undefined || val === '') return 0;
       if (typeof val === 'number') return val;
@@ -1656,10 +1705,10 @@
       roleColumns.push({ col: 'Nhân viên Sale', type: 'Sale' });
 
       const filtered = rawOrders.filter(r => {
-        const d = toDate(r['Ngày lên đơn']);
+        const d = toDate(getRowValue(r, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn'));
         if (!inRange(d, s, e)) return false;
         
-        const ship = parseNumber(r['Phí ship']);
+        const ship = parseNumber(getRowValue(r, 'Phí_ship', 'Phí ship'));
         if (!includeZero && ship === 0) return false;
         
         // Filter by CA - Bỏ filter "Hết ca" để không loại bỏ đơn hàng
@@ -1681,7 +1730,7 @@
         
         // Filter by Product
         if (!selectedProduct.all && (selectedProduct.values.length > 0 || selectedProduct.empty)) {
-          const prod = (r['Mặt hàng'] || '').toString().trim();
+          const prod = String(getRowValue(r, 'Mặt_hàng', 'Mặt hàng') || '').trim();
           const isEmpty = prod === '';
           if (selectedProduct.empty && isEmpty) {}
           else if (selectedProduct.values.length > 0 && selectedProduct.values.includes(prod)) {}
@@ -1690,7 +1739,7 @@
         
         // Filter by Branch (Chi nhánh from F3 Team field)
         if (!selectedBranch.all && (selectedBranch.values.length > 0 || selectedBranch.empty)) {
-          const branch = (r['Team'] || '').toString().trim();
+          const branch = String(getRowValue(r, 'Team') || '').trim();
           const isEmpty = branch === '';
           if (selectedBranch.empty && isEmpty) {}
           else if (selectedBranch.values.length > 0 && selectedBranch.values.includes(branch)) {}
@@ -1699,7 +1748,7 @@
         
         // Filter by Market
         if (!selectedMarket.all && (selectedMarket.values.length > 0 || selectedMarket.empty)) {
-          const market = (r['Khu vực'] || '').toString().trim();
+          const market = String(getRowValue(r, 'Khu_vực', 'Khu vực') || '').trim();
           const isEmpty = market === '';
           if (selectedMarket.empty && isEmpty) {}
           else if (selectedMarket.values.length > 0 && selectedMarket.values.includes(market)) {}
@@ -2073,12 +2122,12 @@
       const f3Columns = ['Nhân viên Marketing', 'Nhân viên Sale', 'NV Vận đơn'];
       
       filtered.forEach(r => {
-        const ship = parseNumber(r['Phí ship']);
-        const tongTien = parseNumber(r['Tổng tiền VNĐ']);
-        const ketQuaCheck = (r['Kết quả Check'] || '').toString().trim();
-        const maTracking = (r['Mã Tracking'] || '').toString().trim();
-        const tienVietDoiSoat = parseNumber(r['Tiền Việt đã đối soát']);
-        const keToanXacNhan = (r['Kế toán xác nhận thu tiền về'] ?? r['Ke toan xac nhan thu tien ve'] ?? '').toString().trim();
+        const ship = parseNumber(getRowValue(r, 'Phí_ship', 'Phí ship'));
+        const tongTien = parseNumber(getRowValue(r, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ'));
+        const ketQuaCheck = (getRowValue(r, 'Kết_quả_Check', 'Kết quả Check') || '').toString().trim();
+        const maTracking = (getRowValue(r, 'Mã_Tracking', 'Mã Tracking') || '').toString().trim();
+        const tienVietDoiSoat = parseNumber(getRowValue(r, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát'));
+        const keToanXacNhan = (getRowValue(r, 'Kế_toán_xác_nhận_thu_tiền_về', 'Kế toán xác nhận thu tiền về', 'Ke toan xac nhan thu tien ve') || '').toString().trim();
         const isHuy = ketQuaCheck === 'Huỷ';
         const isDi = maTracking !== '';
         const isThanhCong = ketQuaCheck === 'OK' && isDi;
@@ -2089,7 +2138,18 @@
         
         // Chỉ lookup trong các cột F3 có trong đơn hàng (O(3) constant)
         for (const f3Column of f3Columns) {
-          const nameInF3Raw = r[f3Column];
+          // Map tên cột có thể có
+          let possibleColumns = [];
+          if (f3Column === 'Nhân viên Marketing') {
+            possibleColumns = ['Nhân_viên_Marketing', 'Nhân viên Marketing'];
+          } else if (f3Column === 'Nhân viên Sale') {
+            possibleColumns = ['Nhân_viên_Sale', 'Nhân viên Sale'];
+          } else if (f3Column === 'NV Vận đơn') {
+            possibleColumns = ['NV_Vận_đơn', 'NV Vận đơn'];
+          } else {
+            possibleColumns = [f3Column];
+          }
+          const nameInF3Raw = getRowValue(r, ...possibleColumns);
           if (!nameInF3Raw) continue;
           
           const nameInF3 = nameInF3Raw.toString().trim().toLowerCase().replace(/\s+/g, ' ');
@@ -2564,35 +2624,44 @@
       const rawDelivery = (document.getElementById('rawDelivery') && document.getElementById('rawDelivery').value) ? document.getElementById('rawDelivery').value.trim() : '';
       rawFiltered = rawOrders.filter(r => {
         if (allowedNames && allowedNames.size > 0) {
-          const nm = (r && r['Nhân viên Marketing'] ? String(r['Nhân viên Marketing']).trim() : '');
+          const nm = String(getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim();
           if (!allowedNames.has(nm)) return false;
         }
         if (caRaw) {
-          const cas = String(r['Ca'] || '').split(',').map(x => x.trim()).filter(Boolean);
+          const cas = String(getRowValue(r, 'Ca') || '').split(',').map(x => x.trim()).filter(Boolean);
           if (!cas.includes(caRaw)) return false;
         }
         // Filter by department & name
         if (dept) {
           const field = getDeptField(dept);
-          const deptName = field ? String(r[field] || '').trim() : '';
+          let deptName = '';
+          if (field === 'Nhân viên Marketing') {
+            deptName = String(getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim();
+          } else if (field === 'Nhân viên Sale') {
+            deptName = String(getRowValue(r, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim();
+          } else if (field === 'NV Vận đơn') {
+            deptName = String(getRowValue(r, 'NV_Vận_đơn', 'NV Vận đơn') || '').trim();
+          } else if (field) {
+            deptName = String(getRowValue(r, field) || '').trim();
+          }
           if (!deptName) return false;
           if (rawName && deptName !== rawName) return false;
         } else if (rawName) {
           const names = [
-            String(r['Nhân viên Marketing'] || '').trim(),
-            String(r['Nhân viên Sale'] || '').trim(),
-            String(r['NV Vận đơn'] || '').trim()
+            String(getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim(),
+            String(getRowValue(r, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim(),
+            String(getRowValue(r, 'NV_Vận_đơn', 'NV Vận đơn') || '').trim()
           ];
           if (!names.includes(rawName)) return false;
         }
         // Filter by Kết quả Check
         if (rawCheck) {
-          const kc = String(r['Kết quả Check'] || '').trim();
+          const kc = String(getRowValue(r, 'Kết_quả_Check', 'Kết quả Check') || '').trim();
           if (kc !== rawCheck) return false;
         }
         // Filter by Trạng thái giao hàng NB
         if (rawDelivery) {
-          const st = String(r['Trạng thái giao hàng NB'] || '').trim();
+          const st = String(getRowValue(r, 'Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng') || '').trim();
           if (st !== rawDelivery) return false;
         }
         if (!rawSearchText) return true;
@@ -2642,14 +2711,43 @@
       rows.forEach(r => {
         const tr = document.createElement('tr');
         tr.innerHTML = rawColumns.map(c => {
-          let value = r[c];
+          // Map tên cột để lấy giá trị
+          let possibleFields = [c];
+          if (c === 'Ngày lên đơn') {
+            possibleFields = ['Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn'];
+          } else if (c === 'Nhân viên Marketing') {
+            possibleFields = ['Nhân_viên_Marketing', 'Nhân viên Marketing'];
+          } else if (c === 'Nhân viên Sale') {
+            possibleFields = ['Nhân_viên_Sale', 'Nhân viên Sale'];
+          } else if (c === 'NV Vận đơn') {
+            possibleFields = ['NV_Vận_đơn', 'NV Vận đơn'];
+          } else if (c === 'Kết quả Check') {
+            possibleFields = ['Kết_quả_Check', 'Kết quả Check'];
+          } else if (c === 'Trạng thái giao hàng NB') {
+            possibleFields = ['Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng'];
+          } else if (c === 'Tổng tiền VNĐ') {
+            possibleFields = ['Tổng_tiền_VNĐ', 'Tổng tiền VNĐ'];
+          } else if (c === 'Mã Tracking') {
+            possibleFields = ['Mã_Tracking', 'Mã Tracking'];
+          } else if (c === 'Phí ship') {
+            possibleFields = ['Phí_ship', 'Phí ship'];
+          } else if (c === 'Tiền Việt đã đối soát') {
+            possibleFields = ['Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát'];
+          } else if (c === 'Mặt hàng') {
+            possibleFields = ['Mặt_hàng', 'Mặt hàng'];
+          } else if (c === 'Khu vực') {
+            possibleFields = ['Khu_vực', 'Khu vực'];
+          }
+          
+          let value = getRowValue(r, ...possibleFields);
           // Format "Ngày lên đơn" column as date
-          if (c === 'Ngày lên đơn' && value !== undefined && value !== null) {
+          if ((c === 'Ngày lên đơn' || c === 'Ngày_lên_đơn') && value !== undefined && value !== null) {
             value = formatDate(value);
           } else if (value === undefined || value === null) {
             value = '';
           }
-          return `<td class="${typeof r[c] === 'number' ? '' : 'text-left'}">${value}</td>`;
+          const originalValue = getRowValue(r, ...possibleFields);
+          return `<td class="${typeof originalValue === 'number' ? '' : 'text-left'}">${value}</td>`;
         }).join('');
         frag.appendChild(tr);
       });
@@ -2659,8 +2757,8 @@
       let totalTongTien = 0;
       let totalDoiSoat = 0;
       rawFiltered.forEach(r => {
-        totalTongTien += parseNumber(r['Tổng tiền VNĐ']);
-        totalDoiSoat += parseNumber(r['Tiền Việt đã đối soát']);
+        totalTongTien += parseNumber(getRowValue(r, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ'));
+        totalDoiSoat += parseNumber(getRowValue(r, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát'));
       });
       const summaryText = `Số đơn: ${total.toLocaleString('vi-VN')} | Tổng tiền VNĐ: ${formatCurrency(totalTongTien)} | Tổng tiền đã đối soát: ${formatCurrency(totalDoiSoat)}`;
       if (summaryTop) summaryTop.textContent = summaryText;
@@ -2711,6 +2809,7 @@
   </script>
 </body>
 </html>
+
 
 
 
