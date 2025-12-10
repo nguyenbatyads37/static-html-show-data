@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quy trình Workflow EBH Upgraded</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* --- CHUNG --- */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f6f9;
+        }
+
+        /* --- TABS NAVIGATION --- */
+        .nav-tabs {
+            background: #fff;
+            padding: 15px 20px 0 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .tab-btn {
+            padding: 10px 25px;
+            border: none;
+            background: transparent;
+            font-size: 16px;
+            font-weight: 600;
+            color: #6c757d;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            color: #0056b3;
+            background-color: #f8f9fa;
+        }
+
+        .tab-btn.active {
+            color: #0056b3;
+            border-bottom-color: #0056b3;
+        }
+        
+        .tab-btn i {
+            margin-right: 8px;
+        }
+
+        /* Ẩn hiện nội dung tab */
+        .tab-content {
+            display: none;
+            padding: 20px;
+            animation: fadeIn 0.5s;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- STYLE CHO TREE VIEW (Sơ đồ cây) --- */
+        #view-tree {
+            /* Giữ nguyên logic hiển thị của Tree View cũ */
+            display: flex; 
+            justify-content: center;
+            overflow-x: auto;
+            min-height: calc(100vh - 60px);
+            align-items: flex-start; /* Căn trên cùng */
+            padding-top: 40px;
+        }
+        
+        /* Biến CSS cho Tree */
+        :root {
+            /* Tree Vars */
+            --node-bg-admin: #e2e6ea;
+            --node-border-admin: #adb5bd;
+            --node-bg-input: #f8d7da;
+            --node-border-input: #f5c6cb;
+            --node-bg-process: #d1ecf1;
+            --node-border-process: #bee5eb;
+            --node-bg-final: #721c24;
+            --text-final: #fff;
+            --line-color: #999;
+
+            /* Doc Vars */
+            --primary-color: #0056b3;
+            --secondary-color: #17a2b8;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --danger-color: #dc3545;
+            --dark-color: #343a40;
+            --light-bg: #f8f9fa;
+            --border-radius: 8px;
+        }
+
+        .tree-container { display: flex; align-items: center; }
+        .node-wrapper { display: flex; align-items: center; margin: 10px 0; position: relative; }
+        .branch { display: flex; flex-direction: column; justify-content: center; margin-left: 60px; position: relative; }
+        .node-content { position: relative; z-index: 2; }
+        
+        /* Đường nối Tree */
+        .branch::before { content: ''; position: absolute; left: -60px; top: 50%; width: 60px; height: 2px; background-color: var(--line-color); z-index: 1; }
+        .branch > .node-wrapper::before { content: ''; position: absolute; left: -60px; top: 50%; width: 30px; height: 2px; background-color: var(--line-color); }
+        .branch > .node-wrapper::after { content: ''; position: absolute; left: -60px; height: 100%; width: 2px; background-color: var(--line-color); }
+        .branch > .node-wrapper:first-child::after { top: 50%; height: 50%; }
+        .branch > .node-wrapper:last-child::after { top: 0; height: 50%; }
+        .branch > .node-wrapper:only-child::after { display: none; }
+        .branch > .node-wrapper:only-child::before { width: 60px; }
+
+        .node {
+            padding: 12px 25px; border-radius: 50px; background: white; border: 2px solid #ddd;
+            min-width: 180px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            font-size: 14px; font-weight: 600; transition: transform 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .node:hover { transform: scale(1.05); box-shadow: 0 6px 12px rgba(0,0,0,0.1); cursor: pointer; }
+        
+        .type-admin { background-color: var(--node-bg-admin); border-color: var(--node-border-admin); color: #495057; }
+        .type-input { background-color: var(--node-bg-input); border-color: var(--node-border-input); color: #721c24; }
+        .type-process { background-color: var(--node-bg-process); border-color: var(--node-border-process); color: #0c5460; }
+        .type-final { background-color: var(--node-bg-final); border-color: #5a1016; color: var(--text-final); }
+        .node-subtext { display: block; font-size: 11px; font-weight: normal; opacity: 0.8; margin-top: 4px; }
+        
+        .legend { position: fixed; bottom: 20px; left: 20px; background: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); font-size: 12px; z-index: 99; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 5px; }
+        .dot { width: 12px; height: 12px; border-radius: 50%; margin-right: 8px; }
+
+        /* --- STYLE CHO DOC VIEW (Tài liệu chi tiết) --- */
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 30px;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        /* Header Doc */
+        .doc-header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid var(--primary-color); padding-bottom: 20px; }
+        .doc-header h1 { color: var(--primary-color); margin: 0; font-size: 24px; text-transform: uppercase; }
+        .doc-subtitle { color: #666; font-style: italic; margin-top: 5px; }
+
+        /* Flow Overview Cards */
+        .flow-overview { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; flex-wrap: wrap; gap: 15px; }
+        .flow-node { background: var(--light-bg); border: 1px solid #ddd; padding: 15px; border-radius: var(--border-radius); text-align: center; flex: 1; min-width: 180px; position: relative; transition: transform 0.2s; }
+        .flow-node:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-color: var(--primary-color); }
+        .flow-node i { font-size: 24px; color: var(--primary-color); margin-bottom: 10px; display: block; }
+        .flow-node strong { display: block; color: var(--dark-color); }
+        .flow-node:not(:last-child)::after { content: '\f061'; font-family: "Font Awesome 6 Free"; font-weight: 900; position: absolute; right: -20px; top: 50%; transform: translateY(-50%); color: #999; z-index: 1; }
+
+        @media (max-width: 768px) {
+            .flow-overview { flex-direction: column; }
+            .flow-node:not(:last-child)::after { content: '\f063'; right: 50%; top: auto; bottom: -25px; transform: translateX(50%); }
+        }
+
+        /* Step Cards */
+        .step-card { background: #fff; border-left: 5px solid var(--primary-color); margin-bottom: 25px; padding: 20px; border-radius: 4px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .step-card h3 { margin-top: 0; color: var(--primary-color); display: flex; align-items: center; }
+        .step-card h3 i { margin-right: 10px; background: var(--primary-color); color: #fff; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 16px; }
+        .role-badge { font-size: 12px; background: #e2e6ea; color: #495057; padding: 4px 8px; border-radius: 4px; margin-left: auto; text-transform: uppercase; font-weight: bold; }
+        .sub-step { margin-left: 20px; margin-bottom: 10px; }
+        .highlight { color: var(--danger-color); font-weight: bold; }
+
+        .step-1 { border-color: var(--primary-color); } .step-1 h3 i { background: var(--primary-color); }
+        .step-2 { border-color: var(--success-color); } .step-2 h3 i { background: var(--success-color); }
+        .step-3 { border-color: var(--secondary-color); } .step-3 h3 i { background: var(--secondary-color); }
+        .step-4 { border-color: var(--warning-color); } .step-4 h3 i { background: var(--warning-color); color: #333; }
+
+        /* Table */
+        .data-section { margin-top: 40px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: #fff; }
+        th, td { padding: 12px 15px; border: 1px solid #ddd; text-align: left; }
+        th { background-color: var(--dark-color); color: #fff; }
+        tr:nth-child(even) { background-color: #f2f2f2; }
+
+        /* Note Box */
+        .note-box { background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 20px; border-radius: var(--border-radius); margin-top: 30px; }
+        .note-box h4 { margin-top: 0; display: flex; align-items: center; }
+        .note-box h4 i { margin-right: 10px; }
+
+    </style>
+</head>
+<body>
+
+<!-- Navigation Tabs -->
+<div class="nav-tabs">
+    <button class="tab-btn active" onclick="openTab('view-tree', this)">
+        <i class="fas fa-project-diagram"></i> Sơ đồ Cây
+    </button>
+    <button class="tab-btn" onclick="openTab('view-doc', this)">
+        <i class="fas fa-file-alt"></i> Tài liệu Chi tiết
+    </button>
+</div>
+
+<!-- TAB 1: TREE VIEW (Giữ nguyên cấu trúc cũ, chỉ thay đổi wrapper) -->
+<div id="view-tree" class="tab-content active" style="display: flex;"> <!-- Inline style flex để override class tab-content -->
+    <div class="tree-container">
+        <!-- Cấp 1: Gốc (Hệ thống) -->
+        <div class="node-wrapper">
+            <div class="node-content">
+                <div class="node" style="border-color: #333; border-width: 3px;">
+                    <i class="fas fa-server"></i>
+                    <div>
+                        HỆ THỐNG EBH
+                        <span class="node-subtext">Quản lý Vật tư & Vận tải</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Nhánh chính ra các luồng -->
+            <div class="branch">
+                <!-- LUỒNG 1: THIẾT LẬP (Admin) -->
+                <div class="node-wrapper">
+                    <div class="node-content">
+                        <div class="node type-admin">
+                            <i class="fas fa-user-cog"></i>
+                            <div>BƯỚC 1: ADMIN THIẾT LẬP<span class="node-subtext">Cấu hình hệ thống</span></div>
+                        </div>
+                    </div>
+                    <div class="branch">
+                        <div class="node-wrapper"><div class="node type-admin">Khai báo Hàng hóa<span class="node-subtext">Mã: DA_HOC (Tỷ trọng 1.5)</span></div></div>
+                        <div class="node-wrapper"><div class="node type-admin">Khai báo Đội xe<span class="node-subtext">Biển số: 29H-123.45</span></div></div>
+                        <div class="node-wrapper"><div class="node type-admin">Phân quyền Dự án<span class="node-subtext">User A -> Dự án X</span></div></div>
+                    </div>
+                </div>
+
+                <!-- LUỒNG 2: NHẬP LIỆU (Hiện trường) -->
+                <div class="node-wrapper">
+                    <div class="node-content">
+                        <div class="node type-input">
+                            <i class="fas fa-dolly"></i>
+                            <div>BƯỚC 2: NHẬP MUA<span class="node-subtext">Tại Mỏ/Cảng</span></div>
+                        </div>
+                    </div>
+                    <div class="branch">
+                        <div class="node-wrapper">
+                            <div class="node type-input">Chọn Kho & Hàng<span class="node-subtext">Đá hộc</span></div>
+                            <div class="branch">
+                                <div class="node-wrapper">
+                                    <div class="node type-input">Nhập số Tấn (Input)<span class="node-subtext">Theo phiếu cân</span></div>
+                                    <div class="branch">
+                                        <div class="node-wrapper">
+                                            <div class="node type-process"><i class="fas fa-sync-alt"></i>Tự động quy đổi<span class="node-subtext">Số m³ = Tấn / 1.5</span></div>
+                                            <div class="branch">
+                                                <div class="node-wrapper"><div class="node type-final"><i class="fas fa-save"></i>LƯU PHIẾU<span class="node-subtext">Data về Server</span></div></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LUỒNG 3: XUẤT & BÁO CÁO -->
+                <div class="node-wrapper">
+                    <div class="node-content">
+                        <div class="node type-process">
+                            <i class="fas fa-truck-moving"></i>
+                            <div>BƯỚC 3: XUẤT & VẬN CHUYỂN<span class="node-subtext">Giao tới công trình</span></div>
+                        </div>
+                    </div>
+                    <div class="branch">
+                        <div class="node-wrapper">
+                            <div class="node type-process">Tạo phiếu xuất<span class="node-subtext">Chọn Xe & Dự án</span></div>
+                            <div class="branch">
+                                <div class="node-wrapper">
+                                    <div class="node type-process">Ghi nhận Logistics<span class="node-subtext">Xe A chở 10m³</span></div>
+                                    <div class="branch">
+                                        <div class="node-wrapper"><div class="node type-final"><i class="fas fa-chart-pie"></i>BÁO CÁO TỒN KHO<span class="node-subtext">Theo Tấn & m³</span></div></div>
+                                        <div class="node-wrapper"><div class="node type-final"><i class="fas fa-chart-line"></i>HIỆU QUẢ DỰ ÁN<span class="node-subtext">Tiền vào vs Tiền ra</span></div></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Chú thích riêng cho Tree View -->
+    <div class="legend">
+        <div class="legend-item"><div class="dot" style="background: #e2e6ea;"></div>Thiết lập / Admin</div>
+        <div class="legend-item"><div class="dot" style="background: #f8d7da;"></div>Nhập liệu (Input)</div>
+        <div class="legend-item"><div class="dot" style="background: #d1ecf1;"></div>Xử lý hệ thống</div>
+        <div class="legend-item"><div class="dot" style="background: #721c24;"></div>Kết quả / Lưu trữ</div>
+    </div>
+</div>
+
+<!-- TAB 2: DOC VIEW (Nội dung mới thêm vào) -->
+<div id="view-doc" class="tab-content">
+    <div class="container">
+        <div class="doc-header">
+            <h1>Workflow: Quản Lý Vật Tư Xây Dựng & Vận Tải</h1>
+            <div class="doc-subtitle">EBH Upgraded System - Từ văn phòng đến hiện trường</div>
+        </div>
+
+        <div class="flow-overview">
+            <div class="flow-node">
+                <i class="fas fa-cogs"></i>
+                <strong>1. Thiết Lập</strong>
+                <small>Admin/Kế toán</small>
+            </div>
+            <div class="flow-node">
+                <i class="fas fa-dolly"></i>
+                <strong>2. Nhập Mua</strong>
+                <small>NV Hiện trường</small>
+            </div>
+            <div class="flow-node">
+                <i class="fas fa-calculator"></i>
+                <strong>3. Hệ Thống</strong>
+                <small>Tự động quy đổi</small>
+            </div>
+            <div class="flow-node">
+                <i class="fas fa-chart-pie"></i>
+                <strong>4. Báo Cáo</strong>
+                <small>Kế toán/Sếp</small>
+            </div>
+        </div>
+
+        <h2><i class="fas fa-list-ol"></i> Chi Tiết Quy Trình</h2>
+
+        <div class="step-card step-1">
+            <h3>
+                <i class="fas fa-user-cog"></i> 
+                Bước 1: Khởi Tạo & Thiết Lập
+                <span class="role-badge">Admin thực hiện 1 lần</span>
+            </h3>
+            <p><em>Mục đích: Chuẩn bị dữ liệu nền tảng để nhân viên chỉ việc chọn, tránh nhập sai.</em></p>
+            <div class="sub-step">
+                <strong>1.1. Khai báo Hàng hóa & Logic quy đổi:</strong><br>
+                - Tạo mã hàng (VD: DA_HOC).<br>
+                - ĐVT Chính (Input): <b>Tấn</b> (Theo cân).<br>
+                - ĐVT Phụ (Output): <b>m³</b> (Theo nghiệm thu).<br>
+                - Cài đặt Tỷ trọng: Nhập hệ số <span class="highlight">1.5</span> (1.5 Tấn = 1 m³).
+            </div>
+            <div class="sub-step">
+                <strong>1.2. Khai báo Đội xe (Logistics):</strong><br>
+                - Thêm danh mục Biển số xe (VD: 29H-123.45, 19C-999.99).
+            </div>
+            <div class="sub-step">
+                <strong>1.3. Phân quyền Dự án:</strong><br>
+                - Cấp quyền truy cập theo từng dự án cụ thể (NV A thấy Dự án X, NV B thấy Dự án Y).
+            </div>
+        </div>
+
+        <div class="step-card step-2">
+            <h3>
+                <i class="fas fa-file-import"></i> 
+                Bước 2: Quy Trình Nhập Mua (Tại Cảng/Mỏ)
+                <span class="role-badge">Nhân viên hiện trường</span>
+            </h3>
+            <p><em>Mục đích: Ghi nhận đầu vào từ nhiều nguồn khác nhau.</em></p>
+            <div class="sub-step">
+                <strong>2.1. Đăng nhập & Nhập liệu:</strong><br>
+                - Mở App Mobile/Tablet.<br>
+                - Chọn Kho, Hàng hóa (Đá hộc), Nhập số lượng <b>Tấn</b> theo phiếu cân.
+            </div>
+            <div class="sub-step">
+                <strong>2.2. Logic Hệ thống tự chạy:</strong><br>
+                - Hệ thống kiểm tra Tỷ trọng (1.5).<br>
+                - Tự động tính: <code>Số m³ = Số Tấn / 1.5</code>.<br>
+                - Hiển thị song song: "Đã nhập 15 Tấn (tương đương 10 m³)".
+            </div>
+            <div class="sub-step">
+                <strong>2.3. Lưu phiếu:</strong> Dữ liệu đồng bộ ngay lập tức về Server.
+            </div>
+        </div>
+
+        <div class="step-card step-3">
+            <h3>
+                <i class="fas fa-truck-moving"></i> 
+                Bước 3: Quy Trình Xuất Bán & Vận Chuyển
+                <span class="role-badge">Logistics / Kho</span>
+            </h3>
+            <p><em>Mục đích: Ghi nhận doanh thu, trừ kho và theo dõi chuyến xe.</em></p>
+            <div class="sub-step">
+                <strong>3.1. Tạo Phiếu Xuất:</strong><br>
+                - Chọn Khách hàng/Dự án (VD: Cty ABC).<br>
+                - Chọn Xe vận chuyển (Dropdown list: 29H-123.45).
+            </div>
+            <div class="sub-step">
+                <strong>3.2. Xác nhận & In phiếu:</strong><br>
+                - Ghi nhận: "Xe 29H-123.45 chở 10 m³ Đá hộc".<br>
+                - In phiếu hoặc gửi ảnh qua Zalo để đối soát.
+            </div>
+        </div>
+
+        <div class="step-card step-4">
+            <h3>
+                <i class="fas fa-chart-line"></i> 
+                Bước 4: Báo Cáo & Đối Soát
+                <span class="role-badge">Quản lý / Sếp</span>
+            </h3>
+            <p><em>Mục đích: Giải quyết bài toán "theo dõi riêng từng dự án" và "quản lý đội xe".</em></p>
+            <ul>
+                <li><strong>Báo cáo Tồn kho:</strong> Xem tồn thực tế theo cả Tấn và m³.</li>
+                <li><strong>Báo cáo Vận tải:</strong> Thống kê số chuyến, tổng tấn theo từng Biển số xe.</li>
+                <li><strong>Hiệu quả Dự án:</strong> So sánh Tiền Nhập vs Tiền Xuất của riêng từng dự án.</li>
+            </ul>
+        </div>
+
+        <div class="data-section">
+            <h2><i class="fas fa-table"></i> Bảng Mô Tả Luồng Dữ Liệu (Data Flow)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Đối tượng</th>
+                        <th>Dữ liệu đầu vào (Input)</th>
+                        <th>Xử lý (Process)</th>
+                        <th>Kết quả đầu ra (Output)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Hàng hóa</strong></td>
+                        <td>15 Tấn (từ Cân điện tử)</td>
+                        <td>Chia cho Tỷ trọng (1.5)</td>
+                        <td><span class="highlight">10 Khối (m³)</span> (để tính tiền)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Vận tải</strong></td>
+                        <td>Chọn xe 29C-xxx.xx</td>
+                        <td>Gắn mã chuyến đi vào Dự án</td>
+                        <td>Báo cáo sản lượng theo xe</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Dự án</strong></td>
+                        <td>Chọn Dự án A</td>
+                        <td>Gom nhóm tất cả phiếu nhập/xuất</td>
+                        <td>Báo cáo Lãi/Lỗ Dự án A</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="note-box">
+            <h4><i class="fas fa-lightbulb"></i> Ghi chú triển khai</h4>
+            <ul>
+                <li><strong>Chuyển đổi số:</strong> Để thực hiện workflow này trơn tru, bạn nên sử dụng Google Sheets (có AppSheet) hoặc Web App tùy chỉnh để dữ liệu được đồng bộ online (thay vì Excel offline).</li>
+                <li><strong>Linh hoạt tỷ trọng:</strong> Admin có thể thay đổi tỷ trọng tạm thời (ví dụ khi trời mưa, cát ướt nặng hơn) để đảm bảo quy đổi ra m³ vẫn chính xác.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    function openTab(viewId, btnElement) {
+        // Ẩn tất cả tab content
+        var contents = document.getElementsByClassName("tab-content");
+        for (var i = 0; i < contents.length; i++) {
+            contents[i].style.display = "none";
+            contents[i].classList.remove("active");
+        }
+
+        // Bỏ active của tất cả nút
+        var buttons = document.getElementsByClassName("tab-btn");
+        for (var i = 0; i < buttons.length; i++) {
+            buttons[i].classList.remove("active");
+        }
+
+        // Hiện tab được chọn
+        var selectedView = document.getElementById(viewId);
+        selectedView.style.display = (viewId === 'view-tree') ? 'flex' : 'block';
+        selectedView.classList.add("active");
+        
+        // Active nút được chọn
+        btnElement.classList.add("active");
+    }
+</script>
+
+</body>
+</html>
