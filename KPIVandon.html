@@ -498,9 +498,9 @@
   </div>
 
   <script>
-    const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
+    const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3';
     const BAO_CAO_MKT_URL = 'https://n-api-gamma.vercel.app/report/generate?tableName=' + encodeURIComponent('Báo cáo MKT');
-    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2n_s%E1%BB%B1.json';
+    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1';
     // Fallback sample (user-provided) to display when network fails
     const F3_SAMPLE = {
       "0": {
@@ -598,12 +598,21 @@
     async function loadData() {
       toggleLoading(true);
       try {
+        console.log('🔄 Bắt đầu load dữ liệu...');
+        console.log('📡 F3_URL:', F3_URL + '.json');
+        console.log('📡 HR_URL:', HR_URL + '.json');
+        
         const [dataF3, dataMkt, dataHr] = await Promise.all([
-          fetchWithRetry(F3_URL, { retries: 3, delayMs: 800 }),
+          fetchWithRetry(F3_URL + '.json', { retries: 3, delayMs: 800 }),
           fetchWithRetry(BAO_CAO_MKT_URL, { retries: 3, delayMs: 800 }).catch(() => null),
-          fetchWithRetry(HR_URL, { retries: 3, delayMs: 800 }).catch(() => null)
+          fetchWithRetry(HR_URL + '.json', { retries: 3, delayMs: 800 }).catch(() => null)
         ]);
+        
+        console.log('📥 Đã nhận dữ liệu F3, kiểu:', typeof dataF3, Array.isArray(dataF3) ? 'Array' : 'Object');
+        console.log('📥 Đã nhận dữ liệu HR, kiểu:', typeof dataHr, Array.isArray(dataHr) ? 'Array' : 'Object');
+        
         rawOrders = normalizeF3(dataF3);
+        console.log(`✅ Đã normalize F3 data, số lượng: ${rawOrders.length} dòng`);
         // Xử lý dữ liệu từ API mới: có thể là {data: [...]} hoặc {rows: [...]} hoặc array trực tiếp
         if (dataMkt) {
           if (Array.isArray(dataMkt)) {
@@ -622,16 +631,25 @@
         // Load HR data giống như vandonCEO.html: chỉ lấy record có Team
         if (dataHr) {
           const normalized = normalizeF3(dataHr);
+          console.log('📊 HR data normalized:', normalized.length, 'records');
           // Lọc chỉ lấy những record có Team (giống vandonCEO.html)
           hrRows = normalized.filter(item => item && item["Team"]);
           console.log('✅ HR data loaded:', hrRows.length, 'records with Team');
           if (hrRows.length > 0) {
             console.log('📌 Sample HR record:', hrRows[0]);
+            console.log('📋 HR record keys:', Object.keys(hrRows[0]));
           }
         } else {
           hrRows = [];
           console.warn('⚠️ No HR data loaded from Firebase');
         }
+        
+        // Debug: Kiểm tra dữ liệu F3
+        if (rawOrders.length > 0) {
+          console.log('📋 Sample F3 record:', rawOrders[0]);
+          console.log('📋 F3 record keys:', Object.keys(rawOrders[0]));
+        }
+        
         computeAccessScope();
         populateAllFilters();
         applyFiltersAndRender(); // Chỉ dùng cho KPI, không khởi tạo RAW F3 view nữa
@@ -1387,17 +1405,53 @@
       document.querySelectorAll('.dd.open').forEach(el => el.classList.remove('open'));
     }
 
+    // Helper function để lấy giá trị từ row với nhiều tên cột khác nhau
+    function getRowValue(row, ...columnNames) {
+      for (const colName of columnNames) {
+        if (row[colName] !== undefined && row[colName] !== null && row[colName] !== '') {
+          return row[colName];
+        }
+      }
+      return '';
+    }
+
     function parseNumber(val) {
       if (val === null || val === undefined || val === '') return 0;
       if (typeof val === 'number') return val;
-      const s = String(val).replace(/\./g, '').replace(/,/g, '');
+      let s = String(val).trim();
+      // Xử lý định dạng số: có thể là "1.234.567" (VN) hoặc "1,234.56" (US) hoặc "1234567"
+      // Kiểm tra nếu có dấu chấm ở 3 vị trí cuối (định dạng US với phần thập phân)
+      const lastDotIndex = s.lastIndexOf('.');
+      const lastCommaIndex = s.lastIndexOf(',');
+      if (lastDotIndex > -1 && lastDotIndex === s.length - 3) {
+        // Có dấu chấm ở vị trí thứ 3 từ cuối -> có thể là phần thập phân (US format)
+        // Kiểm tra xem có dấu phẩy trước đó không (như "1,234.56")
+        if (lastCommaIndex > -1 && lastCommaIndex < lastDotIndex) {
+          // Định dạng US: "1,234.56" -> thay dấu phẩy bằng rỗng, giữ dấu chấm
+          s = s.replace(/,/g, '');
+        } else {
+          // Định dạng VN: "1.234.567" -> thay tất cả dấu chấm bằng rỗng
+          s = s.replace(/\./g, '');
+        }
+      } else {
+        // Không có dấu chấm ở vị trí thứ 3 từ cuối -> định dạng VN hoặc số nguyên
+        // Thay tất cả dấu chấm và phẩy bằng rỗng
+        s = s.replace(/\./g, '').replace(/,/g, '');
+      }
       const n = Number(s);
       return isNaN(n) ? 0 : n;
     }
 
     function toDate(val) {
       if (!val) return null;
-      const d = new Date(val);
+      // Hỗ trợ format ngày mới: "2025-07-26" (không có thời gian)
+      // Và format cũ: "2025-07-26T17:00:00.000Z" (có thời gian)
+      let dateStr = String(val).trim();
+      // Nếu chỉ có ngày (YYYY-MM-DD), thêm thời gian để parse chính xác
+      if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        dateStr = dateStr + 'T00:00:00';
+      }
+      const d = new Date(dateStr);
       return isNaN(d.getTime()) ? null : d;
     }
 
@@ -1428,17 +1482,21 @@
       roleColumns.push({ col: 'NV Vận đơn', type: 'Vận đơn' });
 
       const filtered = rawOrders.filter(r => {
-        const d = toDate(r['Ngày lên đơn']);
+        // Sử dụng getRowValue để hỗ trợ cả tên cột có dấu gạch dưới và không có
+        const d = toDate(getRowValue(r, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn'));
         if (!inRange(d, s, e)) return false;
         
-        const ship = parseNumber(r['Phí ship']);
+        const ship = parseNumber(getRowValue(r, 'Phí_ship', 'Phí ship'));
         if (!includeZero && ship === 0) return false;
         
         // Filter by CA - Default to "Hết ca" only (giống baocaomkt)
+        // Lưu ý: Format mới có thể không có cột Ca, nên bỏ qua filter này nếu không có
         const caFields = ['Ca', 'ca', 'CA'];
         let hasHetCa = false;
+        let hasCaField = false;
         for (const field of caFields) {
-          if (r[field]) {
+          if (r[field] !== undefined && r[field] !== null && r[field] !== '') {
+            hasCaField = true;
             const cas = String(r[field] || '').split(',').map(x => x.trim()).filter(Boolean);
             if (cas.length === 0 || !cas.includes('Hết ca')) {
               // Không có ca hoặc không có "Hết ca"
@@ -1448,11 +1506,12 @@
             }
           }
         }
-        if (!hasHetCa) return false; // Chỉ lấy đơn có "Hết ca"
+        // Nếu có cột Ca thì phải có "Hết ca", nếu không có cột Ca thì bỏ qua filter này
+        if (hasCaField && !hasHetCa) return false; // Chỉ lấy đơn có "Hết ca" nếu có cột Ca
         
         // Filter by Product
         if (!selectedProduct.all && (selectedProduct.values.length > 0 || selectedProduct.empty)) {
-          const prod = (r['Mặt hàng'] || '').toString().trim();
+          const prod = (getRowValue(r, 'Mặt_hàng', 'Mặt hàng') || '').toString().trim();
           const isEmpty = prod === '';
           if (selectedProduct.empty && isEmpty) {}
           else if (selectedProduct.values.length > 0 && selectedProduct.values.includes(prod)) {}
@@ -1461,7 +1520,7 @@
         
         // Filter by Branch (Chi nhánh from F3 Team field)
         if (!selectedBranch.all && (selectedBranch.values.length > 0 || selectedBranch.empty)) {
-          const branch = (r['Team'] || '').toString().trim();
+          const branch = (getRowValue(r, 'Team', 'team') || '').toString().trim();
           const isEmpty = branch === '';
           if (selectedBranch.empty && isEmpty) {}
           else if (selectedBranch.values.length > 0 && selectedBranch.values.includes(branch)) {}
@@ -1470,7 +1529,7 @@
         
         // Filter by Market
         if (!selectedMarket.all && (selectedMarket.values.length > 0 || selectedMarket.empty)) {
-          const market = (r['Khu vực'] || '').toString().trim();
+          const market = (getRowValue(r, 'Khu_vực', 'Khu vực') || '').toString().trim();
           const isEmpty = market === '';
           if (selectedMarket.empty && isEmpty) {}
           else if (selectedMarket.values.length > 0 && selectedMarket.values.includes(market)) {}
@@ -1705,32 +1764,16 @@
       const cpqcByName = new Map();
       const cpqcProcessed = new Set(); // Track đã cộng CPQC cho (name, date) nào
       
-      // Map tên HR -> cột F3 tương ứng
-      const nameToF3Column = new Map();
-      const vanDonStaff = [];
+      // Khởi tạo stats cho tất cả nhân viên từ HR và xây dựng index
       finalStaffList.forEach(s => {
-         const key = `${s.name}|||${s.type}`;
-         if (s.type === 'Marketing') nameToF3Column.set(key, 'Nhân viên Marketing');
-         else if (s.type === 'Sale') nameToF3Column.set(key, 'Nhân viên Sale');
-         else if (s.type === 'Vận đơn') {
-            nameToF3Column.set(key, 'NV Vận đơn');
-            vanDonStaff.push(s.name);
-         }
-      });
-      if (vanDonStaff.length > 0) {
-         console.log('📦 Vận đơn staff found:', vanDonStaff.length, 'staff:', vanDonStaff.slice(0, 5));
-      }
-      
-      // Khởi tạo stats cho tất cả nhân viên từ HR
-      console.log('🔧 Initializing stats for', finalStaffList.length, 'staff members');
-      finalStaffList.forEach(s => {
-         const key = `${s.name}|||${s.type}`;
-         if (!s.name || s.name.trim() === '') {
-            console.warn('⚠️ Staff with empty name:', s);
-            return;
-         }
-         byName.set(key, {
-            name: s.name.trim(),
+        const key = `${s.name}|||${s.type}`;
+        if (!s.name || s.name.trim() === '') return;
+        
+        const nameTrimmed = s.name.trim();
+        
+        // Khởi tạo stats
+        byName.set(key, {
+            name: nameTrimmed,
             team: s.team || '',
             type: s.type,
             soDonChot: 0, dsChot: 0,
@@ -1739,111 +1782,107 @@
             soDonDi: 0, dsDi: 0,
             soDonThuTien: 0, dThuThanhCong: 0,
             ship: 0, cpqc: 0
-         });
+        });
       });
-      console.log('✅ Initialized', byName.size, 'staff stats in byName map');
       
-      // Tính toán số liệu từ F3 data cho từng nhân viên từ HR
-      let vanDonMatchCount = 0;
+      // TỐI ƯU: Tạo Map index từ tên nhân viên (lowercase) để lookup nhanh O(1) thay vì O(n)
+      // Map: tên (lowercase) -> { name, type, key, f3Column }
+      const staffByF3Column = {
+        'Nhân viên Marketing': new Map(),
+        'Nhân viên Sale': new Map(),
+        'NV Vận đơn': new Map()
+      };
+      
+      // Xây dựng index từ finalStaffList
+      finalStaffList.forEach(s => {
+        const key = `${s.name}|||${s.type}`;
+        if (!s.name || s.name.trim() === '') return;
+        
+        const nameTrimmed = s.name.trim();
+        const nameLower = nameTrimmed.toLowerCase().replace(/\s+/g, ' ');
+        
+        // Xác định cột F3 tương ứng
+        let f3Column = null;
+        if (s.type === 'Marketing') f3Column = 'Nhân viên Marketing';
+        else if (s.type === 'Sale') f3Column = 'Nhân viên Sale';
+        else if (s.type === 'Vận đơn') f3Column = 'NV Vận đơn';
+        
+        if (f3Column && staffByF3Column[f3Column]) {
+          staffByF3Column[f3Column].set(nameLower, { name: nameTrimmed, type: s.type, key, team: s.team || '' });
+        }
+      });
+
+      // TỐI ƯU: Tính toán số liệu - O(n) thay vì O(n*m)
+      // Với mỗi đơn hàng, chỉ lookup tên từ các cột F3 trong Map (O(1))
+      const f3Columns = ['Nhân viên Marketing', 'Nhân viên Sale', 'NV Vận đơn'];
+      
       filtered.forEach(r => {
-        const ship = parseNumber(r['Phí ship']);
-        const orderDate = toDate(r['Ngày lên đơn']);
-        const tongTien = parseNumber(r['Tổng tiền VNĐ']);
-        const ketQuaCheck = (r['Kết quả Check'] || '').toString().trim();
-        const maTracking = (r['Mã Tracking'] || '').toString().trim();
-        const tienVietDoiSoat = parseNumber(r['Tiền Việt đã đối soát']);
-        // Lấy cột "Kế toán xác nhận thu tiền về" (thử nhiều tên cột khác nhau)
-        const keToanXacNhan = (r['Kế toán xác nhận thu tiền về'] ?? r['Ke toan xac nhan thu tien ve'] ?? r['Kế toán xác nhận'] ?? r['Xác nhận thu tiền'] ?? '').toString().trim();
+        const ship = parseNumber(getRowValue(r, 'Phí_ship', 'Phí ship'));
+        const tongTien = parseNumber(getRowValue(r, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ'));
+        const ketQuaCheck = (getRowValue(r, 'Kết_quả_Check', 'Kết quả Check') || '').toString().trim();
+        const maTracking = (getRowValue(r, 'Mã_Tracking', 'Mã Tracking') || '').toString().trim();
+        const tienVietDoiSoat = parseNumber(getRowValue(r, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát'));
+        const keToanXacNhan = (getRowValue(r, 'Kế_toán_xác_nhận_thu_tiền_về', 'Kế toán xác nhận thu tiền về', 'Ke toan xac nhan thu tien ve') || '').toString().trim();
         const isHuy = ketQuaCheck === 'Huỷ';
         const isDi = maTracking !== '';
         const isThanhCong = ketQuaCheck === 'OK' && isDi;
-        // Rule tính "Số đơn thu tiền" và "DThu thành công": "Kế toán xác nhận thu tiền về" = "Đã thu tiền"
         const isDaThuTien = keToanXacNhan === 'Đã thu tiền' || keToanXacNhan === 'Da thu tien';
 
-        // Tìm nhân viên từ HR data có tên khớp trong F3 data
-        finalStaffList.forEach(s => {
-            const f3Column = nameToF3Column.get(`${s.name}|||${s.type}`);
-            if (!f3Column) return;
-            
-            const nameInF3 = (r[f3Column] || '').toString().trim();
-            const nameFromHR = (s.name || '').toString().trim();
-            
-            // Match không phân biệt hoa/thường và trim
-            if (nameInF3.toLowerCase() !== nameFromHR.toLowerCase()) return; // Tên không khớp
-            
-            // Log match với Vận đơn (chỉ log 3 lần đầu)
-            if (s.type === 'Vận đơn' && vanDonMatchCount < 3) {
-               console.log('✅ Vận đơn match:', { nameFromHR, nameInF3, f3Column });
-               vanDonMatchCount++;
-            }
-            
-            const key = `${s.name}|||${s.type}`;
-            const agg = byName.get(key);
-            if (!agg) return;
-
-            // Tính "Số đơn chốt" và "DS chốt": Tất cả đơn đã pass filter và match nhân viên (không cần điều kiện Kết quả Check hay Mã Tracking)
-            agg.soDonChot += 1;
-            agg.dsChot += tongTien;
-            if (isHuy) {
-              agg.soDonHuy += 1;
-              agg.dsHuy += tongTien;
-            }
-            if (isThanhCong) {
-              agg.soDonDi += 1;
-              agg.dsDi += tongTien;
-            }
-            // Tính "Số đơn thu tiền" và "DThu thành công": "Kế toán xác nhận thu tiền về" = "Đã thu tiền"
-            if (isDaThuTien && tienVietDoiSoat > 0) {
-              agg.soDonThuTien += 1;
-              agg.dThuThanhCong += tienVietDoiSoat;
-            }
-            agg.ship += ship;
-
-            // CPQC được tính trực tiếp từ mktIndex sau khi xử lý F3 data
-            // Không tính ở đây nữa để tránh thiếu sót
-        });
-      });
-      
-      // Debug: Kiểm tra đơn hàng bị tính trùng
-      console.log('🔍 Debug: Kiểm tra đơn hàng bị tính trùng');
-      const orderDebug = new Map();
-      filtered.slice(0, 100).forEach(r => { // Chỉ check 100 đơn đầu
-        const tongTien = parseNumber(r['Tổng tiền VNĐ']);
-        const maDon = (r['Mã đơn hàng'] || r['Mã đơn'] || r['Mã_đơn_hàng'] || 'N/A').toString().trim();
-        const staffInOrder = [];
+        // Tránh tính trùng cho cùng một nhân viên trong cùng một đơn hàng
+        const processedStaffForOrder = new Set();
         
-        finalStaffList.forEach(s => {
-          const f3Column = nameToF3Column.get(`${s.name}|||${s.type}`);
-          if (f3Column) {
-            const nameInF3 = (r[f3Column] || '').toString().trim();
-            if (nameInF3.toLowerCase() === s.name.toLowerCase()) {
-              staffInOrder.push(`${s.name} (${s.type})`);
-            }
+        // Chỉ lookup trong các cột F3 có trong đơn hàng (O(3) constant)
+        for (const f3Column of f3Columns) {
+          // Map tên cột có thể có
+          let possibleColumns = [];
+          if (f3Column === 'Nhân viên Marketing') {
+            possibleColumns = ['Nhân_viên_Marketing', 'Nhân viên Marketing'];
+          } else if (f3Column === 'Nhân viên Sale') {
+            possibleColumns = ['Nhân_viên_Sale', 'Nhân viên Sale'];
+          } else if (f3Column === 'NV Vận đơn') {
+            possibleColumns = ['NV_Vận_đơn', 'NV Vận đơn'];
+          } else {
+            possibleColumns = [f3Column];
           }
-        });
-        
-        if (staffInOrder.length > 1) {
-          orderDebug.set(maDon, { tongTien, staff: staffInOrder });
+          const nameInF3Raw = getRowValue(r, ...possibleColumns);
+          if (!nameInF3Raw) continue;
+          
+          const nameInF3 = nameInF3Raw.toString().trim().toLowerCase().replace(/\s+/g, ' ');
+          if (!nameInF3) continue;
+          
+          // Tránh tính trùng
+          if (processedStaffForOrder.has(nameInF3)) continue;
+          
+          // Lookup nhanh O(1) trong Map
+          const staffInfo = staffByF3Column[f3Column]?.get(nameInF3);
+          if (!staffInfo) continue;
+          
+          processedStaffForOrder.add(nameInF3);
+          
+          const agg = byName.get(staffInfo.key);
+          if (!agg) continue;
+
+          // Tính toán số liệu
+          agg.soDonChot += 1;
+          agg.dsChot += tongTien;
+          if (isHuy) {
+            agg.soDonHuy += 1;
+            agg.dsHuy += tongTien;
+          }
+          if (isThanhCong) {
+            agg.soDonDi += 1;
+            agg.dsDi += tongTien;
+          }
+          if (isDaThuTien && tienVietDoiSoat > 0) {
+            agg.soDonThuTien += 1;
+            agg.dThuThanhCong += tienVietDoiSoat;
+          }
+          // Ship chỉ tính cho đơn hàng đã đi (có mã tracking) - không tính cho đơn hủy
+          if (isDi) {
+            agg.ship += ship;
+          }
         }
       });
-      
-      if (orderDebug.size > 0) {
-        console.warn('⚠️ Tìm thấy đơn hàng có nhiều nhân viên:', orderDebug.size, 'đơn');
-        let totalDuplicate = 0;
-        let count = 0;
-        orderDebug.forEach((val, key) => {
-          if (count < 10) { // Chỉ log 10 đơn đầu tiên
-            console.log(`Đơn ${key}: ${val.tongTien.toLocaleString('vi-VN')} ₫ - ${val.staff.length} nhân viên:`, val.staff);
-          }
-          totalDuplicate += val.tongTien * (val.staff.length - 1); // Số tiền bị tính thừa
-          count++;
-        });
-        console.log(`💰 Tổng số tiền bị tính thừa (ước tính từ ${orderDebug.size} đơn): ${totalDuplicate.toLocaleString('vi-VN')} ₫`);
-        console.log(`📊 Tỷ lệ: ${orderDebug.size}/${filtered.length} đơn có nhiều nhân viên (${((orderDebug.size/filtered.length)*100).toFixed(2)}%)`);
-      } else {
-        console.log('✅ Không tìm thấy đơn hàng có nhiều nhân viên trong 100 đơn đầu tiên');
-      }
-      
       // Tính CPQC trực tiếp từ mktIndex cho TẤT CẢ nhân viên trong finalStaffList
       // CPQC là cột độc lập, lấy từ BAO_CAO_MKT_URL (đã filter theo date, team, name)
       // Tính theo tên trong cột "Nhân viên"
@@ -1903,11 +1942,18 @@
          console.warn('⚠️ No Vận đơn staff found in table!');
       }
 
-      console.log('📊 Preparing rows from byName map:', byName.size, 'entries');
-      let rows = [...byName.values()]
-        .map((it, idx) => {
+      // Tạo Set các nhân viên được chọn trong bộ lọc để filter
+      const selectedStaffSet = new Set();
+      finalStaffList.forEach(s => {
+        const key = `${s.name}|||${s.type}`;
+        selectedStaffSet.add(key);
+      });
+      
+      // Chỉ lấy nhân viên có trong finalStaffList (theo bộ lọc)
+      let rows = [...byName.entries()]
+        .filter(([key, it]) => selectedStaffSet.has(key))
+        .map(([key, it], idx) => {
           if (!it.name || it.name.trim() === '') {
-            console.warn('⚠️ Row with empty name at index', idx, ':', it);
           }
           const cpqc = cpqcByName.get(it.name) || 0;
           const dsSauHuy = Math.max(0, (it.dsChot || 0) - (it.dsHuy || 0));
@@ -1928,27 +1974,57 @@
           };
         });
       
+      // Lọc bỏ nhân viên không có team
+      rows = rows.filter(row => {
+        const team = (row.team || '').toString().trim();
+        if (team === '') return false; // Chỉ giữ lại nhân viên có team
+        
+        // Ẩn team "Đã nghỉ" mặc định, chỉ hiển thị khi được chọn trong bộ lọc
+        const teamLower = team.toLowerCase();
+        const isDaNghi = teamLower === 'đã nghỉ' || teamLower === 'da nghi' || teamLower === 'đã nghỉ việc' || teamLower === 'da nghi viec';
+        if (isDaNghi) {
+          // Chỉ hiển thị nếu team "Đã nghỉ" được chọn trong bộ lọc
+          const isSelected = !selectedTeam.all && selectedTeam.values.length > 0 && selectedTeam.values.includes(team);
+          return isSelected;
+        }
+        
+        return true; // Giữ lại các team khác
+      });
+      
       // Sắp xếp: Luôn theo Team trước, sau đó mới đến tên
+      // (Nhân viên không có team đã được lọc bỏ ở bước trước)
       rows.sort((a, b) => {
-         const teamA = (a.team || '').trim();
-         const teamB = (b.team || '').trim();
-         if (teamA !== teamB) {
-            // Sắp xếp theo Team (team rỗng sẽ xuống cuối)
-            if (teamA === '') return 1;
-            if (teamB === '') return -1;
+        const teamA = (a.team || '').trim();
+        const teamB = (b.team || '').trim();
+        if (teamA !== teamB) {
             return teamA.localeCompare(teamB, 'vi');
-         }
-         // Cùng Team -> sắp xếp theo tên
-         return (a.name || '').localeCompare(b.name || '', 'vi');
+        }
+        // Cùng Team -> sắp xếp theo tên
+        return (a.name || '').localeCompare(b.name || '', 'vi');
       });
       
       // Cập nhật lại STT sau khi sắp xếp
       rows = rows.map((row, idx) => ({ ...row, stt: idx + 1 }));
       
-      console.log('✅ Prepared', rows.length, 'rows for display (sorted by Team, then Name)');
-      if (rows.length > 0) {
-         console.log('📌 Sample row:', rows[0]);
-      }
+      // Lọc: Chỉ hiển thị nhân viên có ít nhất một chỉ số > 0 (theo bộ lọc)
+      rows = rows.filter(row => {
+        return (row.soDonChot > 0) || 
+              (row.dsChot > 0) || 
+              (row.soDonHuy > 0) || 
+              (row.dsHuy > 0) || 
+              (row.soDonSauHuy > 0) || 
+              (row.dsSauHuy > 0) || 
+              (row.soDonDi > 0) || 
+              (row.dsDi > 0) || 
+              (row.soDonThuTien > 0) || 
+              (row.dThuThanhCong > 0) || 
+              (row.ship > 0) || 
+              (row.dThuTinhKpi > 0) || 
+              (row.cpqc > 0);
+      });
+      
+      // Cập nhật lại STT sau khi lọc
+      rows = rows.map((row, idx) => ({ ...row, stt: idx + 1 }));
 
       currentData = rows;
       renderKpiSummary(rows, null);
@@ -2316,3 +2392,4 @@
   </script>
 </body>
 </html>
+
