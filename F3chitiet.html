@@ -540,7 +540,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
     const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
-    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2n_s%E1%BB%B1.json';
+    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1';
     
     let allData = [];
     let filteredData = [];
@@ -622,19 +622,47 @@
       return [];
     }
 
-    // Lấy id từ URL parameter
+    // Lấy tham số từ URL (hỗ trợ cả query string và hash)
+    function getQueryParam(key) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        let val = params.get(key);
+        if (!val) {
+          const hash = window.location.hash || '';
+          // support both #id=XXX or #...&id=XXX
+          const match = hash.match(new RegExp(`[?#&]?(?:${key})=([^&]+)`));
+          if (match && match[1]) val = decodeURIComponent(match[1]);
+        }
+        return val ? String(val).trim() : '';
+      } catch (_) { return ''; }
+    }
+
+    // Lấy id từ URL parameter (giữ lại để tương thích)
     function getUserIdFromURL() {
-      const urlParams = new URLSearchParams(window.location.search);
-      return urlParams.get('id') || null;
+      return getQueryParam('id') || null;
     }
 
     // Load và xử lý dữ liệu nhân viên
     async function loadAndProcessHRData() {
+      // Kiểm tra scope=allF3 trước - nếu có thì bỏ qua phân quyền
+      const scope = getQueryParam('scope');
+      if (scope === 'allF3') {
+        console.log('📌 scope=allF3 được set, bỏ qua phân quyền - xem tất cả dữ liệu');
+        allowedStaffNames = null;
+        currentEmployee = null;
+        currentBoPhan = null;
+        const greetingEl = document.getElementById('greeting');
+        if (greetingEl) {
+          greetingEl.textContent = '';
+        }
+        return;
+      }
+
       const userId = getUserIdFromURL();
       
-      // Nếu không có id trong URL, cho phép xem tất cả
+      // Nếu không có id trong URL, cho phép xem tất cả (admin mode)
       if (!userId) {
-        console.log('📌 Không có id trong URL, hiển thị tất cả nhân viên');
+        console.log('📌 Không có id trong URL, hiển thị tất cả nhân viên (admin mode)');
         allowedStaffNames = null;
         currentEmployee = null;
         currentBoPhan = null;
@@ -648,54 +676,73 @@
 
       try {
         // Fetch dữ liệu nhân viên
-        const hrResponse = await fetchWithRetry(HR_URL);
+        const hrResponse = await fetchWithRetry(HR_URL + '.json');
         hrData = normalizeHR(hrResponse);
         
-        // Tìm nhân viên theo id
-        const candidates = ['id', 'ID', 'Id', 'uid', 'UID', 'Uid', 'Mã nhân sự', 'Mã_Nhân_sự', 'Ma_Nhan_su'];
-        let foundEmployee = null;
-        
-        for (const emp of hrData) {
-          for (const key of candidates) {
-            if (emp[key] && String(emp[key]).trim() === String(userId).trim()) {
-              foundEmployee = emp;
-              break;
-            }
-          }
-          if (foundEmployee) break;
-        }
-
-        if (!foundEmployee) {
-          console.warn('⚠️ Không tìm thấy nhân viên với id:', userId);
+        // Kiểm tra nếu không có HR data
+        if (!Array.isArray(hrData) || !hrData.length) {
+          console.warn('⚠️ Không có HR data, cho phép xem tất cả');
           allowedStaffNames = null;
           currentEmployee = null;
           currentBoPhan = null;
-          // Ẩn phần chào hỏi
           const greetingEl = document.getElementById('greeting');
           if (greetingEl) {
             greetingEl.textContent = '';
           }
           return;
         }
+        
+        // Tìm nhân viên theo id (giống KPIsale.html)
+        const matchId = (row) => {
+          const candidates = ['id', 'ID', 'Id', 'uid', 'UID', 'Uid', 'Mã nhân sự', 'Mã_Nhân_sự', 'Ma_Nhan_su'];
+          for (const k of candidates) {
+            if (row[k] !== undefined && String(row[k]).trim() === userId) return true;
+          }
+          for (const k in row) {
+            if (k && k.toLowerCase() === 'id' && String(row[k]).trim() === userId) return true;
+          }
+          return false;
+        };
+        
+        const foundEmployee = hrData.find(matchId);
+
+        if (!foundEmployee) {
+          console.warn('⚠️ Không tìm thấy nhân viên với id:', userId);
+          const greetingEl = document.getElementById('greeting');
+          if (greetingEl) {
+            greetingEl.textContent = `Không tìm thấy id: ${userId} trong Nhân sự`;
+          }
+          allowedStaffNames = null;
+          currentEmployee = null;
+          currentBoPhan = null;
+          return;
+        }
 
         // Gán cho biến global
         currentEmployee = foundEmployee;
 
-        const viTri = String(currentEmployee['Vị trí'] || '').trim();
-        const team = String(currentEmployee['Team'] || '').trim();
-        const hoVaTen = String(currentEmployee['Họ Và Tên'] || '').trim();
-        const boPhan = String(currentEmployee['Bộ phận'] || '').trim();
+        // Lấy thông tin nhân viên với nhiều tên cột khác nhau
+        const viTri = (currentEmployee['Vị trí'] ?? currentEmployee['Vi_tri'] ?? currentEmployee['Vi trí'] ?? currentEmployee['Position'] ?? '').toString().trim();
+        const team = (currentEmployee['Team'] ?? '').toString().trim();
+        const hoVaTen = (currentEmployee['Họ Và Tên'] ?? currentEmployee['Họ_và_tên'] ?? currentEmployee['Họ và tên'] ?? currentEmployee['Tên'] ?? currentEmployee['Name'] ?? '').toString().trim();
+        const boPhan = (currentEmployee['Bộ phận'] ?? currentEmployee['Bộ_phận'] ?? currentEmployee['Bo_phan'] ?? '').toString().trim();
         
         // Lưu thông tin nhân viên hiện tại
         // Nếu Bộ phận = CSKH thì xử lý như Sale
         currentBoPhan = (boPhan === 'CSKH') ? 'Sale' : boPhan;
+
+        // Xác định Leader/NV
+        const isLeader = /leader/i.test(viTri);
+        const isNV = /^nv$/i.test(viTri) || viTri.toLowerCase() === 'nhân viên' || viTri === '';
 
         console.log('👤 Nhân viên hiện tại:', {
           id: userId,
           hoVaTen: hoVaTen,
           viTri: viTri,
           team: team,
-          boPhan: boPhan
+          boPhan: boPhan,
+          isLeader: isLeader,
+          isNV: isNV
         });
 
         // Hiển thị chào hỏi
@@ -704,42 +751,36 @@
           greetingEl.textContent = `👋 Xin chào ${hoVaTen}${boPhan ? ` - ${boPhan}` : ''}`;
         }
 
-        // Nếu là Leader, lấy tất cả nhân viên trong Team
-        if (viTri === 'Leader' && team) {
-          const teamMembers = hrData.filter(emp => {
-            const empTeam = String(emp['Team'] || '').trim();
-            return empTeam === team && empTeam !== 'Đã nghỉ';
-          });
-          
-          allowedStaffNames = new Set();
-          teamMembers.forEach(emp => {
-            const name = String(emp['Họ Và Tên'] || '').trim();
-            if (name) {
-              allowedStaffNames.add(name);
+        // Xử lý phân quyền theo vị trí
+        const set = new Set();
+        if (isLeader) {
+          // Leader: xem full Team của mình
+          hrData.forEach(emp => {
+            const empTeam = (emp['Team'] ?? '').toString().trim();
+            if (empTeam === team && empTeam && empTeam !== 'Đã nghỉ') {
+              // Lấy tên với nhiều tên cột khác nhau
+              const name = (emp['Họ Và Tên'] ?? emp['Họ_và_tên'] ?? emp['Họ và tên'] ?? emp['Tên'] ?? emp['Name'] ?? '').toString().trim();
+              if (name) {
+                set.add(name);
+              }
             }
           });
-          
-          console.log('👥 Leader - Danh sách nhân viên trong team:', Array.from(allowedStaffNames));
-        } 
-        // Nếu là NV, chỉ lấy tên mình
-        else if (viTri === 'NV' || viTri === '') {
-          allowedStaffNames = new Set();
+          console.log('👔 Leader - Danh sách nhân viên trong team:', Array.from(set));
+        } else {
+          // NV hoặc không phải Leader: chỉ xem của chính mình
           if (hoVaTen) {
-            allowedStaffNames.add(hoVaTen);
+            set.add(hoVaTen);
+            console.log('👷 NV/Staff - Chỉ hiển thị của chính mình:', hoVaTen);
+            console.log('📋 Bộ phận:', boPhan);
+            console.log('✅ Sẽ lọc đơn hàng có:', {
+              'Sale': boPhan === 'Sale' ? hoVaTen : 'N/A',
+              'MKT': boPhan === 'MKT' ? hoVaTen : 'N/A',
+              'Vận Đơn': (boPhan === 'Vận Đơn' || boPhan === 'Vận Hành') ? hoVaTen : 'N/A'
+            });
           }
-          console.log('👤 NV - Chỉ hiển thị:', Array.from(allowedStaffNames));
-          console.log('📋 Bộ phận:', boPhan);
-          console.log('✅ Sẽ lọc đơn hàng có:', {
-            'Sale': boPhan === 'Sale' ? hoVaTen : 'N/A',
-            'MKT': boPhan === 'MKT' ? hoVaTen : 'N/A',
-            'Vận Đơn': (boPhan === 'Vận Đơn' || boPhan === 'Vận Hành') ? hoVaTen : 'N/A'
-          });
-        } 
-        // Trường hợp khác, cho phép xem tất cả
-        else {
-          console.log('⚠️ Vị trí không xác định hoặc không phải Leader/NV:', viTri);
-          allowedStaffNames = null;
         }
+        
+        allowedStaffNames = set.size ? set : null;
 
       } catch (error) {
         console.error('❌ Lỗi khi load dữ liệu nhân viên:', error);
