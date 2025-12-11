@@ -810,7 +810,7 @@
   <script>
     const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
     const BAO_CAO_MKT_URL = 'https://n-api-gamma.vercel.app/report/generate?tableName=' + encodeURIComponent('Báo cáo MKT');
-    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2n_s%E1%BB%B1.json';
+    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1.json';
     // Fallback sample (user-provided) to display when network fails
     const F3_SAMPLE = {
       "0": {
@@ -947,16 +947,33 @@
         }
         // Load HR data giống như vandonCEO.html: chỉ lấy record có Team
         if (dataHr) {
+          console.log('📥 Raw HR data received:', dataHr);
           const normalized = normalizeF3(dataHr);
+          console.log('📋 Normalized HR data:', normalized.length, 'records');
+          if (normalized.length > 0) {
+            console.log('📌 Sample normalized HR record:', normalized[0]);
+            console.log('📌 Sample HR record keys:', Object.keys(normalized[0]));
+          }
           // Lọc chỉ lấy những record có Team (giống vandonCEO.html)
-          hrRows = normalized.filter(item => item && item["Team"]);
+          // Thử nhiều tên field khác nhau cho Team
+          hrRows = normalized.filter(item => {
+            if (!item) return false;
+            const team = getTeamValue(item);
+            return team !== '';
+          });
           console.log('✅ HR data loaded:', hrRows.length, 'records with Team');
           if (hrRows.length > 0) {
-            console.log('📌 Sample HR record:', hrRows[0]);
+            console.log('📌 Sample HR record with Team:', hrRows[0]);
+          } else if (normalized.length > 0) {
+            console.warn('⚠️ HR data exists but no records have "Team" field');
+            console.log('📌 Available fields in first record:', Object.keys(normalized[0]));
+            // Nếu không có Team, vẫn lấy tất cả records để xử lý (có thể Team là optional)
+            console.log('ℹ️ Using all HR records without Team filter');
+            hrRows = normalized;
           }
         } else {
           hrRows = [];
-          console.warn('⚠️ No HR data loaded from Firebase');
+          console.warn('⚠️ No HR data loaded from Firebase - dataHr is null/undefined');
         }
         computeAccessScope();
         populateAllFilters();
@@ -1109,12 +1126,18 @@
       return [];
     }
 
+    // Helper function để lấy Team value từ nhiều tên field khác nhau
+    function getTeamValue(item) {
+      if (!item) return '';
+      return (item["Team"] || item["team"] || item["TEAM"] || item["Nhóm"] || item["nhóm"] || '').toString().trim();
+    }
+
     function getUniqueValues(field) {
       const s = new Set();
       const restrict = allowedNames && allowedNames.size > 0;
       rawOrders.forEach(r => {
         if (restrict) {
-          const nm = (r && r['Nhân viên Marketing'] ? String(r['Nhân viên Marketing']).trim() : '');
+          const nm = (getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').toString().trim();
           if (!allowedNames.has(nm)) return;
         }
         const v = r && r[field];
@@ -1383,7 +1406,7 @@
               }
               // F3 fallback
               rawOrders.forEach(r => {
-                const n = (r['Nhân viên Marketing'] || '').toString().trim();
+                const n = (getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').toString().trim();
                 if (!n) return;
                 // F3 ko có team info trực tiếp cho NV, giả sử empty team hoặc check logic khác
                 // Ở đây tạm bỏ qua check team chặt chẽ cho fallback F3
@@ -1870,6 +1893,15 @@
       document.querySelectorAll('.dd.open').forEach(el => el.classList.remove('open'));
     }
 
+    function getRowValue(row, ...columnNames) {
+      for (const colName of columnNames) {
+        if (row[colName] !== undefined && row[colName] !== null && row[colName] !== '') {
+          return row[colName];
+        }
+      }
+      return '';
+    }
+
     function parseNumber(val) {
       if (val === null || val === undefined || val === '') return 0;
       if (typeof val === 'number') return val;
@@ -1941,10 +1973,10 @@
       }
 
       const filtered = rawOrders.filter(r => {
-        const d = toDate(r['Ngày lên đơn']);
+        const d = toDate(getRowValue(r, 'Ngày_lên_đơn', 'Ngày lên đơn'));
         if (!inRange(d, s, e)) return false;
         
-        const ship = parseNumber(r['Phí ship']);
+        const ship = parseNumber(getRowValue(r, 'Phí_ship', 'Phí ship'));
         if (!includeZero && ship === 0) return false;
         
         // Filter by CA - Bỏ filter "Hết ca" để không loại bỏ đơn hàng
@@ -2329,12 +2361,12 @@
       const f3Columns = ['Nhân viên Marketing', 'Nhân viên Sale', 'NV Vận đơn'];
       
       filtered.forEach(r => {
-        const ship = parseNumber(r['Phí ship']);
-        const tongTien = parseNumber(r['Tổng tiền VNĐ']);
-        const ketQuaCheck = (r['Kết quả Check'] || '').toString().trim();
-        const maTracking = (r['Mã Tracking'] || '').toString().trim();
-        const tienVietDoiSoat = parseNumber(r['Tiền Việt đã đối soát']);
-        const keToanXacNhan = (r['Kế toán xác nhận thu tiền về'] ?? r['Ke toan xac nhan thu tien ve'] ?? '').toString().trim();
+        const ship = parseNumber(getRowValue(r, 'Phí_ship', 'Phí ship'));
+        const tongTien = parseNumber(getRowValue(r, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ'));
+        const ketQuaCheck = (getRowValue(r, 'Kết_quả_Check', 'Kết quả Check') || '').toString().trim();
+        const maTracking = (getRowValue(r, 'Mã_Tracking', 'Mã Tracking') || '').toString().trim();
+        const tienVietDoiSoat = parseNumber(getRowValue(r, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát'));
+        const keToanXacNhan = (getRowValue(r, 'Kế_toán_xác_nhận_thu_tiền_về', 'Kế toán xác nhận thu tiền về', 'Ke toan xac nhan thu tien ve') || '').toString().trim();
         const isHuy = ketQuaCheck === 'Huỷ';
         const isDi = maTracking !== '';
         const isThanhCong = ketQuaCheck === 'OK' && isDi;
@@ -2345,7 +2377,18 @@
         
         // Chỉ lookup trong các cột F3 có trong đơn hàng (O(3) constant)
         for (const f3Column of f3Columns) {
-          const nameInF3Raw = r[f3Column];
+          // Map tên cột có thể có
+          let possibleColumns = [];
+          if (f3Column === 'Nhân viên Marketing') {
+            possibleColumns = ['Nhân_viên_Marketing', 'Nhân viên Marketing'];
+          } else if (f3Column === 'Nhân viên Sale') {
+            possibleColumns = ['Nhân_viên_Sale', 'Nhân viên Sale'];
+          } else if (f3Column === 'NV Vận đơn') {
+            possibleColumns = ['NV_Vận_đơn', 'NV Vận đơn'];
+          } else {
+            possibleColumns = [f3Column];
+          }
+          const nameInF3Raw = getRowValue(r, ...possibleColumns);
           if (!nameInF3Raw) continue;
           
           const nameInF3 = nameInF3Raw.toString().trim().toLowerCase().replace(/\s+/g, ' ');
@@ -2853,35 +2896,35 @@
       const rawDelivery = (document.getElementById('rawDelivery') && document.getElementById('rawDelivery').value) ? document.getElementById('rawDelivery').value.trim() : '';
       rawFiltered = rawOrders.filter(r => {
         if (allowedNames && allowedNames.size > 0) {
-          const nm = (r && r['Nhân viên Marketing'] ? String(r['Nhân viên Marketing']).trim() : '');
+          const nm = (getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').toString().trim();
           if (!allowedNames.has(nm)) return false;
         }
         if (caRaw) {
-          const cas = String(r['Ca'] || '').split(',').map(x => x.trim()).filter(Boolean);
+          const cas = String(getRowValue(r, 'Ca', 'ca', 'CA') || '').split(',').map(x => x.trim()).filter(Boolean);
           if (!cas.includes(caRaw)) return false;
         }
         // Filter by department & name
         if (dept) {
           const field = getDeptField(dept);
-          const deptName = field ? String(r[field] || '').trim() : '';
+          const deptName = field ? String(getRowValue(r, field) || '').trim() : '';
           if (!deptName) return false;
           if (rawName && deptName !== rawName) return false;
         } else if (rawName) {
           const names = [
-            String(r['Nhân viên Marketing'] || '').trim(),
-            String(r['Nhân viên Sale'] || '').trim(),
-            String(r['NV Vận đơn'] || '').trim()
+            String(getRowValue(r, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim(),
+            String(getRowValue(r, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim(),
+            String(getRowValue(r, 'NV_Vận_đơn', 'NV Vận đơn') || '').trim()
           ];
           if (!names.includes(rawName)) return false;
         }
         // Filter by Kết quả Check
         if (rawCheck) {
-          const kc = String(r['Kết quả Check'] || '').trim();
+          const kc = String(getRowValue(r, 'Kết_quả_Check', 'Kết quả Check') || '').trim();
           if (kc !== rawCheck) return false;
         }
         // Filter by Trạng thái giao hàng NB
         if (rawDelivery) {
-          const st = String(r['Trạng thái giao hàng NB'] || '').trim();
+          const st = String(getRowValue(r, 'Trạng_thái_giao_hàng_NB', 'Trạng thái giao hàng NB') || '').trim();
           if (st !== rawDelivery) return false;
         }
         if (!rawSearchText) return true;
@@ -2948,8 +2991,8 @@
       let totalTongTien = 0;
       let totalDoiSoat = 0;
       rawFiltered.forEach(r => {
-        totalTongTien += parseNumber(r['Tổng tiền VNĐ']);
-        totalDoiSoat += parseNumber(r['Tiền Việt đã đối soát']);
+        totalTongTien += parseNumber(getRowValue(r, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ'));
+        totalDoiSoat += parseNumber(getRowValue(r, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát'));
       });
       const summaryText = `Số đơn: ${total.toLocaleString('vi-VN')} | Tổng tiền VNĐ: ${formatCurrency(totalTongTien)} | Tổng tiền đã đối soát: ${formatCurrency(totalDoiSoat)}`;
       if (summaryTop) summaryTop.textContent = summaryText;
