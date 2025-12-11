@@ -561,6 +561,16 @@
       return rounded.toLocaleString('vi-VN') + ' ₫';
     }
 
+    // Helper function để lấy giá trị từ row với nhiều tên cột khác nhau
+    function getRowValue(row, ...columnNames) {
+      for (const colName of columnNames) {
+        if (row[colName] !== undefined && row[colName] !== null && row[colName] !== '') {
+          return row[colName];
+        }
+      }
+      return '';
+    }
+
     // Format ngày
     function formatDate(dateStr) {
       if (!dateStr) return '';
@@ -578,11 +588,27 @@
 
     // Normalize dữ liệu F3
     function normalizeF3(data) {
-      if (!data) return [];
-      if (Array.isArray(data)) return data;
-      if (typeof data === 'object') {
-        return Object.values(data).filter(item => item && typeof item === 'object');
+      console.log('🔄 normalizeF3 - input type:', typeof data, 'isArray:', Array.isArray(data));
+      
+      if (!data) {
+        console.warn('⚠️ normalizeF3: data is null/undefined');
+        return [];
       }
+      
+      if (Array.isArray(data)) {
+        const filtered = data.filter(item => item && typeof item === 'object');
+        console.log(`✅ normalizeF3: Array with ${data.length} items, ${filtered.length} valid objects`);
+        return filtered;
+      }
+      
+      if (typeof data === 'object') {
+        const values = Object.values(data);
+        const filtered = values.filter(item => item && typeof item === 'object');
+        console.log(`✅ normalizeF3: Object with ${values.length} values, ${filtered.length} valid objects`);
+        return filtered;
+      }
+      
+      console.warn('⚠️ normalizeF3: Unknown data type:', typeof data);
       return [];
     }
 
@@ -754,25 +780,66 @@
       tableEl.style.display = 'none';
 
       try {
+        console.log('🔄 Bắt đầu load dữ liệu...');
+        
         // Load dữ liệu nhân viên trước
         await loadAndProcessHRData();
+        console.log('✅ Đã load dữ liệu HR');
         
         // Load dữ liệu F3
+        console.log('📡 Đang fetch dữ liệu F3 từ:', F3_URL);
         const data = await fetchWithRetry(F3_URL);
+        console.log('📥 Đã nhận dữ liệu F3, kiểu:', typeof data, Array.isArray(data) ? 'Array' : 'Object');
+        
         allData = normalizeF3(data);
+        console.log(`✅ Đã normalize F3 data, số lượng: ${allData.length} dòng`);
+        
+        // Debug: Kiểm tra tên cột thực tế trong dữ liệu (đặc biệt là cột Tổng tiền)
+        if (allData.length > 0) {
+          const firstRow = allData[0];
+          const allKeys = Object.keys(firstRow);
+          console.log('📋 Tất cả các cột trong dữ liệu:', allKeys);
+          console.log('🔍 Mẫu dòng đầu tiên:', firstRow);
+          
+          // Tìm các cột có chứa "tiền" hoặc "tien" hoặc "VND"
+          const tienColumns = allKeys.filter(key => 
+            key.toLowerCase().includes('tiền') || 
+            key.toLowerCase().includes('tien') || 
+            key.toLowerCase().includes('vnd') ||
+            key.toLowerCase().includes('tong')
+          );
+          console.log('💰 Các cột liên quan đến tiền:', tienColumns);
+          
+          // Log giá trị của một vài dòng đầu tiên để debug
+          tienColumns.forEach(col => {
+            console.log(`  - ${col}:`, firstRow[col]);
+          });
+        } else {
+          console.warn('⚠️ allData rỗng sau khi normalize!');
+          console.log('📦 Dữ liệu gốc:', data);
+        }
+        
         filteredData = [...allData];
+        console.log(`📊 filteredData ban đầu: ${filteredData.length} dòng`);
+        
         currentPage = 1; // Reset về trang 1 khi load lại
         populateFilters();
+        console.log('✅ Đã populate filters');
+        
         // Áp dụng filter ngay sau khi populate để lọc theo id (nếu có)
         applyFilters();
+        console.log(`📊 filteredData sau khi apply filters: ${filteredData.length} dòng`);
+        
         updateStats();
         renderTable();
         loadingEl.style.display = 'none';
+        console.log('✅ Đã render bảng thành công');
       } catch (error) {
-        console.error('Error loading data:', error);
+        console.error('❌ Error loading data:', error);
+        console.error('Stack trace:', error.stack);
         loadingEl.style.display = 'none';
         errorEl.style.display = 'block';
-        errorEl.textContent = `❌ Lỗi tải dữ liệu: ${error.message}`;
+        errorEl.textContent = `❌ Lỗi tải dữ liệu: ${error.message}. Vui lòng mở Console (F12) để xem chi tiết.`;
       }
     }
 
@@ -800,8 +867,11 @@
       
       tbody.innerHTML = '';
       
+      console.log('🎨 renderTable called, filteredData.length:', filteredData.length);
+      
       if (filteredData.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="17" class="text-center">Không có dữ liệu</td></tr>';
+        console.warn('⚠️ filteredData rỗng, hiển thị thông báo "Không có dữ liệu"');
+        tbody.innerHTML = '<tr><td colspan="17" class="text-center">Không có dữ liệu. Vui lòng kiểm tra bộ lọc hoặc mở Console (F12) để xem chi tiết.</td></tr>';
         tableEl.style.display = 'table';
         paginationEl.style.display = 'none';
         document.getElementById('tableFooter').innerHTML = '';
@@ -823,20 +893,22 @@
         const globalIndex = startIndex + index;
         const tr = document.createElement('tr');
         
-        const maDonHang = row['Mã đơn hàng'] || '';
-        const maTracking = row['Mã Tracking'] || '';
-        const ngayLenDon = formatDate(row['Ngày lên đơn'] || row['Thời gian lên đơn']);
-        const name = row['Name*'] || row['Tên lên đơn'] || '';
-        const tongTien = formatCurrency(row['Tổng tiền VNĐ']);
-        const nvSale = row['Nhân viên Sale'] || '';
-        const nvMarketing = row['Nhân viên Marketing'] || '';
-        const nvVanDon = row['NV Vận đơn'] || '';
-        const ketQuaCheck = row['Kết quả Check'] || '';
-        const trangThaiGiaoHang = row['Trạng thái giao hàng NB'] || '';
-        const donViVanChuyen = row['Đơn vị vận chuyển'] || '';
-        const trangThaiThuTien = row['Trạng thái thu tiền'] || '';
-        const matHang = row['Mặt hàng'] || '';
-        const khuVuc = row['Khu vực'] || '';
+        // Sử dụng tên cột với dấu gạch dưới (theo cấu trúc dữ liệu thực tế)
+        const maDonHang = getRowValue(row, 'Mã_đơn_hàng', 'Mã đơn hàng') || '';
+        const maTracking = getRowValue(row, 'Mã_Tracking', 'Mã Tracking') || '';
+        const ngayLenDon = formatDate(getRowValue(row, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn'));
+        const name = getRowValue(row, 'Name', 'Name*', 'Tên lên đơn') || '';
+        // Thử nhiều tên cột khác nhau cho Tổng tiền VNĐ
+        const tongTien = formatCurrency(getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0);
+        const nvSale = getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '';
+        const nvMarketing = getRowValue(row, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '';
+        const nvVanDon = getRowValue(row, 'NV_Vận_đơn', 'NV Vận đơn') || '';
+        const ketQuaCheck = getRowValue(row, 'Kết_quả_Check', 'Kết quả Check') || '';
+        const trangThaiGiaoHang = getRowValue(row, 'Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng') || '';
+        const donViVanChuyen = getRowValue(row, 'Đơn_vị_vận_chuyển', 'Đơn vị vận chuyển') || '';
+        const trangThaiThuTien = getRowValue(row, 'Trạng_thái_thu_tiền', 'Trạng thái thu tiền') || '';
+        const matHang = getRowValue(row, 'Mặt_hàng', 'Mặt hàng') || '';
+        const khuVuc = getRowValue(row, 'Khu_vực', 'Khu vực') || '';
 
         // Tạo badge cho Kết quả Check
         let checkBadge = '';
@@ -851,8 +923,8 @@
           }
         }
 
-        const phiShip = formatCurrency(row['Phí ship'] || 0);
-        const tienVietDoiSoat = formatCurrency(row['Tiền Việt đã đối soát'] || 0);
+        const phiShip = formatCurrency(getRowValue(row, 'Phí_ship', 'Phí ship') || 0);
+        const tienVietDoiSoat = formatCurrency(getRowValue(row, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát') || 0);
 
         tr.innerHTML = `
           <td class="text-center">${globalIndex + 1}</td>
@@ -889,12 +961,24 @@
       let totalTongTien = 0;
       let totalPhiShip = 0;
       let totalTienVietDoiSoat = 0;
-      let totalDon = filteredData.length;
+      
+      // Theo dõi các mã đơn hàng đã gặp để loại bỏ trùng lặp
+      const seenCodes = new Set();
+      let totalDon = 0;
 
       filteredData.forEach(row => {
-        totalTongTien += Number(row['Tổng tiền VNĐ'] || 0);
-        totalPhiShip += Number(row['Phí ship'] || 0);
-        totalTienVietDoiSoat += Number(row['Tiền Việt đã đối soát'] || 0);
+        const maDonHang = String(getRowValue(row, 'Mã_đơn_hàng', 'Mã đơn hàng') || '').trim();
+        
+        // Chỉ tính nếu mã đơn hàng chưa xuất hiện (không trùng)
+        if (maDonHang && !seenCodes.has(maDonHang)) {
+          seenCodes.add(maDonHang);
+          totalDon++;
+          // Thử nhiều tên cột khác nhau cho Tổng tiền VNĐ
+          const tongTienValue = getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0;
+          totalTongTien += Number(tongTienValue || 0);
+          totalPhiShip += Number(getRowValue(row, 'Phí_ship', 'Phí ship') || 0);
+          totalTienVietDoiSoat += Number(getRowValue(row, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát') || 0);
+        }
       });
 
       // Cập nhật các giá trị trong bảng thông số
@@ -959,10 +1043,26 @@
           (config.boPhan === currentBoPhan || 
            (config.boPhan === 'Vận Đơn' && currentBoPhan === 'Vận Hành'));
 
-        // Lấy unique values
+        // Lấy unique values - thử cả tên cột có dấu gạch dưới và không có
         const values = new Set();
         allData.forEach(row => {
-          const value = row[config.field];
+          // Tạo danh sách các tên cột có thể có
+          let possibleFields = [];
+          if (config.field === 'Nhân viên Sale') {
+            possibleFields = ['Nhân_viên_Sale', 'Nhân viên Sale'];
+          } else if (config.field === 'Nhân viên Marketing') {
+            possibleFields = ['Nhân_viên_Marketing', 'Nhân viên Marketing'];
+          } else if (config.field === 'NV Vận đơn') {
+            possibleFields = ['NV_Vận_đơn', 'NV Vận đơn'];
+          } else if (config.field === 'Kết quả Check') {
+            possibleFields = ['Kết_quả_Check', 'Kết quả Check'];
+          } else if (config.field === 'Trạng thái giao hàng NB') {
+            possibleFields = ['Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng'];
+          } else {
+            possibleFields = [config.field];
+          }
+          
+          const value = getRowValue(row, ...possibleFields);
           if (value !== null && value !== undefined && value !== '') {
             const valueStr = String(value).trim();
             
@@ -1076,13 +1176,13 @@
             
             // So sánh với cột tương ứng dựa trên Bộ phận
             if (currentBoPhan === 'Sale') {
-              const nvSale = String(row['Nhân viên Sale'] || '').trim();
+              const nvSale = String(getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim();
               matches = nvSale === hoVaTen;
             } else if (currentBoPhan === 'MKT') {
-              const nvMarketing = String(row['Nhân viên Marketing'] || '').trim();
+              const nvMarketing = String(getRowValue(row, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim();
               matches = nvMarketing === hoVaTen;
             } else if (currentBoPhan === 'Vận Đơn' || currentBoPhan === 'Vận Hành') {
-              const nvVanDon = String(row['NV Vận đơn'] || '').trim();
+              const nvVanDon = String(getRowValue(row, 'NV_Vận_đơn', 'NV Vận đơn') || '').trim();
               matches = nvVanDon === hoVaTen;
             }
             
@@ -1097,13 +1197,13 @@
             
             // So sánh với cột tương ứng dựa trên Bộ phận
             if (currentBoPhan === 'Sale') {
-              const nvSale = String(row['Nhân viên Sale'] || '').trim();
+              const nvSale = String(getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim();
               hasAllowedStaff = nvSale && allowedStaffNames.has(nvSale);
             } else if (currentBoPhan === 'MKT') {
-              const nvMarketing = String(row['Nhân viên Marketing'] || '').trim();
+              const nvMarketing = String(getRowValue(row, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim();
               hasAllowedStaff = nvMarketing && allowedStaffNames.has(nvMarketing);
             } else if (currentBoPhan === 'Vận Đơn' || currentBoPhan === 'Vận Hành') {
-              const nvVanDon = String(row['NV Vận đơn'] || '').trim();
+              const nvVanDon = String(getRowValue(row, 'NV_Vận_đơn', 'NV Vận đơn') || '').trim();
               hasAllowedStaff = nvVanDon && allowedStaffNames.has(nvVanDon);
             }
             
@@ -1121,7 +1221,7 @@
 
         // Lọc theo ngày
         if (startDate || endDate) {
-          const rowDate = row['Ngày lên đơn'] || row['Thời gian lên đơn'];
+          const rowDate = getRowValue(row, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn');
           if (!rowDate) return false;
           
           try {
@@ -1151,7 +1251,7 @@
           const shouldApplyFilter = !currentEmployee || allowedStaffNames === null;
           
           if (shouldApplyFilter) {
-            const nvSale = String(row['Nhân viên Sale'] || '').trim();
+            const nvSale = String(getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim();
             if (selectedNVSale === '__EMPTY__') {
               if (nvSale !== '') return false;
             } else {
@@ -1165,7 +1265,7 @@
           const shouldApplyFilter = !currentEmployee || allowedStaffNames === null;
           
           if (shouldApplyFilter) {
-            const nvMarketing = String(row['Nhân viên Marketing'] || '').trim();
+            const nvMarketing = String(getRowValue(row, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '').trim();
             if (selectedNVMarketing === '__EMPTY__') {
               if (nvMarketing !== '') return false;
             } else {
@@ -1179,7 +1279,7 @@
           const shouldApplyFilter = !currentEmployee || allowedStaffNames === null;
           
           if (shouldApplyFilter) {
-            const nvVanDon = String(row['NV Vận đơn'] || '').trim();
+            const nvVanDon = String(getRowValue(row, 'NV_Vận_đơn', 'NV Vận đơn') || '').trim();
             if (selectedNVVanDon === '__EMPTY__') {
               if (nvVanDon !== '') return false;
             } else {
@@ -1190,7 +1290,7 @@
 
         // Filter Kết quả Check
         if (selectedKetQuaCheck) {
-          const ketQuaCheck = String(row['Kết quả Check'] || '').trim();
+          const ketQuaCheck = String(getRowValue(row, 'Kết_quả_Check', 'Kết quả Check') || '').trim();
           if (selectedKetQuaCheck === '__EMPTY__') {
             if (ketQuaCheck !== '') return false;
           } else {
@@ -1200,7 +1300,7 @@
 
         // Filter Trạng thái giao hàng NB
         if (selectedTrangThaiGiaoHang) {
-          const trangThaiGiaoHang = String(row['Trạng thái giao hàng NB'] || '').trim();
+          const trangThaiGiaoHang = String(getRowValue(row, 'Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng') || '').trim();
           if (selectedTrangThaiGiaoHang === '__EMPTY__') {
             if (trangThaiGiaoHang !== '') return false;
           } else {
@@ -1217,6 +1317,7 @@
 
     // Xuất Excel
     function exportToExcel() {
+      // Xuất theo bộ lọc (filteredData)
       if (filteredData.length === 0) {
         alert('Không có dữ liệu để xuất!');
         return;
@@ -1228,7 +1329,6 @@
         'Mã Tracking',
         'Ngày lên đơn',
         'Name*',
-        'Tổng tiền VNĐ',
         'Nhân viên Sale',
         'Nhân viên Marketing',
         'NV Vận đơn',
@@ -1237,40 +1337,55 @@
         'Đơn vị vận chuyển',
         'Trạng thái thu tiền',
         'Mặt hàng',
-        'Khu vực'
+        'Khu vực',
+        'Tổng tiền VNĐ',
+        'Phí ship',
+        'Tiền Việt đã đối soát'
       ];
 
       const excelData = [headers];
 
       filteredData.forEach((row, index) => {
+        // Thử nhiều tên cột khác nhau cho Tổng tiền VNĐ
+        const tongTienValue = getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0;
         excelData.push([
           index + 1,
-          row['Mã đơn hàng'] || '',
-          row['Mã Tracking'] || '',
-          formatDate(row['Ngày lên đơn'] || row['Thời gian lên đơn']),
-          row['Name*'] || row['Tên lên đơn'] || '',
-          row['Tổng tiền VNĐ'] || 0,
-          row['Nhân viên Sale'] || '',
-          row['Nhân viên Marketing'] || '',
-          row['NV Vận đơn'] || '',
-          row['Kết quả Check'] || '',
-          row['Trạng thái giao hàng NB'] || '',
-          row['Đơn vị vận chuyển'] || '',
-          row['Trạng thái thu tiền'] || '',
-          row['Mặt hàng'] || '',
-          row['Khu vực'] || ''
+          getRowValue(row, 'Mã_đơn_hàng', 'Mã đơn hàng') || '',
+          getRowValue(row, 'Mã_Tracking', 'Mã Tracking') || '',
+          formatDate(getRowValue(row, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn')),
+          getRowValue(row, 'Name', 'Name*', 'Tên lên đơn') || '',
+          getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '',
+          getRowValue(row, 'Nhân_viên_Marketing', 'Nhân viên Marketing') || '',
+          getRowValue(row, 'NV_Vận_đơn', 'NV Vận đơn') || '',
+          getRowValue(row, 'Kết_quả_Check', 'Kết quả Check') || '',
+          getRowValue(row, 'Trạng_thái_giao_hàng', 'Trạng thái giao hàng NB', 'Trạng thái giao hàng') || '',
+          getRowValue(row, 'Đơn_vị_vận_chuyển', 'Đơn vị vận chuyển') || '',
+          getRowValue(row, 'Trạng_thái_thu_tiền', 'Trạng thái thu tiền') || '',
+          getRowValue(row, 'Mặt_hàng', 'Mặt hàng') || '',
+          getRowValue(row, 'Khu_vực', 'Khu vực') || '',
+          tongTienValue || 0,
+          getRowValue(row, 'Phí_ship', 'Phí ship') || 0,
+          getRowValue(row, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát') || 0
         ]);
       });
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(excelData);
+      
+      // Thiết lập độ rộng cột tự động
+      const colWidths = [];
+      headers.forEach(() => {
+        colWidths.push({ wch: 15 });
+      });
+      ws['!cols'] = colWidths;
+      
       XLSX.utils.book_append_sheet(wb, ws, 'F3_Data');
       
       const now = new Date();
-      const fileName = `F3_Data_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.xlsx`;
+      const fileName = `F3_Data_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.xlsx`;
       
       XLSX.writeFile(wb, fileName);
-      alert(`✅ Đã xuất ${filteredData.length} dòng dữ liệu thành công!`);
+      alert(`✅ Đã xuất ${filteredData.length.toLocaleString('vi-VN')} dòng dữ liệu theo bộ lọc thành công!`);
     }
 
     // Hàm set date range từ tháng
@@ -1285,13 +1400,23 @@
       const year = now.getFullYear();
       const monthNum = parseInt(month);
       
-      // Ngày đầu tháng
+      // Ngày đầu tháng (mùng 1)
       const startDate = new Date(year, monthNum - 1, 1);
-      // Ngày cuối tháng
+      // Ngày cuối tháng (ngày 0 của tháng tiếp theo = ngày cuối tháng hiện tại)
       const endDate = new Date(year, monthNum, 0);
       
-      document.getElementById('startDate').value = startDate.toISOString().split('T')[0];
-      document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
+      // Format YYYY-MM-DD để tránh timezone issues
+      const formatDate = (date) => {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      };
+      
+      document.getElementById('startDate').value = formatDate(startDate);
+      document.getElementById('endDate').value = formatDate(endDate);
+      
+      console.log(`📅 Đã set filter tháng ${month}: từ ${formatDate(startDate)} đến ${formatDate(endDate)}`);
     }
 
     // Hàm xử lý quick filter
@@ -1416,4 +1541,6 @@
   </script>
 </body>
 </html>
+
+
 
