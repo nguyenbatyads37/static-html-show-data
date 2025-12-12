@@ -810,7 +810,7 @@
   <script>
     const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
     const BAO_CAO_MKT_URL = 'https://n-api-gamma.vercel.app/report/generate?tableName=' + encodeURIComponent('Báo cáo MKT');
-    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1.json';
+    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1';
     // Fallback sample (user-provided) to display when network fails
     const F3_SAMPLE = {
       "0": {
@@ -927,7 +927,7 @@
         const [dataF3, dataMkt, dataHr] = await Promise.all([
           fetchWithRetry(F3_URL, { retries: 3, delayMs: 800 }),
           fetchWithRetry(BAO_CAO_MKT_URL, { retries: 3, delayMs: 800 }).catch(() => null),
-          fetchWithRetry(HR_URL, { retries: 3, delayMs: 800 }).catch(() => null)
+          fetchWithRetry(HR_URL + '.json', { retries: 3, delayMs: 800 }).catch(() => null)
         ]);
         rawOrders = normalizeF3(dataF3);
         // Xử lý dữ liệu từ API mới: có thể là {data: [...]} hoặc {rows: [...]} hoặc array trực tiếp
@@ -2369,8 +2369,8 @@
         const keToanXacNhan = (getRowValue(r, 'Kế_toán_xác_nhận_thu_tiền_về', 'Kế toán xác nhận thu tiền về', 'Ke toan xac nhan thu tien ve') || '').toString().trim();
         const isHuy = ketQuaCheck === 'Huỷ';
         const isDi = maTracking !== '';
-        const isThanhCong = ketQuaCheck === 'OK' && isDi;
-        const isDaThuTien = keToanXacNhan === 'Đã thu tiền' || keToanXacNhan === 'Da thu tien';
+        // Theo công thức mới: Số đơn đi chỉ cần có Mã Tracking (không cần Kết quả Check = "OK")
+        // Theo công thức mới: Số đơn thu tiền chỉ cần Tiền Việt đã đối soát > 0 (không cần Kế toán xác nhận)
 
         // Tránh tính trùng cho cùng một nhân viên trong cùng một đơn hàng
         const processedStaffForOrder = new Set();
@@ -2413,11 +2413,13 @@
             agg.soDonHuy += 1;
             agg.dsHuy += tongTien;
           }
-          if (isThanhCong) {
+          // Theo công thức mới: Số đơn đi và DS đi chỉ cần có Mã Tracking (không cần Kết quả Check = "OK")
+          if (isDi) {
             agg.soDonDi += 1;
             agg.dsDi += tongTien;
           }
-          if (isDaThuTien && tienVietDoiSoat > 0) {
+          // Theo công thức mới: Số đơn thu tiền và DThu thành công chỉ cần Tiền Việt đã đối soát > 0
+          if (tienVietDoiSoat > 0) {
             agg.soDonThuTien += 1;
             agg.dThuThanhCong += tienVietDoiSoat;
           }
