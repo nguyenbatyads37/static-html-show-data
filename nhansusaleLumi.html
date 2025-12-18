@@ -442,7 +442,7 @@ background-color: rgba(0,0,0,0.015);
 let rawData = [];
 let isRestrictedView = false;
 let allowedNames = [];
-let allowedBranch = null;
+let allowedTeam = null;
 let currentUserInfo = null;
 const loader = document.getElementById('loading-overlay');
 const showLoader = () => loader.classList.add('visible');
@@ -577,40 +577,30 @@ function fetchAndProcessData() {
 
                     if (userRole === 'Leader') {
                         // Leader chỉ xem team của mình
-                        const teamNames = new Set();
-                        if (userTeam) {
-                            result.employeeData.forEach(record => {
-                                const recordTeam = (record['Team'] || '').trim();
-                                const recordName = (record['Họ Và Tên'] || '').trim();
-                                if (recordTeam === userTeam && recordName) {
-                                    teamNames.add(recordName);
-                                }
-                            });
-                        }
-                        allowedNames = Array.from(teamNames);
-                        allowedBranch = null;
+                        allowedTeam = userTeam ? userTeam.trim() : null;
+                        allowedNames = []; // Không cần lọc theo tên nữa, chỉ cần lọc theo team
                         document.getElementById('report-title').textContent = `DỮ LIỆU TEAM - ${userTeam}`;
-                        console.log('Leader mode: showing team', userTeam, '- Team members:', allowedNames);
+                        console.log('Leader mode: showing team', allowedTeam);
                     } else if (userRole === 'NV') {
                         document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
                         allowedNames = [cleanName];
-                        allowedBranch = null;
+                        allowedTeam = null;
                         console.log('NV mode: showing personal data for', cleanName);
                     } else {
                         document.getElementById('report-title').textContent = `DỮ LIỆU CÁ NHÂN - ${cleanName}`;
                         allowedNames = [cleanName];
-                        allowedBranch = null;
+                        allowedTeam = null;
                         console.log('Default mode: showing personal data for', cleanName);
                     }
                 } else {
                     document.getElementById('report-title').textContent = 'KHÔNG TÌM THẤY DỮ LIỆU';
                     allowedNames = [];
-                    allowedBranch = null;
+                    allowedTeam = null;
                 }
             } else {
                 isRestrictedView = false;
                 allowedNames = [];
-                allowedBranch = null;
+                allowedTeam = null;
                 currentUserInfo = null;
                 document.getElementById('report-title').textContent = 'DỮ LIỆU TỔNG HỢP';
             }
@@ -645,7 +635,16 @@ function fetchAndProcessData() {
                 }));
 
             const dataForFilters = isRestrictedView
-                ? rawData.filter(r => (allowedBranch && r.chiNhanh === allowedBranch) || (allowedNames.length > 0 && allowedNames.includes(r.ten)))
+                ? rawData.filter(r => {
+                    // Chỉ lọc theo team cho Leader
+                    if (allowedTeam) {
+                        const recordTeam = (r.team || '').trim();
+                        return recordTeam === allowedTeam;
+                    }
+                    // Lọc theo tên cho NV và các role khác
+                    if (allowedNames.length > 0) return allowedNames.includes(r.ten);
+                    return false;
+                })
                 : rawData;
 
             populateAllFilters(dataForFilters);
@@ -758,7 +757,12 @@ function applyFilters() {
 
     const filtered = rawData.filter(r => {
         if (isRestrictedView) {
-            if (allowedBranch && r.chiNhanh !== allowedBranch) return false;
+            // Chỉ lọc theo team cho Leader
+            if (allowedTeam) {
+                const recordTeam = (r.team || '').trim();
+                if (recordTeam !== allowedTeam) return false;
+            }
+            // Lọc theo tên cho NV và các role khác
             if (allowedNames.length > 0 && !allowedNames.includes(r.ten)) return false;
         }
         const recordDate = new Date(r.ngay);
@@ -869,3 +873,6 @@ function renderDailyBreakdown(data) {
 </script>
 </body>
 </html>
+
+
+
