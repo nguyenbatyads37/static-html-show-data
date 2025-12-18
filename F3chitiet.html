@@ -540,7 +540,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
     const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
-    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1';
+    const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2n_s%E1%BB%B1';
     
     let allData = [];
     let filteredData = [];
@@ -721,29 +721,40 @@
         // Gán cho biến global
         currentEmployee = foundEmployee;
 
-        // Lấy thông tin nhân viên với nhiều tên cột khác nhau
-        const viTri = (currentEmployee['Vị trí'] ?? currentEmployee['Vi_tri'] ?? currentEmployee['Vi trí'] ?? currentEmployee['Position'] ?? '').toString().trim();
+        // Lấy thông tin nhân viên với nhiều tên cột khác nhau (ưu tiên format mới với dấu gạch dưới)
+        const viTri = (currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'] ?? currentEmployee['Vi_tri'] ?? currentEmployee['Vi trí'] ?? currentEmployee['Position'] ?? '').toString().trim();
         const team = (currentEmployee['Team'] ?? '').toString().trim();
-        const hoVaTen = (currentEmployee['Họ Và Tên'] ?? currentEmployee['Họ_và_tên'] ?? currentEmployee['Họ và tên'] ?? currentEmployee['Tên'] ?? currentEmployee['Name'] ?? '').toString().trim();
-        const boPhan = (currentEmployee['Bộ phận'] ?? currentEmployee['Bộ_phận'] ?? currentEmployee['Bo_phan'] ?? '').toString().trim();
+        const hoVaTen = (currentEmployee['Họ_và_tên'] ?? currentEmployee['Họ Và Tên'] ?? currentEmployee['Họ và tên'] ?? currentEmployee['Tên'] ?? currentEmployee['Name'] ?? '').toString().trim();
+        const boPhan = (currentEmployee['Bộ_phận'] ?? currentEmployee['Bộ phận'] ?? currentEmployee['Bo_phan'] ?? '').toString().trim();
+        
+        // Lấy chi nhánh với nhiều tên cột khác nhau (ưu tiên format mới)
+        const chiNhanh = (currentEmployee['chi_nhánh'] ?? currentEmployee['chi nhánh'] ?? currentEmployee['Chi_nhanh'] ?? currentEmployee['Chi nhánh'] ?? '').toString().trim();
         
         // Lưu thông tin nhân viên hiện tại
         // Nếu Bộ phận = CSKH thì xử lý như Sale
         currentBoPhan = (boPhan === 'CSKH') ? 'Sale' : boPhan;
 
-        // Xác định Leader/NV
-        const isLeader = /leader/i.test(viTri);
+        // Xác định Sale Leader/Leader/NV
+        const isSaleLeader = viTri === 'Sale Leader';
+        const isLeader = /leader/i.test(viTri) && !isSaleLeader;
         const isNV = /^nv$/i.test(viTri) || viTri.toLowerCase() === 'nhân viên' || viTri === '';
 
         console.log('👤 Nhân viên hiện tại:', {
           id: userId,
           hoVaTen: hoVaTen,
           viTri: viTri,
+          viTriRaw: currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'],
           team: team,
           boPhan: boPhan,
+          chiNhanh: chiNhanh,
+          isSaleLeader: isSaleLeader,
           isLeader: isLeader,
           isNV: isNV
         });
+        
+        if (viTri && viTri.toLowerCase().includes('leader')) {
+          console.log('🔍 Debug Leader - viTri:', viTri, 'isSaleLeader:', isSaleLeader, 'chiNhanh:', chiNhanh);
+        }
 
         // Hiển thị chào hỏi
         const greetingEl = document.getElementById('greeting');
@@ -753,13 +764,46 @@
 
         // Xử lý phân quyền theo vị trí
         const set = new Set();
-        if (isLeader) {
+        if (isSaleLeader) {
+          // Sale Leader: xem full chi nhánh của mình
+          if (chiNhanh) {
+            console.log('🔍 Sale Leader - Tìm nhân viên trong chi nhánh:', chiNhanh);
+            let count = 0;
+            
+            // Hàm helper để lấy chi nhánh từ employee record (ưu tiên format mới)
+            const getEmpChiNhanh = (emp) => {
+              return (emp['chi_nhánh'] ?? emp['chi nhánh'] ?? emp['Chi_nhanh'] ?? emp['Chi nhánh'] ?? '').toString().trim();
+            };
+            
+            // Hàm helper để lấy tên từ employee record (ưu tiên format mới)
+            const getEmpName = (emp) => {
+              return (emp['Họ_và_tên'] ?? emp['Họ Và Tên'] ?? emp['Họ và tên'] ?? emp['Tên'] ?? emp['Name'] ?? '').toString().trim();
+            };
+            
+            hrData.forEach(emp => {
+              const empChiNhanh = getEmpChiNhanh(emp);
+              // So sánh case-insensitive để đảm bảo khớp
+              if (empChiNhanh && empChiNhanh.toLowerCase() === chiNhanh.toLowerCase()) {
+                // Lấy tên với nhiều tên cột khác nhau
+                const name = getEmpName(emp);
+                if (name) {
+                  set.add(name);
+                  count++;
+                }
+              }
+            });
+            console.log('👔 Sale Leader - Tìm thấy', count, 'nhân viên trong chi nhánh', chiNhanh);
+            console.log('👔 Sale Leader - Danh sách nhân viên:', Array.from(set));
+          } else {
+            console.warn('⚠️ Sale Leader nhưng không có thông tin chi nhánh');
+          }
+        } else if (isLeader) {
           // Leader: xem full Team của mình
           hrData.forEach(emp => {
             const empTeam = (emp['Team'] ?? '').toString().trim();
             if (empTeam === team && empTeam && empTeam !== 'Đã nghỉ') {
-              // Lấy tên với nhiều tên cột khác nhau
-              const name = (emp['Họ Và Tên'] ?? emp['Họ_và_tên'] ?? emp['Họ và tên'] ?? emp['Tên'] ?? emp['Name'] ?? '').toString().trim();
+              // Lấy tên với nhiều tên cột khác nhau (ưu tiên format mới)
+              const name = (emp['Họ_và_tên'] ?? emp['Họ Và Tên'] ?? emp['Họ và tên'] ?? emp['Tên'] ?? emp['Name'] ?? '').toString().trim();
               if (name) {
                 set.add(name);
               }
@@ -781,6 +825,10 @@
         }
         
         allowedStaffNames = set.size ? set : null;
+        
+        if (isSaleLeader) {
+          console.log('✅ Sale Leader - allowedStaffNames được set:', allowedStaffNames ? Array.from(allowedStaffNames).length + ' nhân viên' : 'null');
+        }
 
       } catch (error) {
         console.error('❌ Lỗi khi load dữ liệu nhân viên:', error);
@@ -1139,10 +1187,10 @@
 
         // Thêm option "Trống" nếu:
         // 1. Không có id trong URL (admin mode)
-        // 2. Là Leader (cho phép xem cả đơn hàng trống trong team)
+        // 2. Là Leader hoặc Sale Leader (cho phép xem cả đơn hàng trống)
         // 3. Không phải dropdown Bộ phận tương ứng (ví dụ: Leader Sale không cần "Trống" cho Marketing)
-        const viTri = currentEmployee ? String(currentEmployee['Vị trí'] || '').trim() : '';
-        const isLeader = viTri === 'Leader';
+        const viTri = currentEmployee ? String(currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'] ?? '').trim() : '';
+        const isLeader = viTri === 'Leader' || viTri === 'Sale Leader';
         
         if (!currentEmployee || allowedStaffNames === null || (isLeader && isMatchingBoPhan) || !isMatchingBoPhan) {
           const emptyOption = document.createElement('option');
@@ -1229,8 +1277,8 @@
         // Lọc theo nhân viên được phép xem (nếu có giới hạn) - ƯU TIÊN CAO NHẤT
         // Kiểm tra nếu có currentEmployee và allowedStaffNames (có id trong URL)
         if (currentEmployee && allowedStaffNames !== null && currentBoPhan) {
-          const viTri = String(currentEmployee['Vị trí'] || '').trim();
-          const hoVaTen = String(currentEmployee['Họ Và Tên'] || '').trim();
+          const viTri = String(currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'] ?? '').trim();
+          const hoVaTen = String(currentEmployee['Họ_và_tên'] ?? currentEmployee['Họ Và Tên'] ?? '').trim();
           
           // Nếu là NV, chỉ hiển thị đơn hàng của chính họ (lọc chặt chẽ)
           if (viTri === 'NV' || viTri === '') {
@@ -1253,8 +1301,8 @@
               return false;
             }
           } 
-          // Nếu là Leader, hiển thị đơn hàng của team
-          else if (viTri === 'Leader') {
+          // Nếu là Leader hoặc Sale Leader, hiển thị đơn hàng dựa trên allowedStaffNames
+          else if (viTri === 'Leader' || viTri === 'Sale Leader') {
             let hasAllowedStaff = false;
             
             // So sánh với cột tương ứng dựa trên Bộ phận
@@ -1308,13 +1356,13 @@
 
         // Filter Nhân viên Sale
         if (selectedNVSale) {
-          const viTri = currentEmployee ? String(currentEmployee['Vị trí'] || '').trim() : '';
-          const isLeader = viTri === 'Leader';
+          const viTri = currentEmployee ? String(currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'] ?? '').trim() : '';
+          const isLeader = viTri === 'Leader' || viTri === 'Sale Leader';
           const isNV = viTri === 'NV' || viTri === '';
           
           // Áp dụng filter dropdown nếu:
           // 1. Không có id trong URL (admin mode)
-          // 2. Là Leader (cho phép lọc theo từng nhân viên trong team)
+          // 2. Là Leader hoặc Sale Leader (cho phép lọc theo từng nhân viên)
           // 3. KHÔNG áp dụng nếu là NV (đã lọc ở trên rồi)
           const shouldApplyFilter = !currentEmployee || allowedStaffNames === null || isLeader;
           
@@ -1330,13 +1378,13 @@
 
         // Filter Nhân viên Marketing
         if (selectedNVMarketing) {
-          const viTri = currentEmployee ? String(currentEmployee['Vị trí'] || '').trim() : '';
-          const isLeader = viTri === 'Leader';
+          const viTri = currentEmployee ? String(currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'] ?? '').trim() : '';
+          const isLeader = viTri === 'Leader' || viTri === 'Sale Leader';
           const isNV = viTri === 'NV' || viTri === '';
           
           // Áp dụng filter dropdown nếu:
           // 1. Không có id trong URL (admin mode)
-          // 2. Là Leader (cho phép lọc theo từng nhân viên trong team)
+          // 2. Là Leader hoặc Sale Leader (cho phép lọc theo từng nhân viên)
           // 3. KHÔNG áp dụng nếu là NV (đã lọc ở trên rồi)
           const shouldApplyFilter = !currentEmployee || allowedStaffNames === null || isLeader;
           
@@ -1352,13 +1400,13 @@
 
         // Filter NV Vận đơn
         if (selectedNVVanDon) {
-          const viTri = currentEmployee ? String(currentEmployee['Vị trí'] || '').trim() : '';
-          const isLeader = viTri === 'Leader';
+          const viTri = currentEmployee ? String(currentEmployee['Vị_trí'] ?? currentEmployee['Vị trí'] ?? '').trim() : '';
+          const isLeader = viTri === 'Leader' || viTri === 'Sale Leader';
           const isNV = viTri === 'NV' || viTri === '';
           
           // Áp dụng filter dropdown nếu:
           // 1. Không có id trong URL (admin mode)
-          // 2. Là Leader (cho phép lọc theo từng nhân viên trong team)
+          // 2. Là Leader hoặc Sale Leader (cho phép lọc theo từng nhân viên)
           // 3. KHÔNG áp dụng nếu là NV (đã lọc ở trên rồi)
           const shouldApplyFilter = !currentEmployee || allowedStaffNames === null || isLeader;
           
