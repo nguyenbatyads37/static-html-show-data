@@ -1274,12 +1274,100 @@
             return { start, end };
         }
 
+        // Hàm xác định ca hiện tại dựa trên giờ
+        function getCurrentShift() {
+            const now = new Date();
+            const hour = now.getHours();
+            // Từ 8h đến 21h: Ca ngày
+            // Từ 21h đến 7h sáng: Ca Đêm
+            if (hour >= 8 && hour < 21) {
+                return 'Ca ngày';
+            } else {
+                return 'Ca Đêm';
+            }
+        }
+
+        // Hàm kiểm tra nhân sự có thuộc ca được chỉ định không
+        function isStaffInShift(staffName, targetShift) {
+            if (!staffName || !targetShift) return true; // Mặc định hiển thị nếu không có thông tin
+
+            let hasCaInfo = false; // Đánh dấu có tìm thấy thông tin ca hay không
+            let foundShift = null; // Ca tìm được
+
+            // 1. Kiểm tra trong salesReportData (trường Team có thể chứa "Sale Ca ngày" hoặc "Sale Ca Đêm")
+            const saleReports = salesReportData.filter(r => {
+                const name = (r["Tên"] || "").toString().trim();
+                return normalizeName(name) === normalizeName(staffName);
+            });
+
+            for (let r of saleReports) {
+                const team = (r["Team"] || "").toString().trim();
+                if (team) {
+                    hasCaInfo = true;
+                    if (team.includes('Ca ngày')) {
+                        foundShift = 'Ca ngày';
+                    } else if (team.includes('Ca Đêm') || team.includes('Ca đêm')) {
+                        foundShift = 'Ca Đêm';
+                    }
+                }
+            }
+
+            // 2. Kiểm tra trong mktReportData
+            const mktReports = mktReportData.filter(r => {
+                const name = (r["Tên"] || "").toString().trim();
+                return normalizeName(name) === normalizeName(staffName);
+            });
+
+            for (let r of mktReports) {
+                const team = (r["Team"] || "").toString().trim();
+                if (team) {
+                    hasCaInfo = true;
+                    if (team.includes('Ca ngày')) {
+                        foundShift = 'Ca ngày';
+                    } else if (team.includes('Ca Đêm') || team.includes('Ca đêm')) {
+                        foundShift = 'Ca Đêm';
+                    }
+                }
+            }
+
+            // 3. Kiểm tra trong HR data (trường Ca)
+            if (hrDataMap) {
+                const normalizedName = normalizeName(staffName);
+                const hrRecord = hrDataMap.get(normalizedName);
+                if (hrRecord) {
+                    // Thử nhiều tên cột khác nhau cho Ca
+                    const ca = hrRecord['Ca'] || hrRecord['ca'] || hrRecord['CA'] || 
+                              hrRecord['Ca làm việc'] || hrRecord['Ca_lam_viec'] || '';
+                    const caStr = ca.toString().trim();
+                    if (caStr) {
+                        hasCaInfo = true;
+                        if (caStr.includes('Ca ngày') || caStr.includes('ca ngày')) {
+                            foundShift = 'Ca ngày';
+                        } else if (caStr.includes('Ca Đêm') || caStr.includes('Ca đêm') || caStr.includes('ca đêm')) {
+                            foundShift = 'Ca Đêm';
+                        }
+                    }
+                }
+            }
+
+            // Nếu có thông tin ca rõ ràng, chỉ hiển thị nếu khớp với ca hiện tại
+            if (hasCaInfo && foundShift) {
+                return foundShift === targetShift;
+            }
+
+            // Nếu không có thông tin ca rõ ràng, mặc định hiển thị (để vẫn có top)
+            return true;
+        }
+
         function calculateStats(startDate, endDate) {
             const periodOrders = allOrders.filter(o => {
                 const d = new Date(o["Ngày lên đơn"] || o["Ngày_lên_đơn"]);
                 const team = o["Team"] || "";
                 return team.trim() === "Hà Nội" && d >= startDate && d <= endDate;
             });
+
+            // Xác định ca hiện tại dựa trên giờ
+            const currentShift = getCurrentShift();
 
             // 1. Sale
             const saleMap = {};
@@ -1300,6 +1388,11 @@
 
             // Lọc bỏ các nhân sự không cần hiển thị
             saleList = filterExcludedNames(saleList);
+
+            // Lọc theo ca: chỉ giữ lại nhân sự có ca phù hợp với khung giờ hiện tại
+            saleList = saleList.filter(item => {
+                return isStaffInShift(item.name, currentShift);
+            });
 
             if (saleList.length > 0) {
                 const max = saleList[0].rawVal;
@@ -1355,6 +1448,11 @@
 
             // Lọc bỏ các nhân sự không cần hiển thị
             mktList = filterExcludedNames(mktList);
+
+            // Lọc theo ca: chỉ giữ lại nhân sự có ca phù hợp với khung giờ hiện tại
+            mktList = mktList.filter(item => {
+                return isStaffInShift(item.name, currentShift);
+            });
 
             if (mktList.length > 0) {
                 const max = mktList[0].rawVal;
