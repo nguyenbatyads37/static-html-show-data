@@ -776,7 +776,7 @@
     </div>
 
     <script>
-        const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
+        const F3_URL = 'https://n-api-gamma.vercel.app/sheet/F3/data';
         const REPORT_URL = 'https://n-api-gamma.vercel.app/report/generate?tableName=Báo cáo sale';
         const MKT_REPORT_URL = 'https://n-api-gamma.vercel.app/report/generate?tableName=Báo cáo MKT';
         const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1';
@@ -1084,8 +1084,20 @@
                 let hasData = false;
 
                 if (resF3 && resF3.ok) {
-                    const data = await resF3.json();
-                    allOrders = Array.isArray(data) ? data : Object.values(data);
+                    const json = await resF3.json();
+                    // API mới trả về format {success: true, data: [...], meta: {...}}
+                    if (json.success && json.data && Array.isArray(json.data)) {
+                        allOrders = json.data;
+                    } else if (Array.isArray(json)) {
+                        // Fallback: nếu là array trực tiếp
+                        allOrders = json;
+                    } else if (json.data && Array.isArray(json.data)) {
+                        // Fallback: nếu có data trong json
+                        allOrders = json.data;
+                    } else {
+                        // Fallback cuối cùng: xử lý như Firebase
+                        allOrders = Object.values(json);
+                    }
                     if (allOrders.length > 0) hasData = true;
                 }
                 if (resReport && resReport.ok) {
@@ -1126,6 +1138,37 @@
                 loadDemoData();
                 updateData();
             }
+        }
+
+        // Tính tuần hiện tại dựa trên thời gian thực (trong tháng 12)
+        function getCurrentWeek() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = 11; // Tháng 12 (giống getDateRange)
+
+            // Tìm chủ nhật đầu tiên của tháng 12 (7h sáng)
+            const firstDayOfMonth = new Date(year, month, 1);
+            const firstSunday = new Date(firstDayOfMonth);
+            const dayOfWeek = firstDayOfMonth.getDay(); // 0 = Chủ nhật
+            if (dayOfWeek === 0) {
+                firstSunday.setDate(1);
+            } else {
+                const daysToSubtract = dayOfWeek;
+                firstSunday.setDate(1 - daysToSubtract);
+            }
+            firstSunday.setHours(7, 0, 0, 0);
+
+            // Tính số tuần từ chủ nhật đầu tiên đến hiện tại
+            const diffTime = now.getTime() - firstSunday.getTime();
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+            const weekNumber = Math.floor(diffDays / 7) + 1;
+
+            // Giới hạn từ 1 đến 4
+            if (weekNumber <= 1) return 'w1';
+            if (weekNumber === 2) return 'w2';
+            if (weekNumber === 3) return 'w3';
+            // Nếu quá tuần 4, trả về tuần 4
+            return 'w4';
         }
 
         function getDateRange(type, value) {
@@ -1435,6 +1478,17 @@
             container.innerHTML = `<div class="danger-name">${displayText}</div>`;
         }
 
+        // Tự động chọn tuần hiện tại khi load trang
+        function initWeekFilter() {
+            const currentWeek = getCurrentWeek();
+            const periodValueSelect = document.getElementById('period-value');
+            if (periodValueSelect) {
+                periodValueSelect.value = currentWeek;
+            }
+        }
+
+        // Khởi tạo filter và load data
+        initWeekFilter();
         loadData();
 
         // Tự động reload trang sau 5 phút (300.000ms) để cập nhật dữ liệu và làm mới bộ nhớ
