@@ -348,6 +348,7 @@
             font-size: 0.9vw;
             color: #fff;
             width: 0%;
+            max-width: 70%;
             transition: width 1.5s cubic-bezier(0.22, 1, 0.36, 1);
             white-space: nowrap;
             box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
@@ -636,16 +637,26 @@
         }
 
         .btn-close {
-            background: none;
-            border: none;
-            font-size: 24px;
-            color: #999;
+            background: rgba(255, 255, 255, 0.9);
+            border: 2px solid #ddd;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: #666;
             cursor: pointer;
             transition: 0.2s;
+            flex-shrink: 0;
         }
 
         .btn-close:hover {
-            color: #333;
+            background: #ff4444;
+            color: #fff;
+            border-color: #ff4444;
+            transform: scale(1.1);
         }
 
         .modal-body {
@@ -1305,59 +1316,50 @@
         function getCurrentShift() {
             const now = new Date();
             const hour = now.getHours();
-            // Từ 8h đến 21h: Ca ngày
-            // Từ 21h đến 7h sáng: Ca Đêm
-            if (hour >= 8 && hour < 21) {
+            // Từ 7h sáng đến 19h: Ca ngày
+            // Từ 19h đến 7h sáng hôm sau: Ca Đêm
+            if (hour >= 7 && hour < 19) {
                 return 'Ca ngày';
             } else {
                 return 'Ca Đêm';
             }
         }
 
-        // Hàm kiểm tra nhân sự có thuộc ca được chỉ định không
+        // Hàm lấy thông tin ca của nhân viên - chỉ lấy từ HR data
+        function getStaffShift(staffName) {
+            if (!staffName) return null;
+
+            // Chỉ kiểm tra trong HR data
+            if (hrDataMap) {
+                const normalizedName = normalizeName(staffName);
+                const hrRecord = hrDataMap.get(normalizedName);
+                if (hrRecord) {
+                    const ca = hrRecord['Ca'] || hrRecord['ca'] || hrRecord['CA'] || 
+                              hrRecord['Ca làm việc'] || hrRecord['Ca_lam_viec'] || '';
+                    const caStr = ca.toString().trim();
+                    if (caStr) {
+                        // Chuyển sang lowercase để so sánh không phân biệt hoa thường
+                        const caLower = caStr.toLowerCase();
+                        if (caLower.includes('ca ngày') || caLower.includes('ca ngay')) {
+                            return 'Ca ngày';
+                        } else if (caLower.includes('ca đêm') || caLower.includes('ca dem')) {
+                            return 'Ca Đêm';
+                        }
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        // Hàm kiểm tra nhân sự có thuộc ca được chỉ định không - chỉ lấy từ HR data
         function isStaffInShift(staffName, targetShift) {
             if (!staffName || !targetShift) return true; // Mặc định hiển thị nếu không có thông tin
 
             let hasCaInfo = false; // Đánh dấu có tìm thấy thông tin ca hay không
             let foundShift = null; // Ca tìm được
 
-            // 1. Kiểm tra trong salesReportData (trường Team có thể chứa "Sale Ca ngày" hoặc "Sale Ca Đêm")
-            const saleReports = salesReportData.filter(r => {
-                const name = (r["Tên"] || "").toString().trim();
-                return normalizeName(name) === normalizeName(staffName);
-            });
-
-            for (let r of saleReports) {
-                const team = (r["Team"] || "").toString().trim();
-                if (team) {
-                    hasCaInfo = true;
-                    if (team.includes('Ca ngày')) {
-                        foundShift = 'Ca ngày';
-                    } else if (team.includes('Ca Đêm') || team.includes('Ca đêm')) {
-                        foundShift = 'Ca Đêm';
-                    }
-                }
-            }
-
-            // 2. Kiểm tra trong mktReportData
-            const mktReports = mktReportData.filter(r => {
-                const name = (r["Tên"] || "").toString().trim();
-                return normalizeName(name) === normalizeName(staffName);
-            });
-
-            for (let r of mktReports) {
-                const team = (r["Team"] || "").toString().trim();
-                if (team) {
-                    hasCaInfo = true;
-                    if (team.includes('Ca ngày')) {
-                        foundShift = 'Ca ngày';
-                    } else if (team.includes('Ca Đêm') || team.includes('Ca đêm')) {
-                        foundShift = 'Ca Đêm';
-                    }
-                }
-            }
-
-            // 3. Kiểm tra trong HR data (trường Ca)
+            // Chỉ kiểm tra trong HR data (trường Ca)
             if (hrDataMap) {
                 const normalizedName = normalizeName(staffName);
                 const hrRecord = hrDataMap.get(normalizedName);
@@ -1368,9 +1370,11 @@
                     const caStr = ca.toString().trim();
                     if (caStr) {
                         hasCaInfo = true;
-                        if (caStr.includes('Ca ngày') || caStr.includes('ca ngày')) {
+                        // Chuyển sang lowercase để so sánh không phân biệt hoa thường
+                        const caLower = caStr.toLowerCase();
+                        if (caLower.includes('ca ngày') || caLower.includes('ca ngay')) {
                             foundShift = 'Ca ngày';
-                        } else if (caStr.includes('Ca Đêm') || caStr.includes('Ca đêm') || caStr.includes('ca đêm')) {
+                        } else if (caLower.includes('ca đêm') || caLower.includes('ca dem')) {
                             foundShift = 'Ca Đêm';
                         }
                     }
@@ -1454,6 +1458,9 @@
                     item.closeRate = "0%";
                     item.teamName = "Bộ phận Sale";
                 }
+
+                // Lấy thông tin ca của nhân viên
+                item.shift = getStaffShift(item.name);
             });
 
             // 2. MKT
@@ -1499,6 +1506,9 @@
                 }
                 // Format adsRate for display consistency with closeRate
                 item.displayRate = item.adsRate.toFixed(1) + '%';
+                
+                // Lấy thông tin ca của nhân viên
+                item.shift = getStaffShift(item.name);
             });
 
             return { saleList, mktList };
