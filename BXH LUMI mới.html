@@ -884,7 +884,14 @@
         ];
 
         function filterExcludedNames(list) {
-            return list.filter(item => !EXCLUDED_NAMES.includes(item.name.trim()));
+            return list.filter(item => {
+                const name = item.name.trim();
+                // Loại bỏ nếu tên trong danh sách loại trừ
+                if (EXCLUDED_NAMES.includes(name)) return false;
+                // Loại bỏ nếu tên có chứa "Lumi" (không phân biệt hoa thường)
+                if (name.toLowerCase().includes('lumi')) return false;
+                return true;
+            });
         }
 
         function formatMoney(num) {
@@ -1570,8 +1577,15 @@
                 displayText: `${abbreviateName(x.name)}(${formatMoneyForDanger(x.rawVal)})`
             })));
 
-            // Lấy top 3 MKT có doanh số thấp nhất (không cần lọc ADS ở phần cảnh báo)
+            // Lấy top 3 MKT có doanh số thấp nhất
+            // Phải đảm bảo là có mặt trong HR data
             const bottomMkt = [...weekStats.mktList]
+                .filter(item => {
+                    // Kiểm tra xem nhân viên có trong HR data không
+                    if (!hrDataMap || hrDataMap.size === 0) return true; // Nếu chưa có HR data, hiển thị tất cả
+                    const normalizedName = normalizeName(item.name);
+                    return hrDataMap.has(normalizedName);
+                })
                 .sort((a, b) => a.rawVal - b.rawVal)
                 .slice(0, 3);
 
