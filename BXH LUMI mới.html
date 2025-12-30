@@ -5,8 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng Xếp Hạng Lumi</title>
-    <!-- Tự động reload trang sau 300 giây (5 phút) bằng thẻ Meta (Dự phòng) -->
-    <meta http-equiv="refresh" content="300">
+    <!-- Tự động reload trang sau 60 giây (1 phút) bằng thẻ Meta (Dự phòng) -->
+    <meta http-equiv="refresh" content="60">
 
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link
@@ -1524,18 +1524,69 @@
             }
 
             mktList.forEach(item => {
-                const reportItem = mktReportData.find(r => r["Tên"] && r["Tên"].trim() === item.name);
-                if (reportItem) {
-                    const cpqc = Number(reportItem["CPQC"] || 0);
-                    const ds = Number(reportItem["Doanh số"] || 0);
-                    item.adsRate = ds > 0 ? (cpqc / ds) * 100 : 0;
+                // Doanh số từ đơn hàng (đã lọc theo thời gian) - CÔNG THỨC 1
+                const doanhthuPeriod = item.rawVal;
+
+                // Normalize tên để so sánh
+                const itemNameNormalized = normalizeName(item.name);
+
+                // Lọc các bản ghi báo cáo MKT theo tên và khoảng thời gian để lấy CPQC
+                const reports = mktReportData.filter(r => {
+                    // Thử nhiều tên cột khác nhau
+                    const reportName = r["Tên"] || r["Ten"] || r["Name"] || r["name"] || r["Họ và tên"] || r["Họ_và_tên"] || "";
+                    if (!reportName) return false;
+                    
+                    // So sánh tên đã normalize
+                    const reportNameNormalized = normalizeName(reportName.toString().trim());
+                    if (reportNameNormalized !== itemNameNormalized) return false;
+
+                    // Kiểm tra điều kiện Ca = "Hết ca" (CHỈ LẤY CPQC NẾU HẾT CA)
+                    const caField = r["Ca"] || r["ca"] || r["CA"] || r["Ca làm việc"] || r["Ca_lam_viec"] || "";
+                    const caStr = caField.toString().trim().toLowerCase();
+                    // Chỉ chấp nhận nếu ca = "hết ca"
+                    if (!caStr.includes("hết ca") && !caStr.includes("het ca")) return false;
+
+                    // Nếu có trường Ngày, lọc theo thời gian
+                    if (r["Ngày"] || r["Ngay"] || r["Date"]) {
+                        const dateField = r["Ngày"] || r["Ngay"] || r["Date"];
+                        const rDate = new Date(dateField);
+                        return rDate >= startDate && rDate <= endDate;
+                    }
+
+                    // Nếu không có trường Ngày, chấp nhận tất cả (fallback)
+                    return true;
+                });
+
+                if (reports.length > 0) {
+                    // Tổng CPQC của các ngày trong kỳ
+                    let cpqcPeriod = 0;
+                    reports.forEach(r => {
+                        // Thử nhiều tên cột khác nhau cho CPQC
+                        const cpqcValue = r["CPQC"] || r["cpqc"] || r["Chi phí QC"] || r["Chi_phi_QC"] || 
+                                         r["Chi phí quảng cáo"] || r["Chi_phi_quang_cao"] || 
+                                         r["ADS"] || r["ads"] || 0;
+                        
+                        // Parse giá trị CPQC (có thể là số hoặc chuỗi)
+                        const parsedCPQC = parseMoney(cpqcValue);
+                        cpqcPeriod += parsedCPQC;
+                    });
+
+                    // Tính ADS rate dựa trên doanh số (từ đơn hàng) và CPQC (từ báo cáo)
+                    item.adsRate = doanhthuPeriod > 0 ? (cpqcPeriod / doanhthuPeriod) * 100 : 0;
+                    item.cpqc = cpqcPeriod; // CPQC trong kỳ (tổng các ngày từ báo cáo)
+                    item.doanhthu = doanhthuPeriod; // Doanh số trong kỳ (từ đơn hàng F3)
                     item.teamName = "Bộ phận Marketing";
                 } else {
+                    // Nếu không có dữ liệu báo cáo CPQC, chỉ hiển thị doanh số
                     item.adsRate = 0;
+                    item.cpqc = 0;
+                    item.doanhthu = doanhthuPeriod; // Doanh số từ đơn hàng F3
                     item.teamName = "Bộ phận Marketing";
                 }
                 // Format adsRate for display consistency with closeRate
                 item.displayRate = item.adsRate.toFixed(1) + '%';
+                // Format công thức hiển thị: Doanh số / CPQC
+                item.formulaDisplay = `${formatMoney(item.doanhthu)} / ${formatMoney(item.cpqc)}`;
 
                 // Lấy thông tin ca của nhân viên
                 item.shift = getStaffShift(item.name);
@@ -1674,7 +1725,12 @@
                 if (isSaleBoard && item.closeRate) {
                     rateHtml = `<div style="font-size: 0.7vw; color: #666; margin-top: 0.2vh;">Tỉ lệ chốt: ${item.closeRate}</div>`;
                 } else if (isMktBoard && item.displayRate) {
-                    rateHtml = `<div style="font-size: 0.7vw; color: #666; margin-top: 0.2vh;">ADS: ${item.displayRate}</div>`;
+                    // Hiển thị chi tiết: ADS%, Doanh số, CPQC
+                    rateHtml = `<div style="font-size: 0.65vw; color: #666; margin-top: 0.2vh; line-height: 1.4;">
+                        <div style="font-weight: 600; color: #ff6b6b;">ADS: ${item.displayRate}</div>
+                        <div style="font-size: 0.6vw; color: #28a745;">DS: ${formatMoney(item.doanhthu || 0)}</div>
+                        <div style="font-size: 0.6vw; color: #dc3545;">CPQC: ${formatMoney(item.cpqc || 0)}</div>
+                    </div>`;
                 }
 
                 // Tạo fallback avatar URL
@@ -1764,10 +1820,10 @@
         initWeekFilter();
         loadData();
 
-        // Tự động reload trang sau 5 phút (300.000ms) để cập nhật dữ liệu và làm mới bộ nhớ
+        // Tự động reload trang sau 1 phút (60.000ms) để cập nhật dữ liệu và làm mới bộ nhớ
         setTimeout(function () {
             location.reload();
-        }, 300000);
+        }, 60000);
 
     </script>
 </body>
