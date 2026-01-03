@@ -64,7 +64,8 @@
     }
 
     .controls input[type="text"],
-    .controls input[type="date"] {
+    .controls input[type="date"],
+    .controls select {
       padding: 6px 10px;
       border: 1px solid #ccc;
       border-radius: 4px;
@@ -179,21 +180,6 @@
       border-radius: 3px;
       font-size: 11px;
       font-weight: 600;
-    }
-
-    .badge-success {
-      background: #c8e6c9;
-      color: #2e7d32;
-    }
-
-    .badge-warning {
-      background: #fff9c4;
-      color: #f57f17;
-    }
-
-    .badge-danger {
-      background: #ffcdd2;
-      color: #c62828;
     }
 
     .sortable {
@@ -354,20 +340,6 @@
       border-color: var(--primary-color);
     }
 
-    .total-row {
-      background: #ffeb3b !important;
-      font-weight: 700 !important;
-      position: sticky;
-      top: 0;
-      z-index: 5;
-    }
-
-    .total-row td {
-      background: #ffeb3b !important;
-      border-bottom: 2px solid #f57f17;
-      border-top: 2px solid #f57f17;
-    }
-
     .summary-table {
       width: 100%;
       margin-bottom: 15px;
@@ -438,67 +410,6 @@
       color: #fff;
       border-color: var(--primary-color);
     }
-
-    .checkbox-filter-container {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 200px;
-      overflow-y: auto;
-      padding: 10px;
-      background: #f9f9f9;
-      border-radius: 4px;
-      border: 1px solid #ccc;
-      min-width: 200px;
-    }
-
-    .checkbox-filter-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 0;
-    }
-
-    .checkbox-filter-item input[type="checkbox"] {
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-    }
-
-    .checkbox-filter-item label {
-      cursor: pointer;
-      font-size: 12px;
-      margin: 0;
-      font-weight: normal;
-      user-select: none;
-    }
-
-    .checkbox-filter-header {
-      font-weight: 600;
-      font-size: 12px;
-      color: var(--text-medium);
-      margin-bottom: 5px;
-      padding-bottom: 5px;
-      border-bottom: 1px solid #ddd;
-    }
-
-    .filter-toggle-btn {
-      border: 1px solid #ccc;
-      background: #fff;
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-size: 11px;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .filter-toggle-btn:hover {
-      background: var(--primary-light);
-      color: #fff;
-      border-color: var(--primary-light);
-    }
   </style>
 </head>
 
@@ -513,10 +424,11 @@
 
     <div class="controls">
       <input type="text" id="searchInput" placeholder="🔍 Tìm kiếm trong tất cả các cột..." />
+      
+      <!-- Bộ lọc Tháng -->
       <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500;">
         Tháng:
-        <select id="filterMonth"
-          style="padding: 6px 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px;">
+        <select id="filterMonth">
           <option value="">Tất cả</option>
           <option value="1">Tháng 1</option>
           <option value="2">Tháng 2</option>
@@ -532,6 +444,22 @@
           <option value="12">Tháng 12</option>
         </select>
       </label>
+
+      <!-- Bộ lọc Năm (Mới) -->
+      <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500;">
+        Năm:
+        <select id="filterYear">
+          <option value="2023">2023</option>
+          <option value="2024">2024</option>
+          <option value="2025">2025</option>
+          <option value="2026">2026</option>
+          <option value="2027">2027</option>
+          <option value="2028">2028</option>
+          <option value="2029">2029</option>
+          <option value="2030">2030</option>
+        </select>
+      </label>
+
       <label style="display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500;">
         Từ ngày:
         <input type="date" id="startDate" placeholder="Từ ngày" />
@@ -650,7 +578,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script>
     const F3_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/F3.json';
-    // Link HR để lấy phân quyền
     const HR_URL = 'https://lumi-6dff7-default-rtdb.asia-southeast1.firebasedatabase.app/datasheet/Nh%C3%A2ns%E1%BB%B1';
 
     let allData = [];
@@ -658,24 +585,21 @@
     let currentPage = 1;
     let pageSize = 100;
     let totalPages = 1;
-    let allowedStaffNames = null; // null = hiển thị tất cả, Set = chỉ hiển thị nhân viên trong Set
+    let allowedStaffNames = null;
     let hrData = [];
-    let currentEmployee = null; // Lưu thông tin nhân viên hiện tại
-    let currentBoPhan = null; // Lưu Bộ phận của nhân viên hiện tại
-    let sortState = { column: null, direction: 'asc' }; // Trạng thái sắp xếp
-    let dataKeyMap = new Map(); // Map để lưu key của Firebase cho mỗi row (dùng Mã_đơn_hàng)
-    let trangThaiCuoiCungOptions = []; // Danh sách các giá trị unique của "Thời gian cutoff"
+    let currentEmployee = null;
+    let currentBoPhan = null;
+    let sortState = { column: null, direction: 'asc' };
+    let dataKeyMap = new Map();
+    let trangThaiCuoiCungOptions = [];
 
-    // Format số tiền (làm tròn tới hàng nghìn)
     function formatCurrency(value) {
       if (!value) return '0';
       const num = Number(value);
-      // Làm tròn tới hàng nghìn
       const rounded = Math.round(num / 1000) * 1000;
       return rounded.toLocaleString('vi-VN') + ' ₫';
     }
 
-    // Helper function để lấy giá trị từ row với nhiều tên cột khác nhau
     function getRowValue(row, ...columnNames) {
       for (const colName of columnNames) {
         if (row[colName] !== undefined && row[colName] !== null && row[colName] !== '') {
@@ -685,7 +609,6 @@
       return '';
     }
 
-    // Format ngày
     function formatDate(dateStr) {
       if (!dateStr) return '';
       try {
@@ -700,33 +623,15 @@
       }
     }
 
-    // Normalize dữ liệu F3
     function normalizeF3(data) {
-      console.log('🔄 normalizeF3 - input type:', typeof data, 'isArray:', Array.isArray(data));
-
-      if (!data) {
-        console.warn('⚠️ normalizeF3: data is null/undefined');
-        return [];
-      }
-
-      if (Array.isArray(data)) {
-        const filtered = data.filter(item => item && typeof item === 'object');
-        console.log(`✅ normalizeF3: Array with ${data.length} items, ${filtered.length} valid objects`);
-        return filtered;
-      }
-
+      if (!data) return [];
+      if (Array.isArray(data)) return data.filter(item => item && typeof item === 'object');
       if (typeof data === 'object') {
-        const values = Object.values(data);
-        const filtered = values.filter(item => item && typeof item === 'object');
-        console.log(`✅ normalizeF3: Object with ${values.length} values, ${filtered.length} valid objects`);
-        return filtered;
+        return Object.values(data).filter(item => item && typeof item === 'object');
       }
-
-      console.warn('⚠️ normalizeF3: Unknown data type:', typeof data);
       return [];
     }
 
-    // Normalize dữ liệu HR
     function normalizeHR(data) {
       if (!data) return [];
       if (Array.isArray(data)) return data;
@@ -736,14 +641,12 @@
       return [];
     }
 
-    // Lấy tham số từ URL (hỗ trợ cả query string và hash)
     function getQueryParam(key) {
       try {
         const params = new URLSearchParams(window.location.search);
         let val = params.get(key);
         if (!val) {
           const hash = window.location.hash || '';
-          // support both #id=XXX or #...&id=XXX
           const match = hash.match(new RegExp(`[?#&]?(?:${key})=([^&]+)`));
           if (match && match[1]) val = decodeURIComponent(match[1]);
         }
@@ -751,66 +654,45 @@
       } catch (_) { return ''; }
     }
 
-    // Lấy id từ URL parameter (giữ lại để tương thích)
     function getUserIdFromURL() {
       return getQueryParam('id') || null;
     }
 
-    // Load và xử lý dữ liệu nhân viên
     async function loadAndProcessHRData() {
-      // Kiểm tra scope=allF3 trước - nếu có thì bỏ qua phân quyền
       const scope = getQueryParam('scope');
       if (scope === 'allF3') {
-        console.log('📌 scope=allF3 được set, bỏ qua phân quyền - xem tất cả dữ liệu');
         allowedStaffNames = null;
         currentEmployee = null;
         currentBoPhan = null;
         const greetingEl = document.getElementById('greeting');
-        if (greetingEl) {
-          greetingEl.textContent = '';
-        }
+        if (greetingEl) greetingEl.textContent = '';
         return;
       }
 
       const userId = getUserIdFromURL();
 
-      // Luôn load HR data để sử dụng cho filter (ngay cả khi không có id)
       try {
-        // Fetch dữ liệu nhân viên từ HR link để phân quyền
-        console.log('📥 Đang tải HR data từ:', HR_URL + '.json');
         const hrResponse = await fetchWithRetry(HR_URL + '.json');
         hrData = normalizeHR(hrResponse);
 
-        console.log('✅ HR data đã tải thành công:', hrData.length, 'nhân viên');
-
-        // Kiểm tra nếu không có HR data
         if (!Array.isArray(hrData) || !hrData.length) {
-          console.warn('⚠️ Không có HR data, cho phép xem tất cả');
           allowedStaffNames = null;
           currentEmployee = null;
           currentBoPhan = null;
           const greetingEl = document.getElementById('greeting');
-          if (greetingEl) {
-            greetingEl.textContent = '';
-          }
+          if (greetingEl) greetingEl.textContent = '';
           return;
         }
 
-        // Nếu không có id trong URL, cho phép xem tất cả (admin mode) nhưng vẫn giữ HR data
         if (!userId) {
-          console.log('📌 Không có id trong URL, hiển thị tất cả nhân viên (admin mode)');
           allowedStaffNames = null;
           currentEmployee = null;
           currentBoPhan = null;
-          // Ẩn phần chào hỏi
           const greetingEl = document.getElementById('greeting');
-          if (greetingEl) {
-            greetingEl.textContent = '';
-          }
+          if (greetingEl) greetingEl.textContent = '';
           return;
         }
 
-        // Tìm nhân viên theo id (giống KPIsale.html)
         const matchId = (row) => {
           const candidates = ['id', 'ID', 'Id', 'uid', 'UID', 'Uid', 'Mã nhân sự', 'Mã_Nhân_sự', 'Ma_Nhan_su'];
           for (const k of candidates) {
@@ -825,76 +707,45 @@
         const foundEmployee = hrData.find(matchId);
 
         if (!foundEmployee) {
-          console.warn('⚠️ Không tìm thấy nhân viên với id:', userId);
           const greetingEl = document.getElementById('greeting');
-          if (greetingEl) {
-            greetingEl.textContent = `Không tìm thấy id: ${userId} trong Nhân sự`;
-          }
+          if (greetingEl) greetingEl.textContent = `Không tìm thấy id: ${userId} trong Nhân sự`;
           allowedStaffNames = null;
           currentEmployee = null;
           currentBoPhan = null;
           return;
         }
 
-        // Gán cho biến global
         currentEmployee = foundEmployee;
 
-        // Lấy thông tin nhân viên với nhiều tên cột khác nhau
         const viTri = (currentEmployee['Vị trí'] ?? currentEmployee['Vi_tri'] ?? currentEmployee['Vi trí'] ?? currentEmployee['Position'] ?? '').toString().trim();
         const team = (currentEmployee['Team'] ?? '').toString().trim();
         const hoVaTen = (currentEmployee['Họ Và Tên'] ?? currentEmployee['Họ_và_tên'] ?? currentEmployee['Họ và tên'] ?? currentEmployee['Tên'] ?? currentEmployee['Name'] ?? '').toString().trim();
         const boPhan = (currentEmployee['Bộ phận'] ?? currentEmployee['Bộ_phận'] ?? currentEmployee['Bo_phan'] ?? '').toString().trim();
 
-        // Lưu thông tin nhân viên hiện tại
-        // Nếu Bộ phận = CSKH thì xử lý như Sale
         currentBoPhan = (boPhan === 'CSKH') ? 'Sale' : boPhan;
 
-        // Xác định Leader/NV
         const isLeader = /leader/i.test(viTri);
         const isNV = /^nv$/i.test(viTri) || viTri.toLowerCase() === 'nhân viên' || viTri === '';
 
-        console.log('👤 Nhân viên hiện tại:', {
-          id: userId,
-          hoVaTen: hoVaTen,
-          viTri: viTri,
-          team: team,
-          boPhan: boPhan,
-          isLeader: isLeader,
-          isNV: isNV
-        });
-
-        // Hiển thị chào hỏi
         const greetingEl = document.getElementById('greeting');
         if (greetingEl && hoVaTen) {
           greetingEl.textContent = `👋 Xin chào ${hoVaTen}${boPhan ? ` - ${boPhan}` : ''}`;
         }
 
-        // Xử lý phân quyền theo vị trí
         const set = new Set();
         if (isLeader) {
-          // Leader: xem full Team của mình
           hrData.forEach(emp => {
             const empTeam = (emp['Team'] ?? '').toString().trim();
             if (empTeam === team && empTeam && empTeam !== 'Đã nghỉ') {
-              // Lấy tên với nhiều tên cột khác nhau
               const name = (emp['Họ Và Tên'] ?? emp['Họ_và_tên'] ?? emp['Họ và tên'] ?? emp['Tên'] ?? emp['Name'] ?? '').toString().trim();
               if (name) {
                 set.add(name);
               }
             }
           });
-          console.log('👔 Leader - Danh sách nhân viên trong team:', Array.from(set));
         } else {
-          // NV hoặc không phải Leader: chỉ xem của chính mình
           if (hoVaTen) {
             set.add(hoVaTen);
-            console.log('👷 NV/Staff - Chỉ hiển thị của chính mình:', hoVaTen);
-            console.log('📋 Bộ phận:', boPhan);
-            console.log('✅ Sẽ lọc đơn hàng có:', {
-              'Sale': boPhan === 'Sale' ? hoVaTen : 'N/A',
-              'MKT': boPhan === 'MKT' ? hoVaTen : 'N/A',
-              'Vận Đơn': (boPhan === 'Vận Đơn' || boPhan === 'Vận Hành') ? hoVaTen : 'N/A'
-            });
           }
         }
 
@@ -905,15 +756,11 @@
         allowedStaffNames = null;
         currentEmployee = null;
         currentBoPhan = null;
-        // Ẩn phần chào hỏi
         const greetingEl = document.getElementById('greeting');
-        if (greetingEl) {
-          greetingEl.textContent = '';
-        }
+        if (greetingEl) greetingEl.textContent = '';
       }
     }
 
-    // Fetch với retry
     async function fetchWithRetry(url, options = {}) {
       const { retries = 3, delayMs = 500 } = options;
       for (let i = 0; i < retries; i++) {
@@ -928,7 +775,6 @@
       }
     }
 
-    // Load dữ liệu
     async function loadData() {
       const loadingEl = document.getElementById('loading');
       const errorEl = document.getElementById('error');
@@ -939,21 +785,10 @@
       tableEl.style.display = 'none';
 
       try {
-        console.log('🔄 Bắt đầu load dữ liệu...');
-
-        // Load dữ liệu nhân viên trước
         await loadAndProcessHRData();
-        console.log('✅ Đã load dữ liệu HR');
-
-        // Load dữ liệu F3
-        console.log('📡 Đang fetch dữ liệu F3 từ:', F3_URL);
         const data = await fetchWithRetry(F3_URL);
-        console.log('📥 Đã nhận dữ liệu F3, kiểu:', typeof data, Array.isArray(data) ? 'Array' : 'Object');
-
         allData = normalizeF3(data);
-        console.log(`✅ Đã normalize F3 data, số lượng: ${allData.length} dòng`);
 
-        // Xây dựng mapping giữa Mã_đơn_hàng và key trong Firebase
         dataKeyMap.clear();
         if (typeof data === 'object' && !Array.isArray(data)) {
           Object.keys(data).forEach(key => {
@@ -965,10 +800,8 @@
               }
             }
           });
-          console.log('📋 Đã tạo mapping cho', dataKeyMap.size, 'đơn hàng');
         }
 
-        // Lấy danh sách các giá trị unique từ cột "Thời gian cutoff"
         const cutoffSet = new Set();
         allData.forEach(row => {
           const cutoff = getRowValue(row, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '';
@@ -977,62 +810,23 @@
           }
         });
         trangThaiCuoiCungOptions = Array.from(cutoffSet).sort();
-        console.log('📋 Danh sách các giá trị "Thời gian cutoff":', trangThaiCuoiCungOptions);
-
-        // Debug: Kiểm tra tên cột thực tế trong dữ liệu (đặc biệt là cột Tổng tiền)
-        if (allData.length > 0) {
-          const firstRow = allData[0];
-          const allKeys = Object.keys(firstRow);
-          console.log('📋 Tất cả các cột trong dữ liệu:', allKeys);
-          console.log('🔍 Mẫu dòng đầu tiên:', firstRow);
-
-          // Tìm các cột có chứa "tiền" hoặc "tien" hoặc "VND"
-          const tienColumns = allKeys.filter(key =>
-            key.toLowerCase().includes('tiền') ||
-            key.toLowerCase().includes('tien') ||
-            key.toLowerCase().includes('vnd') ||
-            key.toLowerCase().includes('tong')
-          );
-          console.log('💰 Các cột liên quan đến tiền:', tienColumns);
-
-          // Log giá trị của một vài dòng đầu tiên để debug
-          tienColumns.forEach(col => {
-            console.log(`  - ${col}:`, firstRow[col]);
-          });
-        } else {
-          console.warn('⚠️ allData rỗng sau khi normalize!');
-          console.log('📦 Dữ liệu gốc:', data);
-        }
 
         filteredData = [...allData];
-        console.log(`📊 filteredData ban đầu: ${filteredData.length} dòng`);
-
-        currentPage = 1; // Reset về trang 1 khi load lại
+        currentPage = 1;
         populateFilters();
-        console.log('✅ Đã populate filters');
-
-        // Áp dụng filter ngay sau khi populate để lọc theo id (nếu có)
         applyFilters();
-        console.log(`📊 filteredData sau khi apply filters: ${filteredData.length} dòng`);
-
         updateStats();
         renderTable();
         loadingEl.style.display = 'none';
-        tableEl.style.display = 'table'; // Đảm bảo bảng được hiển thị
-        console.log('✅ Đã render bảng thành công');
-        console.log('📊 Tổng số dòng dữ liệu:', allData.length);
-        console.log('📊 Số dòng sau khi filter:', filteredData.length);
-        console.log('👥 HR data có', hrData.length, 'nhân viên');
+        tableEl.style.display = 'table';
       } catch (error) {
         console.error('❌ Error loading data:', error);
-        console.error('Stack trace:', error.stack);
         loadingEl.style.display = 'none';
         errorEl.style.display = 'block';
-        errorEl.textContent = `❌ Lỗi tải dữ liệu: ${error.message}. Vui lòng mở Console (F12) để xem chi tiết.`;
+        errorEl.textContent = `❌ Lỗi tải dữ liệu: ${error.message}.`;
       }
     }
 
-    // Cập nhật thống kê
     function updateStats() {
       const statsEl = document.getElementById('stats');
       const start = (currentPage - 1) * pageSize + 1;
@@ -1040,7 +834,6 @@
       statsEl.textContent = `📊 Tổng số: ${allData.length.toLocaleString('vi-VN')} đơn | Lọc được: ${filteredData.length.toLocaleString('vi-VN')} đơn | Hiển thị: ${start.toLocaleString('vi-VN')}-${end.toLocaleString('vi-VN')}`;
     }
 
-    // Tính toán phân trang
     function calculatePagination() {
       totalPages = Math.max(1, Math.ceil(filteredData.length / pageSize));
       if (currentPage > totalPages) {
@@ -1048,10 +841,8 @@
       }
     }
 
-    // Hàm sắp xếp dữ liệu
     function sortData(column) {
       if (sortState.column === column) {
-        // Đảo chiều sắp xếp nếu click vào cùng cột
         sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
       } else {
         sortState.column = column;
@@ -1060,7 +851,6 @@
 
       filteredData.sort((a, b) => {
         let aVal, bVal;
-
         if (column === 'trangThaiCuoiCung') {
           aVal = getRowValue(a, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '';
           bVal = getRowValue(b, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '';
@@ -1078,7 +868,6 @@
         }
       });
 
-      // Cập nhật UI sort indicator
       document.querySelectorAll('.sortable').forEach(th => {
         th.classList.remove('asc', 'desc');
       });
@@ -1087,15 +876,13 @@
         sortableTh.classList.add(sortState.direction);
       }
 
-      currentPage = 1; // Reset về trang 1
+      currentPage = 1;
       renderTable();
     }
 
-    // Hàm lưu giá trị "Thời gian cutoff" vào Firebase
     async function saveTrangThaiCuoiCung(maDonHang, newValue) {
       const firebaseKey = dataKeyMap.get(maDonHang);
       if (!firebaseKey) {
-        console.error('❌ Không tìm thấy key Firebase cho đơn hàng:', maDonHang);
         alert('Không tìm thấy key để lưu dữ liệu. Vui lòng làm mới trang và thử lại.');
         return false;
       }
@@ -1111,28 +898,17 @@
           body: JSON.stringify(newValue)
         });
 
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        // Cập nhật dữ liệu local
-        const row = allData.find(r => {
-          const md = getRowValue(r, 'Mã_đơn_hàng', 'Mã đơn hàng') || '';
-          return md === maDonHang;
-        });
+        const row = allData.find(r => getRowValue(r, 'Mã_đơn_hàng', 'Mã đơn hàng') === maDonHang);
         if (row) {
-          // Cập nhật tất cả các tên cột có thể
           row['Thời_gian_cutoff'] = newValue;
           row['Thời gian cutoff'] = newValue;
           row['Thời_gian_Cutoff'] = newValue;
           row['Thời gian Cutoff'] = newValue;
         }
 
-        // Cập nhật filteredData
-        const filteredRow = filteredData.find(r => {
-          const md = getRowValue(r, 'Mã_đơn_hàng', 'Mã đơn hàng') || '';
-          return md === maDonHang;
-        });
+        const filteredRow = filteredData.find(r => getRowValue(r, 'Mã_đơn_hàng', 'Mã đơn hàng') === maDonHang);
         if (filteredRow) {
           filteredRow['Thời_gian_cutoff'] = newValue;
           filteredRow['Thời gian cutoff'] = newValue;
@@ -1140,13 +916,11 @@
           filteredRow['Thời gian Cutoff'] = newValue;
         }
 
-        // Thêm giá trị mới vào danh sách options nếu chưa có
         if (newValue && newValue.trim() !== '' && !trangThaiCuoiCungOptions.includes(newValue.trim())) {
           trangThaiCuoiCungOptions.push(newValue.trim());
           trangThaiCuoiCungOptions.sort();
         }
 
-        console.log('✅ Đã lưu thành công:', { maDonHang, newValue, firebaseKey });
         return true;
       } catch (error) {
         console.error('❌ Lỗi khi lưu dữ liệu:', error);
@@ -1155,7 +929,6 @@
       }
     }
 
-    // Render bảng
     function renderTable() {
       const tbody = document.getElementById('tableBody');
       const tableEl = document.getElementById('dataTable');
@@ -1163,11 +936,8 @@
 
       tbody.innerHTML = '';
 
-      console.log('🎨 renderTable called, filteredData.length:', filteredData.length);
-
       if (filteredData.length === 0) {
-        console.warn('⚠️ filteredData rỗng, hiển thị thông báo "Không có dữ liệu"');
-        tbody.innerHTML = '<tr><td colspan="14" class="text-center">Không có dữ liệu. Vui lòng kiểm tra bộ lọc hoặc mở Console (F12) để xem chi tiết.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="14" class="text-center">Không có dữ liệu.</td></tr>';
         tableEl.style.display = 'table';
         paginationEl.style.display = 'none';
         document.getElementById('tableFooter').innerHTML = '';
@@ -1175,31 +945,21 @@
         return;
       }
 
-      // Sắp xếp dữ liệu: các dòng có "Trạng thái cuối cùng" trống lên đầu
       filteredData.sort((a, b) => {
         const aTrangThai = String(getRowValue(a, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '').trim();
         const bTrangThai = String(getRowValue(b, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '').trim();
+        const aEmpty = !aTrangThai;
+        const bEmpty = !bTrangThai;
 
-        const aEmpty = !aTrangThai || aTrangThai === '';
-        const bEmpty = !bTrangThai || bTrangThai === '';
-
-        // Nếu một trong hai trống, đưa trống lên đầu
         if (aEmpty && !bEmpty) return -1;
         if (!aEmpty && bEmpty) return 1;
-
-        // Nếu cả hai đều trống hoặc cả hai đều có giá trị, sắp xếp theo trạng thái
         if (aEmpty && bEmpty) return 0;
-
-        // Sắp xếp theo trạng thái (alphabetical)
         return aTrangThai.localeCompare(bTrangThai, 'vi');
       });
 
       calculatePagination();
-
-      // Render bảng thông số tổng hợp
       renderSummaryTable();
 
-      // Lấy dữ liệu của trang hiện tại
       const startIndex = (currentPage - 1) * pageSize;
       const endIndex = startIndex + pageSize;
       const pageData = filteredData.slice(startIndex, endIndex);
@@ -1208,39 +968,25 @@
         const globalIndex = startIndex + index;
         const tr = document.createElement('tr');
 
-        // Sử dụng tên cột với dấu gạch dưới (theo cấu trúc dữ liệu thực tế)
         const maDonHang = getRowValue(row, 'Mã_đơn_hàng', 'Mã đơn hàng') || '';
         const ngayLenDon = formatDate(getRowValue(row, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn'));
         const name = getRowValue(row, 'Name', 'Name*', 'Tên lên đơn') || '';
         const phone = getRowValue(row, 'Phone', 'Phone*', 'phone', 'phone*') || '';
         const add = getRowValue(row, 'Add', 'add', 'Địa chỉ', 'Địa_chỉ') || '';
-        // Thử nhiều tên cột khác nhau cho Tổng tiền VNĐ
         const tongTien = formatCurrency(getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0);
         const nvSale = getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '';
-        const cskh = getRowValue(
-          row,
-          'CSKH',
-          'NV_CSKH',
-          'NV CSKH',
-          'Nhân_viên_CSKH',
-          'Nhân viên CSKH',
-          'Chăm sóc KH',
-          'Chăm sóc khách hàng'
-        ) || '';
+        const cskh = getRowValue(row, 'CSKH', 'NV_CSKH', 'NV CSKH', 'Nhân_viên_CSKH', 'Nhân viên CSKH', 'Chăm sóc KH', 'Chăm sóc khách hàng') || '';
         const matHang = getRowValue(row, 'Mặt_hàng', 'Mặt hàng') || '';
         const khuVuc = getRowValue(row, 'Khu_vực', 'Khu vực') || '';
-
         const phiShip = formatCurrency(getRowValue(row, 'Phí_ship', 'Phí ship') || 0);
         const tienVietDoiSoat = formatCurrency(getRowValue(row, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát') || 0);
         const trangThaiCuoiCung = getRowValue(row, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '';
 
-        // Tạo dropdown select cho cột "Trạng thái cuối cùng"
         let selectOptions = '<option value="">-- Chọn --</option>';
         trangThaiCuoiCungOptions.forEach(opt => {
           const selected = opt === trangThaiCuoiCung ? 'selected' : '';
           selectOptions += `<option value="${opt.replace(/"/g, '&quot;')}" ${selected}>${opt}</option>`;
         });
-        // Thêm option hiện tại nếu chưa có trong danh sách
         if (trangThaiCuoiCung && !trangThaiCuoiCungOptions.includes(trangThaiCuoiCung)) {
           selectOptions += `<option value="${trangThaiCuoiCung.replace(/"/g, '&quot;')}" selected>${trangThaiCuoiCung}</option>`;
         }
@@ -1265,27 +1011,22 @@
             </select>
           </td>
         `;
-
         tbody.appendChild(tr);
       });
 
       tableEl.style.display = 'table';
       updatePaginationControls();
 
-      // Gắn event listener cho sortable header sau khi render
       const sortableHeader = document.querySelector('.sortable[data-sort="trangThaiCuoiCung"]');
       if (sortableHeader) {
-        // Xóa listener cũ nếu có
         const newSortableHeader = sortableHeader.cloneNode(true);
         sortableHeader.parentNode.replaceChild(newSortableHeader, sortableHeader);
-        // Gắn listener mới
         newSortableHeader.addEventListener('click', function () {
           sortData('trangThaiCuoiCung');
         });
       }
     }
 
-    // Render bảng thông số tổng hợp
     function renderSummaryTable() {
       const summaryTable = document.getElementById('summaryTable');
       if (!summaryTable) return;
@@ -1293,54 +1034,34 @@
       let totalTongTien = 0;
       let totalPhiShip = 0;
       let totalTienVietDoiSoat = 0;
-
-      // Theo dõi các mã đơn hàng đã gặp để loại bỏ trùng lặp
       const seenCodes = new Set();
       let totalDon = 0;
-      let soDonCSKH = 0; // Số đơn của CSKH (CSKH === Nhân viên Sale)
-      let soDonDuocChia = 0; // Số đơn được chia (có CSKH nhưng CSKH !== Nhân viên Sale)
+      let soDonCSKH = 0;
+      let soDonDuocChia = 0;
 
       filteredData.forEach(row => {
         const maDonHang = String(getRowValue(row, 'Mã_đơn_hàng', 'Mã đơn hàng') || '').trim();
 
-        // Chỉ tính nếu mã đơn hàng chưa xuất hiện (không trùng)
         if (maDonHang && !seenCodes.has(maDonHang)) {
           seenCodes.add(maDonHang);
           totalDon++;
 
-          // Thử nhiều tên cột khác nhau cho Tổng tiền VNĐ
-          const tongTienValue = getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0;
-          totalTongTien += Number(tongTienValue || 0);
+          totalTongTien += Number(getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0);
           totalPhiShip += Number(getRowValue(row, 'Phí_ship', 'Phí ship') || 0);
           totalTienVietDoiSoat += Number(getRowValue(row, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát') || 0);
 
-          // Lấy giá trị CSKH và Nhân viên Sale
-          const cskh = String(getRowValue(
-            row,
-            'CSKH',
-            'NV_CSKH',
-            'NV CSKH',
-            'Nhân_viên_CSKH',
-            'Nhân viên CSKH',
-            'Chăm sóc KH',
-            'Chăm sóc khách hàng'
-          ) || '').trim();
-
+          const cskh = String(getRowValue(row, 'CSKH', 'NV_CSKH', 'NV CSKH', 'Nhân_viên_CSKH', 'Nhân viên CSKH') || '').trim();
           const nvSale = String(getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '').trim();
 
-          // Tính số đơn của CSKH: CSKH === Nhân viên Sale và cả 2 đều không trống
           if (cskh && nvSale && cskh === nvSale) {
             soDonCSKH++;
           }
-
-          // Tính số đơn được chia: có CSKH nhưng CSKH !== Nhân viên Sale (hoặc Nhân viên Sale trống)
           if (cskh && cskh !== nvSale) {
             soDonDuocChia++;
           }
         }
       });
 
-      // Cập nhật các giá trị trong bảng thông số
       document.getElementById('summaryTotalDon').textContent = totalDon.toLocaleString('vi-VN') + ' đơn';
       document.getElementById('summaryTotalTongTien').textContent = formatCurrency(totalTongTien);
       document.getElementById('summaryTotalPhiShip').textContent = formatCurrency(totalPhiShip);
@@ -1348,11 +1069,9 @@
       document.getElementById('summarySoDonCSKH').textContent = soDonCSKH.toLocaleString('vi-VN') + ' đơn';
       document.getElementById('summarySoDonDuocChia').textContent = soDonDuocChia.toLocaleString('vi-VN') + ' đơn';
 
-      // Hiển thị bảng thông số
       summaryTable.style.display = 'table';
     }
 
-    // Cập nhật controls phân trang
     function updatePaginationControls() {
       const paginationEl = document.getElementById('pagination');
       const pageInfoEl = document.getElementById('pageInfo');
@@ -1375,71 +1094,49 @@
       lastBtn.disabled = currentPage === totalPages;
     }
 
-    // Chuyển trang
     function goToPage(page) {
       if (page < 1 || page > totalPages) return;
       currentPage = page;
       renderTable();
       updateStats();
-      // Scroll to top
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
-    // Populate checkbox filter cho CSKH (Team Lý)
     function populateNVSaleCheckboxes() {
       const select = document.getElementById('filterCSKH');
       if (!select) return;
 
-      // Lấy danh sách nhân viên thuộc team "CSKH- Lý" từ HR data
       const teamLyMembers = new Set();
       hrData.forEach(emp => {
         const team = (emp['Team'] || '').toString().trim();
         if (team === 'CSKH- Lý') {
           const hoVaTen = (emp['Họ Và Tên'] ?? emp['Họ_và_tên'] ?? emp['Họ và tên'] ?? emp['Tên'] ?? emp['Name'] ?? '').toString().trim();
-          if (hoVaTen) {
-            teamLyMembers.add(hoVaTen);
-          }
+          if (hoVaTen) teamLyMembers.add(hoVaTen);
         }
       });
 
-      // Lấy danh sách CSKH từ dữ liệu F3 (chỉ lấy những người trong team Lý)
       const cskhValues = new Set();
       allData.forEach(row => {
-        const cskh = String(getRowValue(
-          row,
-          'CSKH',
-          'NV_CSKH',
-          'NV CSKH',
-          'Nhân_viên_CSKH',
-          'Nhân viên CSKH',
-          'Chăm sóc KH',
-          'Chăm sóc khách hàng'
-        ) || '').trim();
+        const cskh = String(getRowValue(row, 'CSKH', 'NV_CSKH', 'NV CSKH', 'Nhân_viên_CSKH') || '').trim();
         if (cskh && teamLyMembers.has(cskh)) {
           cskhValues.add(cskh);
         }
       });
 
       const sortedValues = Array.from(cskhValues).sort();
-
-      // Xóa các option cũ (trừ option đầu tiên)
-      const firstOption = select.querySelector('option');
-      const firstOptionText = firstOption ? firstOption.textContent : 'Tất cả';
+      const firstOptionText = select.querySelector('option') ? select.querySelector('option').textContent : 'Tất cả';
       select.innerHTML = '';
 
-      // Thêm lại option đầu tiên
       const allOption = document.createElement('option');
       allOption.value = '';
       allOption.textContent = firstOptionText;
       select.appendChild(allOption);
 
-      // Thêm option "Trống"
       const emptyOption = document.createElement('option');
       emptyOption.value = '__EMPTY__';
       emptyOption.textContent = 'Trống';
       select.appendChild(emptyOption);
 
-      // Thêm các options từ sortedValues
       sortedValues.forEach(value => {
         const option = document.createElement('option');
         option.value = value;
@@ -1447,36 +1144,27 @@
         select.appendChild(option);
       });
 
-      // Thêm event listener
       select.addEventListener('change', applyFilters);
     }
 
-    // Populate filter dropdowns
     function populateFilters() {
-      // Populate dropdown cho CSKH (Team Lý)
       populateNVSaleCheckboxes();
 
-      // Populate dropdown cho Trạng thái cuối cùng
       const selectTrangThai = document.getElementById('filterTrangThaiCuoiCung');
       if (selectTrangThai) {
-        // Xóa các option cũ (trừ option đầu tiên)
-        const firstOption = selectTrangThai.querySelector('option');
-        const firstOptionText = firstOption ? firstOption.textContent : 'Tất cả';
+        const firstOptionText = selectTrangThai.querySelector('option') ? selectTrangThai.querySelector('option').textContent : 'Tất cả';
         selectTrangThai.innerHTML = '';
 
-        // Thêm lại option đầu tiên
         const allOption = document.createElement('option');
         allOption.value = '';
         allOption.textContent = firstOptionText;
         selectTrangThai.appendChild(allOption);
 
-        // Thêm option "Trống"
         const emptyOption = document.createElement('option');
         emptyOption.value = '__EMPTY__';
         emptyOption.textContent = 'Trống';
         selectTrangThai.appendChild(emptyOption);
 
-        // Thêm các options từ trangThaiCuoiCungOptions
         trangThaiCuoiCungOptions.forEach(value => {
           const option = document.createElement('option');
           option.value = value;
@@ -1484,102 +1172,53 @@
           selectTrangThai.appendChild(option);
         });
 
-        // Thêm event listener
         selectTrangThai.addEventListener('change', applyFilters);
       }
     }
 
-    // Lấy giá trị đã chọn từ dropdown
     function getSelectedFilterValue(filterId) {
       const select = document.getElementById(filterId);
       if (!select) return '';
       return select.value.trim();
     }
 
-    // Lọc dữ liệu
     function applyFilters() {
       const searchText = document.getElementById('searchInput').value.toLowerCase().trim();
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
-
-      // Reset về trang 1 khi filter
-      currentPage = 1;
-
-      // Lấy giá trị filter CSKH từ dropdown
       const selectedCSKH = getSelectedFilterValue('filterCSKH');
-
-      // Lấy giá trị filter Trạng thái cuối cùng
       const selectedTrangThaiCuoiCung = getSelectedFilterValue('filterTrangThaiCuoiCung');
 
-      filteredData = allData.filter(row => {
-        // Lọc theo CSKH (dropdown filter)
-        if (selectedCSKH) {
-          const cskhRaw = getRowValue(
-            row,
-            'CSKH',
-            'NV_CSKH',
-            'NV CSKH',
-            'Nhân_viên_CSKH',
-            'Nhân viên CSKH',
-            'Chăm sóc KH',
-            'Chăm sóc khách hàng'
-          );
-          const cskh = String(cskhRaw || '').trim();
+      currentPage = 1;
 
+      filteredData = allData.filter(row => {
+        if (selectedCSKH) {
+          const cskhRaw = getRowValue(row, 'CSKH', 'NV_CSKH', 'NV CSKH', 'Nhân_viên_CSKH');
+          const cskh = String(cskhRaw || '').trim();
           if (selectedCSKH === '__EMPTY__') {
-            // Lọc các dòng có CSKH trống
-            if (cskh !== '') {
-              return false;
-            }
+            if (cskh !== '') return false;
           } else {
-            // Lọc các dòng có CSKH khớp với giá trị đã chọn
-            if (cskh !== selectedCSKH) {
-              return false;
-            }
+            if (cskh !== selectedCSKH) return false;
           }
         }
-        // Lọc theo nhân viên được phép xem (nếu có giới hạn) - ƯU TIÊN CAO NHẤT
-        // Kiểm tra nếu có currentEmployee và allowedStaffNames (có id trong URL)
-        // Phân quyền khớp với cột CSKH
+
         if (currentEmployee && allowedStaffNames !== null) {
           const viTri = String(currentEmployee['Vị trí'] || '').trim();
           const hoVaTen = String(currentEmployee['Họ Và Tên'] || '').trim();
+          const cskh = String(getRowValue(row, 'CSKH', 'NV_CSKH', 'NV CSKH', 'Nhân_viên_CSKH') || '').trim();
 
-          // Lấy giá trị CSKH từ dòng dữ liệu
-          const cskh = String(getRowValue(
-            row,
-            'CSKH',
-            'NV_CSKH',
-            'NV CSKH',
-            'Nhân_viên_CSKH',
-            'Nhân viên CSKH',
-            'Chăm sóc KH',
-            'Chăm sóc khách hàng'
-          ) || '').trim();
-
-          // Nếu là NV, chỉ hiển thị đơn hàng có CSKH === tên của họ
           if (viTri === 'NV' || viTri === '') {
-            if (cskh !== hoVaTen) {
-              return false;
-            }
-          }
-          // Nếu là Leader, hiển thị đơn hàng có CSKH trong danh sách team
-          else if (viTri === 'Leader') {
-            if (!cskh || !allowedStaffNames.has(cskh)) {
-              return false;
-            }
+            if (cskh !== hoVaTen) return false;
+          } else if (viTri === 'Leader') {
+            if (!cskh || !allowedStaffNames.has(cskh)) return false;
           }
         }
 
-        // Tìm kiếm text
         if (searchText) {
-          const searchableText = Object.values(row)
-            .map(v => String(v || '').toLowerCase())
-            .join(' ');
+          const searchableText = Object.values(row).map(v => String(v || '').toLowerCase()).join(' ');
           if (!searchableText.includes(searchText)) return false;
         }
 
-        // Lọc theo ngày
         if (startDate || endDate) {
           const rowDate = getRowValue(row, 'Ngày_lên_đơn', 'Ngày lên đơn', 'Thời gian lên đơn');
           if (!rowDate) return false;
@@ -1593,7 +1232,6 @@
               start.setHours(0, 0, 0, 0);
               if (date < start) return false;
             }
-
             if (endDate) {
               const end = new Date(endDate);
               end.setHours(23, 59, 59, 999);
@@ -1604,7 +1242,6 @@
           }
         }
 
-        // Filter Trạng thái cuối cùng
         if (selectedTrangThaiCuoiCung) {
           const trangThaiCuoiCung = String(getRowValue(row, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '').trim();
           if (selectedTrangThaiCuoiCung === '__EMPTY__') {
@@ -1621,46 +1258,20 @@
       renderTable();
     }
 
-    // Xuất Excel
     function exportToExcel() {
-      // Xuất theo bộ lọc (filteredData)
       if (filteredData.length === 0) {
         alert('Không có dữ liệu để xuất!');
         return;
       }
 
       const headers = [
-        'STT',
-        'Mã đơn hàng',
-        'Ngày lên đơn',
-        'Name*',
-        'Phone*',
-        'Add',
-        'Nhân viên Sale',
-        'CSKH',
-        'Mặt hàng',
-        'Khu vực',
-        'Tổng tiền VNĐ',
-        'Phí ship',
-        'Tiền Việt đã đối soát',
-        'Trạng thái cuối cùng'
+        'STT', 'Mã đơn hàng', 'Ngày lên đơn', 'Name*', 'Phone*', 'Add', 'Nhân viên Sale', 'CSKH',
+        'Mặt hàng', 'Khu vực', 'Tổng tiền VNĐ', 'Phí ship', 'Tiền Việt đã đối soát', 'Trạng thái cuối cùng'
       ];
 
       const excelData = [headers];
 
       filteredData.forEach((row, index) => {
-        // Thử nhiều tên cột khác nhau cho Tổng tiền VNĐ
-        const tongTienValue = getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0;
-        const cskhValue = getRowValue(
-          row,
-          'CSKH',
-          'NV_CSKH',
-          'NV CSKH',
-          'Nhân_viên_CSKH',
-          'Nhân viên CSKH',
-          'Chăm sóc KH',
-          'Chăm sóc khách hàng'
-        ) || '';
         excelData.push([
           index + 1,
           getRowValue(row, 'Mã_đơn_hàng', 'Mã đơn hàng') || '',
@@ -1669,10 +1280,10 @@
           getRowValue(row, 'Phone', 'Phone*', 'phone', 'phone*') || '',
           getRowValue(row, 'Add', 'add', 'Địa chỉ', 'Địa_chỉ') || '',
           getRowValue(row, 'Nhân_viên_Sale', 'Nhân viên Sale') || '',
-          cskhValue,
+          getRowValue(row, 'CSKH', 'NV_CSKH', 'NV CSKH', 'Nhân_viên_CSKH') || '',
           getRowValue(row, 'Mặt_hàng', 'Mặt hàng') || '',
           getRowValue(row, 'Khu_vực', 'Khu vực') || '',
-          tongTienValue || 0,
+          getRowValue(row, 'Tổng_tiền_VNĐ', 'Tổng tiền VNĐ', 'Tổng Tiền VNĐ', 'Tổng_tiền_VND', 'Tổng tiền') || 0,
           getRowValue(row, 'Phí_ship', 'Phí ship') || 0,
           getRowValue(row, 'Tiền_Việt_đã_đối_soát', 'Tiền Việt đã đối soát') || 0,
           getRowValue(row, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || ''
@@ -1681,72 +1292,61 @@
 
       const wb = XLSX.utils.book_new();
       const ws = XLSX.utils.aoa_to_sheet(excelData);
-
-      // Thiết lập độ rộng cột tự động
-      const colWidths = [];
-      headers.forEach(() => {
-        colWidths.push({ wch: 15 });
-      });
+      const colWidths = headers.map(() => ({ wch: 15 }));
       ws['!cols'] = colWidths;
 
       XLSX.utils.book_append_sheet(wb, ws, 'F3_Data');
-
       const now = new Date();
-      const fileName = `F3_Data_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}.xlsx`;
-
+      const fileName = `F3_Data_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}.xlsx`;
       XLSX.writeFile(wb, fileName);
-      alert(`✅ Đã xuất ${filteredData.length.toLocaleString('vi-VN')} dòng dữ liệu theo bộ lọc thành công!`);
     }
 
-    // Hàm set date range từ tháng
-    function setDateRangeFromMonth(month) {
-      if (!month) {
-        document.getElementById('startDate').value = '';
-        document.getElementById('endDate').value = '';
+    // --- Cập nhật logic lọc theo Tháng VÀ Năm ---
+    function setDateRangeFromMonth() {
+      const monthSelect = document.getElementById('filterMonth');
+      const yearSelect = document.getElementById('filterYear');
+      
+      const month = monthSelect.value;
+      const yearStr = yearSelect.value;
+
+      if (!month || !yearStr) {
+        // Chỉ xóa ngày nếu chọn "Tất cả" ở tháng
+        if (!month) {
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+        }
         return;
       }
 
-      const now = new Date();
-      const year = now.getFullYear();
+      const year = parseInt(yearStr);
       const monthNum = parseInt(month);
 
-      // Ngày đầu tháng (mùng 1)
       const startDate = new Date(year, monthNum - 1, 1);
-      // Ngày cuối tháng (ngày 0 của tháng tiếp theo = ngày cuối tháng hiện tại)
       const endDate = new Date(year, monthNum, 0);
 
-      // Format YYYY-MM-DD để tránh timezone issues
-      const formatDate = (date) => {
+      const formatDateISO = (date) => {
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');
         return `${y}-${m}-${d}`;
       };
 
-      document.getElementById('startDate').value = formatDate(startDate);
-      document.getElementById('endDate').value = formatDate(endDate);
-
-      console.log(`📅 Đã set filter tháng ${month}: từ ${formatDate(startDate)} đến ${formatDate(endDate)}`);
+      document.getElementById('startDate').value = formatDateISO(startDate);
+      document.getElementById('endDate').value = formatDateISO(endDate);
     }
 
-    // Hàm xử lý quick filter
     function handleQuickFilter(filterType, clickedBtn) {
       const now = new Date();
       const startDateEl = document.getElementById('startDate');
       const endDateEl = document.getElementById('endDate');
       const monthSelect = document.getElementById('filterMonth');
 
-      // Xóa active class từ tất cả buttons
-      document.querySelectorAll('.quick-filter-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
+      document.querySelectorAll('.quick-filter-btn').forEach(btn => btn.classList.remove('active'));
 
-      // Set active cho button được click
       if (clickedBtn && filterType !== 'clear') {
         clickedBtn.classList.add('active');
       }
 
-      // Reset tháng filter
       if (monthSelect) monthSelect.value = '';
 
       switch (filterType) {
@@ -1758,17 +1358,16 @@
         case 'yesterday':
           const yesterday = new Date(now);
           yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split('T')[0];
-          startDateEl.value = yesterdayStr;
-          endDateEl.value = yesterdayStr;
+          startDateEl.value = yesterday.toISOString().split('T')[0];
+          endDateEl.value = yesterday.toISOString().split('T')[0];
           break;
         case 'thisWeek':
+          const day = now.getDay();
+          const diff = now.getDate() - day + (day === 0 ? -6 : 1);
           const thisWeekStart = new Date(now);
-          const day = thisWeekStart.getDay();
-          const diff = thisWeekStart.getDate() - day + (day === 0 ? -6 : 1); // Thứ 2
           thisWeekStart.setDate(diff);
           const thisWeekEnd = new Date(thisWeekStart);
-          thisWeekEnd.setDate(thisWeekEnd.getDate() + 6); // Chủ nhật
+          thisWeekEnd.setDate(thisWeekEnd.getDate() + 6);
           startDateEl.value = thisWeekStart.toISOString().split('T')[0];
           endDateEl.value = thisWeekEnd.toISOString().split('T')[0];
           break;
@@ -1792,55 +1391,58 @@
           startDateEl.value = '';
           endDateEl.value = '';
           if (monthSelect) monthSelect.value = '';
-          document.querySelectorAll('.quick-filter-btn').forEach(btn => {
-            btn.classList.remove('active');
-          });
           break;
       }
-
       applyFilters();
     }
 
-    // Event listeners
+    // --- Khởi tạo và Event Listeners ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Tự động set năm hiện tại
+        const currentYear = new Date().getFullYear();
+        const yearSelect = document.getElementById('filterYear');
+        if(yearSelect) yearSelect.value = currentYear;
+    });
+
     document.getElementById('searchInput').addEventListener('input', applyFilters);
     document.getElementById('startDate').addEventListener('change', function () {
-      // Khi thay đổi date thủ công, xóa filter tháng
       document.getElementById('filterMonth').value = '';
       applyFilters();
     });
     document.getElementById('endDate').addEventListener('change', function () {
-      // Khi thay đổi date thủ công, xóa filter tháng
       document.getElementById('filterMonth').value = '';
       applyFilters();
     });
+    
+    // Sự kiện thay đổi Tháng
     document.getElementById('filterMonth').addEventListener('change', function () {
-      const month = this.value;
-      setDateRangeFromMonth(month);
-      // Xóa active class từ quick filter buttons
-      document.querySelectorAll('.quick-filter-btn').forEach(btn => {
-        btn.classList.remove('active');
-      });
+      setDateRangeFromMonth();
+      document.querySelectorAll('.quick-filter-btn').forEach(btn => btn.classList.remove('active'));
       applyFilters();
     });
+
+    // Sự kiện thay đổi Năm
+    document.getElementById('filterYear').addEventListener('change', function () {
+      // Nếu đã chọn tháng thì cập nhật lại range ngày
+      if(document.getElementById('filterMonth').value !== "") {
+        setDateRangeFromMonth();
+        applyFilters();
+      }
+    });
+
     document.getElementById('refreshBtn').addEventListener('click', loadData);
     document.getElementById('exportBtn').addEventListener('click', exportToExcel);
 
-    // Toggle hiển thị danh sách CSKH
-
-    // Quick filter buttons
     document.querySelectorAll('.quick-filter-btn').forEach(btn => {
       btn.addEventListener('click', function () {
-        const filterType = this.getAttribute('data-filter');
-        handleQuickFilter(filterType, this);
+        handleQuickFilter(this.getAttribute('data-filter'), this);
       });
     });
 
-    // Pagination event listeners
     document.getElementById('firstPageBtn').addEventListener('click', () => goToPage(1));
     document.getElementById('prevPageBtn').addEventListener('click', () => goToPage(currentPage - 1));
     document.getElementById('nextPageBtn').addEventListener('click', () => goToPage(currentPage + 1));
     document.getElementById('lastPageBtn').addEventListener('click', () => goToPage(totalPages));
-
     document.getElementById('pageSizeSelect').addEventListener('change', function () {
       pageSize = parseInt(this.value);
       currentPage = 1;
@@ -1848,105 +1450,60 @@
       updateStats();
     });
 
-    // Hàm xử lý khi thay đổi giá trị "Trạng thái cuối cùng"
-    // Hàm xử lý khi thay đổi giá trị "Trạng thái cuối cùng"
     window.handleTrangThaiCuoiCungChange = async function (selectElement) {
       const maDonHang = selectElement.getAttribute('data-ma-don');
       const newValue = selectElement.value;
 
-      if (!maDonHang) {
-        console.error('❌ Không tìm thấy mã đơn hàng');
-        return;
-      }
-
-      // Hiển thị loading
+      if (!maDonHang) return;
       selectElement.disabled = true;
       selectElement.style.opacity = '0.6';
 
-      // --- Bắt đầu cập nhật ---
-
       async function updateAppSheet(maDonHang, newValue) {
-
         const APP_ID = 'f9aacd5a-8966-45b1-b20c-c8f5ea16c63b';
         const ACCESS_KEY = 'V2-w28Id-wg3Ec-NToRD-xUaHk-CPMlL-44lVt-tNHJ3-DeMAp';
         const TABLE_NAME = 'F3';
-
         const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${TABLE_NAME}/Action`;
-
         const body = {
           "Action": "Edit",
-          "Properties": {
-            "Locale": "vi-VN",
-          },
-          "Rows": [
-            {
-              "Mã đơn hàng": maDonHang,
-              "Thời gian cutoff": newValue
-            }
-          ]
+          "Properties": { "Locale": "vi-VN" },
+          "Rows": [{ "Mã đơn hàng": maDonHang, "Thời gian cutoff": newValue }]
         };
 
         try {
-          console.log('🚀 Đang gửi yêu cầu đến AppSheet:', { url, body });
           const response = await fetch(url, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'ApplicationAccessKey': ACCESS_KEY
-            },
+            headers: { 'Content-Type': 'application/json', 'ApplicationAccessKey': ACCESS_KEY },
             body: JSON.stringify(body)
           });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Lỗi HTTP ${response.status}: ${errorText}`);
-          }
-
-          const result = await response.json();
-          console.log('✅ AppSheet đã cập nhật thành công:', result);
+          if (!response.ok) throw new Error(await response.text());
           return true;
-
         } catch (error) {
-          console.error('❌ Lỗi khi cập nhật AppSheet:', error);
-          alert(`Lỗi khi cập nhật dữ liệu trên AppSheet: ${error.message}`);
+          console.error('❌ Lỗi AppSheet:', error);
+          alert(`Lỗi AppSheet: ${error.message}`);
           return false;
         }
       }
-
 
       const [firebaseSuccess, appSheetSuccess] = await Promise.all([
         saveTrangThaiCuoiCung(maDonHang, newValue),
         updateAppSheet(maDonHang, newValue)
       ]);
-      // --- Kết thúc cập nhật ---
 
-      // Khôi phục UI
       selectElement.disabled = false;
       selectElement.style.opacity = '1';
 
       if (firebaseSuccess && appSheetSuccess) {
-        // Hiển thị thông báo thành công nếu cả hai đều thành công
         const originalBg = selectElement.style.backgroundColor;
         selectElement.style.backgroundColor = '#c8e6c9';
-        setTimeout(() => {
-          selectElement.style.backgroundColor = originalBg;
-        }, 1000);
+        setTimeout(() => { selectElement.style.backgroundColor = originalBg; }, 1000);
       } else {
-        // Khôi phục giá trị cũ nếu có lỗi
-        const row = filteredData.find(r => {
-          const md = getRowValue(r, 'Mã_đơn_hàng', 'Mã đơn hàng') || '';
-          return md === maDonHang;
-        });
-        if (row) {
-          const oldValue = getRowValue(row, 'Thời_gian_cutoff', 'Thời gian cutoff', 'Thời_gian_Cutoff', 'Thời gian Cutoff') || '';
-          selectElement.value = oldValue;
-        }
+        const row = filteredData.find(r => getRowValue(r, 'Mã_đơn_hàng') === maDonHang);
+        if (row) selectElement.value = getRowValue(row, 'Thời_gian_cutoff');
       }
     };
-    // Load dữ liệu khi trang load
+
     loadData();
   </script>
 </body>
-
 </html>
 
