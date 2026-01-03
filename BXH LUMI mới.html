@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bảng Xếp Hạng Lumi</title>
     <meta http-equiv="refresh" content="300">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&amp;tableName=Kho%20%E1%BA%A3nh&amp;fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg">
+    <link rel="shortcut icon" type="image/x-icon" href="https://www.appsheet.com/template/gettablefileurl?appName=Appsheet-325045268&amp;tableName=Kho%20%E1%BA%A3nh&amp;fileName=Kho%20%E1%BA%A3nh_Images%2Ff930e667.%E1%BA%A2nh.025539.jpg">
 
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -79,7 +83,7 @@
         .danger-col { flex: 1; background: #fff; padding: 12px; border-radius: 12px; border: 2px solid #ff9999; box-shadow: 0 4px 10px rgba(255, 0, 0, 0.08); }
         .danger-title { text-align: center; font-weight: 800; margin-bottom: 10px; color: #e74c3c; font-size: 0.9rem; text-transform: uppercase; }
         .danger-list { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
-        .danger-name-item { font-size: 1.2rem; font-weight: 900; color: #e74c3c; text-align: center; white-space: nowrap; }
+        .danger-name-item { font-size: 1.2rem; font-weight: 900; color: #000; text-align: center; white-space: nowrap; }
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; z-index: 9999; animation: fadeIn 0.3s ease; }
         .modal-content { background: #fff; width: 100%; height: 100%; border-radius: 0; padding: 25px; box-shadow: none; display: flex; flex-direction: column; position: relative; animation: fadeIn 0.3s ease; overflow-y: auto; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 2px solid #eee; padding-bottom: 15px; }
@@ -135,7 +139,7 @@
 
             <!-- CHỌN THÁNG & NĂM -->
             <div id="month-filter-container" style="display: none; gap: 5px;">
-                <select class="filter-select" id="filter-month" onchange="updateData()">
+                <select class="filter-select" id="filter-month" onchange="adjustYearForMonth(); updateData();">
                     <option value="1">Tháng 1</option>
                     <option value="2">Tháng 2</option>
                     <option value="3">Tháng 3</option>
@@ -258,7 +262,7 @@
             return null;
         }
 
-        // HÀM PARSE NGÀY AN TOÀN (QUAN TRỌNG)
+        // HÀM PARSE NGÀY AN TOÀN - FIX LỖI THÁNG 12/2025
         function parseDateSafe(dateInput) {
             if (!dateInput) return null;
             if (dateInput instanceof Date) return dateInput;
@@ -270,13 +274,23 @@
             if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
                 return new Date(str);
             }
-            // Xử lý dạng DD/MM/YYYY (Việt Nam/Excel)
+            
+            // Xử lý dạng DD/MM/YYYY (Việt Nam/Excel) - CÓ THỂ CÓ GIỜ PHÚT
+            // Ví dụ: 25/12/2025 14:30:00
+            // Tách theo dấu /
             const parts = str.split('/');
             if (parts.length === 3) {
-                // parts[0]=Day, parts[1]=Month, parts[2]=Year
-                return new Date(parts[2], parts[1] - 1, parts[0]);
+                // parts[0]=Day, parts[1]=Month, parts[2]=Year (có thể dính giờ)
+                const day = parseInt(parts[0]);
+                const month = parseInt(parts[1]);
+                const year = parseInt(parts[2]); // parseInt tự động loại bỏ " 14:30:00"
+                
+                if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                    return new Date(year, month - 1, day);
+                }
             }
             
+            // Fallback
             const d = new Date(str);
             return isNaN(d.getTime()) ? null : d;
         }
@@ -426,7 +440,6 @@
             if (AVATAR_DATA_MAP.has(nameNormalized)) return AVATAR_DATA_MAP.get(nameNormalized);
             if (AVATAR_DATA[nameTrim]) return AVATAR_DATA[nameTrim];
             
-            // Nếu chưa có hrDataMap, thử build lại (dù thường loadData đã gọi)
             if (!hrDataMap && hrData && hrData.length > 0) buildHRDataMap();
             
             if (hrDataMap) {
@@ -483,7 +496,6 @@
                     buildHRDataMap();
                 }
 
-                // Nếu không có dữ liệu, load Demo
                 if (allOrders.length === 0) {
                     console.warn("API không trả về dữ liệu, dùng Demo Data");
                     loadDemoData();
@@ -501,26 +513,92 @@
         function calculateStats(startDate, endDate, filterCancelled) {
             console.log(`Calculating stats from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
             console.log(`Filter Cancelled (Ok only): ${filterCancelled}`);
+            console.log(`Total orders in database: ${allOrders.length}`);
+
+            // Debug: In ra 5 đơn đầu tiên
+            if (allOrders.length > 0) {
+                console.log("Sample orders (first 3):", allOrders.slice(0, 3));
+                console.log("Available keys in first order:", Object.keys(allOrders[0]));
+                
+                // Kiểm tra ngày
+                const firstDate = findVal(allOrders[0], ["Ngày lên đơn", "Ngày_lên_đơn", "Ngay len don", "Date"]);
+                console.log("First order date (raw):", firstDate);
+                console.log("First order date (parsed):", parseDateSafe(firstDate));
+                
+                // Kiểm tra team
+                const firstTeam = findVal(allOrders[0], ["Team", "TEAM", "Bộ phận"]);
+                console.log("First order team:", firstTeam);
+            }
+
+            let debugStats = {
+                totalOrders: allOrders.length,
+                hasDate: 0,
+                inTeam: 0,
+                inDateRange: 0,
+                passedStatus: 0,
+                final: 0
+            };
 
             const periodOrders = allOrders.filter(o => {
                 const rawDate = findVal(o, ["Ngày lên đơn", "Ngày_lên_đơn", "Ngay len don", "Date"]);
                 const d = parseDateSafe(rawDate);
                 if (!d) return false;
+                debugStats.hasDate++;
 
-                const team = String(findVal(o, ["Team", "TEAM", "Bộ phận"]) || "").toLowerCase();
-                if (!team.includes("hà nội")) return false;
+                const team = String(findVal(o, ["Team", "TEAM", "Bộ phận"]) || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                const hasHanoi = team.includes("ha noi") || team.includes("hanoi") || team.includes("hn");
+                if (!hasHanoi) return false;
+                debugStats.inTeam++;
 
                 if (d < startDate || d > endDate) return false;
+                debugStats.inDateRange++;
 
                 if (filterCancelled) {
-                    const checkStatus = String(findVal(o, ["Kết_quả_Check", "Ket_qua_Check", "Status"]) || "").trim().toLowerCase();
-                    if (checkStatus !== "ok") return false;
+                    const checkStatus = String(findVal(o, ["Kết quả Check", "Kết_quả_Check", "Ket_qua_Check", "Status"]) || "").trim().toLowerCase();
+                    // Chỉ loại bỏ đơn bị hủy rõ ràng (Cancel, Cancelled, Huỷ, etc)
+                    // Nếu status rỗng hoặc Ok thì giữ lại
+                    if (checkStatus && (checkStatus.includes("cancel") || checkStatus.includes("huỷ") || checkStatus.includes("huy"))) {
+                        return false;
+                    }
                 }
+                debugStats.passedStatus++;
 
                 return true;
             });
 
+            debugStats.final = periodOrders.length;
+            console.log("Debug Stats:", debugStats);
             console.log(`Found ${periodOrders.length} orders in period.`);
+            
+            // Debug: In ra tất cả giá trị status khác nhau trong database
+            if (allOrders.length > 0 && debugStats.inDateRange > 0) {
+                const allStatusValues = new Set();
+                allOrders.slice(0, 1000).forEach(o => {
+                    const status = String(findVal(o, ["Kết quả Check", "Kết_quả_Check", "Ket_qua_Check", "Status"]) || "").trim();
+                    if (status) allStatusValues.add(status);
+                });
+                console.log("All unique status values in database:", Array.from(allStatusValues));
+                
+                // Đếm status trong khoảng date range
+                const inRangeOrders = allOrders.filter(o => {
+                    const rawDate = findVal(o, ["Ngày lên đơn", "Ngày_lên_đơn", "Ngay len don", "Date"]);
+                    const d = parseDateSafe(rawDate);
+                    if (!d) return false;
+                    const team = String(findVal(o, ["Team", "TEAM", "Bộ phận"]) || "").toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                    const hasHanoi = team.includes("ha noi") || team.includes("hanoi") || team.includes("hn");
+                    if (!hasHanoi) return false;
+                    if (d < startDate || d > endDate) return false;
+                    return true;
+                });
+                
+                const statusCounts = {};
+                inRangeOrders.forEach(o => {
+                    const status = String(findVal(o, ["Kết quả Check", "Kết_quả_Check", "Ket_qua_Check", "Status"]) || "").trim();
+                    const key = status || "(rỗng)";
+                    statusCounts[key] = (statusCounts[key] || 0) + 1;
+                });
+                console.log("Status distribution in date range:", statusCounts);
+            }
 
             const currentShift = getCurrentShift();
             const saleMap = {};
@@ -542,7 +620,6 @@
                 }
             });
 
-            // Process lists...
             let saleList = Object.keys(saleMap).map(name => ({
                 name, rawVal: saleMap[name], value: formatMoney(saleMap[name]), avatar: getAvatar(name)
             })).sort((a, b) => b.rawVal - a.rawVal);
@@ -556,7 +633,6 @@
                 saleList.forEach(i => i.percent = max > 0 ? (i.rawVal / max) * 100 : 0);
             }
             
-            // MKT List
             let mktList = Object.keys(mktMap).map(name => ({
                 name, rawVal: mktMap[name], value: formatMoney(mktMap[name]), avatar: getAvatar(name)
             })).sort((a, b) => b.rawVal - a.rawVal);
@@ -661,6 +737,11 @@
             const type = document.getElementById('period-type').value;
             document.getElementById('week-filter-container').style.display = type === 'week' ? 'block' : 'none';
             document.getElementById('month-filter-container').style.display = type === 'month' ? 'flex' : 'none';
+            
+            // Tự động điều chỉnh năm khi chọn tháng
+            if (type === 'month') {
+                adjustYearForMonth();
+            }
             updateData();
         }
 
@@ -672,6 +753,22 @@
                 opt.value = y; opt.text = "Năm " + y;
                 if(y===cy) opt.selected = true;
                 sel.appendChild(opt);
+            }
+        }
+
+        // Hàm tự động điều chỉnh năm khi chọn tháng
+        function adjustYearForMonth() {
+            const selectedMonth = parseInt(document.getElementById('filter-month').value);
+            const selectedYear = parseInt(document.getElementById('filter-year').value);
+            const currentDate = new Date();
+            const currentMonth = currentDate.getMonth() + 1; // 1-12
+            const currentYear = currentDate.getFullYear();
+            
+            // Nếu chọn tháng lớn hơn tháng hiện tại và đang chọn năm hiện tại
+            // => Tự động chuyển về năm trước (vì tháng đó chưa đến)
+            if (selectedMonth > currentMonth && selectedYear === currentYear) {
+                document.getElementById('filter-year').value = currentYear - 1;
+                console.log(`Tự động chuyển từ tháng ${selectedMonth}/${currentYear} sang tháng ${selectedMonth}/${currentYear - 1}`);
             }
         }
 
@@ -724,7 +821,7 @@
         function renderDangerList(id, list) {
             const el = document.getElementById(id);
             if(!list.length) { el.innerHTML='...'; return; }
-            el.innerHTML = list.map(i => `<div class="danger-name-item">${abbreviateName(i.name)}(${formatMoneyForDanger(i.rawVal)})</div>`).join('');
+            el.innerHTML = list.map(i => `<div class="danger-name-item">${abbreviateName(i.name)}<span style="color: #e74c3c;">(${formatMoneyForDanger(i.rawVal)})</span></div>`).join('');
         }
 
         function loadDemoData() {
@@ -733,7 +830,9 @@
             allOrders = [
                 {"Ngày lên đơn": "01/01/2026", "Team": "Hà Nội", "Nhân viên Sale": "Nguyễn A", "Tổng tiền VNĐ": 150000000, "Kết_quả_Check": "Ok"},
                 {"Ngày lên đơn": "05/01/2026", "Team": "Hà Nội", "Nhân viên Sale": "Trần B", "Tổng tiền VNĐ": 120000000, "Kết_quả_Check": "Ok"},
-                {"Ngày lên đơn": "10/01/2026", "Team": "Hà Nội", "Nhân viên Marketing": "Lê C", "Tổng tiền VNĐ": 200000000, "Kết_quả_Check": "Ok"}
+                {"Ngày lên đơn": "10/01/2026", "Team": "Hà Nội", "Nhân viên Marketing": "Lê C", "Tổng tiền VNĐ": 200000000, "Kết_quả_Check": "Ok"},
+                // Dữ liệu tháng 12/2025 để test
+                {"Ngày lên đơn": "25/12/2025", "Team": "Hà Nội", "Nhân viên Sale": "Test 2025", "Tổng tiền VNĐ": 50000000, "Kết_quả_Check": "Ok"}
             ];
         }
 
