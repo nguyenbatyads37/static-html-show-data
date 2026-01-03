@@ -247,6 +247,7 @@
         let salesReportData = [];
         let mktReportData = [];
         let hrData = [];
+        let currentStats = null; // Lưu stats hiện tại để dùng cho vinh danh
 
         // HÀM TÌM GIÁ TRỊ TỪ ĐỐI TƯỢNG (CHẤP NHẬN CHỮ HOA/THƯỜNG)
         function findVal(obj, keys) {
@@ -658,6 +659,25 @@
             // Tháng đã qua: KHÔNG lọc theo Kết quả Check (tính tất cả đơn)
             // Tháng hiện tại: CÓ lọc theo Kết quả Check (loại bỏ đơn hủy)
             const stats = calculateStats(start, end, isCurrentPeriod);
+            currentStats = stats; // Lưu stats để dùng cho vinh danh
+
+            // Tạo timeLabel cho vinh danh
+            let timeLabel = '';
+            if (type === 'week') {
+                const weekLabels = {
+                    'w1': 'Tuần 1 (28/12 - 3/1)',
+                    'w2': 'Tuần 2 (4/1 - 10/1)',
+                    'w3': 'Tuần 3 (11/1 - 17/1)',
+                    'w4': 'Tuần 4 (18/1 - 24/1)',
+                    'w5': 'Tuần 5 (25/1 - 31/1)'
+                };
+                timeLabel = weekLabels[weekValue] || weekValue;
+            } else {
+                const m = parseInt(document.getElementById('filter-month').value);
+                const y = parseInt(document.getElementById('filter-year').value);
+                timeLabel = `Tháng ${m}/${y}`;
+            }
+            currentStats.timeLabel = timeLabel;
 
             document.getElementById('date-range-display').innerText = 
                 `${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()} - ${end.getDate()}/${end.getMonth()+1}/${end.getFullYear()}`;
@@ -850,7 +870,57 @@
         // Modal functions
         function openTeamModal() { document.getElementById('teamModal').style.display='block'; }
         function closeTeamModal() { document.getElementById('teamModal').style.display='none'; }
-        function pourDataToV2() { alert('Chức năng vinh danh'); }
+        
+        function pourDataToV2() {
+            if (!currentStats) {
+                alert('Chưa có dữ liệu để vinh danh. Vui lòng đợi hệ thống tải dữ liệu.');
+                return;
+            }
+
+            // Lấy top 3 từ Sale và MKT
+            const topSale = currentStats.saleList.slice(0, 3);
+            const topMkt = currentStats.mktList.slice(0, 3);
+
+            // Tạo dữ liệu vinh danh theo format của BXH V2.html
+            const honorsData = [];
+
+            // Top 3 Sale
+            topSale.forEach((person, index) => {
+                honorsData.push({
+                    name: person.name,
+                    avatar: person.avatar,
+                    value: person.value,
+                    timeLabel: currentStats.timeLabel || 'Tuần hiện tại',
+                    dept: 'SALE',
+                    closeRate: person.closeRate || '0%',
+                    teamName: 'Bộ phận Sale'
+                });
+            });
+
+            // Top 3 MKT
+            topMkt.forEach((person, index) => {
+                honorsData.push({
+                    name: person.name,
+                    avatar: person.avatar,
+                    value: person.value,
+                    timeLabel: currentStats.timeLabel || 'Tuần hiện tại',
+                    dept: 'MKT',
+                    displayRate: person.displayRate || '0%',
+                    teamName: 'Bộ phận Marketing'
+                });
+            });
+
+            if (honorsData.length === 0) {
+                alert('Không có dữ liệu để vinh danh.');
+                return;
+            }
+
+            // Lưu vào localStorage
+            localStorage.setItem('vinhDanhTop3', JSON.stringify(honorsData));
+
+            // Mở trang vinh danh với mode slideshow
+            window.open('BXH V2.html?mode=slideshow', '_blank');
+        }
 
         initApp();
         setTimeout(function () { location.reload(); }, 300000);
