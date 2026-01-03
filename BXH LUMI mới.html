@@ -753,13 +753,14 @@
                 <option value="week">Theo Tuần</option>
                 <option value="month">Theo Tháng</option>
             </select>
-            <!-- ĐÃ CẬP NHẬT: Chọn Tuần của Tháng 1 -->
+            
+            <!-- ĐÃ CẬP NHẬT: Chọn Tuần theo lịch thực tế (T2-CN) -->
             <select class="filter-select" id="period-value" onchange="updateData()">
-                <option value="w1">Tuần 1 (1-7/1)</option>
-                <option value="w2">Tuần 2 (8-14/1)</option>
-                <option value="w3">Tuần 3 (15-21/1)</option>
-                <option value="w4">Tuần 4 (22-28/1)</option>
-                <option value="w5">Tuần 5 (29-End)</option>
+                <option value="w1">Tuần 1 (29/12 - 4/1)</option>
+                <option value="w2">Tuần 2 (5/1 - 11/1)</option>
+                <option value="w3">Tuần 3 (12/1 - 18/1)</option>
+                <option value="w4">Tuần 4 (19/1 - 25/1)</option>
+                <option value="w5">Tuần 5 (26/1 - 1/2)</option>
             </select>
         </div>
     </div>
@@ -1225,50 +1226,70 @@
             }
         }
 
-        // --- HÀM TÍNH TUẦN MỚI: DỰA TRÊN NGÀY TRONG THÁNG ---
-        // Tuần 1: 1-7, Tuần 2: 8-14,...
+        // --- HÀM TÍNH TUẦN MỚI: DỰA TRÊN KHOẢNG THỜI GIAN THỰC TẾ ---
         function getCurrentWeek() {
             const now = new Date();
-            const date = now.getDate();
+            // Reset giờ để so sánh ngày chính xác
+            now.setHours(0, 0, 0, 0);
+
+            // Tuần 1: 29/12/2025 - 04/01/2026
+            if (now >= new Date(2025, 11, 29) && now <= new Date(2026, 0, 4)) return 'w1';
             
-            // Chia cho 7 và làm tròn lên
-            // 1/7 = 0.14 -> 1
-            // 7/7 = 1 -> 1
-            // 8/7 = 1.14 -> 2
-            const week = Math.ceil(date / 7);
+            // Tuần 2: 05/01/2026 - 11/01/2026
+            if (now >= new Date(2026, 0, 5) && now <= new Date(2026, 0, 11)) return 'w2';
             
-            if (week > 5) return 'w5';
-            return 'w' + week;
+            // Tuần 3: 12/01/2026 - 18/01/2026
+            if (now >= new Date(2026, 0, 12) && now <= new Date(2026, 0, 18)) return 'w3';
+            
+            // Tuần 4: 19/01/2026 - 25/01/2026
+            if (now >= new Date(2026, 0, 19) && now <= new Date(2026, 0, 25)) return 'w4';
+            
+            // Tuần 5: 26/01/2026 - 01/02/2026
+            if (now >= new Date(2026, 0, 26) && now <= new Date(2026, 1, 1)) return 'w5';
+
+            return 'w1';
         }
 
-        // --- HÀM LẤY KHOẢNG THỜI GIAN MỚI ---
+        // --- HÀM LẤY KHOẢNG THỜI GIAN (LOGIC CŨ: TUẦN LIỀN MẠCH) ---
         function getDateRange(type, value) {
-            const year = TARGET_YEAR;
-            const month = TARGET_MONTH;
+            const year = TARGET_YEAR; // 2026
+            const month = TARGET_MONTH; // Tháng 1
 
             let start, end;
+            
             if (type === 'week') {
-                // Xác định ngày bắt đầu của tuần dựa vào value (w1, w2...)
-                let startDay = 1;
-                if (value === 'w1') startDay = 1;
-                else if (value === 'w2') startDay = 8;
-                else if (value === 'w3') startDay = 15;
-                else if (value === 'w4') startDay = 22;
-                else if (value === 'w5') startDay = 29;
-                
-                start = new Date(year, month, startDay);
-                
-                if (value === 'w5') {
-                     // Tuần 5 lấy đến hết tháng
-                     end = new Date(year, month + 1, 0, 23, 59, 59);
-                } else {
-                     // Các tuần khác cộng thêm 6 ngày (tổng 7 ngày)
-                     end = new Date(start);
-                     end.setDate(end.getDate() + 6);
-                     end.setHours(23, 59, 59, 999);
+                switch (value) {
+                    case 'w1': // Tuần 29/12/2025 - 04/01/2026
+                        start = new Date(2025, 11, 29); // 29 Tháng 12, 2025
+                        end = new Date(2026, 0, 4);     // 04 Tháng 1, 2026
+                        break;
+                    case 'w2': // Tuần 05/01 - 11/01
+                        start = new Date(2026, 0, 5);
+                        end = new Date(2026, 0, 11);
+                        break;
+                    case 'w3': // Tuần 12/01 - 18/01
+                        start = new Date(2026, 0, 12);
+                        end = new Date(2026, 0, 18);
+                        break;
+                    case 'w4': // Tuần 19/01 - 25/01
+                        start = new Date(2026, 0, 19);
+                        end = new Date(2026, 0, 25);
+                        break;
+                    case 'w5': // Tuần 26/01 - 01/02
+                        start = new Date(2026, 0, 26);
+                        end = new Date(2026, 1, 1);     // 01 Tháng 2, 2026
+                        break;
+                    default:
+                        start = new Date(2026, 0, 1);
+                        end = new Date(2026, 0, 7);
                 }
+                
+                // Set giờ cuối ngày cho end date để lấy trọn vẹn dữ liệu
+                start.setHours(0, 0, 0, 0);
+                end.setHours(23, 59, 59, 999);
+                
             } else {
-                // Month
+                // Logic cho Tháng giữ nguyên: Lấy trọn vẹn tháng 1
                 start = new Date(year, month, 1);
                 end = new Date(year, month + 1, 0, 23, 59, 59);
             }
