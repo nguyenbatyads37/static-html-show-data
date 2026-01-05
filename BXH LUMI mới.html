@@ -897,7 +897,7 @@
             return null;
         }
 
-        // HÀM PARSE NGÀY AN TOÀN - FIX LỖI THÁNG 12/2025
+        // HÀM PARSE NGÀY AN TOÀN - ĐỊNH DẠNG MM/DD/YYYY
         function parseDateSafe(dateInput) {
             if (!dateInput) return null;
             if (dateInput instanceof Date) return dateInput;
@@ -910,18 +910,23 @@
                 return new Date(str);
             }
 
-            // Xử lý dạng DD/MM/YYYY (Việt Nam/Excel) - CÓ THỂ CÓ GIỜ PHÚT
-            // Ví dụ: 25/12/2025 14:30:00
+            // Xử lý dạng MM/DD/YYYY (Định dạng Mỹ) - CÓ THỂ CÓ GIỜ PHÚT
+            // Ví dụ: 01/05/2026 = tháng 1, ngày 5, năm 2026
             // Tách theo dấu /
             const parts = str.split('/');
             if (parts.length === 3) {
-                // parts[0]=Day, parts[1]=Month, parts[2]=Year (có thể dính giờ)
-                const day = parseInt(parts[0]);
-                const month = parseInt(parts[1]);
+                // parts[0]=Month, parts[1]=Day, parts[2]=Year (có thể dính giờ)
+                const month = parseInt(parts[0]);
+                const day = parseInt(parts[1]);
                 const year = parseInt(parts[2]); // parseInt tự động loại bỏ " 14:30:00"
 
                 if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                    return new Date(year, month - 1, day);
+                    const result = new Date(year, month - 1, day);
+                    // Debug: In ra 5 mẫu đầu tiên
+                    if (Math.random() < 0.01) { // Chỉ in 1% để không spam
+                        console.log(`[DEBUG] Parse: "${str}" → Month=${month}, Day=${day}, Year=${year} → ${result.toLocaleDateString('vi-VN')}`);
+                    }
+                    return result;
                 }
             }
 
@@ -1188,13 +1193,7 @@
                 if (d < startDate || d > endDate) return false;
                 debugStats.inDateRange++;
 
-                if (filterCancelled) {
-                    const checkStatus = String(findVal(o, ["Kết quả Check", "Kết_quả_Check", "Ket_qua_Check", "Status"]) || "").trim().toLowerCase();
-                    // Chỉ tính đơn có "Kết quả Check" = "Ok" (không phân biệt hoa/thường)
-                    if (checkStatus !== "ok") {
-                        return false;
-                    }
-                }
+                // BỎ ĐIỀU KIỆN LỌC THEO KẾT QUẢ CHECK - TÍNH TẤT CẢ ĐơN HÀNG
                 debugStats.passedStatus++;
 
                 return true;
@@ -1260,7 +1259,7 @@
 
             const EXCLUDED = ['Mai Thị Lý', 'Phạm Hải Yến', 'Trần Thị Nhung', 'Lê Ngọc Đài Trang', 'Đinh Thị Hoài Thư', 'Đỗ Thị Thu Hằng'];
             saleList = saleList.filter(i => !EXCLUDED.includes(i.name) && !i.name.toLowerCase().includes('lumi'));
-            saleList = saleList.filter(item => isStaffInShift(item.name, currentShift));
+            // BỎ ĐIỀU KIỆN LỌC THEO CA LÀM VIỆC - HIỂN THỊ TẤT CẢ NHÂN VIÊN
 
             if (saleList.length > 0) {
                 const max = saleList[0].rawVal;
@@ -1312,9 +1311,15 @@
                     return rDate >= startDate && rDate <= endDate;
                 });
 
+                // Tính tổng CPQC - TẤT CẢ các dòng có ca = "Hết ca"
                 let totalCPQC = 0;
                 reports.forEach(r => {
-                    totalCPQC += parseMoney(findVal(r, ["CPQC", "cpqc", "Chi phí QC", "ADS", "ads"]) || 0);
+                    // CHỈ TÍNH CPQC KHI CA = "Hết ca"
+                    const ca = String(findVal(r, ["ca", "Ca", "CA", "Ca làm việc"]) || "").trim().toLowerCase();
+                    if (ca === "hết ca" || ca === "het ca") {
+                        const cpqcValue = parseMoney(findVal(r, ["CPQC", "cpqc", "Chi phí QC", "ADS", "ads"]) || 0);
+                        totalCPQC += cpqcValue;
+                    }
                 });
 
                 item.cpqc = totalCPQC;
