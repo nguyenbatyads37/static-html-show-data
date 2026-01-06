@@ -897,7 +897,7 @@
             return null;
         }
 
-        // HÀM PARSE NGÀY AN TOÀN - ĐỊNH DẠNG MM/DD/YYYY
+        // HÀM PARSE NGÀY AN TOÀN - HỖ TRỢ NHIỀU ĐỊNH DẠNG
         function parseDateSafe(dateInput) {
             if (!dateInput) return null;
             if (dateInput instanceof Date) return dateInput;
@@ -905,28 +905,37 @@
             const str = String(dateInput).trim();
             if (!str) return null;
 
-            // Xử lý dạng YYYY-MM-DD
-            if (str.match(/^\d{4}-\d{2}-\d{2}/)) {
-                return new Date(str);
+            // Xử lý dạng YYYY-MM-DD hoặc YYYY-M-D (có dấu -)
+            if (str.includes('-')) {
+                const parts = str.split('-');
+                if (parts.length === 3) {
+                    const year = parseInt(parts[0]);
+                    const month = parseInt(parts[1]);
+                    const day = parseInt(parts[2]);
+                    if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+                        return new Date(year, month - 1, day);
+                    }
+                }
             }
 
             // Xử lý dạng MM/DD/YYYY (Định dạng Mỹ) - CÓ THỂ CÓ GIỜ PHÚT
             // Ví dụ: 01/05/2026 = tháng 1, ngày 5, năm 2026
-            // Tách theo dấu /
-            const parts = str.split('/');
-            if (parts.length === 3) {
-                // parts[0]=Month, parts[1]=Day, parts[2]=Year (có thể dính giờ)
-                const month = parseInt(parts[0]);
-                const day = parseInt(parts[1]);
-                const year = parseInt(parts[2]); // parseInt tự động loại bỏ " 14:30:00"
+            if (str.includes('/')) {
+                const parts = str.split('/');
+                if (parts.length === 3) {
+                    // parts[0]=Month, parts[1]=Day, parts[2]=Year (có thể dính giờ)
+                    const month = parseInt(parts[0]);
+                    const day = parseInt(parts[1]);
+                    const year = parseInt(parts[2]); // parseInt tự động loại bỏ " 14:30:00"
 
-                if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
-                    const result = new Date(year, month - 1, day);
-                    // Debug: In ra 5 mẫu đầu tiên
-                    if (Math.random() < 0.01) { // Chỉ in 1% để không spam
-                        console.log(`[DEBUG] Parse: "${str}" → Month=${month}, Day=${day}, Year=${year} → ${result.toLocaleDateString('vi-VN')}`);
+                    if (!isNaN(day) && !isNaN(month) && !isNaN(year)) {
+                        const result = new Date(year, month - 1, day);
+                        // Debug: In ra 1% để kiểm tra
+                        if (Math.random() < 0.01) {
+                            console.log(`[DEBUG] Parse: "${str}" → Month=${month}, Day=${day}, Year=${year} → ${result.toLocaleDateString('vi-VN')}`);
+                        }
+                        return result;
                     }
-                    return result;
                 }
             }
 
@@ -1233,7 +1242,6 @@
                 console.log("Status distribution in date range:", statusCounts);
             }
 
-            const currentShift = getCurrentShift();
             const saleMap = {};
             const mktMap = {};
 
@@ -1250,8 +1258,24 @@
                 if (mktName) {
                     if (!mktMap[mktName]) mktMap[mktName] = 0;
                     mktMap[mktName] += money;
+
+                    // Debug: In chi tiết đơn hàng của Mạnh Cường
+                    if (mktName.toLowerCase().includes("mạnh cường") || mktName.toLowerCase().includes("manh cuong")) {
+                        const rawDate = findVal(o, ["Ngày lên đơn", "Ngày_lên_đơn", "Date"]);
+                        const parsedDate = parseDateSafe(rawDate);
+                        console.log(`[DEBUG] Đơn hàng của ${mktName}:`, {
+                            ngayGoc: rawDate,
+                            ngayParse: parsedDate ? parsedDate.toLocaleDateString('vi-VN') : 'null',
+                            tien: money.toLocaleString('vi-VN'),
+                            tongHienTai: mktMap[mktName].toLocaleString('vi-VN'),
+                            trongKhoang: parsedDate ? (parsedDate >= startDate && parsedDate <= endDate) : false
+                        });
+                    }
                 }
             });
+
+            // Debug: In khoảng thời gian đang lọc
+            console.log(`[KHOẢNG THỜI GIAN] ${startDate.toLocaleDateString('vi-VN')} → ${endDate.toLocaleDateString('vi-VN')}`);
 
             let saleList = Object.keys(saleMap).map(name => ({
                 name, rawVal: saleMap[name], value: formatMoney(saleMap[name]), avatar: getAvatar(name)
@@ -1259,7 +1283,13 @@
 
             const EXCLUDED = ['Mai Thị Lý', 'Phạm Hải Yến', 'Trần Thị Nhung', 'Lê Ngọc Đài Trang', 'Đinh Thị Hoài Thư', 'Đỗ Thị Thu Hằng'];
             saleList = saleList.filter(i => !EXCLUDED.includes(i.name) && !i.name.toLowerCase().includes('lumi'));
-            // BỎ ĐIỀU KIỆN LỌC THEO CA LÀM VIỆC - HIỂN THỊ TẤT CẢ NHÂN VIÊN
+
+            // LỌC SALE THEO CA LÀM VIỆC (NGÀY: 7h-19h, ĐÊM: 19h-7h)
+            const currentShift = getCurrentShift();
+            console.log(`[SHIFT FILTER] Current shift: ${currentShift} (${new Date().getHours()}:00)`);
+            const beforeShiftFilter = saleList.length;
+            saleList = saleList.filter(i => isStaffInShift(i.name, currentShift));
+            console.log(`[SHIFT FILTER] Sale personnel: ${beforeShiftFilter} → ${saleList.length} (filtered by shift)`);
 
             if (saleList.length > 0) {
                 const max = saleList[0].rawVal;
@@ -1269,6 +1299,13 @@
             let mktList = Object.keys(mktMap).map(name => ({
                 name, rawVal: mktMap[name], value: formatMoney(mktMap[name]), avatar: getAvatar(name)
             })).sort((a, b) => b.rawVal - a.rawVal);
+
+            // Debug: In tổng doanh số của Mạnh Cường
+            Object.keys(mktMap).forEach(name => {
+                if (name.toLowerCase().includes("mạnh cường") || name.toLowerCase().includes("manh cuong")) {
+                    console.log(`[TỔNG KẾT] ${name}: ${mktMap[name].toLocaleString('vi-VN')} VNĐ (${(mktMap[name] / 1000000).toFixed(1)} triệu)`);
+                }
+            });
 
             mktList = mktList.filter(i => !EXCLUDED.includes(i.name) && !i.name.toLowerCase().includes('lumi'));
             if (mktList.length > 0) {
