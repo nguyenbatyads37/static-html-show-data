@@ -1159,9 +1159,10 @@
         }
 
         // --- CALCULATE STATS ---
-        function calculateStats(startDate, endDate, filterCancelled) {
+        function calculateStats(startDate, endDate, filterCancelled, isCurrentPeriod = false) {
             console.log(`Calculating stats from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
             console.log(`Filter Cancelled (Ok only): ${filterCancelled} - ${filterCancelled ? 'CHỈ TÍNH ĐƠN OK (tuần đã qua hoặc tháng)' : 'TÍNH TẤT CẢ ĐƠN (tuần hiện tại)'}`);
+            console.log(`Is Current Period: ${isCurrentPeriod} - ${isCurrentPeriod ? 'KHÔNG LỌC THEO % (tuần hiện tại)' : 'CÓ LỌC THEO % (tuần đã qua/tháng)'}`);
             console.log(`Total orders in database: ${allOrders.length}`);
 
             // Debug: In ra 5 đơn đầu tiên
@@ -1381,23 +1382,25 @@
             const saleListUnfiltered = [...saleList];
             const mktListUnfiltered = [...mktList];
 
-            // LỌC SALE: Loại bỏ những người có Close Rate < 9%
-            // CHỈ LỌC những người CÓ DATA (totalMess > 0) nhưng Close Rate thấp
-            // Những người CHƯA CÓ DATA (totalMess = 0) vẫn được giữ lại
-            const beforeSaleFilter = saleList.length;
-            saleList = saleList.filter(item => {
-                // Nếu chưa có data (totalMess = 0), giữ lại
-                if (!item.totalMess || item.totalMess === 0) return true;
+            // LỌC SALE: CHỈ ÁP DỤNG KHI KHÔNG PHẢI TUẦN HIỆN TẠI
+            // Loại bỏ những người có Close Rate < 9%
+            if (!isCurrentPeriod) {
+                const beforeSaleFilter = saleList.length;
+                saleList = saleList.filter(item => {
+                    // Nếu chưa có data (totalMess = 0), giữ lại
+                    if (!item.totalMess || item.totalMess === 0) return true;
 
-                // Nếu có data, kiểm tra Close Rate >= 9%
-                const closeRateValue = parseFloat(item.closeRate) || 0;
-                return closeRateValue >= 9;
-            });
-            console.log(`[FILTER] Sale: ${beforeSaleFilter} → ${saleList.length} (removed Close Rate < 9%)`);
+                    // Nếu có data, kiểm tra Close Rate >= 9%
+                    const closeRateValue = parseFloat(item.closeRate) || 0;
+                    return closeRateValue >= 9;
+                });
+                console.log(`[FILTER] Sale: ${beforeSaleFilter} → ${saleList.length} (removed Close Rate < 9%)`);
+            } else {
+                console.log(`[FILTER] Sale: Tuần hiện tại - BỎ QUA lọc theo Close Rate`);
+            }
 
-            // LỌC MKT: Loại bỏ những người có ADS Rate > 27%
-            // CHỈ LỌC những người CÓ DATA (doanhthu > 0) nhưng ADS Rate cao
-            // Những người CHƯA CÓ DATA (doanhthu = 0) vẫn được giữ lại
+            // LỌC MKT: LUÔN ÁP DỤNG (cả tuần hiện tại)
+            // Loại bỏ những người có ADS Rate > 27%
             const beforeMktFilter = mktList.length;
             mktList = mktList.filter(item => {
                 // Nếu chưa có doanh thu, giữ lại
@@ -1427,7 +1430,7 @@
             // TUẦN ĐÃ QUA: CÓ lọc theo Kết quả Check (chỉ tính đơn Ok)
             // THÁNG (tất cả): CÓ lọc theo Kết quả Check (chỉ tính đơn Ok)
             const shouldFilterStatus = (type === 'month') || (type === 'week' && !isCurrentPeriod);
-            const stats = calculateStats(start, end, shouldFilterStatus);
+            const stats = calculateStats(start, end, shouldFilterStatus, isCurrentPeriod);
             currentStats = stats; // Lưu stats để dùng cho vinh danh
 
             // Tạo timeLabel cho vinh danh
@@ -1463,8 +1466,8 @@
                 const mStart = new Date(selY, selM - 1, 1);
                 const mEnd = new Date(selY, selM, 0, 23, 59, 59);
 
-                // THÁNG luôn lọc theo Kết quả Check = "Ok"
-                const mStats = calculateStats(mStart, mEnd, true);
+                // THÁNG luôn lọc theo Kết quả Check = "Ok" VÀ lọc theo %
+                const mStats = calculateStats(mStart, mEnd, true, false);
                 renderList('sale-month-list', mStats.saleList.slice(0, 2), true);
                 renderList('mkt-month-list', mStats.mktList.slice(0, 2), true);
 
