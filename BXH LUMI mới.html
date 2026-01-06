@@ -1248,8 +1248,10 @@
                 console.log("Status distribution in date range:", statusCounts);
             }
 
+
             const saleMap = {};
             const mktMap = {};
+            const saleOrderCount = {}; // Đếm số đơn cho Sale
 
             periodOrders.forEach(o => {
                 const money = parseMoney(findVal(o, ["Tổng tiền VNĐ", "Tổng_tiền_VNĐ", "Total"]));
@@ -1257,7 +1259,9 @@
                 const saleName = String(findVal(o, ["Nhân_viên_Sale", "Nhân viên Sale", "Sale"]) || "").trim();
                 if (saleName) {
                     if (!saleMap[saleName]) saleMap[saleName] = 0;
+                    if (!saleOrderCount[saleName]) saleOrderCount[saleName] = 0;
                     saleMap[saleName] += money;
+                    saleOrderCount[saleName] += 1; // Đếm số đơn
                 }
 
                 const mktName = String(findVal(o, ["Nhân_viên_Marketing", "Nhân viên Marketing", "MKT"]) || "").trim();
@@ -1319,8 +1323,9 @@
                 mktList.forEach(i => i.percent = max > 0 ? (i.rawVal / max) * 100 : 0);
             }
 
-            // Tính toán Số mess, Số đơn, Tỉ lệ chốt cho Sale từ salesReportData
+            // Tính toán Số mess, Số đơn, Tỉ lệ chốt cho Sale
             saleList.forEach(item => {
+                // Lấy Số Mess từ salesReportData
                 const reports = salesReportData.filter(r => {
                     const rName = String(findVal(r, ["Tên", "Ten", "Name", "Họ và tên"]) || "").trim();
                     if (normalizeName(rName) !== normalizeName(item.name)) return false;
@@ -1331,11 +1336,12 @@
                 });
 
                 let totalMess = 0;
-                let totalOrders = 0;
                 reports.forEach(r => {
                     totalMess += Number(findVal(r, ["Số Mess", "Số Mess Cmt", "Mess", "So Mess"]) || 0);
-                    totalOrders += Number(findVal(r, ["Số đơn thực tế", "So don thuc te", "Orders"]) || 0);
                 });
+
+                // Lấy Số đơn từ periodOrders (đã lọc theo Kết quả Check = Ok)
+                const totalOrders = saleOrderCount[item.name] || 0;
 
                 item.totalMess = totalMess;
                 item.totalOrders = totalOrders;
@@ -1469,8 +1475,8 @@
                 monthSections.forEach(e => e.style.display = 'none');
             }
 
-            const bottomSale = [...stats.saleList].sort((a, b) => a.rawVal - b.rawVal).slice(0, 3);
-            const bottomMkt = [...stats.mktList].sort((a, b) => a.rawVal - b.rawVal).slice(0, 3);
+            const bottomSale = [...(stats.saleListUnfiltered || stats.saleList)].sort((a, b) => a.rawVal - b.rawVal).slice(0, 3);
+            const bottomMkt = [...(stats.mktListUnfiltered || stats.mktList)].sort((a, b) => a.rawVal - b.rawVal).slice(0, 3);
 
             renderDangerList('danger-sale', bottomSale);
             renderDangerList('danger-mkt', bottomMkt);
