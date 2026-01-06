@@ -1161,7 +1161,7 @@
         // --- CALCULATE STATS ---
         function calculateStats(startDate, endDate, filterCancelled) {
             console.log(`Calculating stats from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
-            console.log(`Filter Cancelled (Ok only): ${filterCancelled}`);
+            console.log(`Filter Cancelled (Ok only): ${filterCancelled} - ${filterCancelled ? 'CHỈ TÍNH ĐƠN OK (tuần đã qua hoặc tháng)' : 'TÍNH TẤT CẢ ĐƠN (tuần hiện tại)'}`);
             console.log(`Total orders in database: ${allOrders.length}`);
 
             // Debug: In ra 5 đơn đầu tiên
@@ -1202,7 +1202,13 @@
                 if (d < startDate || d > endDate) return false;
                 debugStats.inDateRange++;
 
-                // BỎ ĐIỀU KIỆN LỌC THEO KẾT QUẢ CHECK - TÍNH TẤT CẢ ĐơN HÀNG
+                // LỌC THEO KẾT QUẢ CHECK
+                // Tuần HIỆN TẠI: Tính tất cả đơn
+                // Tuần ĐÃ QUA + Tháng: Chỉ tính đơn có Kết quả Check = "Ok"
+                if (filterCancelled) {
+                    const status = String(findVal(o, ["Kết quả Check", "Kết_quả_Check", "Ket_qua_Check", "Status"]) || "").trim().toLowerCase();
+                    if (status !== "ok") return false;
+                }
                 debugStats.passedStatus++;
 
                 return true;
@@ -1375,9 +1381,11 @@
             const isCurrentPeriod = checkIsCurrentPeriod(type, weekValue);
 
             const { start, end } = getDateRange(type, weekValue);
-            // Tháng đã qua: KHÔNG lọc theo Kết quả Check (tính tất cả đơn)
-            // Tháng hiện tại: CÓ lọc theo Kết quả Check (loại bỏ đơn hủy)
-            const stats = calculateStats(start, end, isCurrentPeriod);
+            // TUẦN HIỆN TẠI: KHÔNG lọc theo Kết quả Check (tính tất cả đơn)
+            // TUẦN ĐÃ QUA: CÓ lọc theo Kết quả Check (chỉ tính đơn Ok)
+            // THÁNG (tất cả): CÓ lọc theo Kết quả Check (chỉ tính đơn Ok)
+            const shouldFilterStatus = (type === 'month') || (type === 'week' && !isCurrentPeriod);
+            const stats = calculateStats(start, end, shouldFilterStatus);
             currentStats = stats; // Lưu stats để dùng cho vinh danh
 
             // Tạo timeLabel cho vinh danh
@@ -1412,11 +1420,9 @@
                 const selY = parseInt(document.getElementById('filter-year').value);
                 const mStart = new Date(selY, selM - 1, 1);
                 const mEnd = new Date(selY, selM, 0, 23, 59, 59);
-                const isCurM = (selM === new Date().getMonth() + 1 && selY === new Date().getFullYear());
 
-                // Tháng đã qua: KHÔNG lọc theo Kết quả Check (tính tất cả đơn)
-                // Tháng hiện tại: CÓ lọc theo Kết quả Check (loại bỏ đơn hủy)
-                const mStats = calculateStats(mStart, mEnd, isCurM);
+                // THÁNG luôn lọc theo Kết quả Check = "Ok"
+                const mStats = calculateStats(mStart, mEnd, true);
                 renderList('sale-month-list', mStats.saleList.slice(0, 2), true);
                 renderList('mkt-month-list', mStats.mktList.slice(0, 2), true);
 
