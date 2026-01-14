@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Quản Trị - Danang Aluminium</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-color: #00509E; /* Xanh Nhôm Đà Nẵng */
+            --bg-color: #f0f2f5;
+            --text-color: #333;
+            --card-bg: #ffffff;
+            --kpi-fail: #e74c3c;    /* Đỏ */
+            --kpi-pass: #27ae60;    /* Xanh lá */
+            --kpi-great: #8e44ad;   /* Tím */
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            border-left: 5px solid var(--primary-color);
+        }
+        
+        header h1 { margin: 0; font-size: 24px; color: var(--primary-color); }
+        header .date-display { color: #777; font-size: 14px; }
+
+        /* Grid Layout */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        /* Card Styles (Phần 1: Báo cáo ngày) */
+        .card {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            position: relative;
+            transition: transform 0.2s;
+        }
+
+        .card:hover { transform: translateY(-5px); }
+
+        .card h3 { margin: 0 0 10px 0; font-size: 14px; color: #888; text-transform: uppercase; }
+        .card .value { font-size: 24px; font-weight: bold; color: #333; }
+        .card .sub-text { font-size: 12px; margin-top: 5px; }
+        .trend-up { color: var(--kpi-pass); }
+        .trend-down { color: var(--kpi-fail); }
+
+        /* Icon trang trí */
+        .card-icon {
+            position: absolute;
+            top: 20px; right: 20px;
+            font-size: 24px;
+            opacity: 0.2;
+        }
+
+        /* Chart Section (Phần 2: Biểu đồ) */
+        .chart-section {
+            display: grid;
+            grid-template-columns: 1fr 2fr; /* Tỉ lệ 1:2 */
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .chart-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        /* Table Section (Phần 3: Dòng tiền) */
+        .table-section {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #f8f9fa; color: #555; font-weight: 600; }
+        
+        /* Hiệu ứng Click xem chi tiết */
+        .main-row { cursor: pointer; background-color: white; }
+        .main-row:hover { background-color: #f1f8ff; }
+        
+        .detail-row { display: none; background-color: #fafafa; }
+        .detail-row.active { display: table-row; animation: fadeIn 0.3s; }
+        
+        .detail-content {
+            padding: 15px;
+            margin: 10px;
+            border: 1px dashed #ccc;
+            border-radius: 5px;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 13px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; } to { opacity: 1; }
+        }
+
+        /* Legend màu sắc KPI */
+        .legend { font-size: 12px; display: flex; gap: 15px; margin-top: 10px; }
+        .dot { height: 10px; width: 10px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .grid-container, .chart-section { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div>
+            <h1>QUẢN TRỊ - CÔNG TY NHÔM ĐÀ NẴNG</h1>
+            <div class="date-display">Cập nhật: 14/01/2026 - 15:30 PM</div>
+        </div>
+        <button onclick="window.print()" style="padding: 10px 20px; background: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+            <i class="fas fa-print"></i> Xuất Báo Cáo
+        </button>
+    </header>
+
+    <h2 style="font-size: 18px; color: #555;">1. CHỈ SỐ TRONG NGÀY (Daily Report)</h2>
+    <div class="grid-container">
+        <div class="card">
+            <h3>Doanh Số Tạm Tính</h3>
+            <div class="value">185.000.000 ₫</div>
+            <div class="sub-text trend-up"><i class="fas fa-arrow-up"></i> 12% so với hôm qua</div>
+            <i class="fas fa-calculator card-icon" style="color: orange;"></i>
+        </div>
+        <div class="card">
+            <h3>Doanh Số Thực Tế (Đã chốt)</h3>
+            <div class="value">120.500.000 ₫</div>
+            <div class="sub-text" style="color: #666;">5 Đơn hàng</div>
+            <i class="fas fa-check-circle card-icon" style="color: green;"></i>
+        </div>
+        <div class="card">
+            <h3>Doanh Thu (Tiền về)</h3>
+            <div class="value">68.000.000 ₫</div>
+            <div class="sub-text trend-down"><i class="fas fa-arrow-down"></i> Thấp hơn dự kiến</div>
+            <i class="fas fa-wallet card-icon" style="color: blue;"></i>
+        </div>
+        <div class="card">
+            <h3>Công Nợ Mới Phát Sinh</h3>
+            <div class="value">52.500.000 ₫</div>
+            <div class="sub-text" style="color: red;">Cần theo dõi</div>
+            <i class="fas fa-file-invoice-dollar card-icon" style="color: red;"></i>
+        </div>
+    </div>
+
+    <h2 style="font-size: 18px; color: #555;">2. BIỂU ĐỒ TÀI CHÍNH & KPI</h2>
+    <div class="chart-section">
+        
+        <div class="chart-box">
+            <div class="chart-header">
+                <strong>Cơ Cấu Tài Chính Tháng</strong>
+            </div>
+            <canvas id="financeChart"></canvas>
+            <div style="margin-top: 15px; font-size: 13px; text-align: center;">
+                Tổng quỹ: <strong>5.2 Tỷ VNĐ</strong>
+            </div>
+        </div>
+
+        <div class="chart-box">
+            <div class="chart-header">
+                <strong>Hiệu Suất Doanh Số (KPIs)</strong>
+                <select style="padding: 5px; border-radius: 4px; border: 1px solid #ddd;">
+                    <option>Quý 1/2026</option>
+                    <option>Quý 4/2025</option>
+                </select>
+            </div>
+            <canvas id="kpiChart"></canvas>
+            <div class="legend">
+                <span><span class="dot" style="background: var(--kpi-fail)"></span>Dưới KPI (<80%)</span>
+                <span><span class="dot" style="background: var(--kpi-pass)"></span>Đạt KPI (80-120%)</span>
+                <span><span class="dot" style="background: var(--kpi-great)"></span>Vượt KPI (>120%)</span>
+            </div>
+        </div>
+    </div>
+
+    <h2 style="font-size: 18px; color: #555;">3. BÁO CÁO DÒNG TIỀN (Cash Flow)</h2>
+    <div class="table-section">
+        <table>
+            <thead>
+                <tr>
+                    <th>Ngày</th>
+                    <th>Nội dung</th>
+                    <th>Thu (Vào)</th>
+                    <th>Chi (Ra)</th>
+                    <th>Công Nợ KH</th>
+                    <th>Công Nợ NCC</th>
+                    <th>Dòng Tiền Ròng</th>
+                    <th>Chi tiết</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="main-row" onclick="toggleDetail('detail1')">
+                    <td>14/01/2026</td>
+                    <td>Tổng kết ngày</td>
+                    <td style="color: var(--kpi-pass);">+ 200.000.000</td>
+                    <td style="color: var(--kpi-fail);">- 150.000.000</td>
+                    <td>50.000.000</td>
+                    <td>20.000.000</td>
+                    <td style="font-weight: bold;">+ 30.000.000</td>
+                    <td><i class="fas fa-chevron-down"></i></td>
+                </tr>
+                <tr id="detail1" class="detail-row">
+                    <td colspan="8">
+                        <div class="detail-content">
+                            <strong>Chi tiết giao dịch ngày 14/01:</strong>
+                            <div style="display: flex; margin-top: 10px;">
+                                <div style="flex: 1; border-right: 1px solid #ddd; padding-right: 10px;">
+                                    <h4 style="margin: 0 0 5px 0; color: var(--kpi-pass)">Nguồn Thu</h4>
+                                    <div class="detail-item"><span>Công trình A (Anh Hùng)</span> <span>120.000.000</span></div>
+                                    <div class="detail-item"><span>Bán lẻ cửa Xingfa</span> <span>80.000.000</span></div>
+                                </div>
+                                <div style="flex: 1; border-right: 1px solid #ddd; padding: 0 10px;">
+                                    <h4 style="margin: 0 0 5px 0; color: var(--kpi-fail)">Khoản Chi</h4>
+                                    <div class="detail-item"><span>Nhập nhôm thanh (Xingfa QC)</span> <span>100.000.000</span></div>
+                                    <div class="detail-item"><span>Ứng lương nhân viên</span> <span>30.000.000</span></div>
+                                    <div class="detail-item"><span>Vận chuyển</span> <span>20.000.000</span></div>
+                                </div>
+                                <div style="flex: 1; padding-left: 10px;">
+                                    <h4 style="margin: 0 0 5px 0; color: orange">Công Nợ</h4>
+                                    <div class="detail-item"><span>KH nợ thêm:</span> <span>50.000.000</span></div>
+                                    <div class="detail-item"><span>Nợ NCC thêm:</span> <span>20.000.000</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+
+                <tr class="main-row" onclick="toggleDetail('detail2')">
+                    <td>13/01/2026</td>
+                    <td>Tổng kết ngày</td>
+                    <td style="color: var(--kpi-pass);">+ 500.000.000</td>
+                    <td style="color: var(--kpi-fail);">- 100.000.000</td>
+                    <td>120.000.000</td>
+                    <td>0</td>
+                    <td style="font-weight: bold;">+ 400.000.000</td>
+                    <td><i class="fas fa-chevron-down"></i></td>
+                </tr>
+                <tr id="detail2" class="detail-row">
+                    <td colspan="8">
+                        <div class="detail-content">
+                            Không có dữ liệu chi tiết cho ngày này (Demo).
+                        </div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // --- 1. BIỂU ĐỒ TÀI CHÍNH (PIE CHART) ---
+        const ctxFinance = document.getElementById('financeChart').getContext('2d');
+        const financeChart = new Chart(ctxFinance, {
+            type: 'doughnut',
+            data: {
+                labels: ['Đã Thu', 'Đã Chi', 'Ứng Trước', 'Tồn Quỹ'],
+                datasets: [{
+                    data: [350, 150, 50, 150], // Đơn vị: Triệu
+                    backgroundColor: [
+                        '#27ae60', // Xanh lá (Thu)
+                        '#e74c3c', // Đỏ (Chi)
+                        '#f39c12', // Cam (Ứng)
+                        '#3498db'  // Xanh dương (Tồn)
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { position: 'right' }
+                }
+            }
+        });
+
+        // --- 2. BIỂU ĐỒ KPI (BAR CHART CÓ MÀU ĐỘNG) ---
+        // Giả định KPI mỗi tháng là 500 Triệu
+        const kpiTarget = 500; 
+        const salesData = [300, 450, 500, 750, 900, 480]; // Dữ liệu giả định
+        const months = ['Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12', 'Tháng 1'];
+
+        // Hàm xác định màu sắc dựa trên KPI
+        const barColors = salesData.map(value => {
+            if (value < kpiTarget) return '#e74c3c'; // Đỏ (Dưới KPI)
+            if (value >= kpiTarget && value < kpiTarget * 1.2) return '#27ae60'; // Xanh (Đạt)
+            return '#8e44ad'; // Tím (Vượt > 20%)
+        });
+
+        const ctxKpi = document.getElementById('kpiChart').getContext('2d');
+        const kpiChart = new Chart(ctxKpi, {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Doanh Số (Triệu VNĐ)',
+                    data: salesData,
+                    backgroundColor: barColors,
+                    borderRadius: 5
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                },
+                plugins: {
+                    legend: { display: false }, // Ẩn chú thích mặc định để dùng legend tùy chỉnh
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                label += context.parsed.y + ' Triệu';
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // --- 3. HÀM TOGGLE CHI TIẾT DÒNG TIỀN ---
+        function toggleDetail(id) {
+            var row = document.getElementById(id);
+            if (row.classList.contains('active')) {
+                row.classList.remove('active');
+            } else {
+                row.classList.add('active');
+            }
+        }
+    </script>
+
+</body>
+</html>
