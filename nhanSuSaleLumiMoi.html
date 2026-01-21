@@ -482,11 +482,13 @@
                                 <th>Chi nhánh</th>
                                 <th>Team</th>
                                 <th>Sale</th>
-                                <th>Số Mess</th>
-                                <th>Phản hồi</th>
+                                <th>Số đơn</th>
+                                <th>Số đơn TT</th>
+                                <th>Doanh số</th>
                                 <th>Số đơn sau huỷ</th>
                                 <th>DS Sau Hủy TT</th>
                                 <th>Tỉ lệ chốt</th>
+                                <th>Phần trăm huỷ</th>
                             </tr>
                         </thead>
                         <tbody id="summary-body-sau-huy"></tbody>
@@ -910,14 +912,38 @@
             const soDonSauHuyTotal = total.soDonThucTe - total.soDonHoanHuyThucTe;
             const dsSauHuyTTTotal = total.doanhThuChotThucTe - total.doanhSoHoanHuyThucTe;
             const totalRateSauHuy = total.mess ? soDonSauHuyTotal / total.mess : 0;
-            const totalRowHtmlSauHuy = `<tr class="total-row"><td class="total-label" colspan="4">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value">${formatNumber(total.phanHoi)}</td><td class="total-value">${formatNumber(soDonSauHuyTotal)}</td><td class="total-value">${formatCurrency(dsSauHuyTTTotal)}</td><td class="total-value">${formatPercent(totalRateSauHuy)}</td></tr>`;
-
+            // Lấy flatList báo cáo tay để đồng bộ số đơn và doanh số
+            const { flatList: flatListChot } = summarizeAndSortSalesData(data);
+            const soDonMap = {};
+            const doanhSoMap = {};
+            const soDonTTMap = {};
+            flatListChot.forEach(item => {
+                soDonMap[item.name] = item.don;
+                doanhSoMap[item.name] = item.chot;
+                soDonTTMap[item.name] = item.soDonThucTe;
+            });
+            // Tính trung bình cộng phần trăm huỷ
+            let sumPhanTramHuy = 0, countPhanTramHuy = 0;
+            flatList.forEach(item => {
+                const soDonSauHuy = item.soDonThucTe - item.soDonHoanHuyThucTe;
+                const soDonTT = soDonTTMap[item.name] || 0;
+                if (soDonTT > 0) {
+                    sumPhanTramHuy += (soDonSauHuy / soDonTT) * 100;
+                    countPhanTramHuy++;
+                }
+            });
+            const avgPhanTramHuy = countPhanTramHuy > 0 ? (sumPhanTramHuy / countPhanTramHuy) : 0;
+            const totalRowHtmlSauHuy = `<tr class="total-row"><td class="total-label" colspan="4">TỔNG CỘNG</td><td class="total-value">${formatNumber(total.mess)}</td><td class="total-value"></td><td class="total-value"></td><td class="total-value">${formatNumber(soDonSauHuyTotal)}</td><td class="total-value">${formatCurrency(dsSauHuyTTTotal)}</td><td class="total-value">${formatPercent(totalRateSauHuy)}</td><td class="total-value">${avgPhanTramHuy.toFixed(2)}%</td></tr>`;
             const bodyRowsHtmlSauHuy = flatList.map((item, index) => {
                 const soDonSauHuy = item.soDonThucTe - item.soDonHoanHuyThucTe;
                 const dsSauHuyTT = item.doanhThuChotThucTe - item.doanhSoHoanHuyThucTe;
                 const rate = item.mess ? soDonSauHuy / item.mess : 0;
                 const rateClass = rate >= 0.1 ? 'bg-green' : (rate > 0.05 ? 'bg-yellow' : '');
-                return `<tr style="--row-index: ${index}"><td class="text-center">${index + 1}</td><td class="text-left">${item.chiNhanh}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(item.mess)}</td><td>${formatNumber(item.phanHoi)}</td><td>${formatNumber(soDonSauHuy)}</td><td>${formatCurrency(dsSauHuyTT)}</td><td class="${rateClass}">${formatPercent(rate)}</td></tr>`;
+                const soDon = soDonMap[item.name] || 0;
+                const doanhSo = doanhSoMap[item.name] || 0;
+                const soDonTT = soDonTTMap[item.name] || 0;
+                const phanTramHuy = soDonTT ? (soDonSauHuy / soDonTT) * 100 : 0;
+                return `<tr style="--row-index: ${index}"><td class="text-center">${index + 1}</td><td class="text-left">${item.chiNhanh}</td><td class="text-left">${item.team}</td><td class="text-left">${item.name}</td><td>${formatNumber(soDon)}</td><td>${formatNumber(soDonTT)}</td><td>${formatCurrency(doanhSo)}</td><td>${formatNumber(soDonSauHuy)}</td><td>${formatCurrency(dsSauHuyTT)}</td><td class="${rateClass}">${formatPercent(rate)}</td><td>${phanTramHuy.toFixed(2)}%</td></tr>`;
             }).join('');
             document.getElementById('summary-body-sau-huy').innerHTML = totalRowHtmlSauHuy + bodyRowsHtmlSauHuy;
 
