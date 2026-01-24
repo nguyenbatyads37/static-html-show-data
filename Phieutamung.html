@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Giấy Đề Nghị Tạm Ứng</title>
     <style>
+        /* CSS CHO TRÌNH DUYỆT WEB */
         body {
             font-family: "Times New Roman", Times, serif;
             margin: 0;
@@ -13,7 +14,7 @@
             background-color: #f0f0f0;
             display: flex;
             justify-content: center;
-            line-height: 1.5;
+            line-height: 1.3;
         }
 
         .a4-page {
@@ -26,6 +27,7 @@
             position: relative;
         }
 
+        /* Watermark (Chỉ hiện trên Web, Word khó hỗ trợ background kiểu này nên sẽ ẩn khi xuất) */
         .a4-page::before {
             content: "";
             position: absolute;
@@ -38,7 +40,7 @@
             background-size: contain;
             background-repeat: no-repeat;
             background-position: center;
-            opacity: 0.15;
+            opacity: 0.10;
             pointer-events: none;
             z-index: 0;
         }
@@ -64,11 +66,13 @@
             font-weight: bold;
             text-transform: uppercase;
             font-size: 11pt;
+            margin-bottom: 3px;
         }
 
         .motto {
             font-weight: bold;
             font-size: 11pt;
+            margin-bottom: 3px;
         }
 
         .sub-motto {
@@ -117,6 +121,7 @@
         .content-section {
             margin-bottom: 10px;
             text-align: justify;
+            font-size: 12pt;
         }
 
         table {
@@ -135,6 +140,7 @@
         td {
             padding: 8px;
             vertical-align: middle;
+            font-size: 12pt;
         }
 
         th {
@@ -168,14 +174,40 @@
             background-color: #f9f9f9;
             padding: 10px;
             border: 1px dashed #999;
-            font-size: 10pt;
+            font-size: 11pt;
+        }
+
+        /* Nút Tải về */
+        .btn-export {
+            position: fixed;
+            top: 20px; right: 20px;
+            padding: 12px 24px;
+            background-color: #28a745; /* Màu xanh lá */
+            color: white;
+            border: 2px solid white;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-weight: bold;
+            font-size: 14px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 9999;
+        }
+        .btn-export:hover { background-color: #218838; transform: scale(1.05); }
+        .btn-export:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        @media print {
+            .btn-export { display: none; }
+            .a4-page { box-shadow: none; margin: 0; width: 100%; }
         }
     </style>
 </head>
 
 <body>
 
-    <div class="a4-page">
+    <button onclick="exportDoc()" id="btnExport" class="btn-export">Tải File Word (.doc)</button>
+
+    <div class="a4-page" id="main-content">
         <div class="header">
             <div class="header-left">
                 <div class="company-name">CÔNG TY CỔ PHẦN NỘI THẤT NHÔM KÍNH</div>
@@ -244,114 +276,212 @@
     </div>
 
     <script>
-        // 1. Lấy thông tin URL
-        const params = new URLSearchParams(window.location.search);
+        // 1. LOGIC XỬ LÝ DỮ LIỆU (Giữ nguyên)
+        document.addEventListener('DOMContentLoaded', function() {
+            const params = new URLSearchParams(window.location.search);
+            function cleanNumber(str) {
+                if (!str) return 0;
+                return parseInt(str.toString().replace(/[^0-9]/g, '')) || 0;
+            }
+            const fmt = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
 
-        // DEBUG: In ra toàn bộ URL để kiểm tra
-        console.log("=== DEBUG PHIẾU TẠM ỨNG ===");
-        console.log("Full URL:", window.location.href);
-        console.log("URL Search:", window.location.search);
+            const ngay = params.get('ngay') || new Date().getDate();
+            const thang = params.get('thang') || (new Date().getMonth() + 1);
+            const nam = params.get('nam') || new Date().getFullYear();
+            const sohd = params.get('sohd') || '...';
+            const diachi = params.get('diachi') || '...';
+            const tongTienStr = params.get('tongtien') || '0';
+            const tamUngStr = params.get('tamung') || ''; 
 
-        // In ra tất cả các parameters
-        console.log("\n=== TẤT CẢ PARAMETERS ===");
-        for (let [key, value] of params.entries()) {
-            console.log(`${key} = "${value}"`);
+            const tongTien = cleanNumber(tongTienStr);
+            let arrTamUng = [];
+            if (tamUngStr.includes('_c_')) {
+                arrTamUng = tamUngStr.split('_c_');
+            } else if (tamUngStr.length > 0) {
+                arrTamUng = [tamUngStr];
+            }
+            arrTamUng = arrTamUng.map(s => cleanNumber(s)).filter(n => n > 0);
+
+            document.getElementById('ngay').innerText = ngay;
+            document.getElementById('thang').innerText = thang;
+            document.getElementById('nam').innerText = nam;
+            document.getElementById('diachi').innerText = diachi;
+            document.getElementById('sohd1').innerText = sohd;
+
+            const dotHienTai = arrTamUng.length > 0 ? arrTamUng.length : 1;
+            document.getElementById('dot_subject').innerText = dotHienTai;
+            document.getElementById('dot_body').innerText = dotHienTai;
+
+            const tbody = document.getElementById('bang_du_lieu');
+            let html = '';
+            let daUng = 0;
+
+            html += `<tr><td>Hợp đồng thi công số: <b>${sohd}</b></td><td class="col-money">${fmt.format(tongTien)}</td></tr>`;
+            if (arrTamUng.length > 0) {
+                arrTamUng.forEach((tien, index) => {
+                    daUng += tien;
+                    html += `<tr><td>Tạm ứng đợt ${index + 1}</td><td class="col-money">${fmt.format(tien)}</td></tr>`;
+                });
+            } else {
+                html += `<tr><td colspan="2" style="text-align:center; color:#999; font-style:italic;">⚠️ Chưa có thông tin tạm ứng từ URL</td></tr>`;
+            }
+
+            const tienDotNay = arrTamUng.length > 0 ? arrTamUng[arrTamUng.length - 1] : 0;
+            if (tienDotNay > 0) {
+                html += `<tr><td colspan="2" style="text-align:center; font-style:italic;">(Bằng chữ: ${DocTienBangChu(tienDotNay)})</td></tr>`;
+            }
+
+            const conLai = tongTien - daUng;
+            html += `<tr style="background-color:#ffffe0"><td><b>CÒN LẠI CẦN THANH TOÁN</b></td><td class="col-money" style="color:red">${fmt.format(conLai)}</td></tr>`;
+            tbody.innerHTML = html;
+
+            function DocTienBangChu(n) { if (n <= 0) return "Không đồng"; var t = ["", " nghìn", " triệu", " tỷ", " nghìn tỷ", " triệu tỷ"], e = [" không", " một", " hai", " ba", " bốn", " năm", " sáu", " bảy", " tám", " chín"]; function o(n) { var o = "", a = Math.floor(n / 100), r = Math.floor(n % 100 / 10), c = n % 10; return 0 == a && 0 == r && 0 == c ? "" : "" != o && (o += e[a] + " trăm", 0 == r && 0 != c && (o += " linh")), (0 != r && 1 != r && (o += e[r] + " mươi", 0 == r && 0 != c && (o += " linh")), 1 == r && (o += " mười"), 1 == c ? o += 0 != r && 1 != r ? " mốt" : e[c] : 5 == c ? o += 0 == r ? e[c] : " lầm" : 0 != c && (o += e[c]), o) } var a = "", r = 0, c = n, u = new Array; if (n > 8999999999999999) return "Số quá lớn!"; u[5] = Math.floor(c / 1e15), isNaN(u[5]) && (u[5] = "0"), c -= parseFloat(u[5].toString()) * 1e15, u[4] = Math.floor(c / 1e12), isNaN(u[4]) && (u[4] = "0"), c -= parseFloat(u[4].toString()) * 1e12, u[3] = Math.floor(c / 1e9), isNaN(u[3]) && (u[3] = "0"), c -= parseFloat(u[3].toString()) * 1e9, u[2] = parseInt(c / 1e6), isNaN(u[2]) && (u[2] = "0"), u[1] = parseInt(c % 1e6 / 1e3), isNaN(u[1]) && (u[1] = "0"), u[0] = parseInt(c % 1e3), isNaN(u[0]) && (u[0] = "0"), u[5] > 0 ? r = 5 : u[4] > 0 ? r = 4 : u[3] > 0 ? r = 3 : u[2] > 0 ? r = 2 : u[1] > 0 ? r = 1 : r = 0; for (var i = r; i >= 0; i--) { var l = o(u[i]); a += l, u[i] > 0 && (a += t[i]), i > 0 && l.length > 0 && (a += ",") } return "," == a.substring(a.length - 1) && (a = a.substring(0, a.length - 1)), a.substring(1, 2).toUpperCase() + a.substring(2) + " đồng ./."; }
+        });
+
+        // 2. LOGIC XUẤT FILE WORD (Chuyển Flex -> Table để giữ format)
+        function exportDoc() {
+            var btn = document.getElementById('btnExport');
+            btn.innerText = "Đang xử lý...";
+            btn.disabled = true;
+
+            setTimeout(() => {
+                try {
+                    // Clone nội dung
+                    var src = document.getElementById('main-content');
+                    var clone = src.cloneNode(true);
+
+                    // --- CHUYỂN ĐỔI HEADER (Flex -> Table) ---
+                    var headerDiv = clone.querySelector('.header');
+                    if (headerDiv) {
+                        var leftContent = headerDiv.querySelector('.header-left').innerHTML;
+                        var rightContent = headerDiv.querySelector('.header-right').innerHTML;
+                        
+                        var headerTbl = document.createElement('table');
+                        headerTbl.style.width = '100%';
+                        headerTbl.style.border = 'none'; // Không viền cho header
+                        var tr = document.createElement('tr');
+                        
+                        var td1 = document.createElement('td');
+                        td1.style.width = '50%';
+                        td1.style.textAlign = 'center';
+                        td1.style.verticalAlign = 'top';
+                        td1.style.border = 'none';
+                        td1.innerHTML = leftContent;
+                        
+                        var td2 = document.createElement('td');
+                        td2.style.width = '50%';
+                        td2.style.textAlign = 'center';
+                        td2.style.verticalAlign = 'top';
+                        td2.style.border = 'none';
+                        td2.innerHTML = rightContent;
+                        
+                        tr.appendChild(td1); tr.appendChild(td2);
+                        headerTbl.appendChild(tr);
+                        headerDiv.parentNode.replaceChild(headerTbl, headerDiv);
+                    }
+
+                    // --- CHUYỂN ĐỔI ĐỊA CHỈ & NGÀY (Flex -> Table) ---
+                    var addrRow = clone.querySelector('.address-date-row');
+                    if (addrRow) {
+                        var addrContent = addrRow.querySelector('.address-info').innerHTML;
+                        var dateContent = addrRow.querySelector('.date-line').innerHTML;
+
+                        var addrTbl = document.createElement('table');
+                        addrTbl.style.width = '100%';
+                        addrTbl.style.borderBottom = '1px solid #ccc'; // Giữ viền dưới
+                        var trA = document.createElement('tr');
+                        
+                        var tdA1 = document.createElement('td');
+                        tdA1.style.width = '60%';
+                        tdA1.style.textAlign = 'left';
+                        tdA1.style.border = 'none';
+                        tdA1.innerHTML = addrContent;
+
+                        var tdA2 = document.createElement('td');
+                        tdA2.style.width = '40%';
+                        tdA2.style.textAlign = 'right';
+                        tdA2.style.border = 'none';
+                        tdA2.style.fontStyle = 'italic';
+                        tdA2.innerHTML = dateContent;
+
+                        trA.appendChild(tdA1); trA.appendChild(tdA2);
+                        addrTbl.appendChild(trA);
+                        addrRow.parentNode.replaceChild(addrTbl, addrRow);
+                    }
+
+                    // --- CHUYỂN ĐỔI FOOTER/CHỮ KÝ (Flex -> Table) ---
+                    var footerDiv = clone.querySelector('.footer');
+                    if (footerDiv) {
+                        var footerHTML = footerDiv.innerHTML;
+                        var footerTbl = document.createElement('table');
+                        footerTbl.style.width = '100%';
+                        footerTbl.style.marginTop = '30px';
+                        footerTbl.style.border = 'none';
+                        
+                        var trF = document.createElement('tr');
+                        // Tạo ô rỗng bên trái để đẩy nội dung sang phải
+                        var tdF1 = document.createElement('td');
+                        tdF1.style.width = '50%';
+                        tdF1.style.border = 'none';
+                        
+                        var tdF2 = document.createElement('td');
+                        tdF2.style.width = '50%';
+                        tdF2.style.textAlign = 'center'; // Chữ ký căn giữa trong cột phải
+                        tdF2.style.border = 'none';
+                        tdF2.innerHTML = footerHTML;
+
+                        trF.appendChild(tdF1); trF.appendChild(tdF2);
+                        footerTbl.appendChild(trF);
+                        footerDiv.parentNode.replaceChild(footerTbl, footerDiv);
+                    }
+
+                    // --- XỬ LÝ BACKGROUND MÀU CHO DÒNG CÒN LẠI ---
+                    // Word in HTML background-color đôi khi cần style cụ thể trong TD
+                    var bgRows = clone.querySelectorAll('tr[style*="background-color"]');
+                    bgRows.forEach(row => {
+                        var tds = row.querySelectorAll('td');
+                        tds.forEach(td => {
+                            td.style.backgroundColor = '#ffffe0'; // Gán trực tiếp vào td để chắc ăn
+                        });
+                    });
+
+                    // CSS cho Word
+                    var css = `
+                        <style>
+                            @page { size: 21cm 29.7cm; margin: 2cm; mso-page-orientation: portrait; }
+                            body { font-family: 'Times New Roman', serif; font-size: 12pt; line-height: 1.3; }
+                            table { border-collapse: collapse; width: 100%; mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+                            td, th { padding: 5pt; vertical-align: middle; }
+                        </style>
+                    `;
+
+                    var html = `
+                        <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                        <head><meta charset='utf-8'><title>Giấy Đề Nghị</title>${css}</head>
+                        <body>${clone.innerHTML}</body></html>
+                    `;
+
+                    var blob = new Blob(['\ufeff', html], { type: 'application/msword' });
+                    var url = URL.createObjectURL(blob);
+                    var link = document.createElement('a');
+                    link.href = url;
+                    link.download = "Giay_De_Nghi_Tam_Ung.doc";
+                    document.body.appendChild(link);
+                    link.click();
+                    
+                    setTimeout(() => {
+                        document.body.removeChild(link);
+                        window.URL.revokeObjectURL(url);
+                        btn.innerText = "Tải File Word (.doc)";
+                        btn.disabled = false;
+                    }, 500);
+
+                } catch (e) {
+                    alert('Lỗi: ' + e.message);
+                    btn.disabled = false;
+                }
+            }, 100);
         }
-
-        // Hàm làm sạch số (loại bỏ chữ, dấu chấm phẩy)
-        function cleanNumber(str) {
-            if (!str) return 0;
-            return parseInt(str.toString().replace(/[^0-9]/g, '')) || 0;
-        }
-
-        // Hàm định dạng tiền tệ
-        const fmt = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
-
-        // 2. Lấy dữ liệu
-        const ngay = params.get('ngay') || new Date().getDate();
-        const thang = params.get('thang') || (new Date().getMonth() + 1);
-        const nam = params.get('nam') || new Date().getFullYear();
-        const sohd = params.get('sohd') || '...';
-        const diachi = params.get('diachi') || '...';
-
-        // Xử lý Tiền (Quan trọng)
-        const tongTienStr = params.get('tongtien') || '0';
-        const tamUngStr = params.get('tamung') || ''; // Chuỗi dạng "100_c_200"
-
-        console.log("\n=== DỮ LIỆU THÔ ===");
-        console.log("tongTienStr:", tongTienStr);
-        console.log("tamUngStr:", tamUngStr);
-
-        const tongTien = cleanNumber(tongTienStr);
-
-        // Tách mảng tạm ứng
-        let arrTamUng = [];
-        if (tamUngStr.includes('_c_')) {
-            arrTamUng = tamUngStr.split('_c_');
-            console.log("Split by '_c_':", arrTamUng);
-        } else if (tamUngStr.length > 0) {
-            // Trường hợp chỉ có 1 số, không có dấu _c_
-            arrTamUng = [tamUngStr];
-            console.log("Single value:", arrTamUng);
-        }
-
-        // Chuyển mảng chuỗi thành mảng số
-        arrTamUng = arrTamUng.map(s => cleanNumber(s)).filter(n => n > 0);
-
-        // 3. DEBUG: Kiểm tra xem code có nhận được số không?
-        console.log("\n=== DỮ LIỆU SAU KHI XỬ LÝ ===");
-        console.log("Tổng tiền (số):", tongTien);
-        console.log("Mảng tạm ứng (số):", arrTamUng);
-        console.log("Tổng đã ứng:", arrTamUng.reduce((sum, val) => sum + val, 0));
-
-        // 4. Hiển thị thông tin Header
-        document.getElementById('ngay').innerText = ngay;
-        document.getElementById('thang').innerText = thang;
-        document.getElementById('nam').innerText = nam;
-        document.getElementById('diachi').innerText = diachi;
-        document.getElementById('sohd1').innerText = sohd;
-
-        const dotHienTai = arrTamUng.length > 0 ? arrTamUng.length : 1;
-        document.getElementById('dot_subject').innerText = dotHienTai;
-        document.getElementById('dot_body').innerText = dotHienTai;
-
-        // 5. Vẽ Bảng
-        const tbody = document.getElementById('bang_du_lieu');
-        let html = '';
-        let daUng = 0;
-
-        // Dòng 1: Tổng HĐ
-        html += `<tr><td>Hợp đồng thi công số: <b>${sohd}</b></td><td class="col-money">${fmt.format(tongTien)}</td></tr>`;
-
-        // Các dòng tạm ứng
-        if (arrTamUng.length > 0) {
-            arrTamUng.forEach((tien, index) => {
-                daUng += tien;
-                html += `<tr><td>Tạm ứng đợt ${index + 1}</td><td class="col-money">${fmt.format(tien)}</td></tr>`;
-            });
-        } else {
-            html += `<tr><td colspan="2" style="text-align:center; color:#999; font-style:italic;">⚠️ Chưa có thông tin tạm ứng từ URL</td></tr>`;
-        }
-
-        // Dòng bằng chữ (Đợt này)
-        const tienDotNay = arrTamUng.length > 0 ? arrTamUng[arrTamUng.length - 1] : 0;
-        if (tienDotNay > 0) {
-            html += `<tr><td colspan="2" style="text-align:center; font-style:italic;">(Bằng chữ: ${DocTienBangChu(tienDotNay)})</td></tr>`;
-        }
-
-        // Dòng còn lại
-        const conLai = tongTien - daUng;
-        html += `<tr style="background-color:#ffffe0"><td><b>CÒN LẠI CẦN THANH TOÁN</b></td><td class="col-money" style="color:red">${fmt.format(conLai)}</td></tr>`;
-
-        tbody.innerHTML = html;
-
-        console.log("\n=== BẢNG ĐÃ RENDER ===");
-        console.log("HTML Generated:", html.substring(0, 200) + "...");
-
-        // Hàm đọc số (Rút gọn)
-        function DocTienBangChu(n) { if (n <= 0) return "Không đồng"; var t = ["", " nghìn", " triệu", " tỷ", " nghìn tỷ", " triệu tỷ"], e = [" không", " một", " hai", " ba", " bốn", " năm", " sáu", " bảy", " tám", " chín"]; function o(n) { var o = "", a = Math.floor(n / 100), r = Math.floor(n % 100 / 10), c = n % 10; return 0 == a && 0 == r && 0 == c ? "" : "" != o && (o += e[a] + " trăm", 0 == r && 0 != c && (o += " linh")), (0 != r && 1 != r && (o += e[r] + " mươi", 0 == r && 0 != c && (o += " linh")), 1 == r && (o += " mười"), 1 == c ? o += 0 != r && 1 != r ? " mốt" : e[c] : 5 == c ? o += 0 == r ? e[c] : " lầm" : 0 != c && (o += e[c]), o) } var a = "", r = 0, c = n, u = new Array; if (n > 8999999999999999) return "Số quá lớn!"; u[5] = Math.floor(c / 1e15), isNaN(u[5]) && (u[5] = "0"), c -= parseFloat(u[5].toString()) * 1e15, u[4] = Math.floor(c / 1e12), isNaN(u[4]) && (u[4] = "0"), c -= parseFloat(u[4].toString()) * 1e12, u[3] = Math.floor(c / 1e9), isNaN(u[3]) && (u[3] = "0"), c -= parseFloat(u[3].toString()) * 1e9, u[2] = parseInt(c / 1e6), isNaN(u[2]) && (u[2] = "0"), u[1] = parseInt(c % 1e6 / 1e3), isNaN(u[1]) && (u[1] = "0"), u[0] = parseInt(c % 1e3), isNaN(u[0]) && (u[0] = "0"), u[5] > 0 ? r = 5 : u[4] > 0 ? r = 4 : u[3] > 0 ? r = 3 : u[2] > 0 ? r = 2 : u[1] > 0 ? r = 1 : r = 0; for (var i = r; i >= 0; i--) { var l = o(u[i]); a += l, u[i] > 0 && (a += t[i]), i > 0 && l.length > 0 && (a += ",") } return "," == a.substring(a.length - 1) && (a = a.substring(0, a.length - 1)), a.substring(1, 2).toUpperCase() + a.substring(2) + " đồng ./."; }
     </script>
-
 </body>
-
 </html>
