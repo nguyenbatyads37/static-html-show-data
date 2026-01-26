@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRM Web App - Theo dõi Deadline & Chi tiết</title>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #16a34a;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+            --border: #e2e8f0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Header & Stats */
+        .header {
+            background: var(--card);
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+        }
+
+        .header h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .top-stats {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .progress-container {
+            width: 100%;
+        }
+
+        .progress-bar-bg {
+            height: 24px;
+            background-color: #e2e8f0;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background-color: var(--success);
+            width: 0%;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+            color: white;
+            font-size: 14px;
+            line-height: 24px;
+            font-weight: bold;
+        }
+
+        .btn-reset {
+            background-color: var(--danger);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            justify-self: end;
+        }
+
+        /* Main Layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 24px;
+        }
+
+        /* Modules Styles */
+        .module {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .module-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--bg);
+        }
+
+        .module-title { font-weight: bold; font-size: 1.1rem; }
+        .module-stats { font-size: 0.9rem; color: #64748b; background: #f1f5f9; padding: 4px 8px; border-radius: 4px; }
+        .task-list { list-style: none; padding: 0; margin: 0; }
+        .task-item { display: flex; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); gap: 12px; }
+        .task-content { flex-grow: 1; }
+        .task-name { font-weight: 500; }
+        .task-ref { font-size: 0.8rem; color: #64748b; margin-left: 6px; background: #f1f5f9; padding: 2px 4px; border-radius: 3px; }
+        .deadline-input { border: 1px solid var(--border); padding: 6px; border-radius: 4px; font-size: 0.9rem; color: #475569; }
+        .status-badge { font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; font-weight: 600; margin-left: 8px; }
+        .priority-high { background: #fee2e2; color: #991b1b; }
+        .priority-core { background: #dbeafe; color: #1e40af; }
+
+        /* Chart & Table Styles */
+        .chart-section {
+            background: var(--card);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            position: sticky; 
+            top: 20px;
+        }
+
+        .deadline-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            margin-top: 15px;
+        }
+        
+        .deadline-table th { text-align: left; padding: 8px; border-bottom: 1px solid #e2e8f0; color: #64748b; }
+        .deadline-table td { padding: 10px 8px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.2s; }
+        .deadline-table tr:hover td { background-color: #f8fafc; }
+        
+        .mini-progress {
+            height: 6px;
+            background: #e2e8f0;
+            border-radius: 3px;
+            width: 100px;
+            overflow: hidden;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        .mini-progress-bar { height: 100%; background: var(--success); }
+        .row-date { font-weight: 600; color: var(--primary); }
+        .overdue .row-date { color: var(--danger); }
+
+        /* Modal Styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            background-color: rgba(0,0,0,0.5); 
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto; 
+            padding: 24px;
+            border: 1px solid #888;
+            width: 80%; 
+            max-width: 500px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close:hover { color: black; }
+
+        .modal-task-list {
+            list-style: none;
+            padding: 0;
+            margin-top: 15px;
+        }
+        .modal-task-item {
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-task-item.done { text-decoration: line-through; color: #94a3b8; }
+        .modal-task-item::before { content: "•"; color: var(--primary); }
+        .modal-task-item.done::before { content: "✓"; color: var(--success); }
+
+        @media (max-width: 900px) {
+            .main-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>🚀 HRM Web App - Theo dõi Deadline & Chi tiết</h1>
+        <p style="margin-bottom: 20px; color: #64748b; font-size: 0.9rem;">
+            Dữ liệu bên phải tự động cập nhật theo ngày Deadline bạn nhập. Nhấn vào ngày để xem list công việc.
+        </p>
+        
+        <div class="top-stats">
+            <div class="progress-container">
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill" id="globalProgress">0%</div>
+                </div>
+                <div style="font-size: 0.9rem;">
+                    <strong>Tổng:</strong> <span id="totalTasks">0</span> | 
+                    <strong>Xong:</strong> <span id="completedTasks">0</span>
+                </div>
+            </div>
+            <button class="btn-reset" onclick="resetData()">Reset Dữ Liệu</button>
+        </div>
+    </div>
+
+    <div class="main-layout">
+        <!-- Left Column: Tasks List -->
+        <div class="tasks-column">
+            
+             <!-- 1. Auth -->
+             <div class="module" id="module-auth">
+                <div class="module-header"><div class="module-title">1. Tài khoản & Xác thực <span class="status-badge priority-high">High</span></div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Đăng nhập (Employee Code)</span><span class="task-ref">P83</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Rate-limit & Khóa tạm thời</span><span class="task-ref">P87</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Đổi mật khẩu lần đầu</span><span class="task-ref">P86</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Quên mật khẩu (OTP Email)</span><span class="task-ref">P89</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+
+            <!-- 2. HR -->
+            <div class="module" id="module-hr">
+                <div class="module-header"><div class="module-title">2. Quản trị Nhân sự <span class="status-badge priority-core">Core</span></div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">CRUD Nhân viên</span><span class="task-ref">P97</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Import Dữ liệu</span><span class="task-ref">P102</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Cấu hình Org Unit</span><span class="task-ref">P61</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+
+            <!-- 3. Profile -->
+            <div class="module" id="module-profile">
+                <div class="module-header"><div class="module-title">3. Hồ sơ & Workflow</div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Hiển thị 7 tab hồ sơ</span><span class="task-ref">P118</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Self-service: Sửa -> Gửi duyệt</span><span class="task-ref">P112</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Duyệt hồ sơ (Approve/Reject)</span><span class="task-ref">P115</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Audit Update Profile</span><span class="task-ref">P116</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+
+             <!-- 4. Scoring -->
+             <div class="module" id="module-score">
+                <div class="module-header"><div class="module-title">4. Chấm điểm thi đua</div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Mẫu chấm: NVTT, NVGT, CBQL</span><span class="task-ref">P134</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Quy trình duyệt chấm điểm</span><span class="task-ref">P138</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Export kết quả tháng</span><span class="task-ref">P140</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+
+            <!-- 5. Leave -->
+            <div class="module" id="module-leave">
+                <div class="module-header"><div class="module-title">5. Nghỉ phép</div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Tạo đơn nghỉ & Check trùng</span><span class="task-ref">P143</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Duyệt nghỉ phép theo tuyến</span><span class="task-ref">P148</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+
+             <!-- 6. Task -->
+             <div class="module" id="module-task">
+                <div class="module-header"><div class="module-title">6. Công việc & Tiện ích</div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Giao việc & Deadline</span><span class="task-ref">P156</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Cập nhật tiến độ Task</span><span class="task-ref">P161</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Lịch & Thư viện (ACK)</span><span class="task-ref">P165</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+
+             <!-- 7. System -->
+             <div class="module" id="module-sys">
+                <div class="module-header"><div class="module-title">7. Hệ thống & Export <span class="status-badge priority-high">Sys</span></div><span class="module-stats">0/0</span></div>
+                <ul class="task-list">
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Phân quyền RBAC</span><span class="task-ref">P222</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Export Center</span><span class="task-ref">P199</span></div><input type="date" class="deadline-input"></li>
+                    <li class="task-item"><div class="checkbox-wrapper"><input type="checkbox"></div><div class="task-content"><span class="task-name">Audit Logs</span><span class="task-ref">P209</span></div><input type="date" class="deadline-input"></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Right Column: Chart & Table (Interactive) -->
+        <div class="chart-column">
+            <div class="chart-section">
+                <h4 style="margin-top: 0; margin-bottom: 15px;">Thống kê theo Deadline</h4>
+                
+                <!-- Chart -->
+                <div style="height: 200px;">
+                    <canvas id="deadlineChart"></canvas>
+                </div>
+
+                <!-- Table -->
+                <div style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px;">
+                    <small style="color: #64748b; display:block; margin-bottom: 5px;">Nhấn vào ngày để xem chi tiết task:</small>
+                    <table class="deadline-table">
+                        <thead>
+                            <tr>
+                                <th>Ngày Deadline</th>
+                                <th>Tiến độ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deadlineTableBody">
+                            <!-- JS render here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Detail -->
+<div id="detailModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h3 id="modalDateTitle" style="margin-top:0; color: var(--primary);">Chi tiết công việc</h3>
+        <ul id="modalTaskList" class="modal-task-list">
+            <!-- JS render tasks here -->
+        </ul>
+    </div>
+</div>
+
+<script>
+    const STORAGE_KEY = 'hrm_prd_tracking_v4'; // Changed key to v4
+    let myChart = null;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadData();
+        calculateStats();
+        updateDeadlineView();
+        
+        // Listen for changes
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('change', () => {
+                saveData();
+                calculateStats();
+                updateDeadlineView();
+            });
+        });
+    });
+
+    // --- LOGIC 1: CALCULATE STATS (LEFT SIDE) ---
+    function calculateStats() {
+        let totalChecked = 0;
+        let totalCount = 0;
+
+        document.querySelectorAll('.module').forEach(module => {
+            const checkboxes = module.querySelectorAll('input[type="checkbox"]');
+            const checked = module.querySelectorAll('input[type="checkbox"]:checked');
+            
+            const statsSpan = module.querySelector('.module-stats');
+            if (statsSpan) {
+                statsSpan.textContent = `${checked.length}/${checkboxes.length}`;
+                if(checked.length === checkboxes.length && checkboxes.length > 0) {
+                    statsSpan.style.background = '#dcfce7'; 
+                    statsSpan.style.color = '#166534';
+                } else {
+                    statsSpan.style.background = '#f1f5f9';
+                    statsSpan.style.color = '#64748b';
+                }
+            }
+            totalCount += checkboxes.length;
+            totalChecked += checked.length;
+        });
+
+        const percentage = totalCount === 0 ? 0 : Math.round((totalChecked / totalCount) * 100);
+        const progressBar = document.getElementById('globalProgress');
+        
+        progressBar.style.width = `${percentage}%`;
+        progressBar.textContent = `${percentage}%`;
+        
+        if (percentage < 30) progressBar.style.backgroundColor = '#ef4444';
+        else if (percentage < 70) progressBar.style.backgroundColor = '#eab308';
+        else progressBar.style.backgroundColor = '#16a34a';
+
+        document.getElementById('totalTasks').textContent = totalCount;
+        document.getElementById('completedTasks').textContent = totalChecked;
+    }
+
+    // --- LOGIC 2: DEADLINE VIEW (RIGHT SIDE - CHART & TABLE) ---
+    function updateDeadlineView() {
+        // 1. Gather Data
+        const tasks = [];
+        document.querySelectorAll('.task-item').forEach(item => {
+            const name = item.querySelector('.task-name').innerText;
+            const date = item.querySelector('.deadline-input').value;
+            const checked = item.querySelector('input[type="checkbox"]').checked;
+            if (date) tasks.push({ name, date, checked });
+        });
+
+        const tbody = document.getElementById('deadlineTableBody');
+        tbody.innerHTML = '';
+
+        if (tasks.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#94a3b8; padding:20px;">Chưa có deadline nào</td></tr>';
+            if(myChart) myChart.destroy();
+            return;
+        }
+
+        // 2. Group by Date
+        const grouped = tasks.reduce((acc, task) => {
+            if (!acc[task.date]) acc[task.date] = { total: 0, done: 0, tasks: [] };
+            acc[task.date].total++;
+            if (task.checked) acc[task.date].done++;
+            acc[task.date].tasks.push(task);
+            return acc;
+        }, {});
+
+        // 3. Sort Dates
+        const sortedDates = Object.keys(grouped).sort();
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        // 4. Render Table
+        sortedDates.forEach(date => {
+            const data = grouped[date];
+            const percent = Math.round((data.done / data.total) * 100);
+            const isOverdue = date < todayStr && data.done < data.total;
+            const displayDate = date === todayStr ? 'Hôm nay' : date.split('-').reverse().join('/');
+
+            const tr = document.createElement('tr');
+            if (isOverdue) tr.classList.add('overdue');
+            
+            // Add click event for modal
+            tr.onclick = () => openModal(date, displayDate, data.tasks);
+
+            tr.innerHTML = `
+                <td class="row-date">
+                    ${displayDate}
+                    ${isOverdue ? '<span style="color:var(--danger)"> (Quá hạn)</span>' : ''}
+                </td>
+                <td>
+                    <div class="mini-progress"><div class="mini-progress-bar" style="width: ${percent}%"></div></div>
+                    <span>${data.done}/${data.total}</span>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // 5. Render Chart (Stacked Bar)
+        renderChart(sortedDates, grouped);
+    }
+
+    function renderChart(dates, groupedData) {
+        const ctx = document.getElementById('deadlineChart').getContext('2d');
+        
+        // Prepare datasets
+        const doneData = dates.map(d => groupedData[d].done);
+        const remainData = dates.map(d => groupedData[d].total - groupedData[d].done);
+        const labels = dates.map(d => d.split('-').slice(1).join('/')); // mm/dd
+
+        if (myChart) myChart.destroy();
+
+        myChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Hoàn thành',
+                        data: doneData,
+                        backgroundColor: '#16a34a',
+                        stack: 'Stack 0',
+                    },
+                    {
+                        label: 'Còn lại',
+                        data: remainData,
+                        backgroundColor: '#e2e8f0',
+                        stack: 'Stack 0',
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: true, position: 'bottom' },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => `Ngày deadline: ${dates[items[0].dataIndex]}`
+                        }
+                    }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+    }
+
+    // --- MODAL LOGIC ---
+    function openModal(dateIso, displayDate, tasks) {
+        const modal = document.getElementById('detailModal');
+        const title = document.getElementById('modalDateTitle');
+        const list = document.getElementById('modalTaskList');
+
+        title.textContent = `Deadline: ${displayDate}`;
+        list.innerHTML = '';
+
+        tasks.forEach(t => {
+            const li = document.createElement('li');
+            li.className = `modal-task-item ${t.checked ? 'done' : ''}`;
+            li.innerText = t.name;
+            list.appendChild(li);
+        });
+
+        modal.style.display = "block";
+    }
+
+    function closeModal() {
+        document.getElementById('detailModal').style.display = "none";
+    }
+
+    // Close modal if clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('detailModal');
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+
+    // --- DATA SAVING ---
+    function saveData() {
+        const data = {
+            checkboxes: [],
+            deadlines: []
+        };
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => data.checkboxes.push(cb.checked));
+        document.querySelectorAll('.deadline-input').forEach(dl => data.deadlines.push(dl.value));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    function loadData() {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+            const data = JSON.parse(saved);
+            const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+            if (data.checkboxes) {
+                data.checkboxes.forEach((isChecked, index) => {
+                    if(checkboxes[index]) checkboxes[index].checked = isChecked;
+                });
+            }
+            const deadlines = document.querySelectorAll('.deadline-input');
+            if (data.deadlines) {
+                data.deadlines.forEach((val, index) => {
+                    if(deadlines[index]) deadlines[index].value = val;
+                });
+            }
+        }
+    }
+
+    function resetData() {
+        if(confirm('CẢNH BÁO: Xóa toàn bộ dữ liệu?')) {
+            localStorage.removeItem(STORAGE_KEY);
+            document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            document.querySelectorAll('.deadline-input').forEach(dl => dl.value = '');
+            calculateStats();
+            updateDeadlineView();
+        }
+    }
+</script>
+
+</body>
+</html>
