@@ -128,7 +128,6 @@
       background-color: #45a049;
     }
 
-    /* QR code styles */
     .qr-container {
       position: relative;
       width: 200px;
@@ -151,7 +150,6 @@
       padding: 0;
     }
 
-    /* Add Row Button */
     .action-btn {
       background-color: #2196F3;
       color: white;
@@ -185,13 +183,11 @@
       cursor: text;
     }
 
-    /* Logic to hiding column */
     .hide-supported .col-supported,
     .hide-supported .col-supported-header {
       display: none;
     }
 
-    /* Class Input Styles */
     .class-input {
       font-family: "Times New Roman", Times, serif;
       font-weight: bold;
@@ -203,18 +199,13 @@
       width: 150px;
       transition: all 0.3s ease;
     }
-
-    .custom-class-input:focus {
-      border-color: #e68900;
-      box-shadow: 0 0 5px rgba(255, 152, 0, 0.5);
-    }
   </style>
 </head>
 
 <body>
   <div id="captureArea">
-    <div class="header-title">Lớp học Tiếng anh chất lượng cao cô Thảo Linh</div>
-    <div class="header-address">Địa chỉ: Số 17, Ngõ 2, Trần Cung, Hoàng Quốc Việt, Cầu Giấy</div>
+    <div class="header-title">Lớp học Tiếng anh Chất Lượng Cao cô Thảo Linh</div>
+    <div class="header-address">Địa chỉ: Số 17, ngõ 2, Trần Cung, Hoàng Quốc Việt, Cầu Giấy</div>
     <div class="month-title" id="monthTitle">THÔNG BÁO HỌC PHÍ</div>
     <table id="mainTable">
       <tr>
@@ -269,6 +260,7 @@
   </div>
 
   <script>
+    // --- Utils ---
     function getUrlParameter(name) {
       name = name.replace(/[\[\]]/g, '\\$&');
       const regex = new RegExp('[?&]' + name + '(=([^&#]*)|&|#|$)');
@@ -284,17 +276,30 @@
       return months[today.getMonth()];
     }
 
+    function cleanNumber(str) {
+      if (typeof str !== 'string') return 0;
+      // Loại bỏ tất cả ký tự không phải số (bao gồm cả dấu chấm)
+      return parseInt(str.replace(/\D/g, '')) || 0;
+    }
+
+    // Định dạng số có dấu chấm (ví dụ: 100.000)
+    function formatNumber(num) {
+      return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    }
+
+    // Định dạng tiền tệ có chữ Đ (ví dụ: 100.000 Đ)
+    function formatMoney(num) {
+      return formatNumber(num) + ' Đ';
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
       const ten = getUrlParameter('ten') || 'Không xác định';
       const thang = getCurrentMonth();
       const sobuoi = getUrlParameter('sobuoi') || '0';
       const hotro = getUrlParameter('hotro') || '0';
       const hocphi = getUrlParameter('hocphi') || '0';
-      const tonghocphi = getUrlParameter('tonghocphi') || '0';
-      const linkanh = getUrlParameter('linkanh') || '';
       const lop = getUrlParameter('lop') || '';
 
-      // Đã cập nhật thêm tài khoản VBA (Agribank)
       const taikhoan = ["BIDV-2890331333", "BIDV-8877273517", "VBA-3506205108937"];
 
       const studentNameSpan = document.getElementById('studentName');
@@ -302,23 +307,12 @@
       const classInput = document.getElementById('classInput');
 
       studentNameSpan.textContent = ten;
-
       if (lop) {
         classInput.value = lop;
         studentClassSpan.textContent = lop;
       }
-
       studentNameSpan.setAttribute('contenteditable', 'true');
-      studentNameSpan.style.outline = "none";
-
       document.getElementById('monthTitle').textContent = 'THÔNG BÁO HỌC PHÍ THÁNG ' + thang;
-
-      classInput.addEventListener('input', function () {
-        studentClassSpan.textContent = this.value;
-        updateQR();
-      });
-
-      studentNameSpan.addEventListener('input', () => updateQR());
 
       const table = document.getElementById('mainTable');
       const toggleSupportedBtn = document.getElementById('toggleSupportBtn');
@@ -326,19 +320,11 @@
 
       toggleSupportedBtn.addEventListener('click', function () {
         isSupportedHidden = !isSupportedHidden;
-        if (isSupportedHidden) {
-          table.classList.add('hide-supported');
-          document.querySelector('.total-label-cell').colSpan = 4;
-          document.querySelector('.note-cell').colSpan = 4;
-          toggleSupportedBtn.textContent = "👁‍🗨";
-          toggleSupportedBtn.style.opacity = "0.6";
-        } else {
-          table.classList.remove('hide-supported');
-          document.querySelector('.total-label-cell').colSpan = 5;
-          document.querySelector('.note-cell').colSpan = 5;
-          toggleSupportedBtn.textContent = "👁";
-          toggleSupportedBtn.style.opacity = "1";
-        }
+        const colspan = isSupportedHidden ? 4 : 5;
+        table.classList.toggle('hide-supported', isSupportedHidden);
+        document.querySelector('.total-label-cell').colSpan = colspan;
+        document.querySelector('.note-cell').colSpan = colspan;
+        toggleSupportedBtn.textContent = isSupportedHidden ? "👁‍🗨" : "👁";
       });
 
       const tbody = document.getElementById('billingTableBody');
@@ -348,7 +334,8 @@
         row.querySelector('.col-month').textContent = monthText;
         row.querySelector('.col-total').textContent = total;
         row.querySelector('.col-supported').textContent = support;
-        row.querySelector('.col-fee').textContent = fee;
+        // Định dạng học phí ngay khi load
+        row.querySelector('.col-fee').textContent = formatNumber(cleanNumber(fee));
         updateRow(row);
       }
 
@@ -360,9 +347,7 @@
         newRow.querySelector('.col-month').textContent = "";
         newRow.querySelector('.col-total').textContent = "0";
         newRow.querySelector('.col-supported').textContent = "0";
-        newRow.querySelector('.col-completed').textContent = "0";
-        newRow.querySelector('.col-total-fee').textContent = "0";
-
+        newRow.querySelector('.col-fee').textContent = "0";
         tbody.appendChild(newRow);
         attachRowListeners(newRow);
         updateCalculations();
@@ -376,25 +361,17 @@
           });
 
           cell.addEventListener('blur', () => {
-            if (cell.classList.contains('col-total') ||
-              cell.classList.contains('col-supported') ||
-              cell.classList.contains('col-fee')) {
-              const num = cleanNumber(cell.textContent);
+            const num = cleanNumber(cell.textContent);
+            if (cell.classList.contains('col-fee')) {
+              // Khi rời khỏi ô Học phí/buổi, tự động thêm dấu chấm
+              cell.textContent = formatNumber(num);
+            } else if (cell.classList.contains('col-total') || cell.classList.contains('col-supported')) {
               cell.textContent = num;
-              updateRow(row);
-              updateCalculations();
             }
+            updateRow(row);
+            updateCalculations();
           });
         });
-      }
-
-      function cleanNumber(str) {
-        if (typeof str !== 'string') return 0;
-        return parseInt(str.replace(/\D/g, '')) || 0;
-      }
-
-      function formatMoney(num) {
-        return num.toLocaleString('vi-VN') + ' Đ';
       }
 
       function updateRow(row) {
@@ -415,7 +392,6 @@
         document.querySelectorAll('.data-row').forEach(row => {
           grandTotal += parseInt(row.dataset.totalFee) || 0;
         });
-
         document.getElementById('grandTotal').textContent = formatMoney(grandTotal);
         updateQR(grandTotal);
       }
@@ -432,25 +408,23 @@
 
       function updateQR(currentGrandTotal) {
         if (currentGrandTotal === undefined) {
-          const text = document.getElementById('grandTotal').textContent;
-          currentGrandTotal = cleanNumber(text);
+          currentGrandTotal = cleanNumber(document.getElementById('grandTotal').textContent);
         }
-
         const currentName = studentNameSpan.textContent.trim();
         const currentClass = studentClassSpan.textContent.trim();
         const selectedAccount = accountSelect.value;
         const addInfo = encodeURIComponent("con  " + currentName + " " + currentClass);
-        const qrUrl = `https://img.vietqr.io/image/${selectedAccount}-compact2.jpg?amount=${currentGrandTotal}&addInfo=${addInfo}`;
-        qrImage.src = qrUrl;
+        qrImage.src = `https://img.vietqr.io/image/${selectedAccount}-compact2.jpg?amount=${currentGrandTotal}&addInfo=${addInfo}`;
       }
 
-      accountSelect.addEventListener('change', updateQR);
-
-      if (linkanh) {
-        qrImage.src = linkanh;
-      } else {
+      accountSelect.addEventListener('change', () => updateQR());
+      classInput.addEventListener('input', () => {
+        studentClassSpan.textContent = classInput.value;
         updateQR();
-      }
+      });
+      studentNameSpan.addEventListener('input', () => updateQR());
+
+      updateCalculations();
 
       document.getElementById('copyBtn').addEventListener('click', copyTableAsImage);
     });
@@ -463,20 +437,13 @@
           useCORS: true,
           backgroundColor: null,
           onclone: (clonedDoc) => {
-            const buttons = clonedDoc.querySelectorAll('.action-btn');
-            buttons.forEach(b => b.style.display = 'none');
-
+            clonedDoc.querySelectorAll('.action-btn').forEach(b => b.style.display = 'none');
             const select = clonedDoc.getElementById('accountSelect');
-            if (select) {
-              select.style.display = 'none';
-            }
-
+            if (select) select.style.display = 'none';
+            
             const classInput = clonedDoc.getElementById('classInput');
             const classSpan = clonedDoc.getElementById('studentClass');
-
-            if (classInput) {
-              classInput.style.display = 'none';
-            }
+            if (classInput) classInput.style.display = 'none';
             if (classSpan) {
               classSpan.style.display = 'inline';
               classSpan.style.fontFamily = '"Times New Roman", Times, serif';
@@ -487,14 +454,11 @@
         });
 
         canvas.toBlob(async function (blob) {
-          await navigator.clipboard.write([
-            new ClipboardItem({ [blob.type]: blob })
-          ]);
-          alert('✅ Ảnh đã được sao chép với chất lượng cao!');
+          await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+          alert('✅ Ảnh đã được sao chép!');
         }, 'image/png');
       } catch (error) {
-        console.error('❌ Lỗi sao chép:', error);
-        alert('Không thể sao chép ảnh. Vui lòng thử lại hoặc chụp màn hình.');
+        alert('Không thể sao chép ảnh.');
       }
     }
   </script>
