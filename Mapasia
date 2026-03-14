@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bản Đồ Đông Nam Á - Chi Phí Ads</title>
+    <!-- Tải thư viện D3.js và TopoJSON -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/topojson-client@3"></script>
+    
+    <style>
+        :root {
+            --glow-color: #00f2fe;     
+            --bg-color: #0b1120;       
+            --map-fill: #1e293b;       
+            --map-stroke: #334155;     
+            --map-hover: #3b4c6b;      
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: radial-gradient(circle at center, #1e293b 0%, #0f172a 100%);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            color: white;
+            overflow: hidden; 
+        }
+
+        #map {
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+
+        #map:active {
+            cursor: grabbing;
+        }
+
+        /* Khung thông tin tổng quan */
+        .panel {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 20px 25px;
+            border-radius: 16px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .panel h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.6rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .panel p {
+            margin: 0;
+            font-size: 1rem;
+            color: #94a3b8;
+            transition: color 0.3s;
+            font-weight: 500;
+        }
+
+        .panel .hint {
+            margin-top: 10px;
+            font-size: 0.8rem;
+            color: #64748b;
+            font-style: italic;
+        }
+
+        /* SVG Quốc gia */
+        .country {
+            fill: var(--map-fill);
+            stroke: var(--map-stroke);
+            stroke-width: 0.8px;
+            cursor: pointer;
+            transition: fill 0.3s ease, stroke-width 0.3s ease;
+            outline: none;
+        }
+
+        .country:hover {
+            fill: var(--map-hover);
+        }
+
+        /* Hiệu ứng Phát Sáng (Light up) */
+        .country.active {
+            fill: rgba(0, 242, 254, 0.2);
+            stroke: var(--glow-color);
+            stroke-width: 1.5px;
+            filter: drop-shadow(0 0 10px rgba(0, 242, 254, 0.5));
+        }
+
+        /* Tooltip khi di chuột */
+        #tooltip {
+            position: absolute;
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            border: 1px solid #334155;
+            z-index: 100;
+            transform: translate(-50%, -130%);
+        }
+        #tooltip::after {
+            content: '';
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -6px;
+            border-width: 6px;
+            border-style: solid;
+            border-color: #1e293b transparent transparent transparent;
+        }
+
+        /* Vùng chứa các Bảng Ads nổi */
+        #panels-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 50;
+        }
+
+        /* BẢNG CHỈ SỐ ADS */
+        .ad-panel {
+            position: absolute;
+            background: rgba(11, 17, 32, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glow-color);
+            box-shadow: 0 4px 20px rgba(0, 242, 254, 0.15);
+            border-radius: 8px;
+            padding: 15px;
+            min-width: 200px;
+            color: white;
+            pointer-events: none;
+            transform: translate(150px, -50%); /* Đẩy ra xa hơn để không che khuất */
+            transition: opacity 0.3s ease;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        /* Mũi tên (Đường nối) */
+        .ad-panel::before {
+            content: '';
+            position: absolute;
+            left: -150px; /* Kéo dài đường nối */
+            top: 50%;
+            width: 150px;
+            height: 1.5px;
+            background: var(--glow-color);
+            box-shadow: 0 0 8px var(--glow-color);
+        }
+
+        /* Dấu chấm (Ghim tại tâm quốc gia) */
+        .ad-panel::after {
+            content: '';
+            position: absolute;
+            left: -154px; /* Đẩy mỏ neo xa tương ứng */
+            top: 50%;
+            transform: translateY(-50%);
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--glow-color), 0 0 20px var(--glow-color);
+        }
+
+        .ad-panel h3 {
+            margin: 0 0 12px 0;
+            font-size: 1.1rem;
+            color: var(--glow-color);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: 1px solid rgba(0, 242, 254, 0.3);
+            padding-bottom: 5px;
+        }
+
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .metric-label { color: #94a3b8; }
+        .metric-val { font-weight: 700; font-family: 'Courier New', Courier, monospace; font-size: 1rem; }
+        
+        /* Màu cho từng chỉ số */
+        .val-spend { color: #38bdf8; }
+        .val-cpc { color: #4ade80; }
+        .val-cpm { color: #f472b6; }
+        .val-conv { color: #fbbf24; }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translate(100px, -50%); }
+            to { opacity: 1; transform: translate(150px, -50%); }
+        }
+
+        /* BẢNG TỔNG KẾT BÊN DƯỚI */
+        .summary-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(0, 242, 254, 0.4);
+            border-radius: 12px;
+            padding: 20px 25px;
+            color: white;
+            z-index: 60;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            min-width: 600px;
+            max-width: 90vw;
+            overflow-x: auto;
+            display: none; /* Ẩn mặc định, chỉ hiện khi có quốc gia được chọn */
+            animation: slideUp 0.4s ease forwards;
+        }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translate(-50%, 20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+
+        .summary-panel h2 {
+            margin: 0 0 15px 0;
+            font-size: 1.2rem;
+            color: var(--glow-color);
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: right;
+        }
+
+        .summary-table th, .summary-table td {
+            padding: 10px 15px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            white-space: nowrap;
+        }
+
+        .summary-table th {
+            color: #94a3b8;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .summary-table th:first-child, .summary-table td:first-child {
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .summary-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .row-total {
+            background: rgba(0, 242, 254, 0.1);
+            font-weight: bold;
+            color: var(--glow-color);
+        }
+
+        /* Responsive Bảng Tổng */
+        @media (max-width: 768px) {
+            .summary-panel { min-width: 90vw; padding: 15px; }
+            .summary-table th, .summary-table td { padding: 8px 10px; font-size: 0.85rem; }
+        }
+
+        /* Màn hình tải (Loading) */
+        #loading {
+            position: absolute;
+            top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: var(--glow-color);
+            display: flex; flex-direction: column; align-items: center; gap: 15px;
+        }
+        .spinner {
+            width: 40px; height: 40px; border: 4px solid rgba(0, 242, 254, 0.2);
+            border-top: 4px solid var(--glow-color); border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+    <div class="panel">
+        <h1>Hiệu Quả Ads ĐNA</h1>
+        <p id="info-text">Nhấn vào các quốc gia để xem chi phí Ads</p>
+        <p class="hint">Có thể chọn nhiều vùng. Cuộn chuột để thu phóng.</p>
+    </div>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <div class="loading-text">Đang tải dữ liệu bản đồ...</div>
+    </div>
+
+    <!-- Container chứa các thẻ Ads sẽ được tự động sinh ra -->
+    <div id="panels-container"></div>
+    <div id="tooltip"></div>
+    
+    <!-- Bảng tổng kết so sánh -->
+    <div id="summary-panel" class="summary-panel"></div>
+
+    <div id="map"></div>
+
+    <script>
+        // Dữ liệu giả lập về chi phí Ads cho các quốc gia
+        const seaCountriesInfo = {
+            "704": { name: "Việt Nam", spend: "$45,200", cpc: "$0.12", cpm: "$1.50", conv: "3.4%" },
+            "418": { name: "Lào", spend: "$2,100", cpc: "$0.08", cpm: "$0.80", conv: "1.2%" },
+            "116": { name: "Campuchia", spend: "$5,400", cpc: "$0.09", cpm: "$0.95", conv: "1.8%" },
+            "764": { name: "Thái Lan", spend: "$65,000", cpc: "$0.22", cpm: "$2.10", conv: "4.1%" },
+            "104": { name: "Myanmar", spend: "$3,800", cpc: "$0.07", cpm: "$0.75", conv: "1.0%" },
+            "458": { name: "Malaysia", spend: "$32,000", cpc: "$0.28", cpm: "$2.60", conv: "2.9%" },
+            "360": { name: "Indonesia", spend: "$85,000", cpc: "$0.18", cpm: "$1.85", conv: "3.2%" },
+            "608": { name: "Philippines", spend: "$28,000", cpc: "$0.15", cpm: "$1.60", conv: "2.5%" },
+            "096": { name: "Brunei", spend: "$4,500", cpc: "$0.35", cpm: "$3.80", conv: "1.5%" },
+            "702": { name: "Singapore", spend: "$110,000", cpc: "$0.85", cpm: "$7.00", conv: "5.5%" },
+            "626": { name: "Đông Timor", spend: "$800", cpc: "$0.05", cpm: "$0.40", conv: "0.5%" }
+        };
+
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        const svg = d3.select("#map").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .attr("viewBox", `0 0 ${width} ${height}`);
+
+        const g = svg.append("g");
+
+        // Quản lý trạng thái các nước đang được click
+        const activeCountries = new Map();
+        
+        let currentProjection = null;
+        let currentPathGenerator = null;
+
+        // Các hàm xử lý số liệu cho bảng tổng hợp
+        function parseNum(str) { return parseFloat(str.replace(/[\$,%]/g, '')); }
+        function formatMoney(num) { return "$" + num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+        function formatPercent(num) { return num.toFixed(1) + "%"; }
+
+        // Cập nhật Bảng Tổng Kết So Sánh ở dưới cùng
+        function updateSummaryPanel() {
+            const summaryPanel = d3.select("#summary-panel");
+            
+            if (activeCountries.size === 0) {
+                summaryPanel.style("display", "none");
+                return;
+            }
+
+            summaryPanel.style("display", "block");
+
+            let totalSpend = 0, sumCpc = 0, sumCpm = 0, sumConv = 0;
+            let rowsHtml = '';
+
+            // Tạo các dòng cho từng quốc gia
+            activeCountries.forEach((d, idStr) => {
+                const info = seaCountriesInfo[idStr];
+                const spendNum = parseNum(info.spend);
+                const cpcNum = parseNum(info.cpc);
+                const cpmNum = parseNum(info.cpm);
+                const convNum = parseNum(info.conv);
+
+                totalSpend += spendNum;
+                sumCpc += cpcNum;
+                sumCpm += cpmNum;
+                sumConv += convNum;
+
+                rowsHtml += `
+                    <tr>
+                        <td>${info.name}</td>
+                        <td class="val-spend">${info.spend}</td>
+                        <td class="val-cpc">${info.cpc}</td>
+                        <td class="val-cpm">${info.cpm}</td>
+                        <td class="val-conv">${info.conv}</td>
+                    </tr>
+                `;
+            });
+
+            // Tính toán hàng Tổng/Trung bình
+            const count = activeCountries.size;
+            const avgCpc = formatMoney(sumCpc / count);
+            const avgCpm = formatMoney(sumCpm / count);
+            const avgConv = formatPercent(sumConv / count);
+            const formattedTotalSpend = formatMoney(totalSpend);
+
+            // Render bảng
+            const tableHtml = `
+                <h2>So Sánh Chi Phí (${count} Thị Trường)</h2>
+                <div style="overflow-x: auto;">
+                    <table class="summary-table">
+                        <thead>
+                            <tr>
+                                <th>Quốc gia</th>
+                                <th>Tổng chi tiêu</th>
+                                <th>CPC</th>
+                                <th>CPM</th>
+                                <th>Tỷ lệ C.Đổi</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml}
+                            <tr class="row-total">
+                                <td>TỔNG / TRUNG BÌNH</td>
+                                <td>${formattedTotalSpend}</td>
+                                <td>${avgCpc}</td>
+                                <td>${avgCpm}</td>
+                                <td>${avgConv}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            `;
+
+            summaryPanel.html(tableHtml);
+        }
+
+        // Cập nhật vị trí của các bảng Ads dựa trên mức độ thu phóng
+        function updatePanelPositions(transform) {
+            if (!transform) transform = d3.zoomTransform(svg.node());
+            
+            d3.selectAll(".ad-panel").each(function() {
+                const idStr = d3.select(this).attr("data-id");
+                const d = activeCountries.get(idStr);
+                
+                if (d && currentPathGenerator) {
+                    // Lấy tọa độ trung tâm (centroid) của quốc gia
+                    const centroid = currentPathGenerator.centroid(d);
+                    
+                    // Áp dụng ma trận transform của Zoom để có tọa độ trên màn hình
+                    const [screenX, screenY] = transform.apply(centroid);
+                    
+                    d3.select(this)
+                      .style("left", `${screenX}px`)
+                      .style("top", `${screenY}px`);
+                }
+            });
+        }
+
+        const zoom = d3.zoom()
+            .scaleExtent([0.8, 15]) // Cho phép zoom tối đa 15x
+            .on("zoom", (event) => {
+                g.attr("transform", event.transform);
+                updatePanelPositions(event.transform); // Đồng bộ thẻ HTML với bản đồ SVG
+            });
+            
+        svg.call(zoom);
+
+        const tooltip = d3.select("#tooltip");
+        const infoText = d3.select("#info-text");
+
+        d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json").then(world => {
+            d3.select("#loading").remove();
+
+            const countries = topojson.feature(world, world.objects.countries).features;
+            const seaFeatures = countries.filter(d => seaCountriesInfo[String(d.id).padStart(3, '0')]);
+            const seaFeatureCollection = { type: "FeatureCollection", features: seaFeatures };
+
+            const padding = Math.min(width, height) * 0.1;
+            currentProjection = d3.geoMercator().fitExtent([[padding, padding + 50], [width - padding, height - padding]], seaFeatureCollection);
+            currentPathGenerator = d3.geoPath().projection(currentProjection);
+
+            g.selectAll("path")
+                .data(seaFeatures)
+                .join("path")
+                .attr("d", currentPathGenerator)
+                .attr("class", "country")
+                .on("mouseover", function(event, d) {
+                    const idStr = String(d.id).padStart(3, '0');
+                    tooltip.style("opacity", 1).text(seaCountriesInfo[idStr].name);
+                    if (!d3.select(this).classed("active")) {
+                        d3.select(this).style("fill", "var(--map-hover)");
+                    }
+                })
+                .on("mousemove", function(event) {
+                    tooltip.style("left", event.pageX + "px").style("top", event.pageY + "px");
+                })
+                .on("mouseout", function(event, d) {
+                    tooltip.style("opacity", 0);
+                    d3.select(this).style("fill", ""); 
+                })
+                .on("click", function(event, d) {
+                    const idStr = String(d.id).padStart(3, '0');
+                    const info = seaCountriesInfo[idStr];
+                    const isActive = d3.select(this).classed("active");
+
+                    if (!isActive) {
+                        // Bật chọn (Có thể chọn nhiều)
+                        d3.select(this).classed("active", true).raise();
+                        activeCountries.set(idStr, d);
+
+                        // Tạo nội dung bảng Ads
+                        const panelHtml = `
+                            <h3>${info.name}</h3>
+                            <div class="metric-row">
+                                <span class="metric-label">Tổng chi tiêu:</span>
+                                <span class="metric-val val-spend">${info.spend}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">CPC (Mỗi click):</span>
+                                <span class="metric-val val-cpc">${info.cpc}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">CPM (1000 lượt):</span>
+                                <span class="metric-val val-cpm">${info.cpm}</span>
+                            </div>
+                            <div class="metric-row">
+                                <span class="metric-label">Tỷ lệ C.Đổi:</span>
+                                <span class="metric-val val-conv">${info.conv}</span>
+                            </div>
+                        `;
+
+                        // Render bảng nổi vào container
+                        d3.select("#panels-container")
+                          .append("div")
+                          .attr("class", "ad-panel")
+                          .attr("id", `panel-${idStr}`)
+                          .attr("data-id", idStr)
+                          .html(panelHtml);
+
+                    } else {
+                        // Tắt chọn
+                        d3.select(this).classed("active", false);
+                        activeCountries.delete(idStr);
+                        d3.select(`#panel-${idStr}`).remove();
+                    }
+
+                    // Cập nhật lại vị trí các bảng ngay sau khi click
+                    updatePanelPositions();
+
+                    // Cập nhật text tổng quan
+                    if (activeCountries.size > 0) {
+                        infoText.text(`Đang theo dõi ${activeCountries.size} thị trường Ads`);
+                        infoText.style("color", "var(--glow-color)");
+                    } else {
+                        infoText.text("Nhấn vào các quốc gia để xem chi phí Ads");
+                        infoText.style("color", "#94a3b8");
+                    }
+
+                    // Gọi hàm cập nhật lại Bảng So Sánh bên dưới
+                    updateSummaryPanel();
+                });
+
+        }).catch(error => {
+            console.error(error);
+            d3.select("#loading .loading-text").text("Lỗi tải dữ liệu mạng.");
+        });
+
+        // Cập nhật lại bản đồ khi đổi kích thước trình duyệt
+        window.addEventListener('resize', () => {
+            const newWidth = window.innerWidth;
+            const newHeight = window.innerHeight;
+            svg.attr("width", newWidth).attr("height", newHeight).attr("viewBox", `0 0 ${newWidth} ${newHeight}`);
+            updatePanelPositions(); // Cập nhật lại mỏ neo khi resize
+        });
+
+    </script>
+</body>
+</html>
