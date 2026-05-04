@@ -185,14 +185,53 @@
       background-color: #e68900;
     }
 
+    .col-toggle-wrapper {
+      position: relative;
+      display: inline-flex;
+      vertical-align: middle;
+    }
+
+    .column-toggle-menu {
+      position: absolute;
+      top: 36px;
+      right: 0;
+      z-index: 10;
+      min-width: 210px;
+      padding: 8px 10px;
+      background-color: white;
+      border: 1px solid #999;
+      border-radius: 5px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+      color: #000;
+      text-align: left;
+      font-size: 14px;
+      font-family: "Times New Roman", Times, serif;
+    }
+
+    .column-toggle-menu.hidden {
+      display: none;
+    }
+
+    .column-toggle-menu label {
+      display: block;
+      padding: 4px 0;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .column-toggle-menu input {
+      margin-right: 6px;
+      vertical-align: middle;
+    }
+
     [contenteditable="true"] {
       cursor: text;
     }
 
-    .hide-supported .col-supported,
-    .hide-supported .col-supported-header,
-    .hide-supported .col-completed,
-    .hide-supported .col-completed-header {
+    .hide-support-column .col-supported,
+    .hide-support-column .col-supported-header,
+    .hide-discount-column .col-discount,
+    .hide-discount-column .col-discount-header {
       display: none;
     }
 
@@ -220,11 +259,17 @@
     </div>
     <table id="mainTable">
       <tr>
-        <th colspan="6" class="header-row">
+        <th colspan="7" class="header-row">
           Con <span class="student-name" id="studentName"></span> - Lớp
           <input type="text" id="classInput" class="class-input" placeholder="Nhập tên lớp...">
           <span class="student-name" id="studentClass" style="display: none;"></span>
-          <button class="action-btn toggle-col-btn" id="toggleSupportBtn" title="Ẩn/Hiện cột Hỗ trợ & Hoàn thành">👁</button>
+          <span class="col-toggle-wrapper">
+            <button class="action-btn toggle-col-btn" id="toggleSupportBtn" title="Chọn cột muốn ẩn/hiện">👁</button>
+            <div class="column-toggle-menu hidden" id="columnToggleMenu">
+              <label><input type="checkbox" id="hideSupportColumn">Ẩn Số buổi học cô hỗ trợ</label>
+              <label><input type="checkbox" id="hideDiscountColumn">Ẩn Học phí cô hỗ trợ</label>
+            </div>
+          </span>
           <button class="action-btn" id="addRowBtn" title="Thêm dòng">+</button>
         </th>
       </tr>
@@ -234,6 +279,7 @@
         <th class="col-supported-header">Số buổi học cô hỗ trợ</th>
         <th class="col-completed-header">Số buổi hoàn thành HP</th>
         <th>Học phí/buổi</th>
+        <th class="col-discount-header">Học phí cô hỗ trợ</th>
         <th>Học phí hoàn thành</th>
       </tr>
       <tbody id="billingTableBody">
@@ -243,15 +289,16 @@
           <td class="col-supported" contenteditable="true" type="number"></td>
           <td class="col-completed"></td>
           <td class="col-fee" contenteditable="true" type="number"></td>
+          <td class="col-discount" contenteditable="true" type="number">0</td>
           <td class="col-total-fee"></td>
         </tr>
       </tbody>
       <tr class="fourth-row">
-        <td colspan="5" class="total-label-cell">Tổng học phí</td>
+        <td colspan="6" class="total-label-cell">Tổng học phí</td>
         <td class="right-column" id="grandTotal"></td>
       </tr>
       <tr class="fifth-row">
-        <td colspan="5" class="note note-cell">
+        <td colspan="6" class="note note-cell">
           <p>🌼Phụ huynh vui lòng hoàn thành học phí cho con bằng cách quét mã QR giúp em và không chỉnh sửa nội dung để thuận tiện cho Hệ thống quản lý Lớp học ạ!</p>
           <p>🌼Em cảm ơn Quý phụ huynh ạ!</p>
         </td>
@@ -304,6 +351,7 @@
       const sobuoi = getUrlParameter('sobuoi') || '0';
       const hotro = getUrlParameter('hotro') || '0';
       const hocphi = getUrlParameter('hocphi') || '0';
+      const giamtienhoc = getUrlParameter('giamtienhoc') || getUrlParameter('giam') || getUrlParameter('giamhocphi') || '0';
       const lop = getUrlParameter('lop') || '';
 
       const taikhoan = ["BIDV-3140916867", "VBA-3506205108937","VBA-3100205885687","VBA-3100205647591"];
@@ -324,29 +372,47 @@
 
       const table = document.getElementById('mainTable');
       const toggleSupportedBtn = document.getElementById('toggleSupportBtn');
-      let isSupportedHidden = false;
+      const columnToggleMenu = document.getElementById('columnToggleMenu');
+      const hideSupportColumn = document.getElementById('hideSupportColumn');
+      const hideDiscountColumn = document.getElementById('hideDiscountColumn');
 
       toggleSupportedBtn.addEventListener('click', function () {
-        isSupportedHidden = !isSupportedHidden;
-        const colspan = isSupportedHidden ? 3 : 5;
-        table.classList.toggle('hide-supported', isSupportedHidden);
-        document.querySelector('.total-label-cell').colSpan = colspan;
-        document.querySelector('.note-cell').colSpan = colspan;
-        toggleSupportedBtn.textContent = isSupportedHidden ? "👁‍🗨" : "👁";
+        columnToggleMenu.classList.toggle('hidden');
       });
+
+      hideSupportColumn.addEventListener('change', updateColumnVisibility);
+      hideDiscountColumn.addEventListener('change', updateColumnVisibility);
+
+      document.addEventListener('click', function (event) {
+        if (!event.target.closest('.col-toggle-wrapper')) {
+          columnToggleMenu.classList.add('hidden');
+        }
+      });
+
+      function updateColumnVisibility() {
+        const hiddenCount = Number(hideSupportColumn.checked) + Number(hideDiscountColumn.checked);
+        table.classList.toggle('hide-support-column', hideSupportColumn.checked);
+        table.classList.toggle('hide-discount-column', hideDiscountColumn.checked);
+        document.querySelector('.header-row').colSpan = 7 - hiddenCount;
+        document.querySelector('.total-label-cell').colSpan = 6 - hiddenCount;
+        document.querySelector('.note-cell').colSpan = 6 - hiddenCount;
+        toggleSupportedBtn.textContent = hiddenCount ? "👁‍🗨" : "👁";
+        updateCalculations();
+      }
 
       const tbody = document.getElementById('billingTableBody');
       const firstRow = tbody.querySelector('.data-row');
 
-      function fillRowData(row, monthText, total, support, fee) {
+      function fillRowData(row, monthText, total, support, fee, discount) {
         row.querySelector('.col-month').textContent = monthText;
         row.querySelector('.col-total').textContent = total;
         row.querySelector('.col-supported').textContent = support;
         row.querySelector('.col-fee').textContent = formatNumber(cleanNumber(fee));
+        row.querySelector('.col-discount').textContent = formatNumber(cleanNumber(discount));
         updateRow(row);
       }
 
-      fillRowData(firstRow, "Tháng " + thang, sobuoi, hotro, hocphi);
+      fillRowData(firstRow, "Tháng " + thang, sobuoi, hotro, hocphi, giamtienhoc);
       attachRowListeners(firstRow);
 
       document.getElementById('addRowBtn').addEventListener('click', function () {
@@ -355,6 +421,7 @@
         newRow.querySelector('.col-total').textContent = "0";
         newRow.querySelector('.col-supported').textContent = "0";
         newRow.querySelector('.col-fee').textContent = "0";
+        newRow.querySelector('.col-discount').textContent = "0";
         tbody.appendChild(newRow);
         attachRowListeners(newRow);
         updateCalculations();
@@ -369,7 +436,7 @@
 
           cell.addEventListener('blur', () => {
             const num = cleanNumber(cell.textContent);
-            if (cell.classList.contains('col-fee')) {
+            if (cell.classList.contains('col-fee') || cell.classList.contains('col-discount')) {
               cell.textContent = formatNumber(num);
             } else if (cell.classList.contains('col-total') || cell.classList.contains('col-supported')) {
               cell.textContent = num;
@@ -384,9 +451,11 @@
         const total = cleanNumber(row.querySelector('.col-total').textContent);
         const supported = cleanNumber(row.querySelector('.col-supported').textContent);
         const fee = cleanNumber(row.querySelector('.col-fee').textContent);
+        const supportedFee = cleanNumber(row.querySelector('.col-discount').textContent);
 
         const completed = Math.max(0, total - supported);
-        const totalFee = completed * fee;
+        const appliedFee = hideDiscountColumn.checked ? fee : supportedFee;
+        const totalFee = completed * appliedFee;
 
         row.querySelector('.col-completed').textContent = completed;
         row.querySelector('.col-total-fee').textContent = formatMoney(totalFee);
@@ -444,6 +513,7 @@
           backgroundColor: null,
           onclone: (clonedDoc) => {
             clonedDoc.querySelectorAll('.action-btn').forEach(b => b.style.display = 'none');
+            clonedDoc.querySelectorAll('.column-toggle-menu').forEach(menu => menu.style.display = 'none');
             const select = clonedDoc.getElementById('accountSelect');
             if (select) select.style.display = 'none';
             
