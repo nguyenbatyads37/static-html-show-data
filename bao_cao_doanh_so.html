@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Báo Cáo Doanh Số - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                    colors: { primary: { 50: '#eff6ff', 100: '#dbeafe', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8' } }
+                }
+            }
+        }
+    </script>
+    <style>
+        .table-container::-webkit-scrollbar { height: 8px; width: 8px; }
+        .table-container::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .table-container::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .loading-overlay {
+            display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(255,255,255,0.9); z-index: 50;
+            justify-content: center; align-items: center; flex-direction: column;
+        }
+        #debugConsole { font-family: monospace; white-space: pre-wrap; }
+        .table-filter-box label:has(input:checked) {
+            border-color: #93c5fd;
+            background: #eff6ff;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col">
+
+    <header class="bg-white shadow-sm border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="bg-primary-100 text-primary-600 p-2 rounded-lg">
+                    <i class="fa-solid fa-chart-line text-xl"></i>
+                </div>
+                <h1 class="text-xl font-bold text-slate-900">Hệ Thống Báo Cáo Doanh Số</h1>
+            </div>
+            <div class="text-sm text-slate-500 font-medium">
+                <i class="fa-regular fa-clock mr-1"></i> <span id="currentTime"></span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
+
+        <!-- BỘ LỌC -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wider mb-4">
+                <i class="fa-solid fa-filter mr-2"></i>Bộ lọc dữ liệu
+            </h3>
+            <div class="flex flex-col gap-4">
+                <div class="flex flex-col md:flex-row gap-4 items-end">
+                <div class="w-full md:w-1/4">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Từ ngày</label>
+                    <input type="date" id="startDate" onchange="applyFilters()" class="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                </div>
+                <div class="w-full md:w-1/4">
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Đến ngày</label>
+                    <input type="date" id="endDate" onchange="applyFilters()" class="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-primary-500 outline-none">
+                </div>
+                <div class="w-full md:w-1/4">
+                    <button onclick="fetchData()" class="w-full bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-3 rounded-lg flex justify-center items-center gap-2 shadow-sm transition-colors text-sm">
+                        <i class="fa-solid fa-cloud-arrow-down"></i> Lấy dữ liệu
+                    </button>
+                </div>
+                </div>
+                <div>
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <label class="text-sm font-medium text-slate-700">
+                            <i class="fa-solid fa-chair mr-1 text-slate-500"></i>Lọc theo bàn
+                        </label>
+                        <div class="flex gap-2 text-xs">
+                            <button type="button" onclick="selectAllTables(true)" class="text-primary-600 hover:text-primary-700 font-medium">Chọn tất cả</button>
+                            <span class="text-slate-300">|</span>
+                            <button type="button" onclick="selectAllTables(false)" class="text-slate-500 hover:text-slate-700 font-medium">Bỏ chọn</button>
+                        </div>
+                    </div>
+                    <div id="filterTables" class="table-filter-box flex flex-wrap gap-2 min-h-[2.5rem] p-3 rounded-lg border border-slate-200 bg-slate-50/80">
+                        <span class="text-sm text-slate-400">Bấm "Lấy dữ liệu" để hiện danh sách bàn</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4">
+                <div class="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-2xl flex-shrink-0">
+                    <i class="fa-solid fa-money-bill-wave"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500">Tổng Doanh Thu</p>
+                    <p class="text-2xl font-bold mt-1">
+                        <span id="kpiRevenue" class="text-slate-900">0</span>
+                        <span class="text-sm font-normal text-slate-500"> VNĐ</span>
+                    </p>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4">
+                <div class="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-2xl flex-shrink-0">
+                    <i class="fa-solid fa-receipt"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500">Tổng Số Đơn</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1" id="kpiOrders">0</p>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center gap-4">
+                <div class="w-14 h-14 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 text-2xl flex-shrink-0">
+                    <i class="fa-solid fa-chart-bar"></i>
+                </div>
+                <div>
+                    <p class="text-sm font-medium text-slate-500">Trung Bình / Đơn</p>
+                    <p class="text-2xl font-bold mt-1">
+                        <span id="kpiAvg" class="text-slate-900">0</span>
+                        <span class="text-sm font-normal text-slate-500"> VNĐ</span>
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- BẢNG DỮ LIỆU -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex flex-col mb-6">
+            <div id="loadingOverlay" class="loading-overlay flex">
+                <i class="fa-solid fa-circle-notch fa-spin text-primary-600 text-4xl mb-3"></i>
+                <p class="text-slate-700 font-bold">Đang tải dữ liệu...</p>
+                <p class="text-slate-500 text-sm mt-1">Tối đa 10 giây</p>
+            </div>
+
+            <div class="px-6 py-4 border-b border-slate-200 flex justify-between items-center bg-slate-50/50">
+                <h3 class="font-semibold text-slate-800">Danh sách đơn hàng</h3>
+                <div class="flex items-center gap-3">
+                    <input type="text" id="searchBox" placeholder="Tìm kiếm..." oninput="applySearch()"
+                        class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-primary-500 outline-none w-48">
+                    <span class="text-xs font-medium bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full border border-slate-200" id="recordCount">0 bản ghi</span>
+                </div>
+            </div>
+
+            <div class="table-container overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Mã Đơn</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Ngày Lên Đơn</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Khách Hàng</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Bàn</th>
+                            <th class="px-5 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Trạng Thái</th>
+                            <th class="px-5 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Thành Tiền (VNĐ)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="bg-white divide-y divide-slate-200">
+                        <tr>
+                            <td colspan="6" class="px-6 py-12 text-center text-slate-400">
+                                <i class="fa-regular fa-folder-open text-4xl mb-3 text-slate-300 block"></i>
+                                <p>Vui lòng bấm "Lấy dữ liệu"</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TERMINAL LOG -->
+        <div class="bg-slate-900 rounded-xl shadow-sm border border-slate-800 p-5 text-green-400 text-xs overflow-y-auto" style="max-height: 220px;">
+            <h3 class="text-slate-300 mb-2 border-b border-slate-700 pb-2 uppercase font-bold">
+                <i class="fa-solid fa-terminal mr-1"></i> Terminal / Logs
+            </h3>
+            <div id="debugConsole">Hệ thống sẵn sàng...</div>
+        </div>
+    </main>
+
+    <script>
+        // =====================================================
+        // CẤU HÌNH APPSHEET (sửa tại đây — chỉ cần 1 file HTML)
+        // =====================================================
+        const APPSHEET = {
+            APP_ID: '79688fbc-821c-4192-a0bf-737d91d0f205',
+            API_KEY: 'V2-ennzW-uWRGN-Bs9NS-Eof6S-CedYr-5eE8F-ZJHOp-Js4eP',
+            TABLE_NAME: 'Orders',
+        };
+
+        let allData = [];
+
+        function appSheetApiUrl() {
+            return `https://api.appsheet.com/api/v2/apps/${APPSHEET.APP_ID}/tables/${encodeURIComponent(APPSHEET.TABLE_NAME)}/Action`;
+        }
+
+        async function fetchFromAppSheet() {
+            const response = await fetch(appSheetApiUrl(), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ApplicationAccessKey: APPSHEET.API_KEY,
+                },
+                body: JSON.stringify({
+                    Action: 'Find',
+                    Properties: { Locale: 'vi-VN', Timezone: 'Asia/Ho_Chi_Minh' },
+                    Rows: [],
+                }),
+            });
+            const text = await response.text();
+            if (!response.ok) throw new Error(`AppSheet HTTP ${response.status}: ${text.slice(0, 200)}`);
+            let data = JSON.parse(text);
+            if (data?.error) throw new Error(data.error);
+            if (Array.isArray(data)) return data;
+            if (Array.isArray(data?.value)) return data.value;
+            if (Array.isArray(data?.rows)) return data.rows;
+            if (Array.isArray(data?.data)) return data.data;
+            throw new Error('Phản hồi AppSheet không đúng định dạng');
+        }
+
+        /** Chuẩn hóa cột AppSheet bảng Orders (và bảng vận đơn nếu có) */
+        function normalizeRow(row) {
+            return {
+                ...row,
+                'Mã đơn hàng': row['Mã đơn hàng'] || row.id || row.ID || '',
+                'Ngày lên đơn': row['Ngày lên đơn'] || row.created_at || row.Ngày || row.Ngay || '',
+                'Name*': row['Name*'] || row.Name || (row.table_id ? `Bàn ${row.table_id}` : ''),
+                'Team': row['Team'] || row.team || '—',
+                'Trạng thái giao hàng': row['Trạng thái giao hàng'] || row.status || '',
+                'Tổng tiền VNĐ': row['Tổng tiền VNĐ'] ?? row.TongTien ?? row.Total ?? 0,
+                table_id: String(row.table_id ?? row['Bàn'] ?? row.Ban ?? '').trim(),
+            };
+        }
+
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function getTableId(row) {
+            return row.table_id || String(row['Bàn'] ?? row.Ban ?? '').trim();
+        }
+
+        function systemLog(msg, isError = false) {
+            const el = document.getElementById('debugConsole');
+            const time = new Date().toLocaleTimeString('vi-VN');
+            const color = isError ? 'text-red-400' : 'text-green-400';
+            el.innerHTML += `\n<span class="text-slate-500">[${time}]</span> <span class="${color}">${msg}</span>`;
+            el.scrollTop = el.scrollHeight;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            setDefaultDates();
+            updateClock();
+            setInterval(updateClock, 60000);
+            systemLog(`AppSheet → bảng "${APPSHEET.TABLE_NAME}"`);
+            if (location.protocol === 'file:') {
+                systemLog('⚠️ Mở file trực tiếp (file://) — trình duyệt có thể chặn AppSheet (CORS).', true);
+                systemLog('Gợi ý: Live Server trong VS Code, hoặc bật extension Allow CORS.', true);
+            }
+        });
+
+        function updateClock() {
+            document.getElementById('currentTime').textContent = new Date().toLocaleDateString('vi-VN', {
+                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function setDefaultDates() {
+            const pad = n => String(n).padStart(2, '0');
+            const today = new Date();
+            const iso = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+            // Mặc định rộng (đầu năm → hôm nay); sau khi tải API sẽ tự chỉnh theo dữ liệu
+            const firstDay = `${today.getFullYear()}-01-01`;
+            document.getElementById('startDate').value = firstDay;
+            document.getElementById('endDate').value = iso;
+        }
+
+        function toInputDate(d) {
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        }
+
+        /** Tự chỉnh Từ ngày / Đến ngày theo min–max trong dữ liệu AppSheet */
+        function setDateRangeFromData(data) {
+            let min = null, max = null;
+            data.forEach(row => {
+                const d = parseDate(row['Ngày lên đơn']);
+                if (!d || isNaN(d.getTime()) || d.getTime() === 0) return;
+                if (!min || d < min) min = d;
+                if (!max || d > max) max = d;
+            });
+            if (min && max) {
+                document.getElementById('startDate').value = toInputDate(min);
+                document.getElementById('endDate').value = toInputDate(max);
+                systemLog(`Bộ lọc ngày: ${toInputDate(min)} → ${toInputDate(max)}`);
+            }
+        }
+
+        async function fetchData() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = 'flex';
+            systemLog("─────────────────────────────────────");
+            systemLog(`Gọi AppSheet POST → ${APPSHEET.TABLE_NAME}`);
+
+            const fetchPromise = fetchFromAppSheet();
+            const timeoutPromise = new Promise((_, rej) =>
+                setTimeout(() => rej(new Error("TIMEOUT")), 30000)
+            );
+
+            try {
+                const raw = await Promise.race([fetchPromise, timeoutPromise]);
+                allData = raw.map(normalizeRow);
+                overlay.style.display = 'none';
+
+                systemLog(`Thành công! Tổng ${allData.length} đơn từ AppSheet.`);
+                if (allData.length > 0) {
+                    systemLog(`Mẫu dòng 1: ${JSON.stringify(allData[0])}`);
+                }
+
+                setDateRangeFromData(allData);
+                populateFilters(allData);
+                const shown = applyFilters();
+                systemLog(`Hiển thị ${shown} / ${allData.length} đơn sau bộ lọc.`);
+
+            } catch (err) {
+                overlay.style.display = 'none';
+                systemLog(`LỖI: ${err.message}`, true);
+
+                if (err.message === 'TIMEOUT' || err.message.includes('fetch') || err.message.includes('Failed to fetch')) {
+                    systemLog('Có thể bị chặn CORS — thử Live Server hoặc extension Allow CORS.', true);
+                    renderError(`<b>Không kết nối được AppSheet</b><br>
+                        ${err.message}<br><br>
+                        • Không mở file bằng <code>file://</code><br>
+                        • Dùng <b>Live Server</b> (VS Code) hoặc bật <b>Allow CORS</b> trên Chrome<br>
+                        • Kiểm tra <code>APP_ID</code>, <code>API_KEY</code>, <code>TABLE_NAME</code> trong file HTML`);
+                } else {
+                    renderError(`Lỗi AppSheet: ${err.message}`);
+                }
+            }
+        }
+
+        function populateFilters(data) {
+            const tables = [...new Set(data.map(getTableId).filter(Boolean))].sort((a, b) => {
+                const na = Number(a), nb = Number(b);
+                if (!isNaN(na) && !isNaN(nb)) return na - nb;
+                return String(a).localeCompare(String(b), 'vi');
+            });
+
+            const box = document.getElementById('filterTables');
+            if (!tables.length) {
+                box.innerHTML = '<span class="text-sm text-slate-400">Không có bàn trong dữ liệu</span>';
+                return;
+            }
+            box.innerHTML = tables.map(id => `
+                <label class="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer text-sm text-slate-700">
+                    <input type="checkbox" class="filter-table-cb rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                        value="${escapeHtml(id)}" checked onchange="applyFilters()">
+                    <span>Bàn ${escapeHtml(id)}</span>
+                </label>
+            `).join('');
+        }
+
+        function getSelectedTableIds() {
+            return [...document.querySelectorAll('.filter-table-cb:checked')].map(cb => cb.value);
+        }
+
+        function selectAllTables(checked) {
+            document.querySelectorAll('.filter-table-cb').forEach(cb => { cb.checked = checked; });
+            applyFilters();
+        }
+
+        function applyFilters() {
+            const start      = document.getElementById('startDate').value;
+            const end        = document.getElementById('endDate').value;
+            const search     = (document.getElementById('searchBox').value || '').toLowerCase();
+            const selectedTables = getSelectedTableIds();
+            const hasTableFilter = document.querySelectorAll('.filter-table-cb').length > 0;
+
+            const startDate = start ? new Date(start) : null;
+            const endDate   = end   ? new Date(end + 'T23:59:59') : null;
+
+            const filtered = allData.filter(row => {
+                const rawDate = row['Ngày lên đơn'] || '';
+                if (rawDate && (startDate || endDate)) {
+                    const d = parseDate(rawDate);
+                    if (startDate && d < startDate) return false;
+                    if (endDate   && d > endDate)   return false;
+                }
+                if (hasTableFilter) {
+                    if (!selectedTables.length) return false;
+                    const tid = getTableId(row);
+                    if (tid && !selectedTables.includes(tid)) return false;
+                }
+                if (search) {
+                    const str = JSON.stringify(row).toLowerCase();
+                    if (!str.includes(search)) return false;
+                }
+                return true;
+            });
+
+            renderTable(filtered);
+            return filtered.length;
+        }
+
+        function applySearch() { applyFilters(); }
+
+        // Parse ngày DD/MM/YYYY [HH:mm:ss] hoặc YYYY-MM-DD
+        function parseDate(str) {
+            if (!str) return new Date(0);
+            const s = String(str).trim();
+            const vn = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (vn) {
+                const [, day, month, year] = vn;
+                return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T12:00:00`);
+            }
+            const parsed = new Date(s);
+            return isNaN(parsed.getTime()) ? new Date(0) : parsed;
+        }
+
+        function statusBadge(status) {
+            const map = {
+                'ĐÃ GIAO':    'bg-green-100 text-green-700',
+                'ĐANG GIAO':  'bg-blue-100 text-blue-700',
+                'HOÀN TRẢ':   'bg-red-100 text-red-700',
+                'HỦY':        'bg-slate-100 text-slate-500',
+                'paid':       'bg-green-100 text-green-700',
+                'pending':    'bg-amber-100 text-amber-700',
+            };
+            const cls = map[status] || 'bg-slate-100 text-slate-600';
+            return `<span class="px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${status || '---'}</span>`;
+        }
+
+        function renderTable(rows) {
+            const tbody = document.getElementById('tableBody');
+
+            if (!rows.length) {
+                const hint = allData.length > 0
+                    ? `Đã tải ${allData.length} đơn nhưng bộ lọc đang loại hết — mở rộng ngày hoặc chọn thêm bàn.`
+                    : 'Không có đơn hàng nào phù hợp với bộ lọc.';
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">${hint}</td></tr>`;
+                updateKPIs(0, 0);
+                return;
+            }
+
+            let totalRevenue = 0;
+            const html = rows.map((row, i) => {
+                const orderId  = row['Mã đơn hàng']          || `#${i+1}`;
+                const date     = row['Ngày lên đơn']         || '---';
+                const customer = row['Name*']                 || '---';
+                const ban      = getTableId(row) ? `Bàn ${getTableId(row)}` : '—';
+                const status   = row['Trạng thái giao hàng'] || '';
+                const amount   = parseFloat((row['Tổng tiền VNĐ'] || '0').toString().replace(/,/g,'')) || 0;
+                totalRevenue  += amount;
+
+                return `
+                <tr class="hover:bg-slate-50 transition-colors">
+                    <td class="px-5 py-3.5 text-sm font-semibold text-primary-600">${orderId}</td>
+                    <td class="px-5 py-3.5 text-sm text-slate-600">${date}</td>
+                    <td class="px-5 py-3.5 text-sm text-slate-900">${customer}</td>
+                    <td class="px-5 py-3.5 text-sm text-slate-600">${ban}</td>
+                    <td class="px-5 py-3.5">${statusBadge(status)}</td>
+                    <td class="px-5 py-3.5 text-sm font-semibold text-slate-900 text-right">${amount.toLocaleString('vi-VN')}</td>
+                </tr>`;
+            }).join('');
+
+            tbody.innerHTML = html;
+            updateKPIs(totalRevenue, rows.length);
+        }
+
+        function updateKPIs(revenue, count) {
+            document.getElementById('kpiRevenue').textContent  = revenue.toLocaleString('vi-VN');
+            document.getElementById('kpiOrders').textContent   = count.toLocaleString('vi-VN');
+            document.getElementById('kpiAvg').textContent      = count ? Math.round(revenue / count).toLocaleString('vi-VN') : '0';
+            document.getElementById('recordCount').textContent = `${count} bản ghi`;
+            document.getElementById('kpiRevenue').className    = revenue > 0 ? 'text-green-600' : 'text-slate-900';
+        }
+
+        function renderError(message) {
+            document.getElementById('tableBody').innerHTML = `
+                <tr><td colspan="6" class="px-6 py-8 bg-red-50 text-center">
+                    <div class="text-red-600">
+                        <i class="fa-solid fa-triangle-exclamation text-3xl mb-2 block"></i>
+                        <p class="text-sm">${message}</p>
+                    </div>
+                </td></tr>`;
+            updateKPIs(0, 0);
+        }
+    </script>
+</body>
+</html>
