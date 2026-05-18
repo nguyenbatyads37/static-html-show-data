@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <script>
         tailwind.config = {
@@ -128,6 +129,23 @@
             </div>
         </div>
 
+        <!-- BIỂU ĐỒ DOANH SỐ THEO NGÀY -->
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-5 mb-6">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 class="font-semibold text-slate-800">
+                    <i class="fa-solid fa-chart-column text-primary-600 mr-2"></i>So sánh doanh số theo ngày
+                </h3>
+                <span class="text-xs text-slate-500">Theo bộ lọc ngày &amp; bàn hiện tại</span>
+            </div>
+            <div class="relative h-80">
+                <canvas id="revenueChart" class="hidden"></canvas>
+            </div>
+            <p id="chartEmpty" class="text-center text-slate-400 text-sm py-10">
+                <i class="fa-solid fa-chart-simple text-2xl mb-2 block text-slate-300"></i>
+                Bấm "Lấy dữ liệu" để xem biểu đồ
+            </p>
+        </div>
+
         <!-- BẢNG DỮ LIỆU -->
         <div class="bg-white rounded-xl shadow-sm border border-slate-200 relative overflow-hidden flex flex-col mb-6">
             <div id="loadingOverlay" class="loading-overlay flex">
@@ -189,6 +207,7 @@
         };
 
         let allData = [];
+        let revenueChart = null;
 
         function appSheetApiUrl() {
             return `https://api.appsheet.com/api/v2/apps/${APPSHEET.APP_ID}/tables/${encodeURIComponent(APPSHEET.TABLE_NAME)}/Action`;
@@ -420,6 +439,93 @@
             return isNaN(parsed.getTime()) ? new Date(0) : parsed;
         }
 
+        function formatChartDate(isoKey) {
+            const [y, m, d] = isoKey.split('-');
+            return `${d}/${m}/${y}`;
+        }
+
+        function getDateKeyFromRow(row) {
+            const d = parseDate(row['Ngày lên đơn']);
+            if (!d || isNaN(d.getTime()) || d.getTime() === 0) return null;
+            return toInputDate(d);
+        }
+
+        function aggregateRevenueByDay(rows) {
+            const map = new Map();
+            rows.forEach(row => {
+                const key = getDateKeyFromRow(row);
+                if (!key) return;
+                const amount = parseFloat((row['Tổng tiền VNĐ'] || '0').toString().replace(/,/g, '')) || 0;
+                map.set(key, (map.get(key) || 0) + amount);
+            });
+            return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        }
+
+        function updateRevenueChart(rows) {
+            const canvas = document.getElementById('revenueChart');
+            const emptyEl = document.getElementById('chartEmpty');
+            const series = aggregateRevenueByDay(rows);
+
+            if (!series.length) {
+                canvas.classList.add('hidden');
+                emptyEl.classList.remove('hidden');
+                if (revenueChart) {
+                    revenueChart.destroy();
+                    revenueChart = null;
+                }
+                return;
+            }
+
+            canvas.classList.remove('hidden');
+            emptyEl.classList.add('hidden');
+
+            const labels = series.map(([k]) => formatChartDate(k));
+            const values = series.map(([, v]) => v);
+
+            if (revenueChart) revenueChart.destroy();
+            revenueChart = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Doanh thu (VNĐ)',
+                        data: values,
+                        backgroundColor: 'rgba(37, 99, 235, 0.8)',
+                        borderColor: 'rgb(29, 78, 216)',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => ' ' + Number(ctx.parsed.y).toLocaleString('vi-VN') + ' VNĐ',
+                            },
+                        },
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: (v) => {
+                                    if (v >= 1e6) return (v / 1e6).toFixed(1) + ' tr';
+                                    if (v >= 1e3) return (v / 1e3).toFixed(0) + 'k';
+                                    return v;
+                                },
+                            },
+                        },
+                        x: {
+                            ticks: { maxRotation: 45, minRotation: 0 },
+                        },
+                    },
+                },
+            });
+        }
+
         function statusBadge(status) {
             const map = {
                 'ĐÃ GIAO':    'bg-green-100 text-green-700',
@@ -442,6 +548,7 @@
                     : 'Không có đơn hàng nào phù hợp với bộ lọc.';
                 tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-slate-500">${hint}</td></tr>`;
                 updateKPIs(0, 0);
+                updateRevenueChart([]);
                 return;
             }
 
@@ -468,6 +575,7 @@
 
             tbody.innerHTML = html;
             updateKPIs(totalRevenue, rows.length);
+            updateRevenueChart(rows);
         }
 
         function updateKPIs(revenue, count) {
@@ -487,6 +595,7 @@
                     </div>
                 </td></tr>`;
             updateKPIs(0, 0);
+            updateRevenueChart([]);
         }
     </script>
 </body>
