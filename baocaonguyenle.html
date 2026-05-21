@@ -103,28 +103,46 @@
             <div id="dashboard-view" class="space-y-6 transition-opacity duration-300 max-w-[1440px] mx-auto">
                 
                 <!-- Filters Section -->
-                <section class="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm flex flex-wrap items-end justify-between gap-4">
-                    <div class="flex flex-wrap gap-4 items-center">
-                        <div class="space-y-1">
-                            <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Thời gian</label>
-                            <select id="filter-time" class="w-40 bg-surface-container-low border border-outline-variant rounded-lg text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary py-2 px-3 outline-none" onchange="applyFilters()">
-                                <option value="all">Tất cả thời gian</option>
-                                <option value="today">Hôm nay</option>
-                                <option value="week">Tuần này</option>
-                                <option value="month" selected>Tháng này</option>
-                            </select>
-                        </div>
-                        <div class="space-y-1">
-                            <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Nhân viên</label>
-                            <select id="filter-employee" class="w-48 bg-surface-container-low border border-outline-variant rounded-lg text-sm text-on-surface focus:border-primary focus:ring-1 focus:ring-primary py-2 px-3 outline-none" onchange="applyFilters()">
-                                <option value="all">Tất cả nhân viên</option>
-                                <!-- Sẽ được render động -->
-                            </select>
+                <section class="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm flex flex-col gap-4">
+                    <div class="flex justify-between items-center border-b border-outline-variant/50 pb-3">
+                        <h3 class="text-sm font-bold text-on-surface">Bộ lọc dữ liệu</h3>
+                        <div class="text-sm text-on-surface-variant flex items-center gap-2 bg-surface-container-low py-1.5 px-3 rounded-md border border-outline-variant">
+                            <span class="material-symbols-outlined text-[16px] animate-spin hidden" id="loading-indicator">progress_activity</span>
+                            <span id="last-updated">Đang cập nhật...</span>
                         </div>
                     </div>
-                    <div class="text-sm text-on-surface-variant flex items-center gap-2 bg-surface-container-low py-1.5 px-3 rounded-md border border-outline-variant">
-                        <span class="material-symbols-outlined text-[16px] animate-spin hidden" id="loading-indicator">progress_activity</span>
-                        <span id="last-updated">Đang cập nhật...</span>
+
+                    <div class="flex flex-col gap-5">
+                        <!-- Time Filter (Radio) -->
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Thời gian</label>
+                            <div class="flex flex-wrap gap-4">
+                                <label class="flex items-center gap-2 cursor-pointer text-sm hover:bg-surface-container-low px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-outline-variant">
+                                    <input type="radio" name="filter-time" value="all" class="text-primary focus:ring-primary w-4 h-4 cursor-pointer" onchange="applyFilters()"> 
+                                    <span>Tất cả thời gian</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm hover:bg-surface-container-low px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-outline-variant">
+                                    <input type="radio" name="filter-time" value="today" class="text-primary focus:ring-primary w-4 h-4 cursor-pointer" onchange="applyFilters()"> 
+                                    <span>Hôm nay</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm hover:bg-surface-container-low px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-outline-variant">
+                                    <input type="radio" name="filter-time" value="week" class="text-primary focus:ring-primary w-4 h-4 cursor-pointer" onchange="applyFilters()"> 
+                                    <span>Tuần này</span>
+                                </label>
+                                <label class="flex items-center gap-2 cursor-pointer text-sm hover:bg-surface-container-low px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-outline-variant">
+                                    <input type="radio" name="filter-time" value="month" class="text-primary focus:ring-primary w-4 h-4 cursor-pointer" checked onchange="applyFilters()"> 
+                                    <span class="font-medium text-primary">Tháng này</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Employee Filter (Checkbox) -->
+                        <div class="space-y-2">
+                            <label class="text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Nhân viên</label>
+                            <div id="filter-employee-container" class="flex flex-wrap gap-2 max-h-36 overflow-y-auto custom-scroll p-3 border border-outline-variant/60 rounded-lg bg-surface-container-low/40">
+                                <!-- Dữ liệu checkbox sẽ được render động từ JS -->
+                            </div>
+                        </div>
                     </div>
                 </section>
 
@@ -517,33 +535,74 @@
         }
 
         function populateEmployeeFilter(processedRows) {
-            const select = document.getElementById('filter-employee');
+            const container = document.getElementById('filter-employee-container');
             // Lấy danh sách NV unique
             const empSet = new Set();
             processedRows.forEach(r => empSet.add(r.nhanVien));
             
-            let html = '<option value="all">Tất cả nhân viên</option>';
+            let html = `
+                <label class="flex items-center gap-2 cursor-pointer text-sm hover:bg-surface-container px-2 py-1.5 rounded-lg transition-colors border border-outline-variant bg-surface">
+                    <input type="checkbox" value="all" class="text-primary focus:ring-primary rounded w-4 h-4 cursor-pointer emp-checkbox" checked onchange="handleEmpCheckboxChange(this)"> 
+                    <span class="font-semibold text-primary">Tất cả nhân viên</span>
+                </label>
+            `;
+            
             Array.from(empSet).sort().forEach(emp => {
-                html += `<option value="${emp}">${emp}</option>`;
+                html += `
+                    <label class="flex items-center gap-2 cursor-pointer text-sm hover:bg-surface-container px-2 py-1.5 rounded-lg transition-colors border border-transparent hover:border-outline-variant">
+                        <input type="checkbox" value="${emp}" class="text-primary focus:ring-primary rounded w-4 h-4 cursor-pointer emp-checkbox" onchange="handleEmpCheckboxChange(this)"> 
+                        <span>${emp}</span>
+                    </label>
+                `;
             });
-            select.innerHTML = html;
+            container.innerHTML = html;
+        }
+
+        function handleEmpCheckboxChange(checkbox) {
+            const checkboxes = document.querySelectorAll('.emp-checkbox');
+            
+            if (checkbox.value === 'all') {
+                if (checkbox.checked) {
+                    // Chọn "Tất cả" -> Bỏ chọn các checkbox nhân viên lẻ
+                    checkboxes.forEach(cb => { if (cb.value !== 'all') cb.checked = false; });
+                } else {
+                    // Không cho phép bỏ chọn "Tất cả" nếu chưa chọn nhân viên nào khác
+                    const anyChecked = Array.from(checkboxes).some(cb => cb.value !== 'all' && cb.checked);
+                    if (!anyChecked) checkbox.checked = true;
+                }
+            } else {
+                if (checkbox.checked) {
+                    // Chon 1 nhân viên lẻ -> Bỏ chọn "Tất cả"
+                    document.querySelector('.emp-checkbox[value="all"]').checked = false;
+                } else {
+                    // Bỏ chọn nhân viên lẻ -> Nếu không còn ai được chọn, tự động tick lại "Tất cả"
+                    const anyChecked = Array.from(checkboxes).some(cb => cb.value !== 'all' && cb.checked);
+                    if (!anyChecked) document.querySelector('.emp-checkbox[value="all"]').checked = true;
+                }
+            }
+            applyFilters();
         }
 
         function applyFilters() {
-            const timeFilter = document.getElementById('filter-time').value;
-            const empFilter = document.getElementById('filter-employee').value;
+            // 1. Lấy giá trị thời gian (radio)
+            const timeRadio = document.querySelector('input[name="filter-time"]:checked');
+            const timeFilter = timeRadio ? timeRadio.value : 'month';
+            
+            // 2. Lấy danh sách nhân viên đã chọn (checkbox)
+            const checkedEmps = Array.from(document.querySelectorAll('.emp-checkbox:checked')).map(cb => cb.value);
+            const isAllEmps = checkedEmps.includes('all') || checkedEmps.length === 0;
             
             const today = startOfDay(new Date());
             const startOfWeek = new Date(today);
             startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Thứ 2
             const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-            // 1. Lọc mảng dữ liệu
+            // 3. Lọc mảng dữ liệu
             let filteredRows = globalDataRows.filter(item => {
-                // Lọc theo nhân viên
-                if (empFilter !== 'all' && item.nhanVien !== empFilter) return false;
+                // Lọc theo nhiều nhân viên
+                if (!isAllEmps && !checkedEmps.includes(item.nhanVien)) return false;
                 
-                // Lọc theo thời gian (Dựa vào Deadline hoặc Ngày tạo, ở đây dùng Deadline cho logic quản lý công việc)
+                // Lọc theo thời gian (Dựa vào Deadline)
                 if (timeFilter !== 'all') {
                     if (!item.parsedDeadline) return false; // Bỏ qua nếu ko có date
                     const targetDate = startOfDay(item.parsedDeadline).getTime();
@@ -639,7 +698,7 @@
                         <div class="w-7 h-7 rounded-full bg-primary-container text-primary flex items-center justify-center text-xs font-bold shrink-0">
                             ${empName.charAt(0).toUpperCase()}
                         </div>
-                        <span class="truncate max-w-[120px]" title="${empName}">${empName}</span>
+                        <span class="truncate max-w-[250px]" title="${empName}">${empName}</span>
                     </td>
                     <td class="py-3 px-4 text-sm text-center font-semibold text-primary">${stats.hours.toFixed(1)}h</td>
                     <td class="py-3 px-4 text-sm text-center">${stats.total}</td>
