@@ -1,0 +1,1185 @@
+// ======================================================
+//  CẤU HÌNH APPSHEET
+// ======================================================
+const APP_ID = "dd5d96ed-a5e9-4d39-946a-fcb6eba7905b";
+const ACCESS_KEY = "V2-rbB6f-x8fUy-jvw95-jLLZt-7gz7g-yqhZ5-Dcg2E-umi4t";
+
+const TABLE_THU = "THU";
+const TABLE_CHI = "CHI";
+
+/*
+  CẤU HÌNH SỐ PHÒNG THEO LOẠI — sửa đúng theo thực tế của bạn.
+  Ví dụ:  "Studio": 8,  "Deluxe": 5,  "Suite": 2
+*/
+const ROOM_CONFIG = {
+  "Tất cả": 15
+  // "Studio": 8,
+  // "Deluxe": 5,
+  // "Suite": 2
+};
+
+let thuRowsRaw = [];
+let chiRowsRaw = [];
+let thuCols = {};
+let chiCols = {};
+
+let monthlyChart = null;
+let monthCompareChart = null;
+let ratioChart = null;
+let roomTypeChart = null;
+let priceOccupancyChart = null;
+let occupancyChart = null;
+let revenueDailyChart = null;
+let expenseDailyChart = null;
+let expenseSourceChart = null;
+
+let currentView = "overview";
+let lastMonthlyData = null;
+
+const DEMO = new URLSearchParams(location.search).get("demo") === "1";
+
+// ======================================================
+//  THEME (đồng bộ với CSS)
+// ======================================================
+const THEME = {
+  ink:    "#221E16",
+  muted:  "#8C8472",
+  faint:  "#B4AC98",
+  line:   "#ECE4D3",
+  gold:   "#BE8A12",
+  green:  "#2E7D55",
+  red:    "#BB4634",
+  blue:   "#2C6488",
+  purple: "#6B53A8"
+};
+
+if (window.Chart) {
+  Chart.defaults.font.family = "'Be Vietnam Pro', system-ui, sans-serif";
+  Chart.defaults.font.size = 12.5;
+  Chart.defaults.color = THEME.muted;
+  Chart.defaults.plugins.legend.labels.usePointStyle = true;
+  Chart.defaults.plugins.legend.labels.boxWidth = 8;
+  Chart.defaults.plugins.legend.labels.boxHeight = 8;
+  Chart.defaults.plugins.legend.labels.padding = 16;
+}
+
+// ======================================================
+//  LOG (chỉ console — đã bỏ ô debug khỏi giao diện)
+// ======================================================
+function logDebug(message, data) {
+  if (data !== undefined) console.log("[Báo cáo]", message, data);
+  else console.log("[Báo cáo]", message);
+}
+
+// ======================================================
+//  API APPSHEET
+// ======================================================
+async function getAppSheetRows(tableName) {
+  const url = `https://api.appsheet.com/api/v2/apps/${APP_ID}/tables/${encodeURIComponent(tableName)}/Action`;
+  const body = {
+    Action: "Find",
+    Properties: { Locale: "vi-VN", Timezone: "Asia/Ho_Chi_Minh" },
+    Rows: []
+  };
+
+  logDebug("Đang gọi API bảng " + tableName);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "ApplicationAccessKey": ACCESS_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Lỗi API bảng ${tableName}: HTTP ${res.status}\n${text}`);
+
+  let json;
+  try { json = JSON.parse(text); }
+  catch (err) { throw new Error(`API bảng ${tableName} không trả về JSON hợp lệ:\n${text}`); }
+
+  if (Array.isArray(json)) return json;
+  if (Array.isArray(json.Rows)) return json.Rows;
+  if (Array.isArray(json.rows)) return json.rows;
+
+  throw new Error(`Không đọc được dữ liệu bảng ${tableName}:\n${JSON.stringify(json, null, 2)}`);
+}
+
+// ======================================================
+//  TỰ NHẬN DIỆN CỘT
+// ======================================================
+function normalizeText(str) {
+  return String(str || "").toLowerCase().normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "").replace(/\s/g, "").replace(/_/g, "").replace(/-/g, "").replace(/\//g, "");
+}
+
+function findColumn(cols, keywords) {
+  // Ưu tiên khớp ĐÚNG tên cột (vd cột "NGÀY") trước khi dò gần đúng
+  for (const key of keywords) {
+    const nk = normalizeText(key);
+    const exact = cols.find(c => normalizeText(c) === nk);
+    if (exact) return exact;
+  }
+  for (const col of cols) {
+    const clean = normalizeText(col);
+    for (const key of keywords) if (clean.includes(normalizeText(key))) return col;
+  }
+  return "";
+}
+
+function detectColumns(rows, tableName, type) {
+  if (!rows || rows.length === 0)
+    throw new Error(`Bảng ${tableName} chưa có dữ liệu nên chưa tự nhận diện được cột.`);
+
+  const cols = Object.keys(rows[0]);
+  const result = {};
+
+  result.date = findColumn(cols, ["ngay","ngày","date","thoigian","thoi gian","ngaythu","ngaychi","ngaytao","created"]);
+
+  // Cột số tiền — ưu tiên đúng tên cột AppSheet (DOANH THU / CHI)
+  const amountPriority = type === "THU"
+    ? ["doanh thu", "doanhthu", "sotienthu", "sotien", "so tien", "số tiền"]
+    : type === "CHI"
+    ? ["chi", "sotienchi", "chiphi", "chi phi", "sotien", "so tien", "số tiền"]
+    : [];
+  result.amount = "";
+  for (const key of amountPriority) {
+    const c = cols.find(col => normalizeText(col) === normalizeText(key));
+    if (c) { result.amount = c; break; }
+  }
+  if (!result.amount) {
+    result.amount = findColumn(cols, ["amount","tien","tiền","tong","tổng","thanhtien","thanh tien"]);
+  }
+  result.roomType = findColumn(cols, ["loaiphong","loai phong","loại phòng","hangphong","hạng phòng","roomtype","type"]);
+  result.roomCode = findColumn(cols, ["maphong","ma phong","mã phòng","tenphong","ten phong","room","roomcode"]);
+  // Cột PHÒNG cụ thể (số/tên phòng) — ưu tiên đúng tên cột "PHÒNG"
+  result.room = findColumn(cols, ["phong","sophong","tenphong","maphong","room"]);
+  if (result.room === result.roomType) result.room = ""; // tránh trùng với LOẠI PHÒNG
+  result.checkIn = findColumn(cols, ["ngaynhan","ngày nhận","checkin","ngayvao","ngày vào"]);
+  result.checkOut = findColumn(cols, ["ngaytra","ngày trả","checkout","ngayra","ngày ra","out"]);
+  result.nights = findColumn(cols, ["sodem","so dem","số đêm","dem","đêm","nights"]);
+  result.pricePerNight = findColumn(cols, ["giaphongdem","gia phong dem","giá phòng đêm","gia dem","giá đêm","giademban","pricepernight"]);
+  result.content = findColumn(cols, ["noidung","noi dung","nội dung","diengiai","diễn giải","ghichu","ghi chú","mota","mô tả","danhmuc","ten","tên"]);
+  result.expenseType = findColumn(cols, ["loaichi","loai chi","loại chi","danhmuc","danh mục","hangmuc","hạng mục","category"]);
+  result.source = findColumn(cols, ["nguon","nguồn","source","nguonchi","nguontien"]);
+  result.bookingSource = findColumn(cols, ["nguonbooking","nguồn booking","booking","kenh","kênh"]);
+  result.pic = findColumn(cols, ["pic","nguoiphutrach","người phụ trách","phutrach","nhanvien","sale"]);
+  if (result.bookingSource && result.source === result.bookingSource) result.source = "";
+
+  if (!result.date) result.date = guessDateColumn(rows, cols);
+  if (!result.amount) result.amount = guessMoneyColumn(rows, cols, result.date);
+  if (!result.roomType && type === "THU") result.roomType = "Không rõ loại phòng";
+  if (!result.content) result.content = cols.find(c => normalizeText(c) !== "rownumber" && c !== result.date && c !== result.amount) || cols[0];
+
+  if (!result.date) throw new Error(`Không tìm thấy cột ngày trong bảng ${tableName}. Các cột hiện có: ${cols.join(", ")}`);
+  if (!result.amount) throw new Error(`Không tìm thấy cột số tiền trong bảng ${tableName}. Các cột hiện có: ${cols.join(", ")}`);
+
+  result.dateFormat = detectSlashDateFormat(rows, result.date) || (type === "CHI" ? "mdy" : "dmy");
+
+  logDebug(`Cột tự nhận diện bảng ${tableName}`, result);
+  return result;
+}
+
+function detectSlashDateFormat(rows, dateCol) {
+  const samples = rows
+    .map(r => String(r[dateCol] || "").trim())
+    .filter(s => /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s))
+    .slice(0, 60);
+  if (!samples.length) return null;
+
+  let mdy = 0, dmy = 0;
+  samples.forEach(s => {
+    const [, a, b] = s.match(/^(\d{1,2})\/(\d{1,2})\//);
+    const n1 = Number(a), n2 = Number(b);
+    if (n2 > 12) mdy += 2;
+    if (n1 > 12) dmy += 2;
+  });
+  if (mdy !== dmy) return mdy > dmy ? "mdy" : "dmy";
+  return "mdy";
+}
+
+function guessDateColumn(rows, cols) {
+  for (const col of cols) {
+    let count = 0;
+    rows.slice(0, 20).forEach(row => { if (parseDate(row[col])) count++; });
+    if (count >= 2) return col;
+  }
+  return "";
+}
+
+function guessMoneyColumn(rows, cols, dateCol) {
+  let bestCol = "", bestCount = 0;
+  for (const col of cols) {
+    if (col === dateCol) continue;
+    let count = 0;
+    rows.slice(0, 20).forEach(row => { if (toNumber(row[col]) !== 0) count++; });
+    if (count > bestCount) { bestCount = count; bestCol = col; }
+  }
+  return bestCol;
+}
+
+// ======================================================
+//  FORMAT & XỬ LÝ
+// ======================================================
+function toNumber(value) {
+  if (value === null || value === undefined) return 0;
+  let s = String(value).trim();
+  if (!s) return 0;
+  s = s.replace(/[^\d,.-]/g, "");
+  if (s.includes(".") && s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  else { const dotCount = (s.match(/\./g) || []).length; if (dotCount > 1) s = s.replace(/\./g, ""); }
+  const n = Number(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function parseSlashDate(a, b, y, dateFormat) {
+  const n1 = Number(a), n2 = Number(b), year = Number(y);
+  if (n1 > 12 && n2 <= 12) return new Date(year, n2 - 1, n1);
+  if (n2 > 12 && n1 <= 12) return new Date(year, n1 - 1, n2);
+  if (dateFormat === "mdy") return new Date(year, n1 - 1, n2);
+  return new Date(year, n2 - 1, n1);
+}
+
+function parseDate(value, dateFormat = "dmy") {
+  if (value === null || value === undefined) return null;
+  const s = String(value).trim();
+  if (!s) return null;
+
+  // Số sê-ri ngày kiểu Excel / Google Sheets (số ngày tính từ 1899-12-30)
+  const serialMatch = s.match(/^(\d{4,6})(?:\.\d+)?$/);
+  if (serialMatch) {
+    const serial = Number(s);
+    if (serial >= 20000 && serial <= 80000) { // khoảng 1954 – 2089
+      const ms = Date.UTC(1899, 11, 30) + serial * 86400000;
+      const u = new Date(ms);
+      const d = new Date(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate());
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  let d = new Date(s);
+  if (!isNaN(d.getTime())) return d;
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (m) { d = parseSlashDate(m[1], m[2], m[3], dateFormat); if (!isNaN(d.getTime())) return d; }
+  m = s.match(/^(\d{1,2})-(\d{1,2})-(\d{4})/);
+  if (m) { d = parseSlashDate(m[1], m[2], m[3], dateFormat); if (!isNaN(d.getTime())) return d; }
+  return null;
+}
+
+function getRowDate(row, cols) {
+  const fmt = cols.dateFormat || "dmy";
+  let d = parseDate(row[cols.date], fmt);
+  if (!d && cols.checkIn) d = parseDate(row[cols.checkIn], fmt);
+  return d;
+}
+
+function isValidThuRow(row) {
+  if (!thuCols.amount) return true;
+  if (!toNumber(row[thuCols.amount])) return false;
+  const date = getRowDate(row, thuCols);
+  const room = thuCols.room ? String(row[thuCols.room] || "").trim() : "";
+  const content = thuCols.content ? String(row[thuCols.content] || "").trim() : "";
+  if (!date && !room && !content) return false;
+  return true;
+}
+
+function getValidThuRows() { return thuRowsRaw.filter(isValidThuRow); }
+
+function formatMoney(num) { return Math.round(Number(num) || 0).toLocaleString("vi-VN") + " đ"; }
+function formatPercent(num) { if (!isFinite(num)) return "0%"; return Number(num || 0).toFixed(1).replace(".0", "") + "%"; }
+
+function getMonthKey(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}`;
+}
+function getPrevMonthKey(monthKey) {
+  const [y, m] = monthKey.split("-").map(Number);
+  return getMonthKey(new Date(y, m - 2, 1));
+}
+function getDaysInMonth(monthKey) { const [y, m] = monthKey.split("-").map(Number); return new Date(y, m, 0).getDate(); }
+function formatMonthLabel(monthKey) {
+  if (!monthKey) return "—";
+  const [y, m] = monthKey.split("-");
+  return `Tháng ${m}/${y}`;
+}
+function getSelectedMonthKey() { return document.getElementById("filterMonth").value; }
+function getSelectedRoomType() { return document.getElementById("filterLoaiPhong").value; }
+function isSameMonth(date, monthKey) { return getMonthKey(date) === monthKey; }
+
+function getRoomType(row) {
+  if (!thuCols.roomType || thuCols.roomType === "Không rõ loại phòng") return "Không rõ loại phòng";
+  return row[thuCols.roomType] || "Không rõ loại phòng";
+}
+
+function getNights(row) {
+  if (thuCols.nights) { const n = toNumber(row[thuCols.nights]); if (n > 0) return n; }
+  if (thuCols.checkIn && thuCols.checkOut) {
+    const fmt = thuCols.dateFormat || "dmy";
+    const inDate = parseDate(row[thuCols.checkIn], fmt);
+    const outDate = parseDate(row[thuCols.checkOut], fmt);
+    if (inDate && outDate) { const diff = Math.round((outDate - inDate) / 86400000); if (diff > 0) return diff; }
+  }
+  return 1;
+}
+
+function getPricePerNight(row) {
+  if (thuCols.pricePerNight) { const price = toNumber(row[thuCols.pricePerNight]); if (price > 0) return price; }
+  const amount = toNumber(row[thuCols.amount]);
+  const nights = getNights(row);
+  if (nights > 0) return amount / nights;
+  return amount;
+}
+
+function getRoomCount(roomType) {
+  if (ROOM_CONFIG[roomType]) return ROOM_CONFIG[roomType];
+  if (roomType && ROOM_CONFIG["Tất cả"]) return ROOM_CONFIG["Tất cả"];
+  return 0;
+}
+
+// Danh sách phòng thực tế lấy từ cột PHÒNG (chỉ phòng có dữ liệu hợp lệ)
+let _roomsCache = null;
+function getRoomList() {
+  if (_roomsCache) return _roomsCache;
+  const set = new Set();
+  if (thuCols.room) {
+    getValidThuRows().forEach(r => {
+      const v = String(r[thuCols.room] || "").trim();
+      if (v && getRowDate(r, thuCols)) set.add(v);
+    });
+  }
+  _roomsCache = [...set];
+  return _roomsCache;
+}
+function getTotalRooms() {
+  const n = getRoomList().length;
+  return n > 0 ? n : (ROOM_CONFIG["Tất cả"] || 0);
+}
+// Số phòng riêng biệt thuộc một LOẠI phòng
+function getRoomCountByType(type) {
+  if (!thuCols.room || !thuCols.roomType) return getRoomCount(type);
+  const set = new Set();
+  getValidThuRows().forEach(r => {
+    if (String(r[thuCols.roomType] || "") === type) {
+      const v = String(r[thuCols.room] || "").trim();
+      if (v) set.add(v);
+    }
+  });
+  return set.size || getRoomCount(type);
+}
+
+function sum(arr, fn) { return arr.reduce((total, item) => total + fn(item), 0); }
+
+// ======================================================
+//  LOAD BAN ĐẦU
+// ======================================================
+async function initData() {
+  const loading = document.getElementById("loading");
+  loading.style.display = "flex";
+
+  try {
+    if (DEMO) {
+      ({ thu: thuRowsRaw, chi: chiRowsRaw } = buildDemoData());
+    } else {
+      thuRowsRaw = await getAppSheetRows(TABLE_THU);
+      chiRowsRaw = await getAppSheetRows(TABLE_CHI);
+    }
+
+    thuCols = detectColumns(thuRowsRaw, TABLE_THU, "THU");
+    chiCols = detectColumns(chiRowsRaw, TABLE_CHI, "CHI");
+    _roomsCache = null;
+
+    fillMonthDefault();
+    fillRoomTypeFilter();
+    bindFilters();
+    loadReport();
+  } catch (err) {
+    alert(err.message);
+    logDebug("LỖI", err.message);
+    console.error(err);
+  } finally {
+    loading.style.display = "none";
+  }
+}
+
+function fillMonthDefault() {
+  const monthInput = document.getElementById("filterMonth");
+  const validDates = getValidThuRows().map(row => getRowDate(row, thuCols)).filter(Boolean).sort((a, b) => b - a);
+  monthInput.value = validDates.length ? getMonthKey(validDates[0]) : getMonthKey(new Date());
+}
+
+function fillRoomTypeFilter() {
+  const select = document.getElementById("filterLoaiPhong");
+  const current = select.value;
+  const set = new Set();
+  getValidThuRows().forEach(row => set.add(getRoomType(row)));
+  select.innerHTML = `<option value="">Tất cả loại phòng</option>`;
+  [...set].sort().forEach(type => { select.innerHTML += `<option value="${escapeHtml(type)}">${escapeHtml(type)}</option>`; });
+  if (current) select.value = current;
+}
+
+function bindFilters() {
+  const monthInput = document.getElementById("filterMonth");
+  const roomSelect = document.getElementById("filterLoaiPhong");
+  if (monthInput && !monthInput.dataset.bound) {
+    monthInput.dataset.bound = "1";
+    monthInput.addEventListener("change", loadReport);
+  }
+  if (roomSelect && !roomSelect.dataset.bound) {
+    roomSelect.dataset.bound = "1";
+    roomSelect.addEventListener("change", loadReport);
+  }
+}
+
+// ======================================================
+//  TÍNH SỐ LIỆU 1 THÁNG (dùng cho cả tháng hiện tại & tháng trước)
+// ======================================================
+function computeMonthStats(monthKey, roomTypeFilter) {
+  const thuRows = getValidThuRows().filter(row => {
+    const d = getRowDate(row, thuCols);
+    if (!d || !isSameMonth(d, monthKey)) return false;
+    if (roomTypeFilter && getRoomType(row) !== roomTypeFilter) return false;
+    return true;
+  });
+  const chiRows = chiRowsRaw.filter(row => {
+    const d = getRowDate(row, chiCols);
+    return d && isSameMonth(d, monthKey);
+  });
+
+  const revenue = sum(thuRows, r => toNumber(r[thuCols.amount]));
+  const expense = sum(chiRows, r => toNumber(r[chiCols.amount]));
+  const nights = sum(thuRows, r => getNights(r));
+  const prices = thuRows.map(r => getPricePerNight(r)).filter(x => x > 0);
+
+  const avgPrice = nights ? revenue / nights : 0;
+  const minPrice = prices.length ? Math.min(...prices) : 0;
+  const maxPrice = prices.length ? Math.max(...prices) : 0;
+
+  const roomCount = roomTypeFilter ? getRoomCountByType(roomTypeFilter) : getTotalRooms();
+  const days = getDaysInMonth(monthKey);
+  const availableNights = roomCount ? roomCount * days : 0;
+  const occupancy = availableNights ? nights / availableNights * 100 : 0;
+
+  return { thuRows, chiRows, revenue, expense, profit: revenue - expense, nights, avgPrice, minPrice, maxPrice, roomCount, availableNights, occupancy };
+}
+
+// ======================================================
+//  DELTA CHIP (so với tháng trước)
+// ======================================================
+function arrowSvg(dir) {
+  if (dir === "up") return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 14l5-5 5 5"/></svg>`;
+  if (dir === "down") return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10l5 5 5-5"/></svg>`;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 12h12"/></svg>`;
+}
+
+function setDelta(elId, current, previous, opts = {}) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+
+  if (!previous && !current) { el.className = "delta flat"; el.textContent = "—"; return; }
+
+  let dir, label;
+  if (opts.points) {
+    const diff = Math.round((current - previous) * 10) / 10;
+    dir = diff > 0 ? "up" : diff < 0 ? "down" : "flat";
+    label = (diff > 0 ? "+" : "") + (diff === 0 ? "0" : diff) + " điểm";
+  } else if (!previous) {
+    el.className = "delta up";
+    el.innerHTML = arrowSvg("up") + "<span>Mới</span>";
+    return;
+  } else {
+    const pct = Math.round((current - previous) / Math.abs(previous) * 1000) / 10;
+    dir = pct > 0 ? "up" : pct < 0 ? "down" : "flat";
+    label = (pct > 0 ? "+" : "") + pct + "%";
+  }
+
+  let cls = dir;
+  if (opts.lowerBetter && dir === "up") cls = "down";
+  else if (opts.lowerBetter && dir === "down") cls = "up";
+
+  el.className = "delta " + cls;
+  el.innerHTML = arrowSvg(dir) + "<span>" + label + "</span>";
+}
+
+// ======================================================
+//  BÁO CÁO
+// ======================================================
+function loadReport() {
+  try {
+    const monthKey = getSelectedMonthKey();
+    const roomTypeFilter = getSelectedRoomType();
+    if (!monthKey) { alert("Bạn cần chọn tháng."); return; }
+
+    const cur = computeMonthStats(monthKey, roomTypeFilter);
+    const prev = computeMonthStats(getPrevMonthKey(monthKey), roomTypeFilter);
+
+    document.getElementById("totalRevenue").innerText = formatMoney(cur.revenue);
+    document.getElementById("totalExpense").innerText = formatMoney(cur.expense);
+    document.getElementById("profit").innerText = formatMoney(cur.profit);
+    document.getElementById("expenseRate").innerText = "Chi phí / Doanh thu: " + formatPercent(cur.revenue ? cur.expense / cur.revenue * 100 : 0);
+    document.getElementById("profitRate").innerText = "Biên lợi nhuận: " + formatPercent(cur.revenue ? cur.profit / cur.revenue * 100 : 0);
+    document.getElementById("avgRoomPrice").innerText = formatMoney(cur.avgPrice);
+    document.getElementById("minRoomPrice").innerText = formatMoney(cur.minPrice);
+    document.getElementById("maxRoomPrice").innerText = formatMoney(cur.maxPrice);
+    document.getElementById("totalNights").innerText = cur.nights.toLocaleString("vi-VN");
+    document.getElementById("occupancyRate").innerText = cur.availableNights ? formatPercent(cur.occupancy) : "--";
+    document.getElementById("occupancyNote").innerText = cur.availableNights
+      ? `${cur.nights}/${cur.availableNights} đêm có thể bán`
+      : "Chưa cấu hình số phòng trong ROOM_CONFIG";
+
+    // Deltas so với tháng trước
+    setDelta("revenueDelta", cur.revenue, prev.revenue);
+    setDelta("expenseDelta", cur.expense, prev.expense, { lowerBetter: true });
+    setDelta("profitDelta", cur.profit, prev.profit);
+    setDelta("avgPriceDelta", cur.avgPrice, prev.avgPrice);
+    setDelta("nightsDelta", cur.nights, prev.nights);
+    if (cur.availableNights) setDelta("occupancyDelta", cur.occupancy, prev.occupancy, { points: true });
+    else { const od = document.getElementById("occupancyDelta"); od.className = "delta flat"; od.textContent = "—"; }
+
+    const roomTypeSummary = buildRoomTypeSummary(cur.thuRows, monthKey);
+    const monthlySummary = buildMonthlySummary();
+    const dailySummary = buildDailySummary(cur.thuRows, cur.chiRows, monthKey);
+    lastMonthlyData = monthlySummary;
+
+    const dailySub = document.getElementById("dailyTableSub");
+    if (dailySub) dailySub.textContent = formatMonthLabel(monthKey);
+
+    renderRoomTypeTable(roomTypeSummary);
+    renderMonthlyTable(monthlySummary, monthKey);
+    renderDailyTable(dailySummary);
+    renderRoomMonthTable();
+
+    renderMonthlyChart(monthlySummary);
+    renderMonthCompareChart(monthlySummary, monthKey);
+    renderRatioChart(cur.revenue, cur.expense);
+    renderRoomTypeChart(roomTypeSummary);
+    renderPriceOccupancyChart(monthlySummary);
+    renderOccupancyChart(monthlySummary);
+    revenueDailyChart = renderDailyArea("revenueDailyChart", revenueDailyChart, dailySummary, "revenue", THEME.gold, "rgba(190,138,18,.16)", "Doanh thu");
+    expenseDailyChart = renderDailyArea("expenseDailyChart", expenseDailyChart, dailySummary, "expense", THEME.red, "rgba(187,70,52,.16)", "Chi phí");
+
+    applyViewToDynamic();
+
+    logDebug("Hoàn tất báo cáo", { thang: monthKey, loaiPhong: roomTypeFilter || "Tất cả", doanhThu: cur.revenue, chiPhi: cur.expense, loiNhuan: cur.profit, soDemBan: cur.nights, tiLeLapPhong: cur.occupancy });
+  } catch (err) {
+    alert(err.message);
+    logDebug("LỖI", err.message);
+    console.error(err);
+  }
+}
+
+function buildRoomTypeSummary(rows, monthKey) {
+  const map = {};
+  const daysInMonth = getDaysInMonth(monthKey);
+
+  rows.forEach(row => {
+    const type = getRoomType(row);
+    const amount = toNumber(row[thuCols.amount]);
+    const nights = getNights(row);
+    const price = getPricePerNight(row);
+
+    if (!map[type]) map[type] = { roomType: type, revenue: 0, nights: 0, prices: [], roomCount: getRoomCountByType(type), availableNights: 0, occupancy: 0 };
+    map[type].revenue += amount;
+    map[type].nights += nights;
+    if (price > 0) map[type].prices.push(price);
+  });
+
+  Object.values(map).forEach(item => {
+    item.avgPrice = item.nights ? item.revenue / item.nights : 0;
+    item.minPrice = item.prices.length ? Math.min(...item.prices) : 0;
+    item.maxPrice = item.prices.length ? Math.max(...item.prices) : 0;
+    item.availableNights = item.roomCount ? item.roomCount * daysInMonth : 0;
+    item.occupancy = item.availableNights ? item.nights / item.availableNights * 100 : 0;
+  });
+
+  return Object.values(map).sort((a, b) => b.revenue - a.revenue);
+}
+
+function buildMonthlySummary() {
+  const map = {};
+
+  getValidThuRows().forEach(row => {
+    const d = getRowDate(row, thuCols);
+    if (!d) return;
+    const key = getMonthKey(d);
+    if (!map[key]) map[key] = createMonthItem(key);
+    map[key].revenue += toNumber(row[thuCols.amount]);
+    map[key].nights += getNights(row);
+    const price = getPricePerNight(row);
+    if (price > 0) map[key].prices.push(price);
+  });
+
+  chiRowsRaw.forEach(row => {
+    const d = getRowDate(row, chiCols);
+    if (!d) return;
+    const key = getMonthKey(d);
+    if (!map[key]) map[key] = createMonthItem(key);
+    map[key].expense += toNumber(row[chiCols.amount]);
+  });
+
+  Object.values(map).forEach(item => {
+    item.profit = item.revenue - item.expense;
+    item.expenseRate = item.revenue ? item.expense / item.revenue * 100 : 0;
+    item.avgPrice = item.nights ? item.revenue / item.nights : 0;
+    const days = getDaysInMonth(item.month);
+    const totalRooms = getTotalRooms();
+    item.availableNights = totalRooms ? totalRooms * days : 0;
+    item.occupancy = item.availableNights ? item.nights / item.availableNights * 100 : 0;
+  });
+
+  return Object.values(map).sort((a, b) => a.month.localeCompare(b.month));
+}
+
+function createMonthItem(month) {
+  return { month, revenue: 0, expense: 0, profit: 0, nights: 0, prices: [], expenseRate: 0, avgPrice: 0, occupancy: 0, availableNights: 0 };
+}
+
+// ======================================================
+//  RENDER TABLE
+// ======================================================
+function renderRoomTypeTable(data) {
+  const tbody = document.getElementById("roomTypeTable");
+  tbody.innerHTML = "";
+  if (!data.length) { tbody.innerHTML = `<tr><td colspan="8" class="empty">Không có dữ liệu</td></tr>`; return; }
+
+  data.forEach(item => {
+    tbody.innerHTML += `
+      <tr>
+        <td><span class="badge">${escapeHtml(item.roomType)}</span></td>
+        <td class="right strong green">${formatMoney(item.revenue)}</td>
+        <td class="right">${item.nights.toLocaleString("vi-VN")}</td>
+        <td class="right purple">${formatMoney(item.avgPrice)}</td>
+        <td class="right">${formatMoney(item.minPrice)}</td>
+        <td class="right">${formatMoney(item.maxPrice)}</td>
+        <td class="right">${item.roomCount || "--"}</td>
+        <td class="right blue">${item.availableNights ? formatPercent(item.occupancy) : "--"}</td>
+      </tr>`;
+  });
+}
+
+function renderMonthlyTable(data, currentMonth) {
+  const tbody = document.getElementById("monthlyTable");
+  tbody.innerHTML = "";
+  if (!data.length) { tbody.innerHTML = `<tr><td colspan="7" class="empty">Không có dữ liệu</td></tr>`; return; }
+
+  data.forEach(item => {
+    const isCur = item.month === currentMonth;
+    tbody.innerHTML += `
+      <tr${isCur ? ' style="background:var(--gold-tint)"' : ''}>
+        <td class="${isCur ? 'strong' : ''}">${item.month}${isCur ? ' •' : ''}</td>
+        <td class="right strong green">${formatMoney(item.revenue)}</td>
+        <td class="right red">${formatMoney(item.expense)}</td>
+        <td class="right ${item.profit >= 0 ? "gold" : "red"}">${formatMoney(item.profit)}</td>
+        <td class="right">${formatPercent(item.expenseRate)}</td>
+        <td class="right purple">${formatMoney(item.avgPrice)}</td>
+        <td class="right blue">${item.availableNights ? formatPercent(item.occupancy) : "--"}</td>
+      </tr>`;
+  });
+}
+
+// ======================================================
+//  THEO DÕI THEO TỪNG NGÀY (chi phí lấy từ bảng CHI)
+// ======================================================
+function buildDailySummary(thuRows, chiRows, monthKey) {
+  const map = {};
+  const daysInMonth = getDaysInMonth(monthKey);
+  // Tạo sẵn TẤT CẢ các ngày trong tháng (kể cả ngày không có giao dịch)
+  for (let day = 1; day <= daysInMonth; day++) {
+    map[day] = { day, revenue: 0, expense: 0, nights: 0, prices: [] };
+  }
+  const ensure = (day) => {
+    if (!map[day]) map[day] = { day, revenue: 0, expense: 0, nights: 0, prices: [] };
+    return map[day];
+  };
+
+  thuRows.forEach(row => {
+    const d = getRowDate(row, thuCols);
+    if (!d || !isSameMonth(d, monthKey)) return;
+    const it = ensure(d.getDate());
+    it.revenue += toNumber(row[thuCols.amount]);
+    it.nights += getNights(row);
+    const p = getPricePerNight(row);
+    if (p > 0) it.prices.push(p);
+  });
+
+  // Chi phí: lấy từ bảng CHI (chiRows đã lọc theo tháng)
+  chiRows.forEach(row => {
+    const d = getRowDate(row, chiCols);
+    if (!d || !isSameMonth(d, monthKey)) return;
+    ensure(d.getDate()).expense += toNumber(row[chiCols.amount]);
+  });
+
+  Object.values(map).forEach(it => {
+    it.profit = it.revenue - it.expense;
+    it.avgPrice = it.nights ? it.revenue / it.nights : 0;
+  });
+
+  const [y, m] = monthKey.split("-");
+  return Object.values(map).sort((a, b) => a.day - b.day).map(it => ({
+    ...it,
+    label: `${String(it.day).padStart(2, "0")}/${m}/${y}`
+  }));
+}
+
+function renderDailyTable(data) {
+  const tbody = document.getElementById("dailyTable");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">Không có dữ liệu trong tháng</td></tr>`; return; }
+
+  data.forEach(item => {
+    tbody.innerHTML += `
+      <tr>
+        <td class="strong">${item.label}</td>
+        <td class="right green c-rev">${formatMoney(item.revenue)}</td>
+        <td class="right red c-exp">${formatMoney(item.expense)}</td>
+        <td class="right c-both ${item.profit >= 0 ? "gold" : "red"}">${formatMoney(item.profit)}</td>
+        <td class="right c-rev">${item.nights.toLocaleString("vi-VN")}</td>
+        <td class="right purple c-rev">${formatMoney(item.avgPrice)}</td>
+      </tr>`;
+  });
+
+  // Dòng tổng
+  const t = data.reduce((s, x) => ({ revenue: s.revenue + x.revenue, expense: s.expense + x.expense, nights: s.nights + x.nights }), { revenue: 0, expense: 0, nights: 0 });
+  const avg = t.nights ? t.revenue / t.nights : 0;
+  tbody.innerHTML += `
+    <tr style="background:var(--gold-tint)">
+      <td class="strong">Tổng</td>
+      <td class="right strong green c-rev">${formatMoney(t.revenue)}</td>
+      <td class="right strong red c-exp">${formatMoney(t.expense)}</td>
+      <td class="right strong c-both ${t.revenue - t.expense >= 0 ? "gold" : "red"}">${formatMoney(t.revenue - t.expense)}</td>
+      <td class="right strong c-rev">${t.nights.toLocaleString("vi-VN")}</td>
+      <td class="right strong purple c-rev">${formatMoney(avg)}</td>
+    </tr>`;
+}
+
+// ======================================================
+//  BẢNG SỐ ĐÊM CÓ KHÁCH THEO PHÒNG × THÁNG (tab Lấp phòng)
+// ======================================================
+function buildRoomMonthMatrix() {
+  if (!thuCols.room) return null;
+  const months = new Set();
+  const rooms = {}; // room -> { type, byMonth:{mk:nights} }
+  getValidThuRows().forEach(r => {
+    const d = getRowDate(r, thuCols);
+    if (!d) return;
+    const room = String(r[thuCols.room] || "").trim();
+    if (!room) return;
+    const mk = getMonthKey(d);
+    months.add(mk);
+    if (!rooms[room]) rooms[room] = { room, type: r[thuCols.roomType] || "", byMonth: {} };
+    rooms[room].byMonth[mk] = (rooms[room].byMonth[mk] || 0) + getNights(r);
+  });
+  const monthList = [...months].sort();
+  const roomList = Object.values(rooms).sort((a, b) => String(a.room).localeCompare(String(b.room), "vi", { numeric: true }));
+  return { months: monthList, rooms: roomList };
+}
+
+function renderRoomMonthTable() {
+  const head = document.getElementById("roomMonthHead");
+  const tbody = document.getElementById("roomMonthTable");
+  if (!head || !tbody) return;
+  const data = buildRoomMonthMatrix();
+
+  if (!data || !data.rooms.length) {
+    head.innerHTML = `<tr><th>Phòng</th></tr>`;
+    tbody.innerHTML = `<tr><td class="empty">Không có cột PHÒNG trong bảng THU</td></tr>`;
+    return;
+  }
+
+  head.innerHTML = `<tr><th>Phòng</th><th>Loại phòng</th>${data.months.map(m => `<th class="right">${m}</th>`).join("")}<th class="right">Tổng đêm</th></tr>`;
+
+  const colTotals = {};
+  data.rooms.forEach(rm => {
+    let rowTotal = 0;
+    const cells = data.months.map(m => {
+      const n = rm.byMonth[m] || 0;
+      rowTotal += n;
+      colTotals[m] = (colTotals[m] || 0) + n;
+      return `<td class="right ${n ? "blue" : ""}">${n || "—"}</td>`;
+    }).join("");
+    tbody.innerHTML += `<tr><td class="strong">${escapeHtml(rm.room)}</td><td><span class="badge">${escapeHtml(rm.type || "—")}</span></td>${cells}<td class="right strong">${rowTotal}</td></tr>`;
+  });
+
+  const grand = data.months.reduce((s, m) => s + (colTotals[m] || 0), 0);
+  tbody.innerHTML += `<tr style="background:var(--gold-tint)"><td class="strong">Tổng</td><td></td>${data.months.map(m => `<td class="right strong">${colTotals[m] || 0}</td>`).join("")}<td class="right strong">${grand}</td></tr>`;
+}
+
+// ======================================================
+//  CHUYỂN TAB / VIEW
+// ======================================================
+const VIEW_TITLES = {
+  overview:  { eyebrow: "Tổng quan tài chính", title: "Báo cáo doanh thu &amp; chi phí", sub: "Theo tháng, loại phòng, giá phòng/đêm và tỉ lệ lấp phòng" },
+  revenue:   { eyebrow: "Doanh thu", title: "Báo cáo doanh thu", sub: "Doanh thu theo ngày, loại phòng và giá phòng/đêm" },
+  expense:   { eyebrow: "Chi phí", title: "Báo cáo chi phí", sub: "Chi phí lấy từ bảng CHI — theo ngày và so sánh theo tháng" },
+  price:     { eyebrow: "Giá phòng", title: "Phân tích giá phòng", sub: "Giá phòng/đêm trung bình, thấp nhất và cao nhất" },
+  occupancy: { eyebrow: "Lấp phòng", title: "Tỉ lệ lấp phòng", sub: "Số đêm bán và tỉ lệ lấp phòng theo tháng" }
+};
+
+function setView(view, el) {
+  currentView = view;
+  document.querySelectorAll(".sidebar .menu-item").forEach(m => m.classList.remove("active"));
+  if (el) el.classList.add("active");
+  else { const m = document.querySelector(`.menu-item[data-view="${view}"]`); if (m) m.classList.add("active"); }
+
+  const inView = (attr) => (attr || "").split(/\s+/).includes(view);
+
+  // Thẻ & panel (mức chi tiết) — quyết định nguồn dữ liệu mỗi tab
+  document.querySelectorAll(".card[data-view], .panels > .panel[data-view]").forEach(node => {
+    node.style.display = inView(node.getAttribute("data-view")) ? "" : "none";
+  });
+  // Section bảng độc lập
+  document.querySelectorAll("main.main > section.grid-1[data-view]").forEach(sec => {
+    sec.style.display = inView(sec.getAttribute("data-view")) ? "" : "none";
+  });
+  // Ẩn section bao (.cards/.panels) nếu không còn phần tử con nào hiển thị
+  document.querySelectorAll("main.main > section.cards, main.main > section.panels, main.main > .cards-group > section.cards").forEach(sec => {
+    const anyVisible = [...sec.children].some(ch => ch.style.display !== "none");
+    sec.style.display = anyVisible ? "" : "none";
+  });
+  const cardsGroup = document.getElementById("cardsGroup");
+  if (cardsGroup) {
+    const anyCardSection = [...cardsGroup.querySelectorAll("section.cards")].some(sec => sec.style.display !== "none");
+    cardsGroup.style.display = anyCardSection ? "" : "none";
+    cardsGroup.classList.toggle("occupancy-row", view === "occupancy");
+  }
+
+  const t = VIEW_TITLES[view] || VIEW_TITLES.overview;
+  document.querySelector(".topbar .eyebrow").innerHTML = t.eyebrow;
+  document.querySelector(".topbar h1").innerHTML = t.title;
+  document.querySelector(".topbar .subtitle").innerHTML = t.sub;
+
+  applyViewToDynamic();
+
+  [monthlyChart, monthCompareChart, ratioChart, roomTypeChart, priceOccupancyChart, occupancyChart, revenueDailyChart, expenseDailyChart].forEach(c => {
+    if (c && c.canvas && c.canvas.offsetParent !== null) c.resize();
+  });
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// Cập nhật các phần phụ thuộc tab: cột bảng ngày + dataset biểu đồ thu/chi theo tháng
+function applyViewToDynamic() {
+  const dt = document.getElementById("dailyTable");
+  const tbl = dt && dt.closest("table");
+  if (tbl) {
+    tbl.classList.remove("v-rev", "v-exp");
+    if (currentView === "revenue") tbl.classList.add("v-rev");
+    else if (currentView === "expense") tbl.classList.add("v-exp");
+  }
+
+  if (lastMonthlyData) renderMonthlyChart(lastMonthlyData);
+  const title = document.getElementById("monthlyChartTitle");
+  if (title) {
+    title.innerHTML = currentView === "revenue" ? "Doanh thu theo tháng"
+      : currentView === "expense" ? "Chi phí theo tháng"
+      : "Doanh thu &amp; chi phí theo tháng";
+  }
+}
+
+// ======================================================
+//  RENDER CHARTS
+// ======================================================
+const moneyTick = value => Number(value).toLocaleString("vi-VN");
+const softGrid = { color: "rgba(34,30,22,.06)", drawTicks: false };
+const noGrid = { display: false, drawTicks: false };
+
+function renderMonthlyChart(data) {
+  if (monthlyChart) monthlyChart.destroy();
+  const dsRevenue = { label: "Doanh thu", data: data.map(x => x.revenue), backgroundColor: THEME.gold, borderRadius: 5, maxBarThickness: 26 };
+  const dsExpense = { label: "Chi phí", data: data.map(x => x.expense), backgroundColor: THEME.red, borderRadius: 5, maxBarThickness: 26 };
+  const dsProfit = { label: "Lợi nhuận", data: data.map(x => x.profit), backgroundColor: THEME.green, borderRadius: 5, maxBarThickness: 26 };
+
+  let datasets;
+  if (currentView === "revenue") datasets = [dsRevenue];           // tab Doanh thu: chỉ bảng THU
+  else if (currentView === "expense") datasets = [dsExpense];       // tab Chi phí: chỉ bảng CHI
+  else datasets = [dsRevenue, dsExpense, dsProfit];
+
+  monthlyChart = new Chart(document.getElementById("monthlyChart"), {
+    type: "bar",
+    data: { labels: data.map(x => x.month), datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", display: datasets.length > 1 } },
+      scales: { x: { grid: noGrid }, y: { grid: softGrid, ticks: { callback: moneyTick } } }
+    }
+  });
+}
+
+function renderMonthCompareChart(data, currentMonthKey) {
+  const canvas = document.getElementById("monthCompareChart");
+  if (!canvas) return;
+  if (monthCompareChart) monthCompareChart.destroy();
+  if (!data.length) return;
+
+  const labels = data.map(x => x.month);
+  const curIdx = data.findIndex(x => x.month === currentMonthKey);
+  const hi = i => i === curIdx ? 1 : 0.45;
+
+  const sub = document.getElementById("monthCompareSub");
+  if (sub) sub.textContent = currentMonthKey
+    ? `Doanh thu, chi phí & lợi nhuận — tháng đang chọn: ${formatMonthLabel(currentMonthKey)}`
+    : "Doanh thu, chi phí & lợi nhuận — toàn bộ kỳ";
+
+  monthCompareChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [
+        {
+          label: "Doanh thu",
+          data: data.map(x => x.revenue),
+          backgroundColor: labels.map((_, i) => `rgba(190,138,18,${hi(i)})`),
+          borderColor: labels.map((_, i) => i === curIdx ? THEME.gold : "transparent"),
+          borderWidth: labels.map((_, i) => i === curIdx ? 2 : 0),
+          borderRadius: 5,
+          maxBarThickness: 32
+        },
+        {
+          label: "Chi phí",
+          data: data.map(x => x.expense),
+          backgroundColor: labels.map((_, i) => `rgba(187,70,52,${hi(i)})`),
+          borderColor: labels.map((_, i) => i === curIdx ? THEME.red : "transparent"),
+          borderWidth: labels.map((_, i) => i === curIdx ? 2 : 0),
+          borderRadius: 5,
+          maxBarThickness: 32
+        },
+        {
+          label: "Lợi nhuận",
+          data: data.map(x => x.profit),
+          backgroundColor: labels.map((_, i) => `rgba(46,125,85,${hi(i)})`),
+          borderColor: labels.map((_, i) => i === curIdx ? THEME.green : "transparent"),
+          borderWidth: labels.map((_, i) => i === curIdx ? 2 : 0),
+          borderRadius: 5,
+          maxBarThickness: 32
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${formatMoney(c.parsed.y)}` } }
+      },
+      scales: { x: { grid: noGrid }, y: { grid: softGrid, ticks: { callback: moneyTick } } }
+    }
+  });
+}
+
+function renderRatioChart(revenue, expense) {
+  if (ratioChart) ratioChart.destroy();
+  ratioChart = new Chart(document.getElementById("ratioChart"), {
+    type: "doughnut",
+    data: { labels: ["Doanh thu", "Chi phí"], datasets: [{ data: [revenue, expense], backgroundColor: [THEME.gold, THEME.red], borderWidth: 0, hoverOffset: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, cutout: "66%", plugins: { legend: { position: "bottom" } } }
+  });
+}
+
+function renderRoomTypeChart(data) {
+  if (roomTypeChart) roomTypeChart.destroy();
+  roomTypeChart = new Chart(document.getElementById("roomTypeChart"), {
+    type: "bar",
+    data: { labels: data.map(x => x.roomType), datasets: [{ label: "Doanh thu", data: data.map(x => x.revenue), backgroundColor: THEME.gold, borderRadius: 5, maxBarThickness: 30 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: { legend: { display: false } },
+      scales: { x: { grid: softGrid, ticks: { callback: moneyTick } }, y: { grid: noGrid } }
+    }
+  });
+}
+
+function renderPriceOccupancyChart(data) {
+  if (priceOccupancyChart) priceOccupancyChart.destroy();
+  priceOccupancyChart = new Chart(document.getElementById("priceOccupancyChart"), {
+    type: "line",
+    data: {
+      labels: data.map(x => x.month),
+      datasets: [
+        { label: "Giá TB/đêm", data: data.map(x => x.avgPrice), borderColor: THEME.purple, backgroundColor: "rgba(107,83,168,.12)", borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: THEME.purple, tension: 0.35, fill: true, yAxisID: "y" },
+        { label: "Tỉ lệ lấp phòng %", data: data.map(x => x.occupancy), borderColor: THEME.blue, backgroundColor: "rgba(44,100,136,.10)", borderWidth: 2.5, pointRadius: 3, pointBackgroundColor: THEME.blue, tension: 0.35, yAxisID: "y1" }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { position: "bottom" } },
+      scales: {
+        x: { grid: noGrid },
+        y: { type: "linear", position: "left", grid: softGrid, ticks: { callback: moneyTick } },
+        y1: { type: "linear", position: "right", grid: { drawOnChartArea: false }, ticks: { callback: value => value + "%" } }
+      }
+    }
+  });
+}
+
+function renderOccupancyChart(data) {
+  const canvas = document.getElementById("occupancyChart");
+  if (!canvas) return;
+  if (occupancyChart) occupancyChart.destroy();
+  occupancyChart = new Chart(canvas, {
+    type: "bar",
+    data: {
+      labels: data.map(x => x.month),
+      datasets: [{
+        label: "Tỉ lệ lấp phòng %",
+        data: data.map(x => x.availableNights ? Math.round(x.occupancy * 10) / 10 : 0),
+        backgroundColor: THEME.blue, borderRadius: 5, maxBarThickness: 30
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: c => c.parsed.y + "% (" + (data[c.dataIndex].nights || 0) + " đêm có khách / " + (data[c.dataIndex].availableNights || 0) + " đêm)" } }
+      },
+      scales: {
+        x: { grid: noGrid },
+        y: { grid: softGrid, beginAtZero: true, suggestedMax: 100, ticks: { callback: v => v + "%" } }
+      }
+    }
+  });
+}
+
+// Biểu đồ vùng (area) theo ngày — dùng cho Doanh thu/ngày và Chi phí/ngày
+function renderDailyArea(canvasId, existing, data, key, color, rgba, label) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return existing;
+  if (existing) existing.destroy();
+  return new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: data.map(x => String(x.day).padStart(2, "0")),
+      datasets: [{
+        label, data: data.map(x => x[key]),
+        borderColor: color, backgroundColor: rgba,
+        borderWidth: 2.5, pointRadius: 2, pointHoverRadius: 4, pointBackgroundColor: color,
+        tension: 0.35, fill: true
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => label + ": " + formatMoney(c.parsed.y) } } },
+      scales: { x: { grid: noGrid }, y: { grid: softGrid, beginAtZero: true, ticks: { callback: moneyTick } } }
+    }
+  });
+}
+
+// ======================================================
+//  THỐNG KÊ THEO NGUỒN / PIC
+// ======================================================
+function buildExpenseBySource(chiRows) {
+  if (!chiCols.source) return [];
+  const map = {};
+  chiRows.forEach(r => {
+    const k = String(r[chiCols.source] || "").trim() || "Không rõ";
+    if (!map[k]) map[k] = { key: k, amount: 0 };
+    map[k].amount += toNumber(r[chiCols.amount]);
+  });
+  return Object.values(map).sort((a, b) => b.amount - a.amount);
+}
+
+function renderExpenseSourceChart(chiRows) {
+  const canvas = document.getElementById("expenseSourceChart");
+  if (!canvas) return;
+  const data = buildExpenseBySource(chiRows);
+  if (expenseSourceChart) expenseSourceChart.destroy();
+  expenseSourceChart = new Chart(canvas, {
+    type: "bar",
+    data: { labels: data.map(x => x.key), datasets: [{ label: "Chi phí", data: data.map(x => x.amount), backgroundColor: THEME.red, borderRadius: 5, maxBarThickness: 30 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => "Chi phí: " + formatMoney(c.parsed.x) } } },
+      scales: { x: { grid: softGrid, ticks: { callback: moneyTick } }, y: { grid: noGrid } }
+    }
+  });
+}
+
+// Gom doanh thu theo một cột bất kỳ (nguồn booking, PIC…)
+function buildRevenueByKey(thuRows, col) {
+  if (!col) return [];
+  const map = {};
+  let total = 0;
+  thuRows.forEach(r => {
+    const k = String(r[col] || "").trim() || "Không rõ";
+    const amt = toNumber(r[thuCols.amount]);
+    if (!map[k]) map[k] = { key: k, revenue: 0, nights: 0, count: 0 };
+    map[k].revenue += amt;
+    map[k].nights += getNights(r);
+    map[k].count++;
+    total += amt;
+  });
+  const arr = Object.values(map).sort((a, b) => b.revenue - a.revenue);
+  arr.forEach(x => x.share = total ? x.revenue / total * 100 : 0);
+  return arr;
+}
+
+function renderKeyTable(tbodyId, data) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  if (!data.length) { tbody.innerHTML = `<tr><td colspan="4" class="empty">Không có dữ liệu / thiếu cột</td></tr>`; return; }
+  data.forEach(x => {
+    tbody.innerHTML += `<tr>
+      <td class="strong">${escapeHtml(x.key)}</td>
+      <td class="right green">${formatMoney(x.revenue)}</td>
+      <td class="right">${x.count.toLocaleString("vi-VN")}</td>
+      <td class="right blue">${formatPercent(x.share)}</td>
+    </tr>`;
+  });
+}
+
+// ======================================================
+//  HELPER
+// ======================================================
+function escapeHtml(value) {
+  return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+}
+
+// ======================================================
+//  DỮ LIỆU MẪU (chỉ khi mở với ?demo=1 — không ảnh hưởng AppSheet)
+// ======================================================
+function buildDemoData() {
+  const types = ["Studio", "Deluxe", "Suite"];
+  const baseRate = { Studio: 480000, Deluxe: 720000, Suite: 1250000 };
+  const thu = [], chi = [];
+  const now = new Date();
+
+  for (let back = 5; back >= 0; back--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
+    const y = d.getFullYear(), mo = d.getMonth();
+    const seasonal = 1 + 0.18 * Math.sin((mo / 12) * Math.PI * 2) + (5 - back) * 0.03;
+    const bookings = Math.round(38 * seasonal);
+
+    const mm = String(mo + 1).padStart(2, "0");
+    for (let i = 0; i < bookings; i++) {
+      const type = types[(i + back) % types.length];
+      const day = 1 + ((i * 7 + back * 3) % 27);
+      const nights = 1 + ((i + back) % 4);
+      const rate = Math.round(baseRate[type] * (0.9 + ((i % 5) * 0.05)));
+      thu.push({
+        _RowNumber: thu.length + 1,
+        Ngay: `${y}-${mm}-${String(day).padStart(2, "0")}`,
+        LoaiPhong: type,
+        Phong: String(501 + ((i + back) % 8)),
+        SoDem: nights,
+        GiaDem: rate,
+        SoTien: rate * nights
+      });
+    }
+
+    const revenueMonth = thu.filter(r => r.Ngay.startsWith(`${y}-${mm}-`)).reduce((s, r) => s + r.SoTien, 0);
+    [["Tiền lương", 0.22], ["Điện nước", 0.06], ["Vật tư phòng", 0.05], ["Marketing", 0.04], ["Bảo trì", 0.035]].forEach(([cat, ratio], k) => {
+      chi.push({
+        _RowNumber: chi.length + 1,
+        Ngay: `${y}-${mm}-${String(5 + k * 4).padStart(2, "0")}`,
+        DanhMuc: cat,
+        SoTien: Math.round(revenueMonth * ratio)
+      });
+    });
+  }
+  return { thu, chi };
+}
+
+document.addEventListener("DOMContentLoaded", initData);
