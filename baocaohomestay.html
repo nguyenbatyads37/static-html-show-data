@@ -515,6 +515,24 @@
         <div class="card-foot"><span class="card-note">Theo giao dịch trong tháng</span></div>
       </div>
 
+      <div class="card" data-view="overview revenue price">
+        <div class="card-head">
+          <span class="card-title">Giá thấp nhất / giờ</span>
+          <span class="card-ico ico-green"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12l7 7 7-7"/></svg></span>
+        </div>
+        <div class="card-value green" id="minHourlyPrice">—</div>
+        <div class="card-foot"><span class="card-note">Theo giao dịch OT trong tháng</span></div>
+      </div>
+
+      <div class="card" data-view="overview revenue price">
+        <div class="card-head">
+          <span class="card-title">Giá cao nhất / giờ</span>
+          <span class="card-ico ico-red"><svg viewBox="0 0 24 24" fill="none"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+        </div>
+        <div class="card-value red" id="maxHourlyPrice">—</div>
+        <div class="card-foot"><span class="card-note">Theo giao dịch OT trong tháng</span></div>
+      </div>
+
       <div class="card" data-view="overview revenue occupancy">
         <div class="card-head">
           <span class="card-title">Tổng số đêm bán</span>
@@ -687,10 +705,13 @@
                 <th class="right c-both">Lợi nhuận</th>
                 <th class="right c-rev">Số đêm</th>
                 <th class="right c-rev">Giá TB/đêm</th>
+                <th class="right c-rev">Giá TB/giờ</th>
+                <th class="right c-rev">Giá thấp nhất/giờ</th>
+                <th class="right c-rev">Giá cao nhất/giờ</th>
               </tr>
             </thead>
             <tbody id="dailyTable">
-              <tr><td colspan="6" class="empty">Chưa có dữ liệu</td></tr>
+              <tr><td colspan="9" class="empty">Chưa có dữ liệu</td></tr>
             </tbody>
           </table>
         </div>
@@ -1034,6 +1055,12 @@ function getPricePerNight(row) {
   return amount;
 }
 
+function isHourlyBooking(row) {
+  if (!thuCols.bookingSource) return false;
+  const val = String(row[thuCols.bookingSource] || "").trim().toUpperCase();
+  return val === "OT";
+}
+
 function getRoomCount(roomType) {
   if (ROOM_CONFIG[roomType]) return ROOM_CONFIG[roomType];
   if (roomType && ROOM_CONFIG["Tất cả"]) return ROOM_CONFIG["Tất cả"];
@@ -1151,19 +1178,27 @@ function computeMonthStats(monthKey, roomTypeFilter) {
 
   const revenue = sum(thuRows, r => toNumber(r[thuCols.amount]));
   const expense = sum(chiRows, r => toNumber(r[chiCols.amount]));
-  const nights = sum(thuRows, r => getNights(r));
-  const prices = thuRows.map(r => getPricePerNight(r)).filter(x => x > 0);
+  const standardRows = thuRows.filter(row => !isHourlyBooking(row));
+  const standardRevenue = sum(standardRows, r => toNumber(r[thuCols.amount]));
+  const nights = sum(standardRows, r => getNights(r));
+  const prices = standardRows.map(r => getPricePerNight(r)).filter(x => x > 0);
+  const hourlyPrices = thuRows
+    .filter(isHourlyBooking)
+    .map(r => getPricePerNight(r))
+    .filter(x => x > 0);
 
-  const avgPrice = nights ? revenue / nights : 0;
+  const avgPrice = nights ? standardRevenue / nights : 0;
   const minPrice = prices.length ? Math.min(...prices) : 0;
   const maxPrice = prices.length ? Math.max(...prices) : 0;
+  const minHourlyPrice = hourlyPrices.length ? Math.min(...hourlyPrices) : 0;
+  const maxHourlyPrice = hourlyPrices.length ? Math.max(...hourlyPrices) : 0;
 
   const roomCount = roomTypeFilter ? getRoomCountByType(roomTypeFilter) : getTotalRooms();
   const days = getDaysInMonth(monthKey);
   const availableNights = roomCount ? roomCount * days : 0;
   const occupancy = availableNights ? nights / availableNights * 100 : 0;
 
-  return { thuRows, chiRows, revenue, expense, profit: revenue - expense, nights, avgPrice, minPrice, maxPrice, roomCount, availableNights, occupancy };
+  return { thuRows, chiRows, revenue, expense, profit: revenue - expense, nights, avgPrice, minPrice, maxPrice, minHourlyPrice, maxHourlyPrice, roomCount, availableNights, occupancy };
 }
 
 // ======================================================
@@ -1224,6 +1259,8 @@ function loadReport() {
     document.getElementById("avgRoomPrice").innerText = formatMoney(cur.avgPrice);
     document.getElementById("minRoomPrice").innerText = formatMoney(cur.minPrice);
     document.getElementById("maxRoomPrice").innerText = formatMoney(cur.maxPrice);
+    document.getElementById("minHourlyPrice").innerText = cur.minHourlyPrice ? formatMoney(cur.minHourlyPrice) : "—";
+    document.getElementById("maxHourlyPrice").innerText = cur.maxHourlyPrice ? formatMoney(cur.maxHourlyPrice) : "—";
     document.getElementById("totalNights").innerText = cur.nights.toLocaleString("vi-VN");
     document.getElementById("occupancyRate").innerText = cur.availableNights ? formatPercent(cur.occupancy) : "--";
     document.getElementById("occupancyNote").innerText = cur.availableNights
@@ -1280,15 +1317,19 @@ function buildRoomTypeSummary(rows, monthKey) {
     const amount = toNumber(row[thuCols.amount]);
     const nights = getNights(row);
     const price = getPricePerNight(row);
+    const isHourly = isHourlyBooking(row);
 
-    if (!map[type]) map[type] = { roomType: type, revenue: 0, nights: 0, prices: [], roomCount: getRoomCountByType(type), availableNights: 0, occupancy: 0 };
+    if (!map[type]) map[type] = { roomType: type, revenue: 0, standardRevenue: 0, nights: 0, prices: [], roomCount: getRoomCountByType(type), availableNights: 0, occupancy: 0 };
     map[type].revenue += amount;
-    map[type].nights += nights;
-    if (price > 0) map[type].prices.push(price);
+    if (!isHourly) {
+      map[type].standardRevenue += amount;
+      map[type].nights += nights;
+      if (price > 0) map[type].prices.push(price);
+    }
   });
 
   Object.values(map).forEach(item => {
-    item.avgPrice = item.nights ? item.revenue / item.nights : 0;
+    item.avgPrice = item.nights ? item.standardRevenue / item.nights : 0;
     item.minPrice = item.prices.length ? Math.min(...item.prices) : 0;
     item.maxPrice = item.prices.length ? Math.max(...item.prices) : 0;
     item.availableNights = item.roomCount ? item.roomCount * daysInMonth : 0;
@@ -1306,10 +1347,14 @@ function buildMonthlySummary() {
     if (!d) return;
     const key = getMonthKey(d);
     if (!map[key]) map[key] = createMonthItem(key);
-    map[key].revenue += toNumber(row[thuCols.amount]);
-    map[key].nights += getNights(row);
-    const price = getPricePerNight(row);
-    if (price > 0) map[key].prices.push(price);
+    const amount = toNumber(row[thuCols.amount]);
+    map[key].revenue += amount;
+    if (!isHourlyBooking(row)) {
+      map[key].standardRevenue += amount;
+      map[key].nights += getNights(row);
+      const price = getPricePerNight(row);
+      if (price > 0) map[key].prices.push(price);
+    }
   });
 
   chiRowsRaw.forEach(row => {
@@ -1323,7 +1368,7 @@ function buildMonthlySummary() {
   Object.values(map).forEach(item => {
     item.profit = item.revenue - item.expense;
     item.expenseRate = item.revenue ? item.expense / item.revenue * 100 : 0;
-    item.avgPrice = item.nights ? item.revenue / item.nights : 0;
+    item.avgPrice = item.nights ? item.standardRevenue / item.nights : 0;
     const days = getDaysInMonth(item.month);
     const totalRooms = getTotalRooms();
     item.availableNights = totalRooms ? totalRooms * days : 0;
@@ -1334,7 +1379,7 @@ function buildMonthlySummary() {
 }
 
 function createMonthItem(month) {
-  return { month, revenue: 0, expense: 0, profit: 0, nights: 0, prices: [], expenseRate: 0, avgPrice: 0, occupancy: 0, availableNights: 0 };
+  return { month, revenue: 0, standardRevenue: 0, expense: 0, profit: 0, nights: 0, prices: [], expenseRate: 0, avgPrice: 0, occupancy: 0, availableNights: 0 };
 }
 
 // ======================================================
@@ -1388,10 +1433,10 @@ function buildDailySummary(thuRows, chiRows, monthKey) {
   const daysInMonth = getDaysInMonth(monthKey);
   // Tạo sẵn TẤT CẢ các ngày trong tháng (kể cả ngày không có giao dịch)
   for (let day = 1; day <= daysInMonth; day++) {
-    map[day] = { day, revenue: 0, expense: 0, nights: 0, prices: [] };
+    map[day] = { day, revenue: 0, expense: 0, nights: 0, prices: [], standardRevenue: 0, hourlyRevenue: 0, hourlyUnits: 0, hourlyPrices: [], hourlyMin: 0, hourlyMax: 0 };
   }
   const ensure = (day) => {
-    if (!map[day]) map[day] = { day, revenue: 0, expense: 0, nights: 0, prices: [] };
+    if (!map[day]) map[day] = { day, revenue: 0, expense: 0, nights: 0, prices: [], standardRevenue: 0, hourlyRevenue: 0, hourlyUnits: 0, hourlyPrices: [], hourlyMin: 0, hourlyMax: 0 };
     return map[day];
   };
 
@@ -1399,10 +1444,20 @@ function buildDailySummary(thuRows, chiRows, monthKey) {
     const d = getRowDate(row, thuCols);
     if (!d || !isSameMonth(d, monthKey)) return;
     const it = ensure(d.getDate());
-    it.revenue += toNumber(row[thuCols.amount]);
-    it.nights += getNights(row);
+    const amount = toNumber(row[thuCols.amount]);
+    const units = getNights(row);
     const p = getPricePerNight(row);
-    if (p > 0) it.prices.push(p);
+    it.revenue += amount;
+
+    if (isHourlyBooking(row)) {
+      it.hourlyRevenue += amount;
+      it.hourlyUnits += units;
+      if (p > 0) it.hourlyPrices.push(p);
+    } else {
+      it.nights += units;
+      it.standardRevenue += amount;
+      if (p > 0) it.prices.push(p);
+    }
   });
 
   // Chi phí: lấy từ bảng CHI (chiRows đã lọc theo tháng)
@@ -1414,7 +1469,10 @@ function buildDailySummary(thuRows, chiRows, monthKey) {
 
   Object.values(map).forEach(it => {
     it.profit = it.revenue - it.expense;
-    it.avgPrice = it.nights ? it.revenue / it.nights : 0;
+    it.avgPrice = it.nights ? it.standardRevenue / it.nights : 0;
+    it.hourlyRate = it.hourlyPrices.length ? sum(it.hourlyPrices, x => x) / it.hourlyPrices.length : 0;
+    it.hourlyMin = it.hourlyPrices.length ? Math.min(...it.hourlyPrices) : 0;
+    it.hourlyMax = it.hourlyPrices.length ? Math.max(...it.hourlyPrices) : 0;
   });
 
   const [y, m] = monthKey.split("-");
@@ -1429,7 +1487,7 @@ function renderDailyTable(data) {
   if (!tbody) return;
   tbody.innerHTML = "";
 
-  if (!data.length) { tbody.innerHTML = `<tr><td colspan="6" class="empty">Không có dữ liệu trong tháng</td></tr>`; return; }
+  if (!data.length) { tbody.innerHTML = `<tr><td colspan="9" class="empty">Không có dữ liệu trong tháng</td></tr>`; return; }
 
   data.forEach(item => {
     tbody.innerHTML += `
@@ -1440,12 +1498,28 @@ function renderDailyTable(data) {
         <td class="right c-both ${item.profit >= 0 ? "gold" : "red"}">${formatMoney(item.profit)}</td>
         <td class="right c-rev">${item.nights.toLocaleString("vi-VN")}</td>
         <td class="right purple c-rev">${formatMoney(item.avgPrice)}</td>
+        <td class="right purple c-rev">${item.hourlyUnits ? formatMoney(item.hourlyRate) : "—"}</td>
+        <td class="right purple c-rev">${item.hourlyMin ? formatMoney(item.hourlyMin) : "—"}</td>
+        <td class="right purple c-rev">${item.hourlyMax ? formatMoney(item.hourlyMax) : "—"}</td>
       </tr>`;
   });
 
   // Dòng tổng
-  const t = data.reduce((s, x) => ({ revenue: s.revenue + x.revenue, expense: s.expense + x.expense, nights: s.nights + x.nights }), { revenue: 0, expense: 0, nights: 0 });
-  const avg = t.nights ? t.revenue / t.nights : 0;
+  const t = data.reduce((s, x) => {
+    s.revenue += x.revenue;
+    s.expense += x.expense;
+    s.nights += x.nights;
+    s.standardRevenue += x.standardRevenue;
+    s.hourlyRevenue += x.hourlyRevenue;
+    s.hourlyUnits += x.hourlyUnits;
+    s.hourlyPriceSum += sum(x.hourlyPrices, price => price);
+    s.hourlyPriceCount += x.hourlyPrices.length;
+    if (x.hourlyMin) s.hourlyMin = s.hourlyMin ? Math.min(s.hourlyMin, x.hourlyMin) : x.hourlyMin;
+    if (x.hourlyMax) s.hourlyMax = s.hourlyMax ? Math.max(s.hourlyMax, x.hourlyMax) : x.hourlyMax;
+    return s;
+  }, { revenue: 0, expense: 0, nights: 0, standardRevenue: 0, hourlyRevenue: 0, hourlyUnits: 0, hourlyPriceSum: 0, hourlyPriceCount: 0, hourlyMin: 0, hourlyMax: 0 });
+  const avg = t.nights ? t.standardRevenue / t.nights : 0;
+  const hourlyAvg = t.hourlyPriceCount ? t.hourlyPriceSum / t.hourlyPriceCount : 0;
   tbody.innerHTML += `
     <tr style="background:var(--gold-tint)">
       <td class="strong">Tổng</td>
@@ -1454,6 +1528,9 @@ function renderDailyTable(data) {
       <td class="right strong c-both ${t.revenue - t.expense >= 0 ? "gold" : "red"}">${formatMoney(t.revenue - t.expense)}</td>
       <td class="right strong c-rev">${t.nights.toLocaleString("vi-VN")}</td>
       <td class="right strong purple c-rev">${formatMoney(avg)}</td>
+      <td class="right strong purple c-rev">${t.hourlyUnits ? formatMoney(hourlyAvg) : "—"}</td>
+      <td class="right strong purple c-rev">${t.hourlyMin ? formatMoney(t.hourlyMin) : "—"}</td>
+      <td class="right strong purple c-rev">${t.hourlyMax ? formatMoney(t.hourlyMax) : "—"}</td>
     </tr>`;
 }
 
