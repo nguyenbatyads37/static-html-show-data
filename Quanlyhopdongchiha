@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Hợp Đồng Dự Án</title>
+    <!-- Tailwind CSS cho giao diện -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        /* Tùy chỉnh thanh cuộn */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        
+        /* Hiệu ứng loading spinner */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 20px;
+            height: 20px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row items-start md:items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-slate-100 gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <i class="ph-fill ph-folder-open text-blue-500 text-3xl"></i>
+                    Quản Lý Hợp Đồng Dự Án
+                </h1>
+                <p class="text-slate-500 text-sm mt-1">Nhập liệu và theo dõi danh sách hợp đồng (Lưu trữ trên Supabase)</p>
+            </div>
+            <div class="flex items-center gap-4 w-full md:w-auto">
+                <!-- Nút toggle form -->
+                <button id="toggleFormBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap">
+                    <i class="ph ph-plus-circle text-lg"></i>
+                    <span>Thêm Mới</span>
+                </button>
+                <div id="connectionStatus" class="flex items-center gap-2 text-sm font-medium text-amber-500 bg-amber-50 px-3 py-1.5 rounded-full border border-amber-200 whitespace-nowrap">
+                    <i class="ph ph-plugs text-lg"></i>
+                    Đang kết nối...
+                </div>
+            </div>
+        </header>
+
+        <!-- Cấu trúc 1 cột chính -->
+        <div class="space-y-6">
+            
+            <!-- Container Form Nhập Liệu (Mặc định ẩn) -->
+            <div id="formContainer" class="hidden bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h2 class="text-lg font-semibold mb-4 flex items-center gap-2 border-b pb-3">
+                    <i class="ph ph-plus-circle text-blue-500 text-xl"></i>
+                    Thêm Hợp Đồng Mới
+                </h2>
+                
+                <form id="contractForm" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Tên Khách Hàng -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1" for="tenKhachHang">Tên Khách Hàng <span class="text-red-500">*</span></label>
+                            <input type="text" id="tenKhachHang" required
+                                class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                placeholder="Vd: Công ty TNHH ABC">
+                        </div>
+
+                        <!-- Tên Dự Án -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1" for="tenDuAn">Tên Dự Án <span class="text-red-500">*</span></label>
+                            <input type="text" id="tenDuAn" required
+                                class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                placeholder="Vd: Xây dựng hệ thống ERP">
+                        </div>
+
+                        <!-- Số Hợp Đồng -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1" for="soHopDong">Số Hợp Đồng <span class="text-red-500">*</span></label>
+                            <input type="text" id="soHopDong" required
+                                class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                placeholder="Vd: HD-2023-001">
+                        </div>
+
+                        <!-- Giá Trị Hợp Đồng -->
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1" for="giaTriHopDong">Giá Trị Hợp Đồng (VNĐ) <span class="text-red-500">*</span></label>
+                            <input type="number" id="giaTriHopDong" required min="0"
+                                class="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                                placeholder="Vd: 500000000">
+                        </div>
+                    </div>
+
+                    <!-- Thông báo lỗi / thành công -->
+                    <div id="formMessage" class="hidden text-sm p-3 rounded-lg"></div>
+
+                    <!-- Nút Submit -->
+                    <div class="flex justify-end">
+                        <button type="submit" id="submitBtn"
+                            class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-6 rounded-lg transition-colors flex justify-center items-center gap-2 mt-4">
+                            <i class="ph ph-floppy-disk text-lg"></i>
+                            <span>Lưu Hợp Đồng</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Bảng Dữ Liệu -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col">
+                <div class="p-6 border-b flex justify-between items-center">
+                    <h2 class="text-lg font-semibold flex items-center gap-2">
+                        <i class="ph ph-table text-blue-500 text-xl"></i>
+                        Danh Sách Hợp Đồng
+                    </h2>
+                    <button onclick="fetchContracts()" class="text-sm text-blue-600 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 border border-blue-100">
+                        <i class="ph ph-arrows-clockwise"></i> Làm mới
+                    </button>
+                </div>
+                
+                <div class="overflow-x-auto p-0 flex-1">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider border-b border-slate-200">
+                                <th class="p-4 font-semibold w-16">ID</th>
+                                <th class="p-4 font-semibold">Tên Khách Hàng</th>
+                                <th class="p-4 font-semibold">Tên Dự Án</th>
+                                <th class="p-4 font-semibold">Số Hợp Đồng</th>
+                                <th class="p-4 font-semibold text-right">Giá Trị</th>
+                                <th class="p-4 font-semibold text-center">Ngày Tạo</th>
+                                <th class="p-4 font-semibold text-center w-16">Xóa</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="text-sm divide-y divide-slate-100">
+                            <!-- Dữ liệu sẽ được render ở đây -->
+                            <tr>
+                                <td colspan="7" class="p-8 text-center text-slate-500">
+                                    <div class="flex flex-col items-center justify-center gap-2">
+                                        <div class="loader"></div>
+                                        <p>Đang tải dữ liệu...</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        // --- 1. CẤU HÌNH SUPABASE ---
+        const SUPABASE_URL = 'https://gjtwiigtkunckadgzhgz.supabase.co';
+        // Sử dụng Anon Key cho phía Client (Không dùng Service Role Key ở giao diện người dùng)
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdqdHdpaWd0a3VuY2thZGd6aGd6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE5MTMzNTQsImV4cCI6MjA5NzQ4OTM1NH0.Rk7OhAve8wdWxRvNbfrEYmk9Vhe5Nhr5z3bcNvyCGA0';
+        
+        // Đổi tên biến thành supabaseClient để tránh xung đột với đối tượng window.supabase từ CDN
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        const TABLE_NAME = 'HOP_DONG_DU_AN';
+
+        // Các Elements
+        const form = document.getElementById('contractForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const tableBody = document.getElementById('dataTableBody');
+        const formMessage = document.getElementById('formMessage');
+        const connectionStatus = document.getElementById('connectionStatus');
+        
+        // Mới: Lấy elements cho toggle form
+        const toggleFormBtn = document.getElementById('toggleFormBtn');
+        const formContainer = document.getElementById('formContainer');
+
+        // Mới: Hàm toggle form
+        const toggleForm = () => {
+            const isHidden = formContainer.classList.toggle('hidden');
+            if (isHidden) {
+                toggleFormBtn.innerHTML = '<i class="ph ph-plus-circle text-lg"></i> <span>Thêm Mới</span>';
+                toggleFormBtn.classList.remove('bg-slate-100', 'text-slate-700', 'hover:bg-slate-200');
+                toggleFormBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+            } else {
+                toggleFormBtn.innerHTML = '<i class="ph ph-x-circle text-lg"></i> <span>Đóng</span>';
+                toggleFormBtn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+                toggleFormBtn.classList.add('bg-slate-100', 'text-slate-700', 'hover:bg-slate-200');
+                formContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
+        // Mới: Gán sự kiện click
+        toggleFormBtn.addEventListener('click', toggleForm);
+
+
+        // Hàm định dạng tiền tệ (VNĐ) - Dấu chấm ngăn cách và thêm đuôi VNĐ
+        const formatCurrency = (amount) => {
+            if(!amount) return '0 VNĐ';
+            // Intl.NumberFormat('vi-VN') sẽ tự động dùng dấu chấm (.) làm phân cách hàng nghìn
+            return new Intl.NumberFormat('vi-VN').format(amount) + ' VNĐ';
+        };
+
+        // Hàm hiển thị thông báo form
+        const showMessage = (msg, type = 'success') => {
+            formMessage.classList.remove('hidden', 'bg-green-50', 'text-green-700', 'bg-red-50', 'text-red-700');
+            if(type === 'success') {
+                formMessage.classList.add('bg-green-50', 'text-green-700');
+                formMessage.innerHTML = `<i class="ph-fill ph-check-circle mr-1"></i> ${msg}`;
+            } else {
+                formMessage.classList.add('bg-red-50', 'text-red-700');
+                formMessage.innerHTML = `<i class="ph-fill ph-warning-circle mr-1"></i> ${msg}`;
+            }
+            setTimeout(() => { formMessage.classList.add('hidden'); }, 5000);
+        };
+
+        // Cập nhật trạng thái kết nối
+        const updateConnectionStatus = (isOnline, errorMsg = '') => {
+            if (isOnline) {
+                connectionStatus.className = 'flex items-center gap-2 text-sm font-medium text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-full border border-emerald-200 whitespace-nowrap';
+                connectionStatus.innerHTML = '<i class="ph-fill ph-check-circle text-lg"></i> Đã kết nối Supabase';
+            } else {
+                connectionStatus.className = 'flex items-center gap-2 text-sm font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded-full border border-red-200 whitespace-nowrap';
+                connectionStatus.innerHTML = `<i class="ph-fill ph-warning-circle text-lg"></i> Lỗi: ${errorMsg || 'Không thể kết nối'}`;
+            }
+        };
+
+        // --- 2. HÀM TẢI DỮ LIỆU TỪ SUPABASE ---
+        async function fetchContracts() {
+            try {
+                // Hiển thị trạng thái loading ở bảng
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-500">
+                            <div class="flex flex-col items-center justify-center gap-2">
+                                <div class="loader"></div>
+                                <p>Đang tải dữ liệu...</p>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+
+                // Gọi API Supabase
+                const { data, error } = await supabaseClient
+                    .from(TABLE_NAME)
+                    .select('*')
+                    .order('ID', { ascending: false }); // ID có thể đổi theo cột thực tế nếu là UUID
+
+                if (error) throw error;
+                
+                updateConnectionStatus(true);
+                renderTable(data);
+                
+            } catch (error) {
+                console.error("Lỗi khi tải dữ liệu:", error);
+                updateConnectionStatus(false, error.message);
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-red-500 bg-red-50">
+                            <p class="font-medium">Lỗi tải dữ liệu!</p>
+                            <p class="text-xs mt-1">Chi tiết: ${error.message}</p>
+                            <p class="text-xs mt-2 text-slate-600">(Đảm bảo bảng HOP_DONG_DU_AN đã được tạo và đã tắt RLS hoặc cấu hình Policies phù hợp)</p>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        // Render dữ liệu ra HTML Table
+        function renderTable(data) {
+            if (!data || data.length === 0) {
+                tableBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="p-8 text-center text-slate-500 bg-slate-50/50">
+                            <i class="ph ph-folder-dashed text-4xl text-slate-300 mb-2"></i>
+                            <p>Chưa có dữ liệu hợp đồng nào.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tableBody.innerHTML = data.map(row => {
+                // Định dạng ngày tạo (nếu có)
+                const createdDate = row.created_at ? new Date(row.created_at).toLocaleDateString('vi-VN') : 'N/A';
+                
+                return `
+                <tr class="hover:bg-slate-50 transition-colors group">
+                    <td class="p-4 font-medium text-slate-900">${row.ID || 'N/A'}</td>
+                    <td class="p-4">${row.TEN_KHACH_HANG || ''}</td>
+                    <td class="p-4">${row.TEN_DU_AN || ''}</td>
+                    <td class="p-4">
+                        <span class="inline-flex items-center px-2 py-1 rounded bg-slate-100 text-slate-700 text-xs font-medium font-mono border border-slate-200">
+                            ${row.SO_HOP_DONG || ''}
+                        </span>
+                    </td>
+                    <td class="p-4 text-right font-medium text-emerald-600">${formatCurrency(row.GIA_TRI_HOP_DONG)}</td>
+                    <td class="p-4 text-center text-slate-500 text-sm">${createdDate}</td>
+                    <td class="p-4 text-center">
+                        <button onclick="deleteContract('${row.ID}')" class="text-slate-400 hover:text-red-500 transition-colors p-1 rounded hover:bg-red-50" title="Xóa hợp đồng">
+                            <i class="ph ph-trash text-lg"></i>
+                        </button>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        // --- 3. HÀM THÊM DỮ LIỆU VÀO SUPABASE ---
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Đổi trạng thái nút
+            const originalBtnHtml = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<div class="loader mr-2" style="width:16px;height:16px;border-width:2px;"></div> Đang lưu...';
+            submitBtn.disabled = true;
+
+            // Lấy dữ liệu từ input
+            const newRecord = {
+                TEN_KHACH_HANG: document.getElementById('tenKhachHang').value.trim(),
+                TEN_DU_AN: document.getElementById('tenDuAn').value.trim(),
+                SO_HOP_DONG: document.getElementById('soHopDong').value.trim(),
+                GIA_TRI_HOP_DONG: Number(document.getElementById('giaTriHopDong').value)
+            };
+
+            try {
+                // Insert lên Supabase (Cột ID giả định là auto-increment/serial nên không truyền vào)
+                const { data, error } = await supabaseClient
+                    .from(TABLE_NAME)
+                    .insert([newRecord])
+                    .select();
+
+                if (error) throw error;
+
+                // Thành công
+                showMessage('Thêm hợp đồng thành công!');
+                form.reset();
+                fetchContracts(); // Cập nhật lại bảng
+                
+                // Ẩn form sau khi thêm thành công
+                toggleForm();
+
+            } catch (error) {
+                console.error("Lỗi khi thêm:", error);
+                showMessage(`Lỗi: ${error.message}`, 'error');
+            } finally {
+                // Phục hồi nút submit
+                submitBtn.innerHTML = originalBtnHtml;
+                submitBtn.disabled = false;
+            }
+        });
+
+        // --- 4. HÀM XÓA DỮ LIỆU (Mở rộng thêm) ---
+        async function deleteContract(id) {
+            if(!confirm(`Bạn có chắc chắn muốn xóa hợp đồng ID ${id} không?`)) return;
+
+            try {
+                const { error } = await supabaseClient
+                    .from(TABLE_NAME)
+                    .delete()
+                    .eq('ID', id);
+
+                if (error) throw error;
+                
+                fetchContracts(); // Render lại bảng sau khi xóa
+            } catch (error) {
+                console.error("Lỗi khi xóa:", error);
+                alert("Lỗi khi xóa: " + error.message);
+            }
+        }
+
+        // Chạy lần đầu khi load trang
+        window.onload = () => {
+            fetchContracts();
+        };
+
+    </script>
+</body>
+</html>
