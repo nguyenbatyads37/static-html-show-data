@@ -2,133 +2,166 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <title>Danh Sách Bài Tập Phương Trình Lượng Giác - Phân Loại</title>
+    <title>Phân Loại Bài Tập PTLG (200 Bài)</title>
     <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
     <script>
-        window.MathJax = {
-            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
-        };
+        window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] } };
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <style>
-        body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; font-size: 13pt; color: #000; max-width: 1100px; margin: 40px auto; padding: 0 20px; background-color: #fff; }
+        body { font-family: 'Times New Roman', Times, serif; line-height: 1.6; font-size: 13pt; color: #000; max-width: 1000px; margin: 40px auto; padding: 0 20px; background-color: #fff; }
         h1 { text-align: center; font-size: 22pt; text-transform: uppercase; margin-bottom: 5px; }
-        .subtitle { text-align: center; font-size: 13pt; font-style: italic; color: #333; margin-bottom: 30px; border-bottom: 1px solid #000; padding-bottom: 10px; }
-        
-        .control-panel { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
-        .control-group { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+        .control-panel { background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 8px; padding: 20px; margin-bottom: 30px; position: sticky; top: 10px; z-index: 1000; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        .control-group { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         button { background-color: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #0056b3; }
         
-        .exercise-container { column-count: 2; column-gap: 50px; }
-        .exercise-item { margin-bottom: 20px; break-inside: avoid; display: inline-block; width: 100%; }
-        .group-title { column-span: all; background: #e9ecef; color: #212529; padding: 10px 15px; border-left: 5px solid #d9534f; margin: 20px 0; font-size: 14pt; font-weight: bold; display: flex; align-items: center; gap: 10px; }
-        
-        .type-box { border: none; border-bottom: 1px dashed #d9534f; background: transparent; color: #d9534f; width: 180px; margin: 0 8px; cursor: pointer; }
+        .exercise-container { column-count: 2; column-gap: 40px; }
+        .exercise-item { margin-bottom: 15px; break-inside: avoid; display: inline-block; width: 100%; }
+        .group-title { column-span: all; background: #e9ecef; padding: 10px; border-left: 5px solid #d9534f; margin: 20px 0; font-size: 14pt; font-weight: bold; }
+        .type-select { border: none; border-bottom: 1px dashed #d9534f; background: transparent; color: #d9534f; width: 160px; cursor: pointer; font-size: 11pt; }
         
         @media print {
             .control-panel { display: none; }
-            .type-box { border: none; color: #000; -webkit-appearance: none; appearance: none; }
-            .chk-print { display: none; } /* Ẩn checkbox khi in */
+            .type-select { display: none; }
         }
     </style>
 </head>
 <body>
 
-    <h1>Danh Sách Bài Tập Phương Trình Lượng Giác</h1>
-    <div class="subtitle">Phân loại và in ấn</div>
-
+    <h1>Danh Sách Bài Tập PTLG</h1>
+    
     <div class="control-panel">
         <div class="control-group">
-            <input type="text" id="newTypeInput" placeholder="Nhập tên dạng toán mới...">
+            <input type="text" id="newTypeInput" placeholder="Nhập dạng toán mới...">
             <button onclick="addType()">Thêm dạng</button>
         </div>
         <div class="control-group">
-            <label><input type="radio" name="viewMode" value="original" checked onchange="renderExercises()"> Thứ tự gốc</label>
-            <label><input type="radio" name="viewMode" value="grouped" id="groupedRadio" onchange="renderExercises()"> Nhóm theo dạng</label>
-            <button onclick="printGrouped()" style="background-color: #28a745;">In Các Dạng Đã Chọn</button>
+            <label><input type="radio" name="viewMode" value="original" checked onchange="render()"> Thứ tự gốc</label>
+            <label><input type="radio" name="viewMode" value="grouped" onchange="render()"> Nhóm theo dạng</label>
+            <button onclick="printSelected()" style="background-color: #28a745;">In các dạng đã chọn</button>
         </div>
+        <div id="filter-checkboxes" style="display:flex; flex-wrap:wrap; gap:10px; font-size: 10pt;"></div>
     </div>
 
-    <div id="main-view"></div>
-
-    <div id="exercise-source" style="display: none;">
-        <!-- Dữ liệu gốc -->
-        <div>$2\cos^2 x + 3\cos x + 1 = 0$</div>
-        <div>$2\sin^2 x - 5\sin x + 2 = 0$</div>
-        <div>$\tan^2 x + 3\tan x + 2 = 0$</div>
-        <!-- (Đã lược bớt phần kho dữ liệu để ngắn gọn, code vẫn giữ nguyên của bạn) -->
-    </div>
+    <div id="main-view" class="exercise-container"></div>
 
     <script>
+        // Dữ liệu 200 bài tập của bạn (đã loại bỏ ghi chú [ĐH...])
+        const rawData = [
+            "$2\\cos^2 x + 3\\cos x + 1 = 0$", "$2\\sin^2 x - 5\\sin x + 2 = 0$", "$\\tan^2 x + 3\\tan x + 2 = 0$", "$\\cot^2 2x - 4\\cot 2x + 3 = 0$",
+            "$2\\sin^2 x + \\cos 2x - 2 = 0$", "$\\cos 2x - 3\\cos x + 2 = 0$", "$\\cos 2x + \\sin x = 0$", "$\\cos 2x - \\sin x - 1 = 0$",
+            "$4\\sin^4 x + 12\\cos^2 x - 7 = 0$", "$6\\sin^2 x + 2\\sin^2 2x = 5$", "$\\cos 2x + 3\\sin x = 2$", "$\\cos 2x + 5\\cos x + 3 = 0$",
+            "$2\\cos 2x + 8\\cos x = 5$", "$2\\cos 2x - 4\\cos x = 1$", "$4\\cos^2 x - 2\\cos 2x - 3 = 0$", "$\\cos 2x + 3\\cos x + 2 = 0$",
+            "$2\\sin 2x - 2\\cos 2x = 2$", "$3\\sin x + \\sqrt{3}\\cos x = 3$", "$\\sin x - \\sqrt{3}\\cos x = 1$", "$\\sqrt{3}\\sin x + \\cos x = \\sqrt{2}$",
+            "$32\\cos^6 x - \\sin^6 x = 1$", "$\\sin^4 x + \\cos^4 x = \\frac{1}{2}$", "$\\sin^4 x + \\cos^4 x = \\cos 2x$", "$\\sin^4 x + \\cos^4 x = \\frac{7}{8}$",
+            "$\\sin^4 x + \\cos^4 x = \\sin 2x - \\frac{1}{2}$", "$\\sin^6 x + \\cos^6 x = \\frac{1}{4}$", "$\\sin^6 x + \\cos^6 x = \\frac{7}{16}$", "$\\sin^6 x + \\cos^6 x = \\cos 2x$",
+            "$2(\\sin^6 x + \\cos^6 x) + \\sin x\\cos x = 0$", "$\\sin^4 x + \\cos^4 x = \\frac{5}{8}$", "$\\sin^4 \\frac{x}{2} + \\cos^4 \\frac{x}{2} = \\frac{5}{8}$", "$\\sin^4 x + \\cos^4 x = \\cos 4x$",
+            "$\\sin^4 x + \\cos^4 x = \\frac{5}{8}\\cos^2 2x$", "$\\sin^4 2x + \\cos^4 2x = \\sin 2x\\cos 2x$", "$\\sin^6 x + \\cos^6 x = \\frac{13}{16}$", "$\\sin^6 x + \\cos^6 x = \\frac{5}{8}$",
+            "$\\sin^6 2x + \\cos^6 2x = \\frac{1}{4}$", "$\\sin^6 x - \\cos^6 x = \\frac{1}{4}\\cos 2x$", "$\\cos^6 x - \\sin^6 x = \\frac{13}{16}\\cos 2x$", "$\\sin^8 x + \\cos^8 x = \\frac{17}{32}$",
+            "$\\sin^8 x + \\cos^8 x = \\frac{97}{128}$", "$\\sin^8 x + \\cos^8 x = 2(\\sin^{10} x + \\cos^{10} x) + \\frac{5}{4}\\cos 2x$", "$\\sin^3 x\\cos 3x + \\cos^3 x\\sin 3x = \\frac{3}{8}$", "$\\sin^3 x\\sin 3x + \\cos^3 x\\cos 3x = \\frac{1}{2}$",
+            "$\\frac{(1 + \\sin x + \\cos 2x)\\sin(x + \\frac{\\pi}{4})}{1 + \\tan x} = \\frac{1}{\\sqrt{2}}\\cos x$", "$\\cot x + \\sin x(1 + \\tan x\\tan\\frac{x}{2}) = 4$", "$\\frac{1}{\\cos x} + \\frac{1}{\\sin 2x} = \\frac{2}{\\sin 4x}$", "$\\frac{\\sin^4 2x + \\cos^4 2x}{\\tan(\\frac{\\pi}{4} - x)\\tan(\\frac{\\pi}{4} + x)} = \\cos^4 4x$",
+            "$\\frac{\\sin^2 2x + \\cos^4 2x - 1}{\\sqrt{\\sin x\\cos x}} = 0$", "$\\cos 3x\\tan 5x = \\sin 7x$", "$\\frac{1 + \\sin 2x + \\cos 2x}{1 + \\cot^2 x} = \\sqrt{2}\\sin x\\sin 2x$", "$3\\sin x + 2\\cos x = 3(1 + \\tan x) - \\frac{1}{\\cos x}$",
+            "$\\frac{\\tan^2 x + \\tan x}{\\tan^2 x + 1} = \\frac{\\sqrt{2}}{2}\\sin(x + \\frac{\\pi}{4})$", "$\\tan 5x\\tan 2x = 1$", "$\\frac{\\sin 2x + 2\\cos x - \\sin x - 1}{\\tan x + \\sqrt{3}} = 0$", "$\\frac{2(\\cos^6 x + \\sin^6 x) - \\sin x\\cos x}{\\sqrt{2} - 2\\sin x} = 0$",
+            "$\\frac{\\sin x + \\sin 2x}{\\sin 3x} = -1$", "$5(\\sin x + \\frac{\\cos 3x + \\sin 3x}{1 + \\sin 2x}) = \\cos 2x + 3$", "$\\sin^2 3x - \\cos^2 4x = \\sin^2 5x - \\cos^2 6x$", "$\\cos 3x - 4\\cos 2x + 3\\cos x - 4 = 0$",
+            "$2(\\sin^4 x + \\cos^4 x) + \\cos 4x + \\sin 2x - m = 0$", "$\\frac{\\sin^4 x + \\cos^4 x}{5\\sin 2x} = \\frac{1}{2}\\cot 2x - \\frac{1}{8\\sin 2x}$", "$\\tan^4 x + 1 = \\frac{(2 - \\sin^2 2x)\\sin 3x}{\\cos^4 x}$", "$\\tan x + \\cos x - \\cos^2 x = \\sin x(1 + \\tan x\\tan\\frac{x}{2})$",
+            "$\\frac{2\\sin x + \\cos x + 1}{\\sin x - 2\\cos x + 3} = a$", "$\\sqrt{\\frac{1}{8\\cos^2 x}} = \\sin x$", "$\\cot x - 1 = \\frac{\\cos 2x}{1 + \\tan x} + \\sin^2 x - \\frac{1}{2}\\sin 2x$", "$\\cot x - \\tan x + 4\\sin 2x = \\frac{2}{\\sin 2x}$",
+            "$\\sin^2(\\frac{x}{2} - \\frac{\\pi}{4})\\tan^2 x - \\cos^2\\frac{x}{2} = 0$", "$3 - \\tan x(\\tan x + 2\\sin x) + 6\\cos x = 0$", "$\\cos 2x + \\cos x(2\\tan^2 x - 1) = 2$", "$3\\cos 4x - 8\\cos^6 x + 2\\cos^2 x + 3 = 0$",
+            "$\\frac{(2 - \\sqrt{3})\\cos x - 2\\sin^2(\\frac{x}{2} - \\frac{\\pi}{4})}{2\\cos x - 1} = 1$", "$\\frac{\\cos^2 x(\\cos x - 1)}{\\sin x + \\cos x} = 2(1 + \\sin x)$", "$\\cot x = \\tan x + \\frac{2\\cos 4x}{\\sin 2x}$", "$5\\sin x - 2 = 3(1 - \\sin x)\\tan^2 x$",
+            "$(2\\cos x - 1)(2\\sin x + \\cos x) = \\sin 2x - \\sin x$", "$\\sin x + \\sin 2x = \\sqrt{3}(\\cos x + \\cos 2x)$", "$\\sqrt{1 - \\sin x} + \\sqrt{1 - \\cos x} = 1$", "$4(\\sin^3 x + \\cos^3 x) = \\cos x + 3\\sin x$",
+            "$\\frac{1}{\\cos x} - \\frac{1}{\\sin x} = 2\\sqrt{2}\\cos(x + \\frac{\\pi}{4})$", "$\\sin 4x\\sin 7x = \\cos 3x\\cos 6x$", "$\\sin 2x - 2\\sqrt{2}(\\sin x + \\cos x) - 5 = 0$", "$\\cos^2 3x\\cos 2x - \\cos^2 x = 0$",
+            "$1 + \\sin x + \\cos x + \\sin 2x + \\cos 2x = 0$", "$\\cos^4 x + \\sin^4 x + \\cos(x - \\frac{\\pi}{4})\\sin(3x - \\frac{\\pi}{4}) - \\frac{3}{2} = 0$", "$4\\sin^2\\frac{x}{2} - \\sqrt{3}\\cos 2x = 1 + 2\\cos^2(x - \\frac{3\\pi}{4})$", "$2\\sqrt{2}\\cos^3(x - \\frac{\\pi}{4}) - 3\\cos x - \\sin x = 0$",
+            "$2\\sqrt{2}\\cos^3(x - \\frac{\\pi}{4}) - 3\\cos x - \\sin x = 0$", "$\\tan(\\frac{\\pi}{2} + x) - 3\\tan^2 x = \\frac{\\cos 2x - 1}{\\cos^2 x}$", "$\\tan(\\frac{3\\pi}{2} - x) + \\frac{\\sin x}{1 + \\cos x} = 2$", "$\\sin 2x + \\cos 2x + 3\\sin x - \\cos x - 2 = 0$",
+            "$\\frac{2(\\cos^6 x + \\sin^6 x) - \\sin x\\cos x}{\\sqrt{2} - 2\\sin x} = 0$", "$\\cot x + \\sin x(1 + \\tan x\\tan\\frac{x}{2}) = 4$", "$\\cos 3x + \\cos 2x - \\cos x - 1 = 0$", "$\\cos 3x\\cos^3 x - \\sin 3x\\sin^3 x = \\frac{2 + 3\\sqrt{2}}{8}$",
+            "$2\\sin(2x - \\frac{\\pi}{6}) + 4\\sin x + 1 = 0$", "$(2\\sin^2 x - 1)\\tan^2 2x + 3(2\\cos^2 x - 1) = 0$", "$\\cos 2x + (1 + 2\\cos x)(\\sin x - \\cos x) = 0$", "$\\cos^3 x + \\sin^3 x + 2\\sin^2 x = 1$",
+            "$4\\sin^3 x + 4\\sin^2 x + 3\\sin 2x + 6\\cos x = 0$", "$(1 + \\sin^2 x)\\cos x + (1 + \\cos^2 x)\\sin x = 1 + \\sin 2x$", "$2\\sin^2 2x + \\sin 7x - 1 = \\sin x$", "$(\\sin\\frac{x}{2} + \\cos\\frac{x}{2})^2 + \\sqrt{3}\\cos x = 2$",
+            "$\\sin 2x + \\sin x - \\frac{1}{2\\sin x} - \\frac{1}{\\sin 2x} = 2\\cot 2x$", "$2\\cos^2 x + 2\\sqrt{3}\\sin x\\cos x + 1 = 3(\\sin x + \\sqrt{3}\\cos x)$", "$\\sin(\\frac{5x}{2} - \\frac{\\pi}{4}) - \\cos(\\frac{x}{2} - \\frac{\\pi}{4}) = \\sqrt{2}\\cos\\frac{3x}{2}$", "$\\frac{\\sin 2x}{\\cos x} + \\frac{\\cos 2x}{\\sin x} = \\tan x - \\cot x$",
+            "$2\\sqrt{2}\\sin(x - \\frac{\\pi}{12})\\cos x = 1$", "$(1 - \\tan x)(1 + \\sin 2x) = 1 + \\tan x$", "$\\frac{1}{\\sin x} + \\frac{1}{\\sin(x - \\frac{3\pi}{2})} = 4\\sin(\\frac{7\pi}{4} - x)$", "$\\sin^3 x - \\sqrt{3}\\cos^3 x = \\sin x\\cos^2 x - \\sqrt{3}\\sin^2 x\\cos x$",
+            "$2\\sin x(1 + \\cos 2x) + \\sin 2x = 1 + 2\\cos x$", "$\\sin 3x - \\sqrt{3}\\cos 3x = 2\\sin 2x$", "$\\tan x = \\cot x + 4\\cos^2 2x$", "$\\sin(2x - \\frac{\\pi}{4}) = \\sin(x - \\frac{\\pi}{4}) + \\frac{\\sqrt{2}}{2}$",
+            "$2\\sin(x + \\frac{\\pi}{3}) - \\sin(2x - \\frac{\\pi}{6}) = \\frac{1}{2}$", "$3\\sin x + \\cos 2x + \\sin 2x = 4\\sin x\\cos^2\\frac{x}{2}$", "$4(\\sin^4 x + \\cos^4 x) + \\cos 4x + \\sin 2x = 0$", "$\\frac{\\tan^2 x + \\tan x}{\\tan^2 x + 1} = \\frac{\\sqrt{2}}{2}\\sin(x + \\frac{\\pi}{4})$",
+            "$\\frac{(1 - 2\\sin x)\\cos x}{(1 + 2\\sin x)(1 - \\sin x)} = \\sqrt{3}$", "$\\sin x + \\cos x\\sin 2x + \\sqrt{3}\\cos 3x = 2(\\cos 4x + \\sin^3 x)$", "$\\sqrt{3}\\cos 5x - 2\\sin 3x\\cos 2x - \\sin x = 0$", "$(1 + 2\\sin x)^2\\cos x = 1 + \\sin x + \\cos x$",
+            "$\\frac{(1 + \\sin x + \\cos 2x)\\sin(x + \\frac{\\pi}{4})}{1 + \\tan x} = \\frac{1}{\\sqrt{2}}\\cos x$", "$(\\sin 2x + \\cos 2x)\\cos x + 2\\cos 2x - \\sin x = 0$", "$\\sin 2x - \\cos 2x + 3\\sin x - \\cos x - 1 = 0$", "$\\frac{1 + \\sin 2x + \\cos 2x}{1 + \\cot^2 x} = \\sqrt{2}\\sin x\\sin 2x$",
+            "$9\\sin x + 6\\cos x - 3\\sin 2x + \\cos 2x = 8$", "$\\sin 2x\\cos x + \\sin x\\cos x = \\cos 2x + \\sin x + \\cos x$", "$\\frac{\\sin 2x + 2\\cos x - \\sin x - 1}{\\tan x + \\sqrt{3}} = 0$", "$\\sqrt{3}\\sin 2x + \\cos 2x = 2\\cos x - 1$",
+            "$2(\\cos x + \\sqrt{3}\\sin x)\\cos x = \\cos x - \\sqrt{3}\\sin x + 1$", "$\\sin 3x + \\cos 3x - \\sin x + \\cos x = \\sqrt{2}\\cos 2x$", "$1 + \\tan x = 2\\sqrt{2}\\sin(x + \\frac{\\pi}{4})$", "$\\sin 5x + 2\\cos^2 x = 1$",
+            "$\\sin 3x + \\cos 2x - \\sin x = 0$", "$\\frac{1}{\\sqrt{2}}\\cot x + \\frac{\\sin 2x}{\\sin x + \\cos x} = 2\\sin(x + \\frac{\\pi}{2})$", "$8\\cos^4(x + \\frac{\\pi}{4}) + \\sin 4x = 2 \\cdot \\frac{1 - \\tan^2 x}{1 + \\tan^2 x}$", "$5\\sin(\\frac{5\\pi}{2} - x) - 3(1 - \\cos x)\\cot^2 x = 2$",
+            "$\\frac{1}{\\tan x + \\cot 2x} = \\frac{\\sqrt{2}(\\cos x - \\sin x)}{\\cot x - 1}$", "$\\sin 2x + \\cos x - \\sqrt{2}\\sin(x - \\frac{\\pi}{4}) - 1 = 0$", "$2\\cos 3x\\cos x + \\sqrt{3}(1 + \\sin 2x) = 2\\sqrt{3}\\cos^2(2x + \\frac{\\pi}{4})$", "$\\sin x\\sin 4x = 2\\sqrt{2}\\cos(\\frac{\\pi}{6} - x) - 4\\sqrt{3}\\cos^2 x\\sin x\\cos 2x$",
+            "$\\sqrt{3}\\cos 2x + \\sin 2x - (4 + \\sqrt{3})\\cos x - \\sin x + 2 + \\sqrt{3} = 0$", "$(1 - \\cos x)\\cot x + \\cos 2x + \\sin x = \\sin 2x$", "$(1 - \\cos x)\\cot x + \\cos 2x + \\sin x = \\sin 2x$", "$2\\sin^2(x - \\frac{\\pi}{4}) - \\sin(2x + \\frac{2017\\pi}{2}) = 1 - \\tan x$",
+            "$\\cos 2x - \\tan^2 x = \\frac{\\cos^2 x + \\cos^3 x - 1}{\\cos^2 x}$", "$\\frac{(1 - \\cos x)\\cos x}{(1 + \\cos x)(1 - 2\\cos x)} = \\frac{1}{\\tan x}$", "$\\sin^3 x - \\cos^3 x = \\cos 2x\\cot(x + \\frac{\\pi}{4})\\cot(x - \\frac{\\pi}{4})$", "$2\\sqrt{2}\\cos 2x + \\sin 2x\\cos(x + \\frac{3\\pi}{4}) - 4\\sin(x + \\frac{\\pi}{4}) = 0$",
+            "$\\sin^2 3x - \\cos^2 4x = \\sin^2 5x - \\cos^2 6x$", "$4\\sin^2(\\pi - \\frac{x}{2}) - \\sqrt{3}\\sin(\\frac{\\pi}{2} - 2x) = 1 + 2\\cos^2(x - \\frac{3\\pi}{4})$", "$\\sin 2x + \\sin x - \\frac{1}{2\\sin x} - \\frac{1}{\\sin 2x} = 2\\cot 2x$", "$\\frac{3\\sin 2x - 2\\sin x}{\\sin 2x\\cos x} = 2$",
+            "$\\cos 2x + 5 = 2(2 - \\cos x)(\\sin x - \\cos x)$", "$\\sin x\\tan 2x + \\sqrt{3}(\\sin x - \\sqrt{3}\\tan 2x) = 3\\sqrt{3}$", "$\\cos 3x\\cos^3 x - \\sin 3x\\sin^3 x = \\frac{2 + 3\\sqrt{2}}{8}$", "$9\\sin x + 6\\cos x - 3\\sin 2x + \\cos 2x = 8$",
+            "$\\cos x + \\cos^2 x + \\sin^3 x = 2$", "$\\frac{(\\sin 2x - \\sin x + 4)\\cos x - 2}{2\\sin x + \\sqrt{3}} = 0$", "$|\\sin x - \\cos x| + 4\\sin 2x = 1$", "$\\cos^2 3x\\cos 2x - \\cos^2 x = 0$",
+            "$\\frac{3\\sin 2x - 2\\sin x}{\\sin 2x\\cos x} = 2$", "$4\\cos^4 x - \\cos 2x - \\frac{1}{2}\\cos 4x + \\cos\\frac{3x}{4} = \\frac{7}{2}$", "$\\frac{\\cos^2 x(\\cos x - 1)}{\\sin x + \\cos x} = 2(1 + \\sin x)$", "$1 + \\sin\\frac{x}{2}\\sin x - \\cos\\frac{x}{2}\\sin^2 x = 2\\cos^2(\\frac{\\pi}{4} - \\frac{x}{2})$",
+            "$\\frac{\\sin^3 x\\sin 3x + \\cos^3 x\\cos 3x}{\\tan(x - \\frac{\\pi}{6})\\tan(x + \\frac{\\pi}{3})} = -\\frac{1}{8}$", "$\\sin^3 x(1 + \\cot x) + \\cos^3 x(1 + \\tan x) = \\sqrt{2}\\sin 2x$", "$y = \\frac{\\cos x}{\\sin^2 x(2\\cos x - \\sin x)}$", "$\\sin(3x - \\frac{\\pi}{4}) = \\sin 2x\\sin(x + \\frac{\\pi}{4})$",
+            "$\\cos^2 x + \\cos x + \\sin^3 x = 0$", "$\\cos 3x - \\cos 2x + \\cos x = \\frac{1}{2}$", "Tìm tổng các nghiệm x ∈ [2; 40] của PT: $\\sin x - \\cos 2x = 0$", "$\\tan(x - \\frac{\\pi}{6})\\tan(x + \\frac{\\pi}{3})\\sin 3x = \\sin x + \\sin 2x$",
+            "$2\\cos x + \\frac{1}{3}\\cos^2(x + 3\\pi) = \\frac{8}{3} + \\sin 2(x - \\pi) + 3\\cos(x + \\frac{21\\pi}{2}) + \\frac{1}{3}\\sin^2 x$", "$\\sin 2x + \\sin x - \\frac{1}{2\\sin x} - \\frac{1}{\\sin 2x} = 2\\cot 2x$", "$\\frac{\\sqrt{2}\\sin(\\frac{\\pi}{4} - x)}{\\cos x}(1 + \\sin 2x) = 1 + \\tan x$", "$\\tan^2 x - \\tan^2 x\\sin^3 x + \\cos^3 x - 1 = 0$",
+            "$2\\cos 3x + \\sqrt{3}\\sin x + \\cos x = 0$", "$\\frac{\\sin^6 x + \\cos^6 x}{\\cos^2 x - \\sin^2 x} = \\frac{1}{4}\\tan 2x$", "$\\cos 3x\\cos^3 x - \\sin 3x\\sin^3 x = \\frac{2 + 3\\sqrt{2}}{8}$", "$\\cos^3 x\\cos 3x + \\sin^3 x\\sin 3x = \\frac{\\sqrt{2}}{4}$",
+            "$\\cot x + \\sqrt{3} + \\tan x + 2\\cot 2x = 3$", "$2\\cos^2(\\frac{\\pi}{4} - 3x) - 4\\cos 4x - 15\\sin 2x = 21$", "$(1 - 4\\sin^2 x)\\sin 3x = \\frac{1}{2}$", "$\\sin x + \\frac{1}{2}\\sin 2x = 1 + \\cos x + \\cos^2 x$",
+            "$\\frac{3\\sin x + 3\\tan x}{\\tan x - \\sin x} - 2\\cos x = 2$", "$\\frac{1}{\\tan x + \\cot 2x} = \\frac{\\sqrt{2}(\\cos x - \\sin x)}{\\cot x - 1}$", "$\\sin 3x - 3\\sin 2x - \\cos 2x + 3\\sin x + 3\\cos x - 2 = 0$", "$\\frac{(2\\sin x + 1)(3\\cos 4x + 2\\sin x) + 4\\cos^2 x + 1}{1 + \\sin x} = 8$",
+            "$4\\sin^2(x + \\frac{\\pi}{2}) + \\cos(3x + 2013\\pi) - 2\\sin(\\frac{5\\pi}{2} - 2x) = 2 + \\sin(x - \\frac{\\pi}{2})$", "$\\cos 2x + \\frac{\\sin 3x - \\cos 3x}{2\\sin 2x - 1} = \\sin x(1 + \\tan x)$", "$\\tan(x + \\frac{\\pi}{6})\\tan(x - \\frac{\\pi}{6}) = 2\\cos 2x - 1$", "$2\\cos^2 x + 2\\sqrt{3}\\sin x\\cos x + 1 = 3(\\sin x + \\sqrt{3}\\cos x)$",
+            "$\\sqrt{3}\\sin x - 3\\cos x - 2 = \\cos 2x - \\sqrt{3}\\sin 2x$", "$\\frac{\\sin^4 x + \\cos^4 x}{\\sin 2x} = \\frac{1}{2}(\\tan x + \\cot x)$", "$2\\cos 6x + 2\\cos 4x - \\sqrt{3}\\cos 2x = \\sin 2x + \\sqrt{3}$", "$\\cos^2(\\frac{\\pi}{3} + x) + \\cos^2(\\frac{\\pi}{3} - x) = \\frac{4 - \\sin x}{2}$"
+        ];
+
+        let exercises = rawData.map((d, i) => ({ id: i + 1, content: d, type: "Chưa phân loại" }));
         let mathTypes = ["Chưa phân loại"];
-        let exercises = [];
-        let selectedTypes = new Set(["Chưa phân loại"]);
+        let selectedGroups = new Set(["Chưa phân loại"]);
 
-        window.onload = function() {
-            // Khởi tạo dữ liệu...
-            const sourceDivs = document.querySelectorAll('#exercise-source > div');
-            sourceDivs.forEach((el, index) => {
-                exercises.push({ originalId: index + 1, htmlContent: el.innerHTML, type: "Chưa phân loại" });
-            });
-            renderExercises();
-        };
-
-        function toggleType(type) {
-            if (selectedTypes.has(type)) selectedTypes.delete(type);
-            else selectedTypes.add(type);
+        function addType() {
+            const input = document.getElementById('newTypeInput');
+            const val = input.value.trim();
+            if (val && !mathTypes.includes(val)) {
+                mathTypes.push(val);
+                selectedGroups.add(val);
+                render();
+                input.value = '';
+            }
         }
 
-        function renderExercises() {
+        function render() {
+            const viewMode = document.querySelector('input[name="viewMode"]:checked').value;
             const container = document.getElementById('main-view');
-            const isGrouped = document.querySelector('input[name="viewMode"]:checked').value === 'grouped';
-            let html = '<div class="exercise-container">';
+            const checkboxContainer = document.getElementById('filter-checkboxes');
+            
+            checkboxContainer.innerHTML = '';
+            if (viewMode === 'grouped') {
+                mathTypes.forEach(t => {
+                    checkboxContainer.innerHTML += `<label><input type="checkbox" ${selectedGroups.has(t)?'checked':''} onchange="toggleGroup('${t}')"> ${t}</label>`;
+                });
+            }
 
-            if (!isGrouped) {
+            let html = '';
+            if (viewMode === 'original') {
                 exercises.forEach(ex => {
-                    html += `<div class="exercise-item"><b>Bài ${ex.originalId}:</b> 
-                             <select class="type-box" onchange="updateType(${ex.originalId}, this.value)">
-                                ${mathTypes.map(t => `<option value="${t}" ${ex.type === t ? 'selected' : ''}>${t}</option>`).join('')}
-                             </select>
-                             <span>${ex.htmlContent}</span></div>`;
+                    html += `<div class="exercise-item"><b>Bài ${ex.id}:</b> 
+                             <select class="type-select" onchange="exercises[${ex.id-1}].type=this.value">
+                                ${mathTypes.map(t => `<option value="${t}" ${ex.type===t?'selected':''}>${t}</option>`).join('')}
+                             </select> <span>${ex.content}</span></div>`;
                 });
             } else {
-                mathTypes.forEach(type => {
-                    const group = exercises.filter(e => e.type === type);
-                    if (group.length > 0) {
-                        html += `<div class="group-title">
-                                    <input type="checkbox" class="chk-print" ${selectedTypes.has(type) ? 'checked' : ''} onchange="toggleType('${type}')">
-                                    Dạng: ${type}
-                                 </div>`;
-                        if(selectedTypes.has(type)) {
+                mathTypes.forEach(t => {
+                    if (selectedGroups.has(t)) {
+                        const group = exercises.filter(e => e.type === t);
+                        if (group.length > 0) {
+                            html += `<div class="group-title">Dạng: ${t}</div>`;
                             group.forEach((ex, i) => {
-                                html += `<div class="exercise-item"><b>Bài ${i + 1}:</b> <span>${ex.htmlContent}</span></div>`;
+                                html += `<div class="exercise-item"><b>Bài ${i + 1}:</b> <span>${ex.content}</span></div>`;
                             });
                         }
                     }
                 });
             }
-            container.innerHTML = html + '</div>';
+            container.innerHTML = html;
             if (window.MathJax) MathJax.typesetPromise([container]);
         }
 
-        function updateType(id, newType) {
-            exercises.find(e => e.originalId === id).type = newType;
+        function toggleGroup(t) {
+            if (selectedGroups.has(t)) selectedGroups.delete(t);
+            else selectedGroups.add(t);
+            render();
         }
 
-        function addType() {
-            const val = document.getElementById('newTypeInput').value.trim();
-            if (val && !mathTypes.includes(val)) {
-                mathTypes.push(val);
-                selectedTypes.add(val);
-                renderExercises();
-                document.getElementById('newTypeInput').value = '';
-            }
-        }
-
-        function printGrouped() {
-            document.getElementById('groupedRadio').checked = true;
-            renderExercises();
+        function printSelected() {
+            document.querySelector('input[value="grouped"]').checked = true;
+            render();
             setTimeout(() => window.print(), 500);
         }
     </script>
